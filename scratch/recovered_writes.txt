@@ -1,0 +1,22 @@
+--- Line 1104 Tool Call write_to_file:
+{
+  "CodeContent": "\"import json\\n\\nlog_path = r\\\"C:\\\\Users\\\\Admin\\\\.gemini\\\\antigravity-ide\\\\brain\\\\8b01ecfb-558a-425d-ad46-782d431ef5c7\\\\.system_generated\\\\logs\\\\transcript.jsonl\\\"\\noutput_path = r\\\"c:\\\\Users\\\\Admin\\\\Downloads\\\\casino-bot-main\\\\casino-bot-main\\\\scratch\\\\recovered_methods.txt\\\"\\n\\nwith open(log_path, 'r', encoding='utf-8') as f, open(output_path, 'w', encoding='utf-8') as out:\\n    for line_num, line in enumerate(f):\\n        try:\\n            data = json.loads(line)\\n            content = data.get('content', '')\\n            if 'process_work' in content or 'process_daily' in content:\\n                out.write(f\\\"--- Line {line_num} {data.get('source')}:\\\\n\\\")\\n                out.write(content)\\n                out.write(\\\"\\\\n\\\" + \\\"=\\\"*80 + \\\"\\\\n\\\")\\n        except Exception as e:\\n            pass\\nprint(\\\"Done searching.\\\")\\n\"",
+  "Description": "\"Create search script to recover process_work and process_daily definitions from conversation transcript.\"",
+  "IsArtifact": "false",
+  "Overwrite": "true",
+  "TargetFile": "\"c:\\\\Users\\\\Admin\\\\Downloads\\\\casino-bot-main\\\\casino-bot-main\\\\scratch\\\\search_logs.py\"",
+  "toolAction": "\"Updating search script to recover methods\"",
+  "toolSummary": "\"Update search script\""
+}
+================================================================================
+--- Line 1122 Tool Call write_to_file:
+{
+  "CodeContent": "\"import json\\n\\nlog_path = r\\\"C:\\\\Users\\\\Admin\\\\.gemini\\\\antigravity-ide\\\\brain\\\\8b01ecfb-558a-425d-ad46-782d431ef5c7\\\\.system_generated\\\\logs\\\\transcript.jsonl\\\"\\noutput_path = r\\\"c:\\\\Users\\\\Admin\\\\Downloads\\\\casino-bot-main\\\\casino-bot-main\\\\scratch\\\\recovered_writes.txt\\\"\\n\\nwith open(log_path, 'r', encoding='utf-8') as f, open(output_path, 'w', encoding='utf-8') as out:\\n    for line_num, line in enumerate(f):\\n        try:\\n            data = json.loads(line)\\n            if 'tool_calls' in data:\\n                for tc in data['tool_calls']:\\n                    name = tc.get('name')\\n                    args = tc.get('args', {})\\n                    # Convert args to string to search for keywords\\n                    args_str = json.dumps(args)\\n                    if ('replace_file_content' in name or 'write_to_file' in name) and ('process_daily' in args_str or 'process_work' in args_str or 'def work' in args_str):\\n                        out.write(f\\\"--- Line {line_num} Tool Call {name}:\\\\n\\\")\\n                        out.write(json.dumps(args, indent=2))\\n                        out.write(\\\"\\\\n\\\" + \\\"=\\\"*80 + \\\"\\\\n\\\")\\n        except Exception as e:\\n            pass\\nprint(\\\"Done searching.\\\")\\n\"",
+  "Description": "\"Search for file modification tool calls containing daily or work logic in transcript.\"",
+  "IsArtifact": "false",
+  "Overwrite": "true",
+  "TargetFile": "\"c:\\\\Users\\\\Admin\\\\Downloads\\\\casino-bot-main\\\\casino-bot-main\\\\scratch\\\\search_logs.py\"",
+  "toolAction": "\"Updating search script to look for edit calls\"",
+  "toolSummary": "\"Update search script\""
+}
+================================================================================

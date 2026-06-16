@@ -412,7 +412,7 @@ class Slots(commands.Cog):
             ),
             color=color
         )
-        embed.set_footer(text="Gõ !muavang <số lượng> hoặc !banvang <số lượng> để giao dịch")
+        embed.set_footer(text="Gõ i?muavang <số lượng> hoặc i?banvang <số lượng> để giao dịch")
         await ctx.send(embed=embed)
 
     @tasks.loop(minutes=10)

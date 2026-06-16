@@ -75,7 +75,7 @@ def load_config() -> Config:
     try:
         bot = BotConfig(
             token=(getenv("DISCORD_TOKEN", "").strip()),
-            prefix=getenv("DISCORD_PREFIX", "$"),
+            prefix=getenv("DISCORD_PREFIX", "$").strip(),
             owner_ids=_parse_owner_ids(getenv("DISCORD_OWNER_IDS")),
             default_bet=_parse_int_env("DISCORD_DEFAULT_BET", 100),
             bonus_multiplier=_parse_int_env("DISCORD_BONUS_MULTIPLIER", 5),

@@ -1,0 +1,38 @@
+Created At: 2026-06-15T08:24:04Z
+Completed At: 2026-06-15T08:24:07Z
+
+				The command completed successfully.
+				Output:
+				1790: '        self.economy.update_cock(cock.id, **updates)\n'
+1791: '        items_str = ", ".join(f"**[{item}]**" for item in unequipped)\n'
+1792: '        await ctx.send(f"\xe2\x9c\x85 \xc4\x90\xc3\xa3 th\xc3\xa1o th\xc3\xa0nh c\xc3\xb4ng {items_str} kh\xe1\xbb\x8fi chi\xe1\xba\xbfn k\xc3\xaa **{cock.name}** (ID: {cock.id}) v\xc3\xa0 c\xe1\xba\xa5t v\xc3\xa0o kho \xc4\x91\xe1\xbb\x93.")\n'
+1793: '\n'
+1794: '    @daga_group.command(name="equip", brief="L\xe1\xba\xafp trang b\xe1\xbb\x8b t\xe1\xbb\xab kho \xc4\x91\xe1\xbb\x93 cho chi\xe1\xba\xbfn k\xc3\xaa ch\xc3\xadnh b\xe1\xba\xb1ng ID (1-18).")\n'
+1795: '    async def daga_equip(self, ctx: commands.Context, equip_id: str):\n'
+1796: '        equip_id = equip_id.strip()\n'
+1797: '        if equip_id not in GEAR_ID_MAP:\n'
+1798: '            await ctx.send("\xe2\x9d\x8c **L\xe1\xbb\x97i:** ID trang b\xe1\xbb\x8b kh\xc3\xb4ng h\xe1\xbb\xa3p l\xe1\xbb\x87! Vui l\xc3\xb2ng ch\xe1\xbb\x8dn t\xe1\xbb\xab `1` \xc4\x91\xe1\xba\xbfn `18`:\\n"\n'
+1799: '                           "G\xc3\xb5 `i?daga shop` \xc4\x91\xe1\xbb\x83 xem ID t\xc6\xb0\xc6\xa1ng \xe1\xbb\xa9ng.")\n'
+1800: '            return\n'
+1801: '            \n'
+1802: '        item_id, slot, item_fullname = GEAR_ID_MAP[equip_id]\n'
+1803: '        \n'
+1804: '        active_row = self.economy.get_active_cock(ctx.author.id)\n'
+1805: '        if not active_row:\n'
+1806: '            await ctx.send("\xe2\x9d\x8c **L\xe1\xbb\x97i:** B\xe1\xba\xa1n ch\xc6\xb0a ch\xe1\xbb\x8dn chi\xe1\xba\xbfn k\xc3\xaa xu\xe1\xba\xa5t tr\xe1\xba\xadn n\xc3\xa0o. H\xc3\xa3y d\xc3\xb9ng `i?daga active`.")\n'
+1807: '            return\n'
+1808: '            \n'
+1809: '        cock = Cock(active_row)\n'
+1810: '        \n'
+1811: '        inventory = self.economy.get_inventory(ctx.author.id)\n'
+1812: '        item_qty = 0\n'
+1813: '        for inv_item, qty in inventory:\n'
+1814: '            if inv_item == item_id:\n'
+1815: '                item_qty = qty\n'
+1816: '                break\n'
+1817: '                \n'
+1818: '        if item_qty <= 0:\n'
+1819: '            await ctx.send(f"\xe2\x9d\x8c **L\xe1    @daga_group.command(name="list", brief="Xem danh s\xc3\xa1ch nh\xc3\xa2n v\xe1\xba\xadt anime c\xe1\xbb\xa7a b\xe1\xba\xa1n.")\n'
+1820: '    async def daga_list(self, ctx: commands.Context):\n'
+1821: '        cocks_rows = self.economy.get_cocks(ctx.author.id)\n'
+

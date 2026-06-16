@@ -22,7 +22,9 @@ from app.config import config
 from app.discord_bot.modules.helpers import (
     InsufficientCreditsException,
     InsufficientFundsException,
+    make_embed,
 )
+from app.discord_bot.modules.economy import Economy
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +33,41 @@ class Handlers(commands.Cog, name="handlers"):
     def __init__(self, client: commands.Bot):
         self.client = client
         self._ready_once = False
+        self.economy = getattr(client, "economy", None) or Economy()
+        client.before_invoke(self.before_command_hook)
+
+    async def before_command_hook(self, ctx: commands.Context):
+        if not self.economy or (ctx.author and ctx.author.bot):
+            return
+            
+        user_id = ctx.author.id
+        
+        # Nếu chưa nhận quà khởi nghiệp và lệnh không phải là khoinghiep hoặc help
+        if not self.economy.has_claimed_start(user_id):
+            if ctx.command and ctx.command.name in ["khoinghiep", "help"]:
+                return
+                
+            prefix = self.client.command_prefix
+            if isinstance(prefix, list):
+                prefix = prefix[0]
+            embed = make_embed(
+                title="👋 CHÀO MỪNG THÀNH VIÊN MỚI! 👋",
+                description=(
+                    f"Chào mừng **{ctx.author.name}** lần đầu tiên sử dụng Casino Bot! 🏙️🎰\n\n"
+                    f"Vì bạn là người mới và chưa khởi nghiệp, ví của bạn hiện đang trống rỗng.\n"
+                    f"Hãy sử dụng lệnh khởi nghiệp dưới đây để nhận **1,000,000 VND** làm vốn ban đầu:\n\n"
+                    f"👉 👉 **`{prefix}khoinghiep`** (hoặc `{prefix}batdau`) 👈 👈\n\n"
+                    f"Sau khi nhận tiền, bạn có thể tham gia các trò chơi hoặc làm việc kiếm thêm tiền bằng lệnh `{prefix}work`.\n"
+                    f"Gõ `{prefix}help` để xem toàn bộ danh sách lệnh."
+                ),
+                color=discord.Color.gold(),
+            )
+            embed.set_thumbnail(url=ctx.author.display_avatar.url)
+            try:
+                await ctx.send(embed=embed)
+            except Exception:
+                pass
+            raise commands.CheckFailure("Chưa khởi nghiệp")
 
     @commands.Cog.listener()
     async def on_ready(self):
@@ -48,6 +85,9 @@ class Handlers(commands.Cog, name="handlers"):
     @commands.Cog.listener()
     async def on_command_error(self, ctx: commands.Context, error):
         if hasattr(ctx.command, "on_error"):
+            return
+
+        if isinstance(error, commands.CheckFailure) and str(error) == "Chưa khởi nghiệp":
             return
 
         if isinstance(error, CommandInvokeError):

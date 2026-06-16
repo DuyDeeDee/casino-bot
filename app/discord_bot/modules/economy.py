@@ -11,7 +11,8 @@ from app.config import config
 Entry = Tuple[int, int, int]
 DATABASE_PATH = Path(config.storage.database_path)
 LEGACY_DATABASE_PATH = Path(__file__).resolve().parents[3] / "economy.db"
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 18
+
 
 logger = logging.getLogger(__name__)
 
@@ -118,6 +119,229 @@ def _migration_6_add_simulator_tables(cur: sqlite3.Cursor) -> None:
         pass
 
 
+def _migration_7_add_daily_columns(cur: sqlite3.Cursor) -> None:
+    try:
+        cur.execute("ALTER TABLE economy ADD COLUMN last_daily INTEGER DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        cur.execute("ALTER TABLE economy ADD COLUMN daily_streak INTEGER DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
+
+
+def _migration_8_add_daga_tables(cur: sqlite3.Cursor) -> None:
+    try:
+        cur.execute("ALTER TABLE economy ADD COLUMN pity_golden INTEGER DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
+        cur.execute(
+            """CREATE TABLE IF NOT EXISTS user_cocks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            rarity TEXT NOT NULL,
+            level INTEGER NOT NULL DEFAULT 1,
+            exp INTEGER NOT NULL DEFAULT 0,
+            hp INTEGER NOT NULL,
+            atk INTEGER NOT NULL,
+            df INTEGER NOT NULL,
+            spd INTEGER NOT NULL,
+            luk INTEGER NOT NULL,
+            weapon TEXT DEFAULT 'None',
+            armor TEXT DEFAULT 'None',
+            charm TEXT DEFAULT 'None',
+            is_active INTEGER DEFAULT 0,
+            wins INTEGER DEFAULT 0,
+            losses INTEGER DEFAULT 0,
+            streak INTEGER DEFAULT 0,
+            last_train INTEGER DEFAULT 0,
+            stars INTEGER DEFAULT 0,
+            shards INTEGER DEFAULT 0
+        )"""
+        )
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_cocks_user ON user_cocks(user_id)")
+    except sqlite3.OperationalError:
+        pass
+
+
+def _migration_9_add_equipped_banner(cur: sqlite3.Cursor) -> None:
+    try:
+        cur.execute("ALTER TABLE economy ADD COLUMN equipped_banner TEXT DEFAULT NULL")
+    except sqlite3.OperationalError:
+        pass
+
+
+def _migration_10_add_garage_tables(cur: sqlite3.Cursor) -> None:
+    try:
+        cur.execute(
+            """CREATE TABLE IF NOT EXISTS user_cars (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            model TEXT NOT NULL,
+            rarity TEXT NOT NULL,
+            serial INTEGER NOT NULL,
+            edition TEXT NOT NULL,
+            collection TEXT NOT NULL,
+            is_favorite INTEGER DEFAULT 0
+        )"""
+        )
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_cars_user ON user_cars(user_id)")
+        
+        cur.execute(
+            """CREATE TABLE IF NOT EXISTS car_market (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            car_id INTEGER NOT NULL,
+            seller_id INTEGER NOT NULL,
+            price INTEGER NOT NULL,
+            created_at INTEGER NOT NULL
+        )"""
+        )
+    except sqlite3.OperationalError:
+        pass
+
+
+def _migration_11_update_car_names(cur: sqlite3.Cursor) -> None:
+    try:
+        updates = {
+            "Mazda RX7 FD": "Mazda 3",
+            "Mitsubishi Lancer Evolution IX": "Mitsubishi Outlander",
+            "Lamborghini Huracan": "Lamborghini",
+            "Ferrari F8": "Ferrari SF90 Stradale",
+            "Subaru WRX STI": "Hyundai Elantra",
+            "McLaren P1": "Aston Martin",
+            "Porsche 918 Spyder": "Chevrolet Corvette",
+            "Venom F5": "Dodge Challenger",
+            "Pagani Huayra": "Rolls-Royce Phantom",
+            "Koenigsegg Regera": "Tesla Model S"
+        }
+        for old_name, new_name in updates.items():
+            cur.execute("UPDATE user_cars SET model = ? WHERE model = ?", (new_name, old_name))
+            
+        cur.execute("UPDATE user_cars SET collection = 'JDM' WHERE model IN ('Mazda 3', 'Mitsubishi Outlander', 'Hyundai Elantra')")
+        cur.execute("UPDATE user_cars SET collection = 'Hypercar' WHERE model IN ('Aston Martin', 'Lamborghini', 'Chevrolet Corvette', 'Dodge Challenger', 'Ferrari SF90 Stradale', 'Rolls-Royce Phantom', 'Tesla Model S')")
+    except sqlite3.OperationalError:
+        pass
+
+
+def _migration_12_add_last_work(cur: sqlite3.Cursor) -> None:
+    try:
+        cur.execute("ALTER TABLE user_simulator_stats ADD COLUMN last_work INTEGER DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
+
+
+def _migration_13_add_cock_stars_and_shards(cur: sqlite3.Cursor) -> None:
+    try:
+        cur.execute("ALTER TABLE user_cocks ADD COLUMN stars INTEGER DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        cur.execute("ALTER TABLE user_cocks ADD COLUMN shards INTEGER DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
+
+
+def _migration_14_add_roulette_table(cur: sqlite3.Cursor) -> None:
+    try:
+        cur.execute(
+            """CREATE TABLE IF NOT EXISTS user_roulette (
+            user_id INTEGER NOT NULL PRIMARY KEY,
+            plays INTEGER NOT NULL DEFAULT 0,
+            wins INTEGER NOT NULL DEFAULT 0,
+            losses INTEGER NOT NULL DEFAULT 0,
+            profit INTEGER NOT NULL DEFAULT 0,
+            streak INTEGER NOT NULL DEFAULT 0,
+            max_streak INTEGER NOT NULL DEFAULT 0,
+            chips INTEGER NOT NULL DEFAULT 0,
+            number_stats TEXT NOT NULL DEFAULT '{}',
+            achievements TEXT NOT NULL DEFAULT '[]'
+        )"""
+        )
+    except sqlite3.OperationalError:
+        pass
+
+
+def _migration_15_add_coinflip_table(cur: sqlite3.Cursor) -> None:
+    try:
+        cur.execute(
+            """CREATE TABLE IF NOT EXISTS user_coinflip (
+            user_id INTEGER NOT NULL PRIMARY KEY,
+            plays INTEGER NOT NULL DEFAULT 0,
+            wins INTEGER NOT NULL DEFAULT 0,
+            losses INTEGER NOT NULL DEFAULT 0,
+            profit INTEGER NOT NULL DEFAULT 0,
+            streak INTEGER NOT NULL DEFAULT 0,
+            max_streak INTEGER NOT NULL DEFAULT 0,
+            max_win_amount INTEGER NOT NULL DEFAULT 0,
+            achievements TEXT NOT NULL DEFAULT '[]'
+        )"""
+        )
+    except sqlite3.OperationalError:
+        pass
+
+
+def _migration_16_add_showcase_treasure(cur: sqlite3.Cursor) -> None:
+    try:
+        cur.execute("ALTER TABLE economy ADD COLUMN showcase_treasure TEXT DEFAULT NULL")
+    except sqlite3.OperationalError:
+        pass
+
+
+def _migration_17_add_bkb_tables(cur: sqlite3.Cursor) -> None:
+    try:
+        cur.execute(
+            """CREATE TABLE IF NOT EXISTS user_bkb (
+            user_id INTEGER NOT NULL PRIMARY KEY,
+            plays INTEGER NOT NULL DEFAULT 0,
+            wins INTEGER NOT NULL DEFAULT 0,
+            losses INTEGER NOT NULL DEFAULT 0,
+            draws INTEGER NOT NULL DEFAULT 0,
+            profit INTEGER NOT NULL DEFAULT 0,
+            streak INTEGER NOT NULL DEFAULT 0,
+            max_streak INTEGER NOT NULL DEFAULT 0
+        )"""
+        )
+        cur.execute(
+            """CREATE TABLE IF NOT EXISTS bkb_h2h (
+            player_one INTEGER NOT NULL,
+            player_two INTEGER NOT NULL,
+            player_one_wins INTEGER NOT NULL DEFAULT 0,
+            player_two_wins INTEGER NOT NULL DEFAULT 0,
+            draws INTEGER NOT NULL DEFAULT 0,
+            profit_transfer INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (player_one, player_two)
+        )"""
+        )
+    except sqlite3.OperationalError:
+        pass
+
+
+def _migration_18_add_baito_table(cur: sqlite3.Cursor) -> None:
+    try:
+        cur.execute(
+            """CREATE TABLE IF NOT EXISTS user_baito (
+            user_id INTEGER NOT NULL PRIMARY KEY,
+            plays INTEGER NOT NULL DEFAULT 0,
+            wins INTEGER NOT NULL DEFAULT 0,
+            profit INTEGER NOT NULL DEFAULT 0,
+            streak INTEGER NOT NULL DEFAULT 0,
+            max_streak INTEGER NOT NULL DEFAULT 0,
+            point_9_wins INTEGER NOT NULL DEFAULT 0,
+            batay_wins INTEGER NOT NULL DEFAULT 0,
+            bacao_wins INTEGER NOT NULL DEFAULT 0,
+            baat_wins INTEGER NOT NULL DEFAULT 0,
+            all_in_plays INTEGER NOT NULL DEFAULT 0,
+            blind_plays INTEGER NOT NULL DEFAULT 0,
+            blind_wins INTEGER NOT NULL DEFAULT 0,
+            max_blind_win_amount INTEGER NOT NULL DEFAULT 0,
+            achievements TEXT NOT NULL DEFAULT '[]'
+        )"""
+        )
+    except sqlite3.OperationalError:
+        pass
+
+
 MIGRATIONS: dict[int, Callable[[sqlite3.Cursor], None]] = {
     1: _migration_1_create_economy,
     2: _migration_2_add_indexes,
@@ -125,6 +349,18 @@ MIGRATIONS: dict[int, Callable[[sqlite3.Cursor], None]] = {
     4: _migration_4_add_loan_columns,
     5: _migration_5_add_market_table,
     6: _migration_6_add_simulator_tables,
+    7: _migration_7_add_daily_columns,
+    8: _migration_8_add_daga_tables,
+    9: _migration_9_add_equipped_banner,
+    10: _migration_10_add_garage_tables,
+    11: _migration_11_update_car_names,
+    12: _migration_12_add_last_work,
+    13: _migration_13_add_cock_stars_and_shards,
+    14: _migration_14_add_roulette_table,
+    15: _migration_15_add_coinflip_table,
+    16: _migration_16_add_showcase_treasure,
+    17: _migration_17_add_bkb_tables,
+    18: _migration_18_add_baito_table,
 }
 
 
@@ -232,11 +468,12 @@ class Economy:
         self.conn.commit()
 
     def reset_all_data(self) -> None:
-        self.cur.execute("UPDATE economy SET money=0, credits=0, loan_amount=0, loan_due=0")
+        self.cur.execute("UPDATE economy SET money=0, credits=0, loan_amount=0, loan_due=0, last_daily=0, daily_streak=0, equipped_banner=NULL")
         self.cur.execute("DELETE FROM user_businesses")
         self.cur.execute("DELETE FROM user_portfolio")
         self.cur.execute("DELETE FROM user_inventory")
         self.cur.execute("DELETE FROM user_simulator_stats")
+        self.cur.execute("DELETE FROM user_roulette")
         self.conn.commit()
 
     def has_claimed_start(self, user_id: int) -> bool:
@@ -248,6 +485,20 @@ class Economy:
     def set_claimed_start(self, user_id: int) -> None:
         self._ensure_entry(user_id)
         self.cur.execute("UPDATE economy SET claimed_start=1 WHERE user_id=?", (user_id,))
+        self.conn.commit()
+
+    def get_daily(self, user_id: int) -> Tuple[int, int]:
+        self._ensure_entry(user_id)
+        self.cur.execute("SELECT last_daily, daily_streak FROM economy WHERE user_id=?", (user_id,))
+        row = self.cur.fetchone()
+        return row if row else (0, 0)
+
+    def set_daily(self, user_id: int, last_daily: int, daily_streak: int) -> None:
+        self._ensure_entry(user_id)
+        self.cur.execute(
+            "UPDATE economy SET last_daily=?, daily_streak=? WHERE user_id=?",
+            (int(last_daily), int(daily_streak), user_id),
+        )
         self.conn.commit()
 
     def get_loan(self, user_id: int) -> Tuple[int, int]:
@@ -388,20 +639,48 @@ class Economy:
         self.conn.commit()
         return new_qty
 
-    def get_simulator_stats(self, user_id: int) -> tuple[int, int, int, float]:
+    def get_equipped_banner(self, user_id: int) -> str | None:
+        self._ensure_entry(user_id)
+        self.cur.execute("SELECT equipped_banner FROM economy WHERE user_id=?", (user_id,))
+        row = self.cur.fetchone()
+        return row[0] if row else None
+
+    def set_equipped_banner(self, user_id: int, banner_id: str | None) -> None:
         self._ensure_entry(user_id)
         self.cur.execute(
-            "SELECT last_collect, last_mine, last_rob, fractional_gold FROM user_simulator_stats WHERE user_id=?",
+            "UPDATE economy SET equipped_banner=? WHERE user_id=?",
+            (banner_id, user_id),
+        )
+        self.conn.commit()
+
+    def get_showcase_treasure(self, user_id: int) -> str | None:
+        self._ensure_entry(user_id)
+        self.cur.execute("SELECT showcase_treasure FROM economy WHERE user_id=?", (user_id,))
+        row = self.cur.fetchone()
+        return row[0] if row else None
+
+    def set_showcase_treasure(self, user_id: int, treasure_id: str | None) -> None:
+        self._ensure_entry(user_id)
+        self.cur.execute(
+            "UPDATE economy SET showcase_treasure=? WHERE user_id=?",
+            (treasure_id, user_id),
+        )
+        self.conn.commit()
+
+    def get_simulator_stats(self, user_id: int) -> tuple[int, int, int, float, int]:
+        self._ensure_entry(user_id)
+        self.cur.execute(
+            "SELECT last_collect, last_mine, last_rob, fractional_gold, last_work FROM user_simulator_stats WHERE user_id=?",
             (user_id,),
         )
         row = self.cur.fetchone()
         if row is None:
             self.cur.execute(
-                "INSERT OR IGNORE INTO user_simulator_stats(user_id, last_collect, last_mine, last_rob, fractional_gold) VALUES(?, 0, 0, 0, 0.0)",
+                "INSERT OR IGNORE INTO user_simulator_stats(user_id, last_collect, last_mine, last_rob, fractional_gold, last_work) VALUES(?, 0, 0, 0, 0.0, 0)",
                 (user_id,),
             )
             self.conn.commit()
-            return (0, 0, 0, 0.0)
+            return (0, 0, 0, 0.0, 0)
         return row
 
     def set_simulator_stats(
@@ -411,6 +690,7 @@ class Economy:
         last_mine: int | None = None,
         last_rob: int | None = None,
         fractional_gold: float | None = None,
+        last_work: int | None = None,
     ) -> None:
         self._ensure_entry(user_id)
         # ensure row exists
@@ -430,6 +710,9 @@ class Economy:
         if fractional_gold is not None:
             updates.append("fractional_gold=?")
             params.append(fractional_gold)
+        if last_work is not None:
+            updates.append("last_work=?")
+            params.append(last_work)
         
         if updates:
             params.append(user_id)
@@ -460,3 +743,623 @@ class Economy:
             (symbol, price, prev_price, change_percent),
         )
         self.conn.commit()
+
+    def get_pity_golden(self, user_id: int) -> int:
+        self._ensure_entry(user_id)
+        self.cur.execute("SELECT pity_golden FROM economy WHERE user_id=?", (user_id,))
+        row = self.cur.fetchone()
+        return row[0] if row else 0
+
+    def set_pity_golden(self, user_id: int, pity: int) -> None:
+        self._ensure_entry(user_id)
+        self.cur.execute("UPDATE economy SET pity_golden=? WHERE user_id=?", (int(pity), user_id))
+        self.conn.commit()
+
+    def add_cock(self, user_id: int, name: str, rarity: str, hp: int, atk: int, df: int, spd: int, luk: int) -> tuple[int, bool, bool, int, int, int, dict]:
+        # Check if the user already has a cock with this name (breed)
+        breed_names = [name]
+        if name in ("Luffy", "Luffy Gear 4"):
+            breed_names = ["Luffy", "Luffy Gear 4"]
+        
+        placeholders = ", ".join("?" for _ in breed_names)
+        self.cur.execute(
+            f"SELECT id, name, stars, shards, hp, atk, df, spd, luk FROM user_cocks WHERE user_id=? AND name IN ({placeholders}) LIMIT 1",
+            tuple([user_id] + breed_names)
+        )
+        row = self.cur.fetchone()
+        
+        if row:
+            cock_id, cur_name, cur_stars, cur_shards, cur_hp, cur_atk, cur_df, cur_spd, cur_luk = row
+            new_shards = cur_shards + 1
+            
+            self.cur.execute(
+                """UPDATE user_cocks 
+                   SET shards=? 
+                   WHERE id=?""",
+                (new_shards, cock_id)
+            )
+            self.conn.commit()
+            return cock_id, True, False, cur_stars, cur_stars, new_shards, {"hp": cur_hp, "atk": cur_atk, "df": cur_df, "spd": cur_spd, "luk": cur_luk}
+            
+        else:
+            self.cur.execute("SELECT count(*) FROM user_cocks WHERE user_id=?", (user_id,))
+            count = self.cur.fetchone()[0]
+            is_active = 1 if count == 0 else 0
+
+            self.cur.execute(
+                """INSERT INTO user_cocks(user_id, name, rarity, hp, atk, df, spd, luk, is_active, stars, shards)
+                   VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)""",
+                (user_id, name, rarity, hp, atk, df, spd, luk, is_active),
+            )
+            self.conn.commit()
+            return self.cur.lastrowid, False, False, 0, 0, 0, {"hp": hp, "atk": atk, "df": df, "spd": spd, "luk": luk}
+
+    def get_cocks(self, user_id: int) -> list:
+        self.cur.execute("SELECT * FROM user_cocks WHERE user_id=?", (user_id,))
+        return self.cur.fetchall()
+
+    def get_cock(self, cock_id: int) -> tuple | None:
+        self.cur.execute("SELECT * FROM user_cocks WHERE id=?", (cock_id,))
+        return self.cur.fetchone()
+
+    def get_active_cock(self, user_id: int) -> tuple | None:
+        self.cur.execute("SELECT * FROM user_cocks WHERE user_id=? AND is_active=1", (user_id,))
+        return self.cur.fetchone()
+
+    def set_active_cock(self, user_id: int, cock_id: int) -> None:
+        self.cur.execute("UPDATE user_cocks SET is_active=0 WHERE user_id=?", (user_id,))
+        self.cur.execute("UPDATE user_cocks SET is_active=1 WHERE user_id=? AND id=?", (user_id, cock_id))
+        self.conn.commit()
+
+    def update_cock(self, cock_id: int, **kwargs) -> None:
+        if not kwargs:
+            return
+        fields = ", ".join(f"{k}=?" for k in kwargs.keys())
+        params = list(kwargs.values())
+        params.append(cock_id)
+        self.cur.execute(f"UPDATE user_cocks SET {fields} WHERE id=?", tuple(params))
+        self.conn.commit()
+
+    def delete_cock(self, cock_id: int) -> None:
+        self.cur.execute("DELETE FROM user_cocks WHERE id=?", (cock_id,))
+        self.conn.commit()
+
+    # --- GARAGE SYSTEMS ---
+    def add_user_car(self, user_id: int, model: str, rarity: str, serial: int, edition: str, collection: str) -> int:
+        self.cur.execute(
+            """INSERT INTO user_cars(user_id, model, rarity, serial, edition, collection, is_favorite)
+               VALUES(?, ?, ?, ?, ?, ?, 0)""",
+            (user_id, model, rarity, serial, edition, collection)
+        )
+        self.conn.commit()
+        return self.cur.lastrowid
+
+    def get_user_cars(self, user_id: int) -> list:
+        self.cur.execute("SELECT * FROM user_cars WHERE user_id=?", (user_id,))
+        return self.cur.fetchall()
+
+    def get_user_car(self, car_id: int) -> tuple | None:
+        self.cur.execute("SELECT * FROM user_cars WHERE id=?", (car_id,))
+        return self.cur.fetchone()
+
+    def delete_user_car(self, car_id: int) -> None:
+        self.cur.execute("DELETE FROM user_cars WHERE id=?", (car_id,))
+        self.conn.commit()
+
+    def transfer_user_car(self, car_id: int, new_owner_id: int) -> None:
+        self.cur.execute("UPDATE user_cars SET user_id=?, is_favorite=0 WHERE id=?", (new_owner_id, car_id))
+        self.conn.commit()
+
+    def set_favorite_car(self, user_id: int, car_id: int) -> None:
+        self.cur.execute("UPDATE user_cars SET is_favorite=0 WHERE user_id=?", (user_id,))
+        self.cur.execute("UPDATE user_cars SET is_favorite=1 WHERE user_id=? AND id=?", (user_id, car_id))
+        self.conn.commit()
+
+    def get_favorite_car(self, user_id: int) -> tuple | None:
+        self.cur.execute("SELECT * FROM user_cars WHERE user_id=? AND is_favorite=1", (user_id,))
+        return self.cur.fetchone()
+
+    def add_market_listing(self, car_id: int, seller_id: int, price: int) -> int:
+        import time
+        self.cur.execute(
+            "INSERT INTO car_market(car_id, seller_id, price, created_at) VALUES(?, ?, ?, ?)",
+            (car_id, seller_id, price, int(time.time()))
+        )
+        self.conn.commit()
+        return self.cur.lastrowid
+
+    def get_market_listings(self) -> list:
+        self.cur.execute("SELECT * FROM car_market ORDER BY created_at DESC")
+        return self.cur.fetchall()
+
+    def get_market_listing(self, listing_id: int) -> tuple | None:
+        self.cur.execute("SELECT * FROM car_market WHERE id=?", (listing_id,))
+        return self.cur.fetchone()
+
+    def get_market_listing_by_car(self, car_id: int) -> tuple | None:
+        self.cur.execute("SELECT * FROM car_market WHERE car_id=?", (car_id,))
+        return self.cur.fetchone()
+
+    def delete_market_listing(self, listing_id: int) -> None:
+        self.cur.execute("DELETE FROM car_market WHERE id=?", (listing_id,))
+        self.conn.commit()
+
+    def get_roulette(self, user_id: int) -> dict:
+        self._ensure_entry(user_id)
+        self.cur.execute(
+            "SELECT plays, wins, losses, profit, streak, max_streak, chips, number_stats, achievements FROM user_roulette WHERE user_id=?",
+            (user_id,),
+        )
+        row = self.cur.fetchone()
+        if row is None:
+            self.cur.execute(
+                "INSERT OR IGNORE INTO user_roulette(user_id, plays, wins, losses, profit, streak, max_streak, chips, number_stats, achievements) VALUES(?, 0, 0, 0, 0, 0, 0, 0, '{}', '[]')",
+                (user_id,),
+            )
+            self.conn.commit()
+            return {
+                "plays": 0,
+                "wins": 0,
+                "losses": 0,
+                "profit": 0,
+                "streak": 0,
+                "max_streak": 0,
+                "chips": 0,
+                "number_stats": {},
+                "achievements": [],
+            }
+        
+        import json
+        try:
+            num_stats = json.loads(row[7])
+        except Exception:
+            num_stats = {}
+            
+        try:
+            achievements = json.loads(row[8])
+        except Exception:
+            achievements = []
+            
+        return {
+            "plays": row[0],
+            "wins": row[1],
+            "losses": row[2],
+            "profit": row[3],
+            "streak": row[4],
+            "max_streak": row[5],
+            "chips": row[6],
+            "number_stats": num_stats,
+            "achievements": achievements,
+        }
+
+    def update_roulette(
+        self,
+        user_id: int,
+        *,
+        plays: int = 0,
+        wins: int = 0,
+        losses: int = 0,
+        profit: int = 0,
+        streak: int | None = None,
+        max_streak: int | None = None,
+        chips: int | None = None,
+        number_stats: dict | None = None,
+        achievements: list | None = None,
+    ) -> None:
+        self._ensure_entry(user_id)
+        self.get_roulette(user_id)
+        
+        updates = []
+        params = []
+        
+        if plays != 0:
+            updates.append("plays = plays + ?")
+            params.append(plays)
+        if wins != 0:
+            updates.append("wins = wins + ?")
+            params.append(wins)
+        if losses != 0:
+            updates.append("losses = losses + ?")
+            params.append(losses)
+        if profit != 0:
+            updates.append("profit = profit + ?")
+            params.append(profit)
+        if streak is not None:
+            updates.append("streak = ?")
+            params.append(streak)
+        if max_streak is not None:
+            updates.append("max_streak = ?")
+            params.append(max_streak)
+        if chips is not None:
+            updates.append("chips = ?")
+            params.append(chips)
+            
+        import json
+        if number_stats is not None:
+            updates.append("number_stats = ?")
+            params.append(json.dumps(number_stats))
+        if achievements is not None:
+            updates.append("achievements = ?")
+            params.append(json.dumps(achievements))
+            
+        if updates:
+            params.append(user_id)
+            query = f"UPDATE user_roulette SET {', '.join(updates)} WHERE user_id=?"
+            self.cur.execute(query, tuple(params))
+            self.conn.commit()
+
+    def get_coinflip(self, user_id: int) -> dict:
+        self._ensure_entry(user_id)
+        self.cur.execute(
+            "SELECT plays, wins, losses, profit, streak, max_streak, max_win_amount, achievements FROM user_coinflip WHERE user_id=?",
+            (user_id,),
+        )
+        row = self.cur.fetchone()
+        if row is None:
+            self.cur.execute(
+                "INSERT OR IGNORE INTO user_coinflip(user_id, plays, wins, losses, profit, streak, max_streak, max_win_amount, achievements) VALUES(?, 0, 0, 0, 0, 0, 0, 0, '[]')",
+                (user_id,),
+            )
+            self.conn.commit()
+            return {
+                "plays": 0,
+                "wins": 0,
+                "losses": 0,
+                "profit": 0,
+                "streak": 0,
+                "max_streak": 0,
+                "max_win_amount": 0,
+                "achievements": [],
+            }
+        
+        import json
+        try:
+            achievements = json.loads(row[7])
+        except Exception:
+            achievements = []
+            
+        return {
+            "plays": row[0],
+            "wins": row[1],
+            "losses": row[2],
+            "profit": row[3],
+            "streak": row[4],
+            "max_streak": row[5],
+            "max_win_amount": row[6],
+            "achievements": achievements,
+        }
+
+    def update_coinflip(
+        self,
+        user_id: int,
+        *,
+        plays: int = 0,
+        wins: int = 0,
+        losses: int = 0,
+        profit: int = 0,
+        streak: int | None = None,
+        max_streak: int | None = None,
+        max_win_amount: int | None = None,
+        achievements: list | None = None,
+    ) -> None:
+        self._ensure_entry(user_id)
+        self.get_coinflip(user_id)
+        
+        updates = []
+        params = []
+        
+        if plays != 0:
+            updates.append("plays = plays + ?")
+            params.append(plays)
+        if wins != 0:
+            updates.append("wins = wins + ?")
+            params.append(wins)
+        if losses != 0:
+            updates.append("losses = losses + ?")
+            params.append(losses)
+        if profit != 0:
+            updates.append("profit = profit + ?")
+            params.append(profit)
+        if streak is not None:
+            updates.append("streak = ?")
+            params.append(streak)
+        if max_streak is not None:
+            updates.append("max_streak = ?")
+            params.append(max_streak)
+        if max_win_amount is not None:
+            updates.append("max_win_amount = ?")
+            params.append(max_win_amount)
+            
+        import json
+        if achievements is not None:
+            updates.append("achievements = ?")
+            params.append(json.dumps(achievements))
+            
+        if updates:
+            params.append(user_id)
+            query = f"UPDATE user_coinflip SET {', '.join(updates)} WHERE user_id=?"
+            self.cur.execute(query, tuple(params))
+            self.conn.commit()
+
+    def get_bkb_stats(self, user_id: int) -> dict:
+        self._ensure_entry(user_id)
+        self.cur.execute(
+            "SELECT plays, wins, losses, draws, profit, streak, max_streak FROM user_bkb WHERE user_id=?",
+            (user_id,),
+        )
+        row = self.cur.fetchone()
+        if row is None:
+            self.cur.execute(
+                "INSERT OR IGNORE INTO user_bkb(user_id, plays, wins, losses, draws, profit, streak, max_streak) VALUES(?, 0, 0, 0, 0, 0, 0, 0)",
+                (user_id,),
+            )
+            self.conn.commit()
+            return {
+                "plays": 0,
+                "wins": 0,
+                "losses": 0,
+                "draws": 0,
+                "profit": 0,
+                "streak": 0,
+                "max_streak": 0,
+            }
+        return {
+            "plays": row[0],
+            "wins": row[1],
+            "losses": row[2],
+            "draws": row[3],
+            "profit": row[4],
+            "streak": row[5],
+            "max_streak": row[6],
+        }
+
+    def update_bkb_stats(
+        self,
+        user_id: int,
+        *,
+        plays: int = 0,
+        wins: int = 0,
+        losses: int = 0,
+        draws: int = 0,
+        profit: int = 0,
+        streak: int | None = None,
+        max_streak: int | None = None,
+    ) -> None:
+        self._ensure_entry(user_id)
+        self.get_bkb_stats(user_id)
+        
+        updates = []
+        params = []
+        
+        if plays != 0:
+            updates.append("plays = plays + ?")
+            params.append(plays)
+        if wins != 0:
+            updates.append("wins = wins + ?")
+            params.append(wins)
+        if losses != 0:
+            updates.append("losses = losses + ?")
+            params.append(losses)
+        if draws != 0:
+            updates.append("draws = draws + ?")
+            params.append(draws)
+        if profit != 0:
+            updates.append("profit = profit + ?")
+            params.append(profit)
+        if streak is not None:
+            updates.append("streak = ?")
+            params.append(streak)
+        if max_streak is not None:
+            updates.append("max_streak = ?")
+            params.append(max_streak)
+            
+        if updates:
+            params.append(user_id)
+            query = f"UPDATE user_bkb SET {', '.join(updates)} WHERE user_id=?"
+            self.cur.execute(query, tuple(params))
+            self.conn.commit()
+
+    def get_bkb_h2h(self, p1: int, p2: int) -> dict:
+        player_one, player_two = min(p1, p2), max(p1, p2)
+        self.cur.execute(
+            "SELECT player_one_wins, player_two_wins, draws, profit_transfer FROM bkb_h2h WHERE player_one=? AND player_two=?",
+            (player_one, player_two),
+        )
+        row = self.cur.fetchone()
+        if row is None:
+            self.cur.execute(
+                "INSERT OR IGNORE INTO bkb_h2h(player_one, player_two, player_one_wins, player_two_wins, draws, profit_transfer) VALUES(?, ?, 0, 0, 0, 0)",
+                (player_one, player_two),
+            )
+            self.conn.commit()
+            return {
+                "player_one_wins": 0,
+                "player_two_wins": 0,
+                "draws": 0,
+                "profit_transfer": 0,
+            }
+        return {
+            "player_one_wins": row[0],
+            "player_two_wins": row[1],
+            "draws": row[2],
+            "profit_transfer": row[3],
+        }
+
+    def update_bkb_h2h(
+        self,
+        p1: int,
+        p2: int,
+        *,
+        p1_win: bool = False,
+        p2_win: bool = False,
+        draw: bool = False,
+        profit_delta: int = 0,
+    ) -> None:
+        player_one, player_two = min(p1, p2), max(p1, p2)
+        self.get_bkb_h2h(player_one, player_two)
+        
+        updates = []
+        params = []
+        
+        if p1_win:
+            if p1 == player_one:
+                updates.append("player_one_wins = player_one_wins + 1")
+            else:
+                updates.append("player_two_wins = player_two_wins + 1")
+        elif p2_win:
+            if p2 == player_one:
+                updates.append("player_one_wins = player_one_wins + 1")
+            else:
+                updates.append("player_two_wins = player_two_wins + 1")
+        elif draw:
+            updates.append("draws = draws + 1")
+            
+        if profit_delta != 0:
+            if p1 == player_one:
+                updates.append("profit_transfer = profit_transfer + ?")
+                params.append(profit_delta)
+            else:
+                updates.append("profit_transfer = profit_transfer - ?")
+                params.append(profit_delta)
+                
+        if updates:
+            params.append(player_one)
+            params.append(player_two)
+            query = f"UPDATE bkb_h2h SET {', '.join(updates)} WHERE player_one=? AND player_two=?"
+            self.cur.execute(query, tuple(params))
+            self.conn.commit()
+
+    def get_baito_stats(self, user_id: int) -> dict:
+        self._ensure_entry(user_id)
+        self.cur.execute(
+            """SELECT plays, wins, profit, streak, max_streak, point_9_wins, batay_wins, bacao_wins, baat_wins, 
+                      all_in_plays, blind_plays, blind_wins, max_blind_win_amount, achievements 
+               FROM user_baito WHERE user_id=?""",
+            (user_id,),
+        )
+        row = self.cur.fetchone()
+        if row is None:
+            self.cur.execute(
+                """INSERT OR IGNORE INTO user_baito(user_id, plays, wins, profit, streak, max_streak, point_9_wins, 
+                                                    batay_wins, bacao_wins, baat_wins, all_in_plays, blind_plays, 
+                                                    blind_wins, max_blind_win_amount, achievements) 
+                   VALUES(?, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, '[]')""",
+                (user_id,),
+            )
+            self.conn.commit()
+            return {
+                "plays": 0,
+                "wins": 0,
+                "profit": 0,
+                "streak": 0,
+                "max_streak": 0,
+                "point_9_wins": 0,
+                "batay_wins": 0,
+                "bacao_wins": 0,
+                "baat_wins": 0,
+                "all_in_plays": 0,
+                "blind_plays": 0,
+                "blind_wins": 0,
+                "max_blind_win_amount": 0,
+                "achievements": [],
+            }
+        
+        import json
+        try:
+            achievements = json.loads(row[13])
+        except Exception:
+            achievements = []
+            
+        return {
+            "plays": row[0],
+            "wins": row[1],
+            "profit": row[2],
+            "streak": row[3],
+            "max_streak": row[4],
+            "point_9_wins": row[5],
+            "batay_wins": row[6],
+            "bacao_wins": row[7],
+            "baat_wins": row[8],
+            "all_in_plays": row[9],
+            "blind_plays": row[10],
+            "blind_wins": row[11],
+            "max_blind_win_amount": row[12],
+            "achievements": achievements,
+        }
+
+    def update_baito_stats(
+        self,
+        user_id: int,
+        *,
+        plays: int = 0,
+        wins: int = 0,
+        profit: int = 0,
+        streak: int | None = None,
+        max_streak: int | None = None,
+        point_9_wins: int = 0,
+        batay_wins: int = 0,
+        bacao_wins: int = 0,
+        baat_wins: int = 0,
+        all_in_plays: int = 0,
+        blind_plays: int = 0,
+        blind_wins: int = 0,
+        max_blind_win_amount: int | None = None,
+        achievements: list | None = None,
+    ) -> None:
+        self._ensure_entry(user_id)
+        self.get_baito_stats(user_id)
+        
+        updates = []
+        params = []
+        
+        if plays != 0:
+            updates.append("plays = plays + ?")
+            params.append(plays)
+        if wins != 0:
+            updates.append("wins = wins + ?")
+            params.append(wins)
+        if profit != 0:
+            updates.append("profit = profit + ?")
+            params.append(profit)
+        if streak is not None:
+            updates.append("streak = ?")
+            params.append(streak)
+        if max_streak is not None:
+            updates.append("max_streak = ?")
+            params.append(max_streak)
+        if point_9_wins != 0:
+            updates.append("point_9_wins = point_9_wins + ?")
+            params.append(point_9_wins)
+        if batay_wins != 0:
+            updates.append("batay_wins = batay_wins + ?")
+            params.append(batay_wins)
+        if bacao_wins != 0:
+            updates.append("bacao_wins = bacao_wins + ?")
+            params.append(bacao_wins)
+        if baat_wins != 0:
+            updates.append("baat_wins = baat_wins + ?")
+            params.append(baat_wins)
+        if all_in_plays != 0:
+            updates.append("all_in_plays = all_in_plays + ?")
+            params.append(all_in_plays)
+        if blind_plays != 0:
+            updates.append("blind_plays = blind_plays + ?")
+            params.append(blind_plays)
+        if blind_wins != 0:
+            updates.append("blind_wins = blind_wins + ?")
+            params.append(blind_wins)
+        if max_blind_win_amount is not None:
+            updates.append("max_blind_win_amount = ?")
+            params.append(max_blind_win_amount)
+            
+        import json
+        if achievements is not None:
+            updates.append("achievements = ?")
+            params.append(json.dumps(achievements))
+            
+        if updates:
+            params.append(user_id)
+            query = f"UPDATE user_baito SET {', '.join(updates)} WHERE user_id=?"
+            self.cur.execute(query, tuple(params))
+            self.conn.commit()
+

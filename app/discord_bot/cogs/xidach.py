@@ -139,7 +139,7 @@ class GameSession:
             if rank >= 100:
                 status_desc = f"trúng {name}"
             else:
-                status_desc = "dằn bài" if status == "stand" else "bị quắc"
+                status_desc = "dằn bài"
             await self.update_lobby_table(f"🛑 {player.display_name} đã {status_desc}!")
 
     async def end_game(self):
@@ -312,6 +312,13 @@ class PlayerHandView(discord.ui.View):
     @discord.ui.button(label="Dừng", style=discord.ButtonStyle.danger, emoji="🛑")
     async def stand_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         score = Deck.calculate_score(self.hand)
+        if score < 16:
+            await interaction.response.send_message(
+                "❌ Bạn chưa đủ 16 điểm (điểm dằn tối thiểu) để dằn bài! Vui lòng rút thêm.",
+                ephemeral=True,
+            )
+            return
+            
         for child in self.children:
             child.disabled = True
         file = self.render_table()

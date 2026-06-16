@@ -1,0 +1,502 @@
+--- Line 920 MODEL:
+I will view the newly generated test image to confirm the placement of the horse stats, total bets, and better names inside the layout.
+========================================
+--- Line 921 MODEL:
+Created At: 2026-06-12T10:10:02Z
+Completed At: 2026-06-12T10:10:02Z
+The following is the entire, complete content of the requested file.
+========================================
+--- Line 922 MODEL:
+Tôi đã hoàn tất việc tích hợp toàn bộ thông tin phòng cược (Lobby Phase) vào bên trong đường đua dạng ảnh!
+
+### 🌟 Các thay đổi đã cập nhật:
+1. **Tích hợp thông tin vào ảnh**:
+   * **Thông tin hiển thị**: Ngay dưới mỗi thanh đua của ngựa, bot sẽ vẽ thêm dòng thông tin phụ bao gồm:
+     `Sức mạnh: XX  |  Cược: YY VND (Tên người chơi (Số tiền cược))`
+   * **Cập nhật động**: Mỗi khi có người chơi đặt cược thành công bằng nút bấm hoặc Modal, ảnh đường đua sẽ lập tức cập nhật lại số tiền cược và danh sách người đặt tương ứng theo thời gian thực (realtime).
+2. **Thu gọn nội dung Embed**:
+   * Loại bỏ hoàn toàn danh sách chữ text dài dòng của embed Discord cũ, giúp tin nhắn cực kỳ gọn gàng và đậm chất đồ họa cao cấp.
+3. **Giữ thông tin suốt cuộc đua**:
+   * Toàn bộ thông tin đặt cược của người chơi vẫn tiếp tục được giữ lại và hiển thị bên dưới đường đua trong suốt thời gian trận đấu diễn ra để mọi người dễ dàng theo dõi ngựa của mình.
+
+---
+
+### 🧪 Xem ảnh demo phòng cược thực tế:
+Bạn có thể xem trước ảnh phòng cược đã vẽ thành công tại: [scratch/test_race_rendered.png](file:///c:/Users/Admin/Downloads/casino-bot-main/casino-bot-main/scratch/test_race_rendered.png)
+
+### 💡 Hướng dẫn áp dụng:
+1. Bạn hãy bấm **`Ctrl + C`** để tắt bot trong terminal.
+2. Khởi động lại bot bằng lệnh:
+   ```powershell
+   .\venv\Scripts\python.exe main.py
+   ```
+3. Hãy thử gõ `i?duangua` / `i?race` để chiêm ngưỡng giao diện tích hợp thông minh mới này!
+========================================
+--- Line 923 USER_EXPLICIT:
+<USER_REQUEST>
+lam the nao de toi xem duoc co nhung nguoi choi nao dang su dung bot cua toi
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-06-12T17:42:23+07:00.
+
+The user's current state is as follows:
+Other open documents:
+- c:\Users\Admin\Downloads\casino-bot-main\casino-bot-main\daga.md (LANGUAGE_MARKDOWN)
+- c:\Users\Admin\Downloads\casino-bot-main\casino-bot-main\.env.example (LANGUAGE_UNSPECIFIED)
+- c:\Users\Admin\Downloads\casino-bot-main\casino-bot-main\app\discord_bot\cogs\help_command.py (LANGUAGE_PYTHON)
+- c:\Users\Admin\Downloads\casino-bot-main\casino-bot-main\test_baucua.py (LANGUAGE_PYTHON)
+- c:\Users\Admin\Downloads\casino-bot-main\casino-bot-main\app\discord_bot\cogs\gambling_helpers.py (LANGUAGE_PYTHON)
+Running terminal commands:
+- .\venv\Scripts\python.exe main.py (in c:\Users\Admin\Downloads\casino-bot-main\casino-bot-main, running for 32m5s)
+</ADDITIONAL_METADATA>
+========================================
+--- Line 924 MODEL:
+I will view `app/config.py` to see where the SQLite database file is stored.
+========================================
+--- Line 925 MODEL:
+Created At: 2026-06-12T10:42:28Z
+Completed At: 2026-06-12T10:42:28Z
+File Path: `file:///c:/Users/Admin/Downloads/casino-bot-main/casino-bot-main/app/config.py`
+Total Lines: 107
+Total Bytes: 3060
+Showing lines 1 to 107
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+1: from os import getenv
+2: from pathlib import Path
+3: 
+4: from dotenv import load_dotenv
+5: from pydantic import BaseModel, Field, ValidationError
+6: 
+7: __all__ = (
+8:     "load_config",
+9:     "env_vars",
+10: )
+11: 
+12: load_dotenv()
+13: REPO_ROOT = Path(__file__).resolve().parents[1]
+14: DEFAULT_DATA_DIR = REPO_ROOT / "data"
+15: 
+16: 
+17: class BotConfig(BaseModel):
+18:     token: str = ""
+19:     prefix: str = Field(default="$", min_length=1, max_length=8)
+20:     owner_ids: list[int] = Field(default_factory=list)
+21:     default_bet: int = Field(default=100, ge=1, le=1_000_000)
+22:     bonus_multiplier: int = Field(default=5, ge=1, le=1_000)
+23:     bonus_cooldown: int = Field(default=12, ge=1, le=168)
+24: 
+25: 
+26: class StorageConfig(BaseModel):
+27:     data_dir: Path
+28:     database_path: Path
+29:     log_path: Path
+30: 
+31: 
+32: class Config(BaseModel):
+33:     bot: BotConfig
+34:     storage: StorageConfig
+35: 
+36: 
+37: env_vars = (
+38:     "DISCORD_TOKEN",
+39:     "DISCORD_PREFIX",
+40:     "DISCORD_OWNER_IDS",
+41:     "DISCORD_DEFAULT_BET",
+42:     "DISCORD_BONUS_MULTIPLIER",
+43:     "DISCORD_BONUS_COOLDOWN",
+44:     "CASINO_DATA_DIR",
+45:     "CASINO_DATABASE_PATH",
+46:     "CASINO_LOG_PATH",
+47: )
+48: 
+49: 
+50: def _parse_owner_ids(raw_owner_ids: str | None) -> list[int]:
+51:     if not raw_owner_ids:
+52:         return []
+53:     return [int(owner_id.strip()) for owner_id in raw_owner_ids.split(",") if owner_id.strip()]
+54: 
+55: 
+56: def _parse_int_env(name: str, default: int) -> int:
+57:     raw = getenv(name)
+58:     if raw is None or raw.strip() == "":
+59:         return default
+60:     return int(raw.strip())
+61: 
+62: 
+63: def _parse_path_env(name: str, default: Path) -> Path:
+64:     raw = getenv(name)
+65:     if raw is None or raw.strip() == "":
+66:         candidate = default
+67:     else:
+68:         candidate = Path(raw.strip()).expanduser()
+69:     if not candidate.is_absolute():
+70:         candidate = REPO_ROOT / candidate
+71:     return candidate.resolve()
+72: 
+73: 
+74: def load_config() -> Config:
+75:     try:
+76:         bot = BotConfig(
+77:             token=(getenv("DISCORD_TOKEN", "").strip()),
+78:             prefix=getenv("DISCORD_PREFIX", "$").strip(),
+79:             owner_ids=_parse_owner_ids(getenv("DISCORD_OWNER_IDS")),
+80:             default_bet=_parse_int_env("DISCORD_DEFAULT_BET", 100),
+81:             bonus_multiplier=_parse_int_env("DISCORD_BONUS_MULTIPLIER", 5),
+82:             bonus_cooldown=_parse_int_env("DISCORD_BONUS_COOLDOWN", 12),
+83:         )
+84:         data_dir = _parse_path_env("CASINO_DATA_DIR", DEFAULT_DATA_DIR)
+85:         database_path = _parse_path_env(
+86:             "CASINO_DATABASE_PATH",
+87:             data_dir / "economy.db",
+88:         )
+89:         log_path = _parse_path_env(
+90:             "CASINO_LOG_PATH",
+91:             data_dir / "logs" / "casino-bot.log",
+92:         )
+93:         data_dir.mkdir(parents=True, exist_ok=True)
+94:         database_path.parent.mkdir(parents=True, exist_ok=True)
+95:         log_path.parent.mkdir(parents=True, exist_ok=True)
+96:         storage = StorageConfig(
+97:             data_dir=data_dir,
+98:             database_path=database_path,
+99:             log_path=log_path,
+100:         )
+101:         return Config(bot=bot, storage=storage)
+102:     except (ValueError, ValidationError) as exc:
+103:         raise RuntimeError(f"Invalid bot configuration: {exc}") from exc
+104: 
+105: 
+106: config = load_config()
+107: 
+The above content shows the entire, complete file contents of the requested file.
+
+========================================
+--- Line 926 MODEL:
+I will search for a leaderboard or player listing command in the codebase.
+========================================
+--- Line 927 MODEL:
+Created At: 2026-06-12T10:42:32Z
+Completed At: 2026-06-12T10:42:33Z
+{"File":"c:\\Users\\Admin\\Downloads\\casino-bot-main\\casino-bot-main\\app\\discord_bot\\cogs\\xidach.py","LineNumber":287,"LineContent":"            self.stop()"}
+{"File":"c:\\Users\\Admin\\Downloads\\casino-bot-main\\casino-bot-main\\app\\discord_bot\\cogs\\xidach.py","LineNumber":301,"LineContent":"            self.stop()"}
+{"File":"c:\\Users\\Admin\\Downloads\\casino-bot-main\\casino-bot-main\\app\\discord_bot\\cogs\\xidach.py","LineNumber":323,"LineContent":"        self.stop()"}
+{"File":"c:\\Users\\Admin\\Downloads\\casino-bot-main\\casino-bot-main\\app\\discord_bot\\cogs\\xidach.py","LineNumber":420,"LineContent":"                view.stop()"}
+{"File":"c:\\Users\\Admin\\Downloads\\casino-bot-main\\casino-bot-main\\app\\discord_bot\\cogs\\xidach.py","LineNumber":439,"LineContent":"        self.stop()"}
+{"File":"c:\\Users\\Admin\\Downloads\\casino-bot-main\\casino-bot-main\\app\\discord_bot\\cogs\\xe.py","LineNumber":770,"LineContent":"        for lst in listings[:15]: # Show top 15 listings"}
+{"File":"c:\\Users\\Admin\\Downloads\\casino-bot-main\\casino-bot-main\\app\\discord_bot\\cogs\\xe.py","LineNumber":887,"LineContent":"async def top_level_garage(ctx: commands.Context, member: discord.Member | None = None):"}
+{"File":"c:\\Users\\Admin\\Downloads\\casino-bot-main\\casino-bot-main\\app\\discord_bot\\cogs\\xe.py","LineNumber":893,"LineContent":"async def top_level_favorite(ctx: commands.Context, car_id: int):"}
+{"File":"c:\\Users\\Admin\\Downloads\\casino-bot-main\\casino-bot-main\\app\\discord_bot\\cogs\\xe.py","LineNumber":899,"LineContent":"async def top_level_market(ctx: commands.Context, *args):"}
+{"File":"c:\\Users\\Admin\\Downloads\\casino-bot-main\\casino-bot-main\\app\\discord_bot\\cogs\\xe.py","LineNumber":934,"LineContent":"    client.add_command(top_level_garage)"}
+{"File":"c:\\Users\\Admin\\Downloads\\casino-bot-main\\casino-bot-main\\app\\discord_bot\\cogs\\xe.py","LineNumber":935,"LineContent":"    client.add_command(top_l
+<truncated 5162 bytes>
+ent":"            f\"🔹 `{prefix}daga top` — Xem bảng xếp hạng sư kê có nhiều trận thắng nhất.\\n\""}
+{"File":"c:\\Users\\Admin\\Downloads\\casino-bot-main\\casino-bot-main\\app\\discord_bot\\cogs\\daga.py","LineNumber":2702,"LineContent":"    @daga_group.command(name=\"top\", brief=\"Xem bảng xếp hạng sư kê giỏi nhất.\")"}
+{"File":"c:\\Users\\Admin\\Downloads\\casino-bot-main\\casino-bot-main\\app\\discord_bot\\cogs\\daga.py","LineNumber":2703,"LineContent":"    async def daga_top(self, ctx: commands.Context):"}
+{"File":"c:\\Users\\Admin\\Downloads\\casino-bot-main\\casino-bot-main\\app\\discord_bot\\cogs\\coinflip.py","LineNumber":246,"LineContent":"        self.stop()"}
+{"File":"c:\\Users\\Admin\\Downloads\\casino-bot-main\\casino-bot-main\\app\\discord_bot\\cogs\\coinflip.py","LineNumber":253,"LineContent":"        self.stop()"}
+{"File":"c:\\Users\\Admin\\Downloads\\casino-bot-main\\casino-bot-main\\app\\discord_bot\\cogs\\coinflip.py","LineNumber":260,"LineContent":"        self.stop()"}
+{"File":"c:\\Users\\Admin\\Downloads\\casino-bot-main\\casino-bot-main\\app\\discord_bot\\cogs\\coinflip.py","LineNumber":313,"LineContent":"        self.stop()"}
+{"File":"c:\\Users\\Admin\\Downloads\\casino-bot-main\\casino-bot-main\\app\\discord_bot\\cogs\\coinflip.py","LineNumber":320,"LineContent":"        self.stop()"}
+{"File":"c:\\Users\\Admin\\Downloads\\casino-bot-main\\casino-bot-main\\app\\discord_bot\\cogs\\coinflip.py","LineNumber":327,"LineContent":"        self.stop()"}
+{"File":"c:\\Users\\Admin\\Downloads\\casino-bot-main\\casino-bot-main\\app\\discord_bot\\cogs\\coinflip.py","LineNumber":334,"LineContent":"        self.stop()"}
+{"File":"c:\\Users\\Admin\\Downloads\\casino-bot-main\\casino-bot-main\\app\\discord_bot\\cogs\\coinflip.py","LineNumber":341,"LineContent":"        self.stop()"}
+{"File":"c:\\Users\\Admin\\Downloads\\casino-bot-main\\casino-bot-main\\app\\discord_bot\\cogs\\coinflip.py","LineNumber":408,"LineContent":"        self.stop()"}
+(...2 more results not shown)
+========================================
+--- Line 928 MODEL:
+I will view lines 390 to 420 of `app/discord_bot/cogs/gambling_helpers.py` to see the command implementation.
+========================================
+--- Line 929 MODEL:
+Created At: 2026-06-12T10:42:36Z
+Completed At: 2026-06-12T10:42:36Z
+File Path: `file:///c:/Users/Admin/Downloads/casino-bot-main/casino-bot-main/app/discord_bot/cogs/gambling_helpers.py`
+Total Lines: 1185
+Total Bytes: 51744
+Showing lines 390 to 420
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+390:             description=(
+391:                 "**{:,} VND**".format(profile[1]) + "\n**{:,}** thỏi vàng".format(profile[2])
+392:             ),
+393:         )
+394:         embed.set_thumbnail(url=target_user.display_avatar.url)
+395:         await ctx.send(embed=embed)
+396: 
+397:     @commands.command(
+398:         brief="Hiển thị bảng xếp hạng những người giàu nhất",
+399:         usage="leaderboard",
+400:         aliases=["top"],
+401:     )
+402:     async def leaderboard(self, ctx: commands.Context):
+403:         entries = self.economy.top_entries(5)
+404:         embed = make_embed(title="Bảng xếp hạng đại gia:", color=discord.Color.gold())
+405:         for i, entry in enumerate(entries):
+406:             user = self.client.get_user(entry[0])
+407:             name = user.name if user else f"Người chơi {entry[0]}"
+408:             embed.add_field(
+409:                 name=f"{i+1}. {name}",
+410:                 value="{:,} VND".format(entry[1]),
+411:                 inline=False,
+412:             )
+413:         await ctx.send(embed=embed)
+414: 
+415:     async def process_work(self, user: discord.User | discord.Member, ctx: commands.Context | None = None) -> discord.Embed:
+416:         user_id = user.id
+417:         stats = self.economy.get_simulator_stats(user_id)
+418:         last_work = stats[4] if len(stats) > 4 else 0
+419:         now = int(time.time())
+420:         cooldown = 3600  # 1 tiếng cooldown (3600 giây)
+The above content does NOT show the entire file contents. If you need to view any lines of the file which were not shown to complete your task, call this tool again to view those lines.
+
+========================================
+--- Line 930 MODEL:
+I will view lines 1010 to 1030 of `app/discord_bot/cogs/gambling_helpers.py` to see if there is an existing command to query users.
+========================================
+--- Line 931 MODEL:
+Created At: 2026-06-12T10:42:40Z
+Completed At: 2026-06-12T10:42:40Z
+File Path: `file:///c:/Users/Admin/Downloads/casino-bot-main/casino-bot-main/app/discord_bot/cogs/gambling_helpers.py`
+Total Lines: 1185
+Total Bytes: 51744
+Showing lines 1010 to 1030
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+1010:             return
+1011:         if amount <= 0:
+1012:             await ctx.send("❌ Số lượng phát quà phải lớn hơn 0.")
+1013:             return
+1014: 
+1015:         all_users = self.economy.top_entries(0)
+1016:         user_ids = [row[0] for row in all_users]
+1017: 
+1018:         if not user_ids:
+1019:             await ctx.send("❌ Không có người chơi nào trong cơ sở dữ liệu.")
+1020:             return
+1021: 
+1022:         if category in ["money", "tiền"]:
+1023:             for uid in user_ids:
+1024:                 self.economy.add_money(uid, amount)
+1025:             await ctx.send(f"🎉 Admin đã phát **{amount:,} VND** tiền mặt cho tất cả **{len(user_ids)}** người chơi!")
+1026:         else:
+1027:             for uid in user_ids:
+1028:                 self.economy.add_credits(uid, amount)
+1029:             await ctx.send(f"🎉 Admin đã phát **{amount:,} thỏi vàng** cho tất cả **{len(user_ids)}** người chơi!")
+1030: 
+The above content does NOT show the entire file contents. If you need to view any lines of the file which were not shown to complete your task, call this tool again to view those lines.
+
+========================================
+--- Line 932 MODEL:
+Để xem danh sách những người chơi đang hoặc đã từng tương tác với bot của bạn, bạn có thể sử dụng các cách sau (dành cho bạn với tư cách là chủ sở hữu / nhà phát triển chạy bot):
+
+### Cách 1: Truy vấn trực tiếp cơ sở dữ liệu SQLite (Nhanh và chính xác nhất)
+Cơ sở dữ liệu của bot được lưu tại file `data/economy.db`. Bạn có thể chạy nhanh một dòng lệnh Python sau trong Terminal (ở thư mục gốc của dự án) để in ra danh sách toàn bộ người chơi kèm số dư tài khoản của họ:
+
+```powershell
+.\venv\Scripts\python.exe -c "import sqlite3; conn = sqlite3.connect('data/economy.db'); cur = conn.cursor(); cur.execute('SELECT user_id, money, credits FROM economy'); [print(f'User ID: {row[0]} | Tiền mặt: {row[1]:,} VND | Thỏi vàng: {row[2]:,}') for row in cur.fetchall()]"
+```
+
+Lệnh này sẽ quét toàn bộ bảng `economy` và hiển thị tất cả các User ID Discord của người chơi đã từng tương tác với bot.
+
+---
+
+### Cách 2: Kiểm tra lịch sử giao dịch qua file Log
+Mỗi khi người chơi chạy lệnh cược, nhận quà hàng ngày (`i?daily`), làm việc (`i?work`), v.v., hệ thống đều lưu log kèm ID người dùng.
+* File log nằm tại: `data/logs/casino-bot.log`
+* Bạn chỉ cần mở file này để theo dõi các sự kiện tương tác realtime của người chơi.
+
+---
+
+### Cách 3: Viết thêm câu lệnh Admin hiển thị danh sách trực tiếp trên Discord
+Nếu bạn muốn có thể kiểm tra danh sách này ngay trên Discord (chỉ dành cho bạn - Owner bot), tôi có thể tạo thêm một lệnh admin ẩn (ví dụ: `i?players` hoặc `i?servers`) để liệt kê toàn bộ các server bot đang tham gia cùng các thành viên hoạt động. 
+
+Hãy cho tôi biết nếu bạn muốn tích hợp thêm lệnh hiển thị này nhé!
+========================================
+--- Line 933 USER_EXPLICIT:
+<USER_REQUEST>
+cach 3 di
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-06-12T17:43:30+07:00.
+
+The user's current state is as follows:
+Other open documents:
+- c:\Users\Admin\Downloads\casino-bot-main\casino-bot-main\daga.md (LANGUAGE_MARKDOWN)
+- c:\Users\Admin\Downloads\casino-bot-main\casino-bot-main\.env.example (LANGUAGE_UNSPECIFIED)
+- c:\Users\Admin\Downloads\casino-bot-main\casino-bot-main\app\discord_bot\cogs\help_command.py (LANGUAGE_PYTHON)
+- c:\Users\Admin\Downloads\casino-bot-main\casino-bot-main\test_baucua.py (LANGUAGE_PYTHON)
+- c:\Users\Admin\Downloads\casino-bot-main\casino-bot-main\app\discord_bot\cogs\gambling_helpers.py (LANGUAGE_PYTHON)
+Running terminal commands:
+- .\venv\Scripts\python.exe main.py (in c:\Users\Admin\Downloads\casino-bot-main\casino-bot-main, running for 33m12s)
+</ADDITIONAL_METADATA>
+========================================
+--- Line 934 MODEL:
+I will search for `is_owner` or owner check inside `app/discord_bot/cogs/gambling_helpers.py` to see where owner commands are located.
+========================================
+--- Line 935 MODEL:
+Created At: 2026-06-12T10:43:32Z
+Completed At: 2026-06-12T10:43:33Z
+No results found
+========================================
+--- Line 936 MODEL:
+I will search for `owner` in `app/discord_bot/cogs/gambling_helpers.py` to see the authentication patterns.
+========================================
+--- Line 937 MODEL:
+Created At: 2026-06-12T10:43:35Z
+Completed At: 2026-06-12T10:43:36Z
+No results found
+========================================
+--- Line 938 MODEL:
+I will search for `admin` in `app/discord_bot/cogs/gambling_helpers.py` to see the admin commands.
+========================================
+--- Line 939 MODEL:
+Created At: 2026-06-12T10:43:39Z
+Completed At: 2026-06-12T10:43:39Z
+No results found
+========================================
+--- Line 940 MODEL:
+I will search for `@commands.command` in `app/discord_bot/cogs/gambling_helpers.py` to see the commands defined.
+========================================
+--- Line 941 MODEL:
+Created At: 2026-06-12T10:43:42Z
+Completed At: 2026-06-12T10:43:43Z
+No results found
+========================================
+--- Line 942 MODEL:
+I will view the first 100 lines of `app/discord_bot/cogs/gambling_helpers.py` to see how the cog is defined.
+========================================
+--- Line 943 MODEL:
+Created At: 2026-06-12T10:43:46Z
+Completed At: 2026-06-12T10:43:46Z
+File Path: `file:///c:/Users/Admin/Downloads/casino-bot-main/casino-bot-main/app/discord_bot/cogs/gambling_helpers.py`
+Total Lines: 1185
+Total Bytes: 51744
+Showing lines 1 to 100
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+1: import logging
+2: import random
+3: import time
+4: from contextlib import suppress
+5: 
+6: import discord
+7: from discord.ext import commands
+8: 
+9: from app.config import config
+10: from app.discord_bot.modules.economy import Economy
+11: from app.discord_bot.modules.helpers import make_embed
+12: from app.discord_bot.modules.wallet_logging import log_wallet_change
+13: 
+14: logger = logging.getLogger(__name__)
+15: 
+16: 
+17: class ConfirmResetView(discord.ui.View):
+18:     def __init__(self, author: discord.User | discord.Member, timeout: float = 60.0):
+19:         super().__init__(timeout=timeout)
+20:         self.author = author
+21:         self.confirmed = False
+22: 
+23:     @discord.ui.button(label="Xác nhận Reset", style=discord.ButtonStyle.danger, emoji="⚠️")
+24:     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
+25:         self.confirmed = True
+26:         self.stop()
+27:         try:
+28:             await interaction.response.edit_message(content="⏳ Đang tiến hành reset ví của tất cả người chơi...", view=None)
+29:         except Exception:
+30:             pass
+31: 
+32:     @discord.ui.button(label="Hủy bỏ", style=discord.ButtonStyle.secondary, emoji="❌")
+33:     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+34:         self.confirmed = False
+35:         self.stop()
+36:         try:
+37:             await interaction.response.edit_message(content="❌ Đã hủy yêu cầu reset ví.", 
+<truncated 1119 bytes>
+ion):
+68:         if not await interaction.client.is_owner(interaction.user):
+69:             await interaction.response.send_message("❌ Bạn không có quyền thực hiện lệnh này!", ephemeral=True)
+70:             return
+71: 
+72:         cat = self.category.value.strip().lower()
+73:         if cat not in ["money", "gold", "tiền", "vàng"]:
+74:             await interaction.response.send_message("❌ Loại quà không hợp lệ! Vui lòng điền `money`, `gold`, `tiền` hoặc `vàng`.", ephemeral=True)
+75:             return
+76: 
+77:         try:
+78:             val = int(self.amount.value.strip())
+79:             if val <= 0:
+80:                 raise ValueError()
+81:         except ValueError:
+82:             await interaction.response.send_message("❌ Số lượng phát quà phải là số nguyên dương hợp lệ!", ephemeral=True)
+83:             return
+84: 
+85:         all_users = self.cog.economy.top_entries(0)
+86:         user_ids = [row[0] for row in all_users]
+87: 
+88:         if not user_ids:
+89:             await interaction.response.send_message("❌ Không có người chơi nào trong cơ sở dữ liệu.", ephemeral=True)
+90:             return
+91: 
+92:         if cat in ["money", "tiền"]:
+93:             for uid in user_ids:
+94:                 self.cog.economy.add_money(uid, val)
+95:             await interaction.response.send_message(f"🎉 **{interaction.user.name}** đã phát **{val:,} VND** tiền mặt cho tất cả **{len(user_ids)}** người chơi!")
+96:         else:
+97:             for uid in user_ids:
+98:                 self.cog.economy.add_credits(uid, val)
+99:             await interaction.response.send_message(f"🎉 **{interaction.user.name}** đã phát **{val:,} thỏi vàng** cho tất cả **{len(user_ids)}** người chơi!")
+100: 
+The above content does NOT show the entire file contents. If you need to view any lines of the file which were not shown to complete your task, call this tool again to view those lines.
+
+========================================
+--- Line 944 MODEL:
+I will view lines 970 to 1010 of `gambling_helpers.py` to see the authentication patterns inside the cog.
+========================================
+--- Line 945 MODEL:
+Created At: 2026-06-12T10:43:49Z
+Completed At: 2026-06-12T10:43:49Z
+File Path: `file:///c:/Users/Admin/Downloads/casino-bot-main/casino-bot-main/app/discord_bot/cogs/gambling_helpers.py`
+Total Lines: 1185
+Total Bytes: 51744
+Showing lines 970 to 1010
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+970: 
+971:         log_wallet_change(
+972:             logger,
+973:             event="transfer_gold_send",
+974:             user_id=ctx.author.id,
+975:             credits_delta=-amount,
+976:             ctx=ctx,
+977:             recipient_id=target.id,
+978:         )
+979:         log_wallet_change(
+980:             logger,
+981:             event="transfer_gold_receive",
+982:             user_id=target.id,
+983:             credits_delta=amount,
+984:             ctx=ctx,
+985:             sender_id=ctx.author.id,
+986:         )
+987: 
+988:         embed = make_embed(
+989:             title="🟡 CHUYỂN VÀNG THÀNH CÔNG 🟡",
+990:             description=(
+991:                 f"**{ctx.author.mention}** đã chuyển thành công **{amount:,}** thỏi vàng cho **{target.mention}**!\n\n"
+992:                 f"💳 **Số dư mới của bạn:** `{self.economy.get_entry(ctx.author.id)[2]:,}` thỏi vàng"
+993:             ),
+994:             color=discord.Color.gold(),
+995:         )
+996:         embed.set_thumbnail(url=target.display_avatar.url)
+997:         await ctx.send(embed=embed)
+998: 
+999:     @commands.command(
+1000:         brief="Tặng tiền VND hoặc thỏi vàng cho toàn bộ người chơi trong database.",
+1001:         usage="giveall <money|gold> <số_lượng>",
+1002:         aliases=["phatqua"],
+1003:         hidden=True,
+1004:     )
+1005:     @commands.is_owner()
+1006:     async def giveall(self, ctx: commands.Context, category: str, amount: int):
+1007:         category = category.lower()
+1008:         if category not in ["money", "gold", "tiền", "vàng"]:
+1009:             await ctx.send("❌ Hướng dẫn: `i?giveall <money|gold> <số_lượng>`")
+1010:             return
+The above content does NOT show the entire file contents. If you need to view any lines of the file which were not shown to complete your task, call this tool again to view those lines.
+
+========================================

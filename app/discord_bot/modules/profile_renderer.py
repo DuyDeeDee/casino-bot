@@ -11,16 +11,16 @@ from app.config import config
 logger = logging.getLogger(__name__)
 
 def get_font_path(font_type: str) -> Path:
-    """Gets local path to Outfit font, downloading it if not present."""
+    """Gets local path to Roboto font, downloading it if not present."""
     font_dir = Path(config.storage.data_dir) / "fonts"
     font_dir.mkdir(parents=True, exist_ok=True)
     
-    filename = f"Outfit-{font_type.capitalize()}.ttf"
+    filename = f"Roboto-{font_type.capitalize()}.ttf"
     font_path = font_dir / filename
     
     if not font_path.exists():
-        weight = "700" if font_type == "bold" else "400"
-        url = f"https://cdn.jsdelivr.net/fontsource/fonts/outfit@latest/latin-{weight}-normal.ttf"
+        mapped_name = "Regular" if font_type.lower() == "regular" else "Bold"
+        url = f"https://github.com/googlefonts/roboto-2/raw/main/src/hinted/Roboto-{mapped_name}.ttf"
         try:
             logger.info(f"Downloading premium font from {url} to {font_path}...")
             urllib.request.urlretrieve(url, str(font_path))
@@ -101,6 +101,192 @@ def get_rank_info(net_worth: int) -> tuple[str, tuple[int, int, int], tuple[int,
     else:
         return "Tỷ Phú Đô La", (255, 69, 0), (255, 255, 255) # Red-Orange
 
+def strip_emoji(text: str | None) -> str:
+    """Removes emojis and special characters from title string for clean PIL rendering."""
+    if not text:
+        return ""
+    return "".join(c for c in text if ord(c) < 0x2000 or 0x20A0 <= ord(c) <= 0x20CF).strip()
+
+def draw_profile_content(
+    img: Image.Image,
+    draw: ImageDraw.Draw,
+    avatar_img: Image.Image | None,
+    username: str,
+    money: int,
+    gold: int,
+    gold_price: int,
+    loan_amount: int,
+    biz_count: int,
+    inv_count: int,
+    rl_title: str | None = None,
+    daga_title: str | None = None,
+    cf_title: str | None = None
+) -> None:
+    width, height = img.size
+    
+    # Create a transparent overlay image for drawing everything to blend properly
+    overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    overlay_draw = ImageDraw.Draw(overlay)
+    
+    # 1. Draw glowing outline border
+    overlay_draw.rounded_rectangle([6, 6, width - 6, height - 6], radius=16, outline=(255, 215, 0, 80), width=3)
+    
+    # 2. Draw Avatar
+    avatar_size = 180
+    avatar_x, avatar_y = 40, (height - avatar_size) // 2
+    
+    if avatar_img:
+        # Make circle mask
+        mask = Image.new("L", (avatar_size, avatar_size), 0)
+        mask_draw = ImageDraw.Draw(mask)
+        mask_draw.ellipse((0, 0, avatar_size, avatar_size), fill=255)
+        
+        # Paste avatar circular
+        avatar_circle = Image.new("RGBA", (avatar_size, avatar_size), (0, 0, 0, 0))
+        avatar_circle.paste(avatar_img, (0, 0), mask=mask)
+        overlay.paste(avatar_circle, (avatar_x, avatar_y), mask=avatar_circle)
+        avatar_circle.close()
+        mask.close()
+    else:
+        # Fallback placeholder circle
+        overlay_draw.ellipse([avatar_x, avatar_y, avatar_x + avatar_size, avatar_y + avatar_size], fill=(100, 100, 100, 255))
+        
+    # Avatar gold border
+    overlay_draw.ellipse([avatar_x - 3, avatar_y - 3, avatar_x + avatar_size + 3, avatar_y + avatar_size + 3], outline=(255, 215, 0, 180), width=4)
+    
+    # 3. Load Fonts
+    font_title = load_font("bold", 34)
+    font_badge = load_font("bold", 17)
+    font_widget_title = load_font("regular", 11)
+    font_widget_val = load_font("bold", 15)
+    
+    # 5. Gather Badges
+    badges = []
+    
+    # Wealth Badge
+    net_worth = money + (gold * gold_price) - loan_amount
+    rank_name, badge_bg, badge_fg = get_rank_info(net_worth)
+    badges.append((rank_name, badge_bg, badge_fg))
+    
+    # Roulette Title Badge
+    if rl_title:
+        clean_rl = strip_emoji(rl_title)
+        if clean_rl:
+            if "Huyền Thoại" in clean_rl:
+                rl_bg = (75, 0, 130)  # Indigo
+            elif "Vua" in clean_rl:
+                rl_bg = (25, 25, 112)  # Midnight Blue
+            elif "Cao Thủ" in clean_rl:
+                rl_bg = (184, 134, 11)  # Dark Goldenrod
+            elif "Con Cưng" in clean_rl:
+                rl_bg = (112, 128, 144)  # Slate Gray
+            else:
+                rl_bg = (160, 82, 45)  # Sienna
+            badges.append((clean_rl, rl_bg, (255, 255, 255)))
+            
+    # Daga Title Badge
+    if daga_title:
+        clean_daga = strip_emoji(daga_title)
+        if clean_daga and clean_daga not in ["Chưa xuất trận", "Người mới"]:
+            if "Huyền Thoại" in clean_daga:
+                dg_bg = (148, 0, 211)  # Dark Violet
+            elif "Đại Sư Kê" in clean_daga:
+                dg_bg = (218, 165, 32)  # Goldenrod
+            elif "Sư Kê" in clean_daga:
+                dg_bg = (178, 34, 34)  # Firebrick
+            elif "Chiến Kê" in clean_daga:
+                dg_bg = (255, 140, 0)  # Dark Orange
+            elif "Tân Binh" in clean_daga:
+                dg_bg = (46, 139, 87)  # Sea Green
+            else:
+                dg_bg = (105, 105, 105)  # Dim Gray
+            badges.append((clean_daga, dg_bg, (255, 255, 255)))
+            
+    # Coin Flip Title Badge
+    if cf_title:
+        clean_cf = strip_emoji(cf_title)
+        if clean_cf:
+            if "Vua" in clean_cf:
+                cf_bg = (25, 25, 112)  # Midnight Blue
+            elif "Cao Thủ" in clean_cf:
+                cf_bg = (184, 134, 11)  # Dark Goldenrod
+            elif "Thần May" in clean_cf:
+                cf_bg = (46, 139, 87)  # Sea Green
+            else:
+                cf_bg = (160, 82, 45)  # Sienna
+            badges.append((clean_cf, cf_bg, (255, 255, 255)))
+
+    # Loan Warning Badge
+    if loan_amount > 0:
+        loan_text = f"Nợ: -{format_money_short(loan_amount)}"
+        badges.append((loan_text, (139, 0, 0), (255, 255, 255)))
+        
+    # Calculate text layout dynamically and center it vertically
+    # 1. Group badges into rows
+    badge_rows = []
+    current_row = []
+    current_row_width = 0
+    start_x = 260
+    max_badges_width = 760 - start_x  # boundary is 760
+    spacing = 10
+    
+    for text, bg_color, fg_color in badges:
+        try:
+            text_w = font_badge.getlength(text)
+        except AttributeError:
+            text_w = len(text) * 10
+        badge_w = int(text_w + 24)
+        
+        if current_row_width + badge_w > max_badges_width:
+            if current_row:
+                badge_rows.append(current_row)
+            current_row = [(text, bg_color, fg_color, badge_w)]
+            current_row_width = badge_w
+        else:
+            current_row.append((text, bg_color, fg_color, badge_w))
+            current_row_width += badge_w + spacing
+            
+    if current_row:
+        badge_rows.append(current_row)
+
+    # 2. Compute heights
+    username_height = 34  # font size 34
+    spacing_between = 15
+    badge_h = 32
+    badge_row_gap = 8
+    
+    num_rows = len(badge_rows)
+    if num_rows > 0:
+        total_text_height = username_height + spacing_between + num_rows * badge_h + (num_rows - 1) * badge_row_gap
+    else:
+        total_text_height = username_height
+        
+    # 3. Vertically center the text block
+    start_y = (height - total_text_height) // 2
+    
+    # 4. Draw Username
+    overlay_draw.text((start_x, start_y), username, font=font_title, fill=(255, 255, 255, 255))
+    
+    # 5. Draw Badges
+    current_y = start_y + username_height + spacing_between
+    for row in badge_rows:
+        current_x = start_x
+        for text, bg_color, fg_color, badge_w in row:
+            overlay_draw.rounded_rectangle(
+                [current_x, current_y, current_x + badge_w, current_y + badge_h],
+                radius=8,
+                fill=bg_color
+            )
+            overlay_draw.text((current_x + 12, current_y + 5), text, font=font_badge, fill=fg_color)
+            current_x += badge_w + spacing
+        current_y += badge_h + badge_row_gap
+
+    # Paste transparent overlay onto the base image
+    img.paste(overlay, (0, 0), mask=overlay)
+    overlay.close()
+
+
+
 async def render_profile_banner(
     username: str,
     avatar_url: str,
@@ -109,132 +295,327 @@ async def render_profile_banner(
     gold_price: int,
     loan_amount: int,
     biz_count: int,
-    inv_count: int
+    inv_count: int,
+    banner_path: Path | None = None,
+    rl_title: str | None = None,
+    daga_title: str | None = None,
+    cf_title: str | None = None
 ) -> BytesIO:
-    """Renders a beautiful profile banner card and returns it as a BytesIO buffer."""
+    """Renders a beautiful profile banner card (static or dynamic GIF) and returns it as a BytesIO buffer."""
+    width = 800
+    height = 400  # Locked standard banner height
     
-    # 1. Background
-    width, height = 800, 300
+    # 1. Resolve custom background if exists
+    is_gif = False
+    
+    if banner_path and banner_path.exists():
+        is_gif = (banner_path.suffix.lower() == ".gif")
+    else:
+        banner_path = None
+                
+    # Fetch avatar bytes once
+    avatar_bytes = await fetch_avatar(avatar_url)
+    avatar_img = None
+    if avatar_bytes:
+        try:
+            avatar_img = Image.open(BytesIO(avatar_bytes)).convert("RGBA")
+            avatar_img = avatar_img.resize((180, 180), Image.Resampling.LANCZOS)
+        except Exception as e:
+            logger.error(f"Failed to prepare avatar image: {e}")
+            avatar_img = None
+
+    # Case A: Animated GIF Background
+    if banner_path and is_gif:
+        try:
+            with Image.open(banner_path) as gif:
+                frames = []
+                num_frames = min(gif.n_frames, 100) # Safe limit to prevent CPU/memory exhaustion (increased to 100 to support full animations like sally.gif)
+                
+                # Fetch duration from original gif or set default
+                duration = gif.info.get('duration', 100)
+                
+                for frame_idx in range(num_frames):
+                    gif.seek(frame_idx)
+                    # Create RGBA copy of current frame and resize
+                    frame = gif.copy().convert("RGBA")
+                    frame = frame.resize((width, height), Image.Resampling.BILINEAR)
+                    frame_draw = ImageDraw.Draw(frame)
+                    
+                    # Draw profile overlay details
+                    draw_profile_content(
+                        img=frame,
+                        draw=frame_draw,
+                        avatar_img=avatar_img,
+                        username=username,
+                        money=money,
+                        gold=gold,
+                        gold_price=gold_price,
+                        loan_amount=loan_amount,
+                        biz_count=biz_count,
+                        inv_count=inv_count,
+                        rl_title=rl_title,
+                        daga_title=daga_title,
+                        cf_title=cf_title
+                    )
+                    frames.append(frame)
+                    
+                if avatar_img:
+                    avatar_img.close()
+                    
+                output = BytesIO()
+                # Save frames as animated GIF
+                frames[0].save(
+                    output,
+                    format="GIF",
+                    save_all=True,
+                    append_images=frames[1:],
+                    loop=0,
+                    duration=duration,
+                    disposal=2 # Restore to background to prevent ghosting
+                )
+                output.seek(0)
+                output.is_gif = True
+                return output
+        except Exception as e:
+            logger.error(f"Error rendering animated profile GIF: {e}", exc_info=True)
+            # Fall through to default static if rendering GIF fails
+
+    # Case B: Static Custom Background (PNG/JPG)
+    if banner_path:
+        try:
+            img = Image.open(banner_path).convert("RGBA")
+            img = img.resize((width, height), Image.Resampling.BILINEAR)
+            draw = ImageDraw.Draw(img)
+            
+            draw_profile_content(
+                img=img,
+                draw=draw,
+                avatar_img=avatar_img,
+                username=username,
+                money=money,
+                gold=gold,
+                gold_price=gold_price,
+                loan_amount=loan_amount,
+                biz_count=biz_count,
+                inv_count=inv_count,
+                rl_title=rl_title,
+                daga_title=daga_title,
+                cf_title=cf_title
+            )
+            
+            if avatar_img:
+                avatar_img.close()
+                
+            output = BytesIO()
+            img.save(output, format="PNG")
+            output.seek(0)
+            output.is_gif = False
+            img.close()
+            return output
+        except Exception as e:
+            logger.error(f"Error rendering static profile banner: {e}", exc_info=True)
+            # Fall through to default static gradient if loading custom static fails
+
+    # Case C: Fallback Default Gradient Background
     gradient = Image.new("RGBA", (1, 2))
-    # Elegant dark purple / gold-bordered vibe
     gradient.putpixel((0, 0), (26, 11, 46, 255))
     gradient.putpixel((0, 1), (11, 4, 16, 255))
     img = gradient.resize((width, height), Image.Resampling.BILINEAR)
     
     draw = ImageDraw.Draw(img)
     
-    # Draw glowing outline border
-    draw.rounded_rectangle([6, 6, width - 6, height - 6], radius=16, outline=(255, 215, 0, 80), width=3)
+    draw_profile_content(
+        img=img,
+        draw=draw,
+        avatar_img=avatar_img,
+        username=username,
+        money=money,
+        gold=gold,
+        gold_price=gold_price,
+        loan_amount=loan_amount,
+        biz_count=biz_count,
+        inv_count=inv_count,
+        rl_title=rl_title,
+        daga_title=daga_title,
+        cf_title=cf_title
+    )
     
-    # 2. Draw Avatar
-    avatar_bytes = await fetch_avatar(avatar_url)
-    avatar_size = 140
-    avatar_x, avatar_y = 40, (height - avatar_size) // 2
-    
-    if avatar_bytes:
-        try:
-            avatar_img = Image.open(BytesIO(avatar_bytes)).convert("RGBA")
-            avatar_img = avatar_img.resize((avatar_size, avatar_size), Image.Resampling.LANCZOS)
-            
-            # Make circle mask
-            mask = Image.new("L", (avatar_size, avatar_size), 0)
-            mask_draw = ImageDraw.Draw(mask)
-            mask_draw.ellipse((0, 0, avatar_size, avatar_size), fill=255)
-            
-            # Paste avatar circular
-            avatar_circle = Image.new("RGBA", (avatar_size, avatar_size), (0, 0, 0, 0))
-            avatar_circle.paste(avatar_img, (0, 0), mask=mask)
-            img.paste(avatar_circle, (avatar_x, avatar_y), mask=avatar_circle)
-            avatar_img.close()
-        except Exception as e:
-            logger.error(f"Error drawing avatar: {e}")
-            # Fallback placeholder circle
-            draw.ellipse([avatar_x, avatar_y, avatar_x + avatar_size, avatar_y + avatar_size], fill=(100, 100, 100, 255))
-    else:
-        # Fallback placeholder circle
-        draw.ellipse([avatar_x, avatar_y, avatar_x + avatar_size, avatar_y + avatar_size], fill=(100, 100, 100, 255))
+    if avatar_img:
+        avatar_img.close()
         
-    # Avatar gold border
-    draw.ellipse([avatar_x - 3, avatar_y - 3, avatar_x + avatar_size + 3, avatar_y + avatar_size + 3], outline=(255, 215, 0, 180), width=4)
-    
-    # 3. Load Fonts
-    font_title = load_font("bold", 34)
-    font_badge = load_font("bold", 13)
-    font_widget_title = load_font("regular", 11)
-    font_widget_val = load_font("bold", 15)
-    
-    # 4. Draw Username & Rank
-    net_worth = money + (gold * gold_price) - loan_amount
-    rank_name, badge_bg, badge_fg = get_rank_info(net_worth)
-    
-    # Draw Username
-    draw.text((200, 50), username, font=font_title, fill=(255, 255, 255, 255))
-    
-    # Draw Rank Badge
-    # Calculate badge size based on text length
-    # A simple fallback for text measurement if not supported
-    try:
-        text_w = font_badge.getlength(rank_name)
-    except AttributeError:
-        # Fallback estimate
-        text_w = len(rank_name) * 8
-        
-    badge_w = int(text_w + 20)
-    badge_h = 24
-    badge_x, badge_y = 200, 105
-    
-    draw.rounded_rectangle([badge_x, badge_y, badge_x + badge_w, badge_y + badge_h], radius=6, fill=badge_bg)
-    draw.text((badge_x + 10, badge_y + 4), rank_name, font=font_badge, fill=badge_fg)
-    
-    # Draw Loan Warning inside badge line if active loan exists
-    if loan_amount > 0:
-        loan_text = f"Nợ: -{format_money_short(loan_amount)}"
-        try:
-            loan_w = font_badge.getlength(loan_text)
-        except AttributeError:
-            loan_w = len(loan_text) * 8
-        draw.rounded_rectangle([badge_x + badge_w + 10, badge_y, badge_x + badge_w + 10 + int(loan_w + 20), badge_y + badge_h], radius=6, fill=(139, 0, 0))
-        draw.text((badge_x + badge_w + 20, badge_y + 4), loan_text, font=font_badge, fill=(255, 255, 255))
+    output = BytesIO()
+    img.save(output, format="PNG")
+    output.seek(0)
+    output.is_gif = False
+    img.close()
+    return output
 
-    # 5. Draw 4 Status Widgets (Horizontal Row)
-    widget_y = 155
-    widget_h = 85
-    widget_w = 132
-    widget_gap = 12
-    start_x = 200
-    
-    widgets = [
-        ("TÀI KHOẢN (VND)", format_money_short(money), (46, 204, 113, 255)), # Green tint
-        ("KÉT SẮT (VÀNG)", f"{gold} Vàng", (241, 196, 15, 255)), # Yellow tint
-        ("DOANH NGHIỆP", f"{biz_count} Cơ sở", (52, 152, 219, 255)), # Blue tint
-        ("TÚI ĐỒ (SHOP)", f"{inv_count} Vật phẩm", (155, 89, 182, 255)), # Purple tint
-    ]
-    
-    for idx, (title, value, color_theme) in enumerate(widgets):
-        box_x = start_x + idx * (widget_w + widget_gap)
-        # frosted glass box
+
+async def render_showcase_image(
+    cock_info: dict | None,
+    car_info: dict | None
+) -> BytesIO | None:
+    if not cock_info and not car_info:
+        return None
+
+    width, height = 800, 240
+    # Create background image with dark gradient
+    gradient = Image.new("RGBA", (1, 2))
+    gradient.putpixel((0, 0), (20, 10, 35, 255))
+    gradient.putpixel((0, 1), (8, 4, 12, 255))
+    img = gradient.resize((width, height), Image.Resampling.BILINEAR)
+    draw = ImageDraw.Draw(img)
+
+    # Draw outline border
+    draw.rounded_rectangle([6, 6, width - 6, height - 6], radius=16, outline=(255, 255, 255, 30), width=2)
+
+    font_bold = load_font("bold", 16)
+    font_regular = load_font("regular", 12)
+    font_header = load_font("bold", 18)
+
+    panel_y = 25
+    panel_h = 190
+    panel_w = 360
+
+    from app.discord_bot.modules.helpers import ABS_PATH
+
+    # Panel 1: Cock
+    if cock_info and car_info:
+        cock_x = 30
+    elif cock_info:
+        cock_x = (width - panel_w) // 2
+    else:
+        cock_x = None
+
+    if cock_info and cock_x is not None:
+        # Draw Cock Panel Frosted Glass Box
         draw.rounded_rectangle(
-            [box_x, widget_y, box_x + widget_w, widget_y + widget_h],
-            radius=10,
-            fill=(255, 255, 255, 12),
-            outline=(255, 255, 255, 25),
+            [cock_x, panel_y, cock_x + panel_w, panel_y + panel_h],
+            radius=12,
+            fill=(255, 255, 255, 10),
+            outline=(255, 255, 255, 20),
             width=1
         )
-        
-        # Color accent strip on left border
+        rarity_colors = {
+            "Thường": (120, 120, 120, 255),       # C (Grey)
+            "Hiếm": (46, 204, 113, 255),         # B (Green)
+            "Quý": (52, 152, 219, 255),          # A (Blue)
+            "Sử Thi": (155, 89, 182, 255),       # S (Purple)
+            "Huyền Thoại": (241, 196, 15, 255),   # SS (Gold)
+            "Thần Kê": (231, 76, 60, 255),       # SSS (Red)
+            "Exclusive": (230, 126, 34, 255)     # Exclusive (Orange)
+        }
+        rarity_display = {
+            "Thường": "C",
+            "Hiếm": "B",
+            "Quý": "A",
+            "Sử Thi": "S",
+            "Huyền Thoại": "SS",
+            "Thần Kê": "SSS",
+            "Exclusive": "Exclusive"
+        }
+        rarity = cock_info.get("rarity", "Thường")
+        accent_color = rarity_colors.get(rarity, (120, 120, 120, 255))
         draw.rounded_rectangle(
-            [box_x, widget_y, box_x + 4, widget_y + widget_h],
-            radius=10,
-            fill=color_theme
+            [cock_x, panel_y, cock_x + 5, panel_y + panel_h],
+            radius=12,
+            fill=accent_color
         )
+
+        # Draw cock image
+        img_file = cock_info.get("image_filename")
+        cock_img = None
+        if img_file:
+            path = ABS_PATH / "modules" / "daga" / img_file
+            if path.exists():
+                try:
+                    cock_img = Image.open(path).convert("RGBA")
+                    cock_img = cock_img.resize((130, 130), Image.Resampling.LANCZOS)
+                except Exception as e:
+                    logger.error(f"Failed to load cock image: {e}")
         
-        # Widget title
-        draw.text((box_x + 12, widget_y + 15), title, font=font_widget_title, fill=(200, 200, 200, 200))
+        if cock_img:
+            img.paste(cock_img, (cock_x + 20, panel_y + 30), mask=cock_img)
+            cock_img.close()
+        else:
+            draw.ellipse([cock_x + 20, panel_y + 30, cock_x + 150, panel_y + 160], fill=(100, 100, 100, 255))
+
+        name = cock_info.get("name", "Nhân vật")
+        level = cock_info.get("level", 1)
+        wins = cock_info.get("wins", 0)
+        losses = cock_info.get("losses", 0)
+        streak = cock_info.get("streak", 0)
+
+        draw.text((cock_x + 165, panel_y + 25), name, font=font_header, fill=(255, 255, 255, 255))
         
-        # Widget value
-        draw.text((box_x + 12, widget_y + 40), value, font=font_widget_val, fill=(255, 255, 255, 255))
-        
-    # Save image to BytesIO
+        display_rarity = rarity_display.get(rarity, rarity)
+        draw.text((cock_x + 165, panel_y + 55), f"Độ hiếm: {display_rarity}", font=font_bold, fill=accent_color)
+        draw.text((cock_x + 165, panel_y + 80), f"Cấp độ: {level}", font=font_regular, fill=(200, 200, 200, 255))
+        draw.text((cock_x + 165, panel_y + 110), f"Thắng: {wins} | Thua: {losses}", font=font_regular, fill=(200, 200, 200, 255))
+        draw.text((cock_x + 165, panel_y + 135), f"Chuỗi thắng: {streak}", font=font_regular, fill=(200, 200, 200, 255))
+
+    # Panel 2: Car
+    if cock_info and car_info:
+        car_x = 410
+    elif car_info:
+        car_x = (width - panel_w) // 2
+    else:
+        car_x = None
+
+    if car_info and car_x is not None:
+        # Draw Car Panel Frosted Glass Box
+        draw.rounded_rectangle(
+            [car_x, panel_y, car_x + panel_w, panel_y + panel_h],
+            radius=12,
+            fill=(255, 255, 255, 10),
+            outline=(255, 255, 255, 20),
+            width=1
+        )
+        rarity_colors = {
+            "Common": (120, 120, 120, 255),
+            "Rare": (46, 204, 113, 255),
+            "Epic": (52, 152, 219, 255),
+            "Legendary": (155, 89, 182, 255),
+            "Mythic": (241, 196, 15, 255),
+            "Exclusive": (231, 76, 60, 255)
+        }
+        rarity = car_info.get("rarity", "Common")
+        accent_color = rarity_colors.get(rarity, (120, 120, 120, 255))
+        draw.rounded_rectangle(
+            [car_x, panel_y, car_x + 5, panel_y + panel_h],
+            radius=12,
+            fill=accent_color
+        )
+
+        # Draw car image
+        img_file = car_info.get("image_filename")
+        car_img = None
+        if img_file:
+            path = ABS_PATH / "modules" / "duaxe" / img_file
+            if path.exists():
+                try:
+                    car_img = Image.open(path).convert("RGBA")
+                    car_img = car_img.resize((150, 90), Image.Resampling.LANCZOS)
+                except Exception as e:
+                    logger.error(f"Failed to load car image: {e}")
+                    
+        if car_img:
+            img.paste(car_img, (car_x + 15, panel_y + 50), mask=car_img)
+            car_img.close()
+        else:
+            draw.ellipse([car_x + 20, panel_y + 45, car_x + 150, panel_y + 145], fill=(100, 100, 100, 255))
+
+        model = car_info.get("model", "Xe Chưa Đặt Tên")
+        edition = car_info.get("edition", "Stock")
+        serial = car_info.get("serial", 1)
+        collection = car_info.get("collection", "Other")
+
+        draw.text((car_x + 175, panel_y + 25), model, font=font_header, fill=(255, 255, 255, 255))
+        draw.text((car_x + 175, panel_y + 55), f"Độ hiếm: {rarity}", font=font_bold, fill=accent_color)
+        draw.text((car_x + 175, panel_y + 80), f"Phiên bản: {edition}", font=font_regular, fill=(200, 200, 200, 255))
+        draw.text((car_x + 175, panel_y + 110), f"Bộ sưu tập: {collection}", font=font_regular, fill=(200, 200, 200, 255))
+        draw.text((car_x + 175, panel_y + 135), f"Serial: #{serial:04d}", font=font_bold, fill=(255, 215, 0, 255))
+
     output = BytesIO()
     img.save(output, format="PNG")
     output.seek(0)

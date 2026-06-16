@@ -6,7 +6,6 @@ from discord.ext import commands
 from app.config import config
 from app.discord_bot.cogs import (
     Blackjack,
-    Gambling,
     GamblingHelpers,
     Handlers,
     Help,
@@ -14,6 +13,16 @@ from app.discord_bot.cogs import (
     Slots,
     AIHelper,
     Simulator,
+    GamblingGames,
+    Daga,
+    Xe,
+    Roulette,
+    CoinFlip,
+    HorseRace,
+    Crash,
+    ScratchCard,
+    Bkb,
+    Baito,
 )
 
 from app.discord_bot.modules.economy import Economy
@@ -23,14 +32,25 @@ logger = logging.getLogger(__name__)
 COGS = (
     Blackjack,
     GamblingHelpers,
-    Gambling,
     Handlers,
     Help,
     Slots,
     MultiBlackjack,
     AIHelper,
     Simulator,
+    GamblingGames,
+    Daga,
+    Xe,
+    Roulette,
+    CoinFlip,
+    HorseRace,
+    Crash,
+    ScratchCard,
+    Bkb,
+    Baito,
 )
+
+
 
 
 def build_intents() -> discord.Intents:
@@ -44,8 +64,10 @@ def build_intents() -> discord.Intents:
 
 class CasinoBot(commands.Bot):
     def __init__(self) -> None:
+        p = config.bot.prefix
+        prefixes = [p.lower(), p.upper()] if p.lower() != p.upper() else [p]
         super().__init__(
-            command_prefix=config.bot.prefix,
+            command_prefix=prefixes,
             owner_ids=set(config.bot.owner_ids),
             intents=build_intents(),
         )

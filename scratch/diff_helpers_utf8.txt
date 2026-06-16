@@ -1,0 +1,879 @@
+diff --git a/app/discord_bot/cogs/gambling_helpers.py b/app/discord_bot/cogs/gambling_helpers.py
+index 7c805c6..b8fdc4a 100644
+--- a/app/discord_bot/cogs/gambling_helpers.py
++++ b/app/discord_bot/cogs/gambling_helpers.py
+@@ -45,6 +45,67 @@ class ConfirmResetView(discord.ui.View):
+         return True
+ 
+ 
++async def get_user_name(client: commands.Bot, user_id: int) -> str:
++    user = client.get_user(user_id)
++    if user:
++        return user.name
++    try:
++        user = await client.fetch_user(user_id)
++        return user.name
++    except Exception:
++        return f"Người chơi {user_id}"
++
++
++class PaginatorView(discord.ui.View):
++    def __init__(self, ctx: commands.Context, total_pages: int, get_page_content_func, timeout: float = 120.0):
++        super().__init__(timeout=timeout)
++        self.ctx = ctx
++        self.total_pages = total_pages
++        self.get_page_content_func = get_page_content_func
++        self.current_page = 1
++        self.message = None
++
++    async def update_message(self):
++        embed = await self.get_page_content_func(self.current_page)
++        for child in self.children:
++            if isinstance(child, discord.ui.Button):
++                if child.label == "◀️ Trước":
++                    child.disabled = self.current_page == 1
++                elif child.label == "Sau ▶️":
++                    child.disabled = self.current_page == self.total_pages
++        
++        await self.message.edit(embed=embed, view=self)
++
++    @discord.ui.button(label="◀️ Trước", style=discord.ButtonStyle.primary)
++    async def prev_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
++        await interaction.response.defer()
++        if self.current_page > 1:
++            self.current_page -= 1
++            await self.update_message()
++
++    @discord.ui.button(label="Sau ▶️", style=discord.ButtonStyle.primary)
++    async def next_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
++        await interaction.response.defer()
++        if self.current_page < self.total_pages:
++            self.current_page += 1
++            await self.update_message()
++
++    async def interaction_check(self, interaction: discord.Interaction) -> bool:
++        if interaction.user.id != self.ctx.author.id:
++            await interaction.response.send_message("Bạn không phải admin yêu cầu lệnh này!", ephemeral=True)
++            return False
++        return True
++
++    async def on_timeout(self):
++        for child in self.children:
++            if isinstance(child, discord.ui.Button):
++                child.disabled = True
++        try:
++            await self.message.edit(view=self)
++        except Exception:
++            pass
++
++
+ class GamblingHelpers(commands.Cog, name="General"):
+     def __init__(self, client: commands.Bot) -> None:
+         self.client = client
+@@ -147,23 +208,6 @@ class GamblingHelpers(commands.Cog, name="General"):
+             except Exception:
+                 await ctx.send("✅ **Thành công:** Đã reset toàn bộ tiền, vàng và dữ liệu khởi nghiệp của tất cả người chơi về mặc định!")
+ 
+-    @commands.command(
+-        brief=f"Nhận {(config.bot.default_bet*config.bot.bonus_multiplier):,} VND miễn phí mỗi {config.bot.bonus_cooldown} giờ",
+-        usage="add",
+-    )
+-    @commands.cooldown(1, config.bot.bonus_cooldown * 3600, type=commands.BucketType.user)
+-    async def add(self, ctx: commands.Context):
+-        amount = config.bot.default_bet * config.bot.bonus_multiplier
+-        self.economy.add_money(ctx.author.id, amount)
+-        log_wallet_change(
+-            logger,
+-            event="bonus_add",
+-            user_id=ctx.author.id,
+-            money_delta=amount,
+-            ctx=ctx,
+-        )
+-        await ctx.send(f"Đã cộng thêm {amount:,} VND! Quay lại sau {config.bot.bonus_cooldown} giờ nhé.")
+-
+     @commands.command(
+         brief="Xem số tiền bạn hoặc người khác đang có",
+         usage="money [@thành_viên]",
+@@ -199,87 +243,109 @@ class GamblingHelpers(commands.Cog, name="General"):
+             )
+         await ctx.send(embed=embed)
+ 
++    @commands.command(
++        brief="Điểm danh hàng ngày để nhận tiền miễn phí",
++        usage="daily",
++        aliases=["diemdanh"],
++    )
++    async def daily(self, ctx: commands.Context):
++        embed = await self.process_daily(ctx.author, ctx)
++        await ctx.send(embed=embed)
++
++    async def process_daily(self, user: discord.User | discord.Member, ctx: commands.Context | None = None) -> discord.Embed:
++        user_id = user.id
++        last_daily, streak = self.economy.get_daily(user_id)
++        now = int(time.time())
++        cooldown = 86400  # 24 hours
++        
++        # Check cooldown
++        if now - last_daily < cooldown:
++            remaining = cooldown - (now - last_daily)
++            hours = remaining // 3600
++            minutes = (remaining % 3600) // 60
++            seconds = remaining % 60
++            
++            embed = make_embed(
++                title="⏳ ĐIỂM DANH HÀNG NGÀY",
++                description=(
++                    f"**{user.name}** ơi, bạn đã điểm danh hôm nay rồi!\n"
++                    f"Vui lòng quay lại sau **{hours:02d} giờ {minutes:02d} phút {seconds:02d} giây**."
++                ),
++                color=discord.Color.red(),
++            )
++            if hasattr(user, "display_avatar"):
++                embed.set_thumbnail(url=user.display_avatar.url)
++            return embed
++            
++        # Cooldown passed. Calculate streak.
++        # If last daily was within 48 hours, keep streak. Otherwise reset to 1.
++        if now - last_daily < 172800:  # 48 hours
++            streak += 1
++        else:
++            streak = 1
++            
++        # Reward: 100k base + 20k per streak day (up to 7 days, max bonus 140k).
++        # Plus if streak is a multiple of 7, give 1 thỏi vàng (credits) as a special milestone!
++        base_reward = 100_000
++        streak_bonus = 20_000 * min(streak, 7)
++        total_money = base_reward + streak_bonus
++        
++        self.economy.add_money(user_id, total_money)
++        
++        bonus_gold = 0
++        gold_text = ""
++        if streak > 0 and streak % 7 == 0:
++            bonus_gold = 1
++            self.economy.add_credits(user_id, bonus_gold)
++            gold_text = f"\n🌟 **Quà cột mốc 7 ngày:** `+1 thỏi vàng` 🪙"
++            
++        self.economy.set_daily(user_id, now, streak)
++        
++        log_wallet_change(
++            logger,
++            event="daily_claim",
++            user_id=user_id,
++            money_delta=total_money,
++            credits_delta=bonus_gold,
++            ctx=ctx,
++            streak=streak,
++        )
++        
++        new_balance = self.economy.get_entry(user_id)[1]
++        new_gold = self.economy.get_entry(user_id)[2]
++        
++        embed = make_embed(
++            title="🎁 ĐIỂM DANH HÀNG NGÀY THÀNH CÔNG 🎁",
++            description=(
++                f"Chúc mừng **{user.name}** đã điểm danh ngày thứ **{streak}** liên tiếp!\n\n"
++                f"💰 **Tiền thưởng nhận:** `+{total_money:,} VND`"
++                f"{gold_text}\n"
++                f"💳 **Số dư VND hiện tại:** `{new_balance:,} VND`\n"
++                f"🪙 **Số dư Vàng hiện tại:** `{new_gold:,} thỏi vàng`"
++            ),
++            color=discord.Color.green(),
++        )
++        if hasattr(user, "display_avatar"):
++            embed.set_thumbnail(url=user.display_avatar.url)
++        return embed
++
+     @commands.command(
+         brief="Làm việc để kiếm tiền (hoặc bị mất tiền nếu gặp xui xẻo)",
+         usage="work",
+     )
+     @commands.cooldown(1, 3600, type=commands.BucketType.user)  # 1 tiếng cooldown (3600 giây)
+     async def work(self, ctx: commands.Context):
++        embed = await self.process_work(ctx.author, ctx)
++        await ctx.send(embed=embed)
++
++    async def process_work(self, user: discord.User | discord.Member, ctx: commands.Context | None = None) -> discord.Embed:
++        user_id = user.id
+         # Lấy thông tin tài khoản người chơi
+-        profile = self.economy.get_entry(ctx.author.id)
++        profile = self.economy.get_entry(user_id)
+         current_money = profile[1]
+ 
+-        # Kiểm tra bằng cấp công nghệ
+-        inventory = self.economy.get_inventory(ctx.author.id)
+-        has_degree = any(item == 'bang_cap' and qty > 0 for item, qty in inventory)
+-        
+-        if has_degree:
+-            # Kỹ thuật công nghệ (Kiếm nhiều VND, có rủi ro hỏng hóc)
+-            # Rủi ro 10%
+-            if random.random() < 0.10:
+-                penalty = 500_000
+-                actual_deduction = min(current_money, penalty)
+-                self.economy.add_money(ctx.author.id, -penalty)
+-                
+-                log_wallet_change(
+-                    logger,
+-                    event="work_tech_badluck",
+-                    user_id=ctx.author.id,
+-                    money_delta=-actual_deduction,
+-                    ctx=ctx,
+-                )
+-                new_balance = self.economy.get_entry(ctx.author.id)[1]
+-                embed = make_embed(
+-                    title="🔥 SỰ CỐ CÔNG NGHỆ! 🔥",
+-                    description=(
+-                        f"**{ctx.author.name}** gặp sự cố kỹ thuật:\n"
+-                        f"👉 *\"Bạn làm chập cháy mạch, phải đền bù 500,000 VND.\"*\n\n"
+-                        f"💸 **Thất thoát:** `-{actual_deduction:,} VND`\n"
+-                        f"💳 **Số dư mới:** `{new_balance:,} VND`"
+-                     ),
+-                     color=discord.Color.red(),
+-                )
+-                embed.set_thumbnail(url=ctx.author.display_avatar.url)
+-                await ctx.send(embed=embed)
+-                return
+-            else:
+-                # Thành công (90%)
+-                tech_jobs = [
+-                    ("Thiết kế cho công ty khởi nghiệp 🛠️", 1_500_000),
+-                    ("Setup thành công server cho khách hàng 🎮", 800_000),
+-                    ("Phát triển ứng dụng Mobile mini cho shop quần áo 📱", 1_200_000),
+-                    ("Khắc phục sự cố mạng doanh nghiệp trong đêm 🌐", 1_000_000)
+-                ]
+-                job_desc, reward = random.choice(tech_jobs)
+-                self.economy.add_money(ctx.author.id, reward)
+-                
+-                log_wallet_change(
+-                    logger,
+-                    event="work_tech_success",
+-                    user_id=ctx.author.id,
+-                    money_delta=reward,
+-                    ctx=ctx,
+-                )
+-                new_balance = self.economy.get_entry(ctx.author.id)[1]
+-                embed = make_embed(
+-                    title="💻 DỰ ÁN CÔNG NGHỆ THÀNH CÔNG! 💻",
+-                    description=(
+-                        f"**{ctx.author.name}** đã hoàn thành dự án:\n"
+-                        f"👉 *\"{job_desc}\"*\n\n"
+-                        f"💰 **Thu nhập:** `+{reward:,} VND`\n"
+-                        f"💳 **Số dư mới:** `{new_balance:,} VND`"
+-                    ),
+-                    color=discord.Color.blue(),
+-                )
+-                embed.set_thumbnail(url=ctx.author.display_avatar.url)
+-                await ctx.send(embed=embed)
+-                return
+-
+-        # Quay ngẫu nhiên tỉ lệ phần trăm
+-        rand_val = random.random()
+-
+-        if rand_val < 0.10:
+-            # 1. Sự kiện đặc biệt (10%)
++        # 1. 10% cơ hội xảy ra sự kiện đặc biệt (sugar baby, phú bà, cứu chủ tịch) cho TẤT CẢ mọi người
++        if random.random() < 0.10:
+             special_scenarios = [
+                 "Làm trai bao được phú bà bao nuôi 💖",
+                 "Làm sugar baby ngoan ngoãn 🧸",
+@@ -289,110 +355,412 @@ class GamblingHelpers(commands.Cog, name="General"):
+             reward = random.randint(1_000_000, 5_000_000)
+             
+             # Cộng tiền vào tài khoản
+-            self.economy.add_money(ctx.author.id, reward)
++            self.economy.add_money(user_id, reward)
+             
+             log_wallet_change(
+                 logger,
+                 event="work_special_event",
+-                user_id=ctx.author.id,
++                user_id=user_id,
+                 money_delta=reward,
+                 ctx=ctx,
+             )
+ 
+-            new_balance = self.economy.get_entry(ctx.author.id)[1]
++            new_balance = self.economy.get_entry(user_id)[1]
+ 
+             embed = make_embed(
+                 title="🎰 SỰ KIỆN ĐẶC BIỆT! 🎰",
+                 description=(
+-                    f"**{ctx.author.name}** đã trúng sự kiện đặc biệt:\n"
++                    f"**{user.name}** đã trúng sự kiện đặc biệt:\n"
+                     f"👉 *\"{scenario}\"*\n\n"
+                     f"💰 **Phần thưởng:** `+{reward:,} VND`\n"
+                     f"💳 **Số dư mới:** `{new_balance:,} VND`"
+                 ),
+                 color=discord.Color.gold(), # Màu vàng
+             )
+-            embed.set_thumbnail(url=ctx.author.display_avatar.url)
+-            await ctx.send(embed=embed)
++            if hasattr(user, "display_avatar"):
++                embed.set_thumbnail(url=user.display_avatar.url)
++            return embed
+ 
+-        else:
+-            # 90% Làm việc bình thường
+-            normal_rand = random.random()
++        # 2. Nếu không trúng sự kiện đặc biệt (90% còn lại):
++        # Lấy túi đồ của người chơi để kiểm tra các bằng cấp / nghề nghiệp sở hữu
++        inventory = self.economy.get_inventory(user_id)
++        owned_careers = []
++        for item, qty in inventory:
++            if qty > 0 and item in ['bang_cap', 'bang_kien_truc', 'bang_phi_hanh', 'bang_bac_si', 'the_tho_san']:
++                owned_careers.append(item)
++
++        if owned_careers:
++            # Chọn ngẫu nhiên một trong các nghề nghiệp đang sở hữu
++            chosen_career = random.choice(owned_careers)
+             
+-            if normal_rand < 0.80:
+-                # A. Kịch bản làm việc suôn sẻ (80% của 90%)
+-                jobs = [
+-                    "Phục vụ quán cafe ☕",
+-                    "Bảo vệ ca đêm 👮",
+-                    "Chạy xe ôm công nghệ (Grab/Be) 🛵",
+-                    "Nhân viên pha chế (Barista) 🍹",
+-                    "Phát tờ rơi ngoài ngã tư 📄",
+-                    "Streamer part-time 🎮"
+-                ]
+-                job = random.choice(jobs)
+-                reward = random.randint(20_000, 50_000)
+-                
+-                # Cộng tiền vào tài khoản
+-                self.economy.add_money(ctx.author.id, reward)
+-                
+-                log_wallet_change(
+-                    logger,
+-                    event="work_normal_success",
+-                    user_id=ctx.author.id,
+-                    money_delta=reward,
+-                    ctx=ctx,
+-                )
++            if chosen_career == 'bang_cap':
++                # Kỹ thuật công nghệ (Rủi ro 10%)
++                if random.random() < 0.10:
++                    penalty = 500_000
++                    actual_deduction = min(current_money, penalty)
++                    self.economy.add_money(user_id, -penalty)
++                    
++                    log_wallet_change(
++                        logger,
++                        event="work_tech_badluck",
++                        user_id=user_id,
++                        money_delta=-actual_deduction,
++                        ctx=ctx,
++                    )
++                    new_balance = self.economy.get_entry(user_id)[1]
++                    embed = make_embed(
++                        title="🔥 SỰ CỐ CÔNG NGHỆ! 🔥",
++                        description=(
++                            f"**{user.name}** gặp sự cố kỹ thuật:\n"
++                            f"👉 *\"Bạn làm chập cháy mạch, phải đền bù 500,000 VND.\"*\n\n"
++                            f"💸 **Thất thoát:** `-{actual_deduction:,} VND`\n"
++                            f"💳 **Số dư mới:** `{new_balance:,} VND`"
++                        ),
++                        color=discord.Color.red(),
++                    )
++                else:
++                    tech_jobs = [
++                        ("Thiết kế cho công ty khởi nghiệp 🛠️", 1_500_000),
++                        ("Setup thành công server cho khách hàng 🎮", 800_000),
++                        ("Phát triển ứng dụng Mobile mini cho shop quần áo 📱", 1_200_000),
++                        ("Khắc phục sự cố mạng doanh nghiệp trong đêm 🌐", 1_000_000)
++                    ]
++                    job_desc, reward = random.choice(tech_jobs)
++                    self.economy.add_money(user_id, reward)
++                    
++                    log_wallet_change(
++                        logger,
++                        event="work_tech_success",
++                        user_id=user_id,
++                        money_delta=reward,
++                        ctx=ctx,
++                    )
++                    new_balance = self.economy.get_entry(user_id)[1]
++                    embed = make_embed(
++                        title="💻 DỰ ÁN CÔNG NGHỆ THÀNH CÔNG! 💻",
++                        description=(
++                            f"**{user.name}** đã hoàn thành dự án:\n"
++                            f"👉 *\"{job_desc}\"*\n\n"
++                            f"💰 **Thu nhập:** `+{reward:,} VND`\n"
++                            f"💳 **Số dư mới:** `{new_balance:,} VND`"
++                        ),
++                        color=discord.Color.blue(),
++                    )
++                    
++            elif chosen_career == 'bang_kien_truc':
++                # Kiến trúc sư (Rủi ro 10%)
++                if random.random() < 0.10:
++                    penalty = 800_000
++                    actual_deduction = min(current_money, penalty)
++                    self.economy.add_money(user_id, -penalty)
++                    
++                    log_wallet_change(
++                        logger,
++                        event="work_arch_badluck",
++                        user_id=user_id,
++                        money_delta=-actual_deduction,
++                        ctx=ctx,
++                    )
++                    new_balance = self.economy.get_entry(user_id)[1]
++                    embed = make_embed(
++                        title="🔥 SỰ CỐ THIẾT KẾ! 🔥",
++                        description=(
++                            f"**{user.name}** gặp lỗi kỹ thuật bản vẽ:\n"
++                            f"👉 *\"Bạn thiết kế sai kết cấu móng nhà, bị phạt đền bù 800,000 VND.\"*\n\n"
++                            f"💸 **Thất thoát:** `-{actual_deduction:,} VND`\n"
++                            f"💳 **Số dư mới:** `{new_balance:,} VND`"
++                        ),
++                        color=discord.Color.red(),
++                    )
++                else:
++                    arch_jobs = [
++                        ("Vẽ bản thiết kế biệt thự nghỉ dưỡng ở Đà Lạt 📐", 2_400_000),
++                        ("Tư vấn quy hoạch đô thị cho tập đoàn bất động sản 🏙️", 1_800_000),
++                        ("Thiết kế nội thất căn hộ Penthouse sang trọng 🛋️", 3_000_000)
++                    ]
++                    job_desc, reward = random.choice(arch_jobs)
++                    self.economy.add_money(user_id, reward)
++                    
++                    log_wallet_change(
++                        logger,
++                        event="work_arch_success",
++                        user_id=user_id,
++                        money_delta=reward,
++                        ctx=ctx,
++                    )
++                    new_balance = self.economy.get_entry(user_id)[1]
++                    embed = make_embed(
++                        title="📐 DỰ ÁN KIẾN TRÚC THÀNH CÔNG! 📐",
++                        description=(
++                            f"**{user.name}** đã hoàn thành bản vẽ:\n"
++                            f"👉 *\"{job_desc}\"*\n\n"
++                            f"💰 **Thu nhập:** `+{reward:,} VND`\n"
++                            f"💳 **Số dư mới:** `{new_balance:,} VND`"
++                        ),
++                        color=discord.Color.teal(),
++                    )
+ 
+-                new_balance = self.economy.get_entry(ctx.author.id)[1]
++            elif chosen_career == 'bang_phi_hanh':
++                # Phi hành gia (Rủi ro 10%)
++                if random.random() < 0.10:
++                    penalty = 1_500_000
++                    actual_deduction = min(current_money, penalty)
++                    self.economy.add_money(user_id, -penalty)
++                    
++                    log_wallet_change(
++                        logger,
++                        event="work_astro_badluck",
++                        user_id=user_id,
++                        money_delta=-actual_deduction,
++                        ctx=ctx,
++                    )
++                    new_balance = self.economy.get_entry(user_id)[1]
++                    embed = make_embed(
++                        title="🔥 SỰ CỐ KHÔNG GIAN! 🔥",
++                        description=(
++                            f"**{user.name}** gặp sự cố ngoài không gian:\n"
++                            f"👉 *\"Gặp sự cố rò rỉ oxy trên trạm ISS, phải bồi thường phí xử lý khẩn cấp 1,500,000 VND.\"*\n\n"
++                            f"💸 **Thất thoát:** `-{actual_deduction:,} VND`\n"
++                            f"💳 **Số dư mới:** `{new_balance:,} VND`"
++                        ),
++                        color=discord.Color.red(),
++                    )
++                else:
++                    astro_jobs = [
++                        ("Thực hiện chuyến đi bộ ngoài không gian sửa tấm pin mặt trời 🚀", 6_000_000),
++                        ("Nghiên cứu mẫu đất đá quý từ Sao Hỏa gửi về Trái Đất ☄️", 4_500_000),
++                        ("Huấn luyện phi hành đoàn kế cận tại trung tâm vũ trụ 🌌", 8_000_000)
++                    ]
++                    job_desc, reward = random.choice(astro_jobs)
++                    self.economy.add_money(user_id, reward)
++                    
++                    log_wallet_change(
++                        logger,
++                        event="work_astro_success",
++                        user_id=user_id,
++                        money_delta=reward,
++                        ctx=ctx,
++                    )
++                    new_balance = self.economy.get_entry(user_id)[1]
++                    embed = make_embed(
++                        title="🚀 DỰ ÁN VŨ TRỤ THÀNH CÔNG! 🚀",
++                        description=(
++                            f"**{user.name}** đã hoàn thành sứ mệnh:\n"
++                            f"👉 *\"{job_desc}\"*\n\n"
++                            f"💰 **Thu nhập:** `+{reward:,} VND`\n"
++                            f"💳 **Số dư mới:** `{new_balance:,} VND`"
++                        ),
++                        color=discord.Color.dark_blue(),
++                    )
+ 
+-                embed = make_embed(
+-                    title="💼 Đi làm chăm chỉ 💼",
+-                    description=(
+-                        f"**{ctx.author.name}** đã đi làm: *{job}*\n\n"
+-                        f"💰 **Thu nhập:** `+{reward:,} VND`\n"
+-                        f"💳 **Số dư mới:** `{new_balance:,} VND`"
+-                    ),
+-                    color=discord.Color.green(), # Màu xanh lá
+-                )
+-                embed.set_thumbnail(url=ctx.author.display_avatar.url)
+-                await ctx.send(embed=embed)
+-                
+-            else:
+-                # B. Kịch bản xui xẻo/bị trừ tiền (20% của 90%)
+-                bad_scenarios = [
+-                    "Bị vấp té làm vỡ ly của quán và phải đền tiền 😢",
+-                    "Chạy xe ôm bị thủng lốp dọc đường 🛞",
+-                    "Bị khách hàng boom đơn hàng đồ ăn lớn 😭",
+-                    "Ngủ gật trong lúc làm bảo vệ ca đêm bị trừ lương 😴"
+-                ]
+-                scenario = random.choice(bad_scenarios)
+-                penalty = random.randint(10_000, 30_000)
+-                
+-                # Trừ tiền (add_money với số âm, SQLite MAX(0, money + ?) tự động lo việc không để tiền âm)
+-                actual_deduction = min(current_money, penalty)
+-                self.economy.add_money(ctx.author.id, -penalty)
+-                
+-                log_wallet_change(
+-                    logger,
+-                    event="work_normal_badluck",
+-                    user_id=ctx.author.id,
+-                    money_delta=-actual_deduction,
+-                    ctx=ctx,
+-                )
++            elif chosen_career == 'bang_bac_si':
++                # Bác sĩ (Rủi ro 10%)
++                if random.random() < 0.10:
++                    penalty = 3_000_000
++                    actual_deduction = min(current_money, penalty)
++                    self.economy.add_money(user_id, -penalty)
++                    
++                    log_wallet_change(
++                        logger,
++                        event="work_doc_badluck",
++                        user_id=user_id,
++                        money_delta=-actual_deduction,
++                        ctx=ctx,
++                    )
++                    new_balance = self.economy.get_entry(user_id)[1]
++                    embed = make_embed(
++                        title="🔥 TAI NẠN Y KHOA! 🔥",
++                        description=(
++                            f"**{user.name}** gặp sự cố chuyên môn:\n"
++                            f"👉 *\"Kê nhầm đơn thuốc bổ đắt đỏ cho khách VIP, bị bệnh viện trừ lương đền bù 3,000,000 VND.\"*\n\n"
++                            f"💸 **Thất thoát:** `-{actual_deduction:,} VND`\n"
++                            f"💳 **Số dư mới:** `{new_balance:,} VND`"
++                        ),
++                        color=discord.Color.red(),
++                    )
++                else:
++                    doc_jobs = [
++                        ("Phẫu thuật thành công ca ghép tim phức tạp 🩺", 18_000_000),
++                        ("Điều trị phục hồi sức khỏe VIP cho tỷ phú 🏥", 12_000_000),
++                        ("Nghiên cứu lâm sàng vắc-xin thế hệ mới 🧪", 20_000_000)
++                    ]
++                    job_desc, reward = random.choice(doc_jobs)
++                    self.economy.add_money(user_id, reward)
++                    
++                    log_wallet_change(
++                        logger,
++                        event="work_doc_success",
++                        user_id=user_id,
++                        money_delta=reward,
++                        ctx=ctx,
++                    )
++                    new_balance = self.economy.get_entry(user_id)[1]
++                    embed = make_embed(
++                        title="🩺 CA PHẪU THUẬT THÀNH CÔNG! 🩺",
++                        description=(
++                            f"**{user.name}** đã hoàn thành nhiệm vụ y khoa:\n"
++                            f"👉 *\"{job_desc}\"*\n\n"
++                            f"💰 **Thu nhập:** `+{reward:,} VND`\n"
++                            f"💳 **Số dư mới:** `{new_balance:,} VND`"
++                        ),
++                        color=discord.Color.dark_green(),
++                    )
+ 
+-                new_balance = self.economy.get_entry(ctx.author.id)[1]
+-
+-                embed = make_embed(
+-                    title="❌ Hôm nay quá xui xẻo! ❌",
+-                    description=(
+-                        f"**{ctx.author.name}** gặp vận xui:\n"
+-                        f"👉 *{scenario}*\n\n"
+-                        f"💸 **Thất thoát:** `-{actual_deduction:,} VND`\n"
+-                        f"💳 **Số dư mới:** `{new_balance:,} VND`"
+-                    ),
+-                    color=discord.Color.red(), # Màu đỏ
+-                )
+-                embed.set_thumbnail(url=ctx.author.display_avatar.url)
+-                await ctx.send(embed=embed)
++            else: # the_tho_san
++                # Thợ săn kho báu (Rủi ro 10%)
++                if random.random() < 0.10:
++                    penalty = 5_000_000
++                    actual_deduction = min(current_money, penalty)
++                    self.economy.add_money(user_id, -penalty)
++                    
++                    log_wallet_change(
++                        logger,
++                        event="work_hunter_badluck",
++                        user_id=user_id,
++                        money_delta=-actual_deduction,
++                        ctx=ctx,
++                    )
++                    new_balance = self.economy.get_entry(user_id)[1]
++                    embed = make_embed(
++                        title="🔥 BẪY CỔ ĐẠI KÍCH HOẠT! 🔥",
++                        description=(
++                            f"**{user.name}** bị sập bẫy trong hầm mộ:\n"
++                            f"👉 *\"Bị sập bẫy đá cổ trong hầm mộ, phải chi tiền viện phí điều trị vết thương 5,000,000 VND.\"*\n\n"
++                            f"💸 **Thất thoát:** `-{actual_deduction:,} VND`\n"
++                            f"💳 **Số dư mới:** `{new_balance:,} VND`"
++                        ),
++                        color=discord.Color.red(),
++                    )
++                else:
++                    from app.discord_bot.cogs.simulator import TREASURES
++                    
++                    r = random.random()
++                    if r < 0.35:
++                        rarity_pool = [k for k, v in TREASURES.items() if v["rarity"] == "Rác thải"]
++                    elif r < 0.70:
++                        rarity_pool = [k for k, v in TREASURES.items() if v["rarity"] == "Thường"]
++                    elif r < 0.85:
++                        rarity_pool = [k for k, v in TREASURES.items() if v["rarity"] == "Hiếm"]
++                    elif r < 0.95:
++                        rarity_pool = [k for k, v in TREASURES.items() if v["rarity"] == "Quý hiếm"]
++                    elif r < 0.99:
++                        rarity_pool = [k for k, v in TREASURES.items() if v["rarity"] == "Huyền thoại"]
++                    else:
++                        rarity_pool = [k for k, v in TREASURES.items() if v["rarity"] == "Thần thoại"]
++                    
++                    chosen_id = random.choice(rarity_pool)
++                    treasure = TREASURES[chosen_id]
++                    
++                    # Add to inventory
++                    self.economy.add_inventory_item(user_id, chosen_id, 1)
++                    
++                    # Log finding item
++                    log_wallet_change(
++                        logger,
++                        event="work_hunter_success_item",
++                        user_id=user_id,
++                        money_delta=0,
++                        item_id=chosen_id,
++                        quantity=1,
++                        ctx=ctx,
++                    )
++                    
++                    embed = make_embed(
++                        title="🗺️ KHAI QUẬT ĐƯỢC KHO BÁU CỔ! 🗺️",
++                        description=(
++                            f"**{user.name}** đã thám hiểm hầm mộ cổ và tìm thấy:\n\n"
++                            f"🏺 **Kho báu:** {treasure['name']} (ID: `{chosen_id}`)\n"
++                            f"✨ **Độ hiếm:** `{treasure['rarity']}`\n"
++                            f"💰 **Giá trị ước tính:** `{treasure['value']:,} VND`\n\n"
++                            f"💡 *Bạn có thể giữ lại để sưu tầm hoặc dùng lệnh `i?sellitem {chosen_id}` để bán cho viện bảo tàng.*"
++                        ),
++                        color=discord.Color.orange(),
++                    )
++            
++            if hasattr(user, "display_avatar"):
++                embed.set_thumbnail(url=user.display_avatar.url)
++            return embed
++
++        # 3. Làm việc bình thường (cafe, grab...)
++        normal_rand = random.random()
++        
++        if normal_rand < 0.80:
++            # A. Kịch bản làm việc suôn sẻ (80% của 90%)
++            jobs = [
++                "Phục vụ quán cafe ☕",
++                "Bảo vệ ca đêm 👮",
++                "Chạy xe ôm công nghệ (Grab/Be) 🛵",
++                "Nhân viên pha chế (Barista) 🍹",
++                "Phát tờ rơi ngoài ngã tư 📄",
++                "Streamer part-time 🎮"
++            ]
++            job = random.choice(jobs)
++            reward = random.randint(20_000, 50_000)
++            
++            # Cộng tiền vào tài khoản
++            self.economy.add_money(user_id, reward)
++            
++            log_wallet_change(
++                logger,
++                event="work_normal_success",
++                user_id=user_id,
++                money_delta=reward,
++                ctx=ctx,
++            )
++
++            new_balance = self.economy.get_entry(user_id)[1]
++
++            embed = make_embed(
++                title="💼 Đi làm chăm chỉ 💼",
++                description=(
++                    f"**{user.name}** đã đi làm: *{job}*\n\n"
++                    f"💰 **Thu nhập:** `+{reward:,} VND`\n"
++                    f"💳 **Số dư mới:** `{new_balance:,} VND`"
++                ),
++                color=discord.Color.green(), # Màu xanh lá
++            )
++            if hasattr(user, "display_avatar"):
++                embed.set_thumbnail(url=user.display_avatar.url)
++            return embed
++            
++        else:
++            # B. Kịch bản xui xẻo/bị trừ tiền (20% của 90%)
++            bad_scenarios = [
++                "Bị vấp té làm vỡ ly của quán và phải đền tiền 😢",
++                "Chạy xe ôm bị thủng lốp dọc đường 🛞",
++                "Bị khách hàng boom đơn hàng đồ ăn lớn 😭",
++                "Ngủ gật trong lúc làm bảo vệ ca đêm bị trừ lương 😴"
++            ]
++            scenario = random.choice(bad_scenarios)
++            penalty = random.randint(10_000, 30_000)
++            
++            # Trừ tiền (add_money với số âm, SQLite MAX(0, money + ?) tự động lo việc không để tiền âm)
++            actual_deduction = min(current_money, penalty)
++            self.economy.add_money(user_id, -penalty)
++            
++            log_wallet_change(
++                logger,
++                event="work_normal_badluck",
++                user_id=user_id,
++                money_delta=-actual_deduction,
++                ctx=ctx,
++            )
++
++            new_balance = self.economy.get_entry(user_id)[1]
++
++            embed = make_embed(
++                title="❌ Hôm nay quá xui xẻo! ❌",
++                description=(
++                    f"**{user.name}** gặp vận xui:\n"
++                    f"👉 *{scenario}*\n\n"
++                    f"💸 **Thất thoát:** `-{actual_deduction:,} VND`\n"
++                    f"💳 **Số dư mới:** `{new_balance:,} VND`"
++                ),
++                color=discord.Color.red(), # Màu đỏ
++            )
++            if hasattr(user, "display_avatar"):
++                embed.set_thumbnail(url=user.display_avatar.url)
++            return embed
+ 
+     @commands.command(
+         brief="Nhận quà khởi nghiệp lần đầu tiên đặt chân lên thành phố",
+@@ -656,6 +1024,106 @@ class GamblingHelpers(commands.Cog, name="General"):
+         embed.set_thumbnail(url=target.display_avatar.url)
+         await ctx.send(embed=embed)
+ 
++    @commands.command(
++        brief="Liệt kê danh sách tất cả người chơi trong cơ sở dữ liệu.",
++        usage="botplayers",
++        aliases=["players", "users"],
++        hidden=True,
++    )
++    @commands.is_owner()
++    async def botplayers(self, ctx: commands.Context):
++        all_entries = self.economy.top_entries(0)
++        if not all_entries:
++            await ctx.send("❌ Không có người chơi nào trong cơ sở dữ liệu.")
++            return
++
++        entries_per_page = 15
++        total_pages = (len(all_entries) + entries_per_page - 1) // entries_per_page
++
++        async def get_page_embed(page_num: int) -> discord.Embed:
++            start_idx = (page_num - 1) * entries_per_page
++            end_idx = min(start_idx + entries_per_page, len(all_entries))
++            page_entries = all_entries[start_idx:end_idx]
++
++            desc_lines = []
++            for idx, entry in enumerate(page_entries, start=start_idx + 1):
++                uid, money, credits = entry[0], entry[1], entry[2]
++                name = await get_user_name(self.client, uid)
++                desc_lines.append(
++                    f"`{idx:02d}.` **{name}** (ID: `{uid}`)\n"
++                    f"   └ 💸 `{money:,} VND` | 🪙 `{credits:,}` thỏi vàng"
++                )
++
++            embed = make_embed(
++                title="📋 DANH SÁCH NGƯỜI CHƠI BOT",
++                description="\n".join(desc_lines),
++                color=discord.Color.blue(),
++            )
++            embed.set_footer(text=f"Trang {page_num}/{total_pages} | Tổng số: {len(all_entries)} người chơi | Chỉ Admin")
++            return embed
++
++        embed = await get_page_embed(1)
++        if total_pages <= 1:
++            await ctx.send(embed=embed)
++            return
++
++        view = PaginatorView(ctx, total_pages, get_page_embed)
++        # Disable prev button on load
++        for child in view.children:
++            if isinstance(child, discord.ui.Button) and child.label == "◀️ Trước":
++                child.disabled = True
++        view.message = await ctx.send(embed=embed, view=view)
++
++    @commands.command(
++        brief="Liệt kê danh sách tất cả các server bot đang tham gia.",
++        usage="botservers",
++        aliases=["servers"],
++        hidden=True,
++    )
++    @commands.is_owner()
++    async def botservers(self, ctx: commands.Context):
++        guilds = sorted(list(self.client.guilds), key=lambda g: g.member_count or 0, reverse=True)
++        if not guilds:
++            await ctx.send("❌ Bot chưa tham gia server nào.")
++            return
++
++        entries_per_page = 10
++        total_pages = (len(guilds) + entries_per_page - 1) // entries_per_page
++
++        async def get_page_embed(page_num: int) -> discord.Embed:
++            start_idx = (page_num - 1) * entries_per_page
++            end_idx = min(start_idx + entries_per_page, len(guilds))
++            page_guilds = guilds[start_idx:end_idx]
++
++            desc_lines = []
++            for idx, guild in enumerate(page_guilds, start=start_idx + 1):
++                owner_name = guild.owner.name if guild.owner else f"ID: {guild.owner_id}"
++                desc_lines.append(
++                    f"`{idx:02d}.` **{guild.name}** (ID: `{guild.id}`)\n"
++                    f"   └ 👥 `{guild.member_count:,}` thành viên | 👑 Owner: **{owner_name}**"
++                )
++
++            embed = make_embed(
++                title="🌐 DANH SÁCH SERVER BOT THAM GIA",
++                description="\n".join(desc_lines),
++                color=discord.Color.gold(),
++            )
++            total_members = sum(g.member_count or 0 for g in guilds)
++            embed.set_footer(text=f"Trang {page_num}/{total_pages} | Tổng: {len(guilds)} server, {total_members:,} mem | Chỉ Admin")
++            return embed
++
++        embed = await get_page_embed(1)
++        if total_pages <= 1:
++            await ctx.send(embed=embed)
++            return
++
++        view = PaginatorView(ctx, total_pages, get_page_embed)
++        # Disable prev button on load
++        for child in view.children:
++            if isinstance(child, discord.ui.Button) and child.label == "◀️ Trước":
++                child.disabled = True
++        view.message = await ctx.send(embed=embed, view=view)
++
+ 
+ async def setup(client: commands.Bot):
+     await client.add_cog(GamblingHelpers(client))

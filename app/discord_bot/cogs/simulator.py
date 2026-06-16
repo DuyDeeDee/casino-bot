@@ -2,22 +2,25 @@ import asyncio
 import logging
 import random
 import time
+from pathlib import Path
 from uuid import uuid4
 import discord
 from discord.ext import commands, tasks
 
 from app.config import config
 from app.discord_bot.modules.economy import Economy
-from app.discord_bot.modules.helpers import make_embed
-from app.discord_bot.modules.profile_renderer import render_profile_banner
+from app.discord_bot.modules.helpers import make_embed, ABS_PATH
+from app.discord_bot.modules.profile_renderer import render_profile_banner, render_showcase_image
 from app.discord_bot.modules.wallet_logging import log_wallet_change
+from app.discord_bot.cogs.xe import get_car_image_file
+from app.discord_bot.cogs.daga import get_cock_image_file, RARITY_DISPLAY
 
 logger = logging.getLogger(__name__)
 
 # Business configs
 BUSINESSES = {
     "iot": {
-        "name": "Nha May",
+        "name": "Nhà Máy",
         "base_cost": 50_000_000,
         "base_revenue": 500_000, # per hour
         "currency": "money"
@@ -39,25 +42,1044 @@ BUSINESSES = {
 
 # Shop items config
 SHOP_ITEMS = {
+    "banner_hr": {
+        "name": "Banner HR Động ⚡",
+        "cost": 1,
+        "currency": "money",
+        "description": "Hình nền động HR cực chất.",
+        "is_banner": True,
+        "filename": "hr.gif"
+    },
+    "banner_anak": {
+        "name": "Banner Anak Động 🌌",
+        "cost": 1,
+        "currency": "money",
+        "description": "Hình nền động Anak phong cách vũ trụ ảo diệu.",
+        "is_banner": True,
+        "filename": "anak.gif"
+    },
     "bang_cap": {
         "name": "Bằng cấp công nghệ 🎓",
         "cost": 10_000_000,
         "currency": "money",
         "description": "Mở khóa công việc Công nghệ trong lệnh $work để nhận dự án lớn."
     },
+    "bang_kien_truc": {
+        "name": "Bằng Kiến Trúc Sư 📐",
+        "cost": 25_000_000,
+        "currency": "money",
+        "description": "Mở khóa các dự án thiết kế công trình trong lệnh $work để nhận từ 1,800,000 VND đến 3,000,000 VND mỗi giờ."
+    },
+    "bang_phi_hanh": {
+        "name": "Chứng Chỉ Phi Hành Gia 🚀",
+        "cost": 75_000_000,
+        "currency": "money",
+        "description": "Mở khóa nhiệm vụ thám hiểm vũ trụ trong lệnh $work để nhận từ 4,500,000 VND đến 8,000,000 VND mỗi giờ."
+    },
+    "bang_bac_si": {
+        "name": "Bằng Bác Sĩ Chuyên Khoa 🩺",
+        "cost": 150_000_000,
+        "currency": "money",
+        "description": "Mở khóa công việc chăm sóc sức khỏe VIP trong lệnh $work để nhận từ 10,000,000 VND đến 20,000,000 VND mỗi giờ."
+    },
     "the_tho_mo": {
-        "name": "Thẻ thợ mỏ VIP 🪪",
-        "cost": 5,
+        "name": "Nghề Khai Thác Vàng ⛏️",
+        "cost": 50_000_000,
+        "currency": "money",
+        "description": "Mở khóa lệnh $mine khai thác vàng tự động. Càng sở hữu nhiều vàng, tỷ lệ đào trúng càng khó."
+    },
+    "the_tho_san": {
+        "name": "Chứng Chỉ Thợ Săn Kho Báu 🗺️",
+        "cost": 300,
         "currency": "gold",
-        "description": "Mở khóa lệnh $mine đào quặng kiếm VND và có cơ hội nhận Vàng."
+        "description": "Mở khóa thám hiểm hầm mộ cổ đại trong lệnh $work để tìm kiếm các kho báu giá trị (có thể sưu tầm hoặc bán bằng lệnh i?sellitem)."
+    },
+    "banner_aesthetic": {
+        "name": "Banner Aesthetic Động ✨",
+        "cost": 50,
+        "currency": "gold",
+        "description": "Hình nền động phong cách lofi hoàng hôn cực chất.",
+        "is_banner": True,
+        "filename": "aesthetic-banner.gif"
+    },
+    "banner_cyberpunk": {
+        "name": "Banner Cyberpunk Neon 🌆",
+        "cost": 25_000_000,
+        "currency": "money",
+        "description": "Hình nền tĩnh thành phố tương lai neon lung linh.",
+        "is_banner": True,
+        "filename": "cyberpunk.png"
+    },
+    "banner_royal": {
+        "name": "Banner Casino Hoàng Gia 👑",
+        "cost": 50_000_000,
+        "currency": "money",
+        "description": "Hình nền tĩnh casino hoàng gia sang xịn mịn.",
+        "is_banner": True,
+        "filename": "royal.png"
+    },
+    "banner_lelouch": {
+        "name": "Banner Lelouch Động 👁️",
+        "cost": 80,
+        "currency": "gold",
+        "description": "Hình nền động Lelouch Geass cực kỳ ngầu.",
+        "is_banner": True,
+        "filename": "lelouch.gif"
+    },
+    "sally": {
+        "name": "🐤",
+        "cost": 1,
+        "currency": "VND",
+        "description": "abc",
+        "is_banner": True,
+        "filename": "sally.gif"
     }
 }
+
+TREASURES = {
+    "t_lop_xe": {"name": "Lốp xe cũ hỏng 🛞", "value": 50_000, "rarity": "Rác thải"},
+    "t_lon_bia": {"name": "Lon bia rỉ sét 🥫", "value": 100_000, "rarity": "Rác thải"},
+    "t_dong_xu_co": {"name": "Đồng xu cổ thời Đinh 🪙", "value": 2_500_000, "rarity": "Thường"},
+    "t_bat_gom": {"name": "Bát gốm Chu Đậu cổ 🏺", "value": 8_000_000, "rarity": "Thường"},
+    "t_kiem_ri": {"name": "Thanh kiếm rỉ sét của nghĩa quân 🗡️", "value": 20_000_000, "rarity": "Hiếm"},
+    "t_mat_na_vang": {"name": "Mặt nạ vàng bộ tộc Inca 🎭", "value": 60_000_000, "rarity": "Quý hiếm"},
+    "t_vuong_mien": {"name": "Vương miện đính ngọc Hoàng đế La Mã 👑", "value": 250_000_000, "rarity": "Huyền thoại"},
+    "t_chen_thanh": {"name": "Chén Thánh truyền thuyết 🏆", "value": 1_000_000_000, "rarity": "Thần thoại"}
+}
+
+class ChestSelect(discord.ui.Select):
+    def __init__(self, current_value: str):
+        options = [
+            discord.SelectOption(label="Banner Thường - 1M", value="banner_thuong", description="Triệu hồi nhân vật C -> SS", emoji="🔮"),
+            discord.SelectOption(label="Banner Xịn - 5M", value="banner_xin", description="Triệu hồi nhân vật B -> SS (Bảo hiểm 50)", emoji="🔮"),
+            
+            discord.SelectOption(label="Garage Box Xe - 100k", value="box_garage", description="Mở xe Common -> Epic", emoji="🏎️"),
+            discord.SelectOption(label="Premium Box Xe - 1M", value="box_premium", description="Mở xe Rare -> Mythic", emoji="🏎️"),
+            discord.SelectOption(label="Luxury Box Xe - 10M", value="box_luxury", description="Mở xe Epic -> Exclusive", emoji="🏎️"),
+        ]
+        super().__init__(placeholder="Chọn loại Trứng / Rương cần mở...", min_values=1, max_values=1, options=options)
+        for opt in self.options:
+            opt.default = (opt.value == current_value)
+
+    async def callback(self, interaction: discord.Interaction):
+        self.view.selected_option = self.values[0]
+        for opt in self.options:
+            opt.default = (opt.value == self.view.selected_option)
+        embed = self.view.get_embed()
+        await interaction.response.edit_message(embed=embed, view=self.view)
+
+
+class OpenButton(discord.ui.Button):
+    def __init__(self, label: str, quantity: int, style: discord.ButtonStyle, emoji: str):
+        super().__init__(label=label, style=style, emoji=emoji)
+        self.quantity = quantity
+
+    async def callback(self, interaction: discord.Interaction):
+        try:
+            await self.view.cog.process_chest_open(interaction, self.view, self.view.selected_option, self.quantity)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).exception("Error in process_chest_open callback")
+            try:
+                await interaction.response.send_message(f"❌ **Lỗi:** `{str(e)}`", ephemeral=True)
+            except Exception:
+                try:
+                    await interaction.followup.send(f"❌ **Lỗi:** `{str(e)}`", ephemeral=True)
+                except Exception:
+                    pass
+
+
+class ChestOpenView(discord.ui.View):
+    def __init__(self, cog, author: discord.User | discord.Member, timeout: float = 180.0):
+        super().__init__(timeout=timeout)
+        self.cog = cog
+        self.author = author
+        self.selected_option = "banner_thuong"
+        self.message = None
+        self.add_item(ChestSelect(self.selected_option))
+        self.add_item(OpenButton(label="Mở 1", quantity=1, style=discord.ButtonStyle.success, emoji="1️⃣"))
+        self.add_item(OpenButton(label="Mở 3", quantity=3, style=discord.ButtonStyle.primary, emoji="3️⃣"))
+        self.add_item(OpenButton(label="Mở 10", quantity=10, style=discord.ButtonStyle.danger, emoji="🔟"))
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.author.id:
+            await interaction.response.send_message("❌ Bảng điều khiển này không phải của bạn!", ephemeral=True)
+            return False
+            
+        if not self.cog.economy.has_claimed_start(interaction.user.id):
+            await interaction.response.send_message("❌ Bạn chưa nhận quà khởi nghiệp! Hãy gõ `i?khoinghiep` trước.", ephemeral=True)
+            return False
+            
+        return True
+
+    def get_embed(self) -> discord.Embed:
+        details = {
+            "banner_thuong": ("🔮 Banner Thường", 1_000_000, "Triệu hồi nhân vật. Tỷ lệ: C (60%), B (30%), A (9%), S (0.8%), SS (0.2%)."),
+            "banner_xin": ("🔮 Banner Xịn", 5_000_000, "Triệu hồi nhân vật. Tỷ lệ: B (40%), A (45%), S (12%), SS (3%). Có bảo hiểm (pity) 50 lần."),
+
+            "box_garage": ("🏎️ Garage Box Xe", 100_000, "Mở xe / siêu xe. Tỷ lệ: Common (70%), Rare (25%), Epic (5%)."),
+            "box_premium": ("🏎️ Premium Box Xe", 1_000_000, "Mở xe / siêu xe. Tỷ lệ: Rare (50%), Epic (35%), Legendary (13%), Mythic (2%)."),
+            "box_luxury": ("🏎️ Luxury Box Xe", 10_000_000, "Mở xe / siêu xe. Tỷ lệ: Epic (40%), Legendary (35%), Mythic (20%), Exclusive (5%)."),
+        }
+        name, price, desc = details[self.selected_option]
+        
+        embed = make_embed(
+            title="🎁 CỬA HÀNG MỞ RƯƠNG NHANH 🎁",
+            description=(
+                f"### **{name}**\n"
+                f"💵 **Giá mở 1 lần:** `{price:,} VND`\n"
+                f"💵 **Giá mở 3 lần:** `{(price * 3):,} VND`\n"
+                f"💵 **Giá mở 10 lần:** `{(price * 10):,} VND`\n\n"
+                f"📝 **Mô tả:** *{desc}*\n\n"
+                f"▼ Chọn loại rương trong menu và bấm nút tương ứng để mở."
+            ),
+            color=discord.Color.gold()
+        )
+        embed.set_footer(text="Casino Bot • Mở Rương")
+        return embed
+
+    async def on_timeout(self):
+        for child in self.children:
+            if isinstance(child, (discord.ui.Button, discord.ui.Select)):
+                child.disabled = True
+        try:
+            if self.message:
+                await self.message.edit(view=self)
+        except Exception:
+            pass
+
+
+class InteractionContext:
+    def __init__(self, interaction: discord.Interaction):
+        self.interaction = interaction
+        self.bot = interaction.client
+        self.author = interaction.user
+        self.channel = interaction.channel
+        self.guild = interaction.guild
+        self.command = None
+
+    async def send(self, *args, **kwargs):
+        if not self.interaction.response.is_done():
+            return await self.interaction.response.send_message(*args, **kwargs)
+        else:
+            return await self.interaction.followup.send(*args, **kwargs)
+
+
+class ControlPanelView(discord.ui.View):
+    def __init__(self, cog, author: discord.Member, timeout: float = 180.0):
+        super().__init__(timeout=timeout)
+        self.cog = cog
+        self.economy = cog.economy
+        self.client = cog.client
+        self.author = author
+        self.current_tab = "overview"
+        self.message = None
+        self.setup_components()
+
+    def setup_components(self):
+        self.clear_items()
+        
+        # Add select menu
+        self.add_item(AreaSelect())
+        
+        # Add buttons depending on tab
+        if self.current_tab == "overview":
+            self.add_item(DailyButton())
+            self.add_item(WorkButton())
+            self.add_item(CollectButton())
+            self.add_item(InventoryButton())
+            self.add_item(CloseButton())
+        elif self.current_tab == "biz":
+            self.add_item(CollectButton())
+            self.add_item(BackButton())
+        elif self.current_tab == "mine":
+            self.add_item(MineButton())
+            self.add_item(BackButton())
+        elif self.current_tab == "daga":
+            self.add_item(TrainButton())
+            self.add_item(BackButton())
+        else:
+            self.add_item(BackButton())
+
+    async def get_current_embed_and_file(self) -> tuple[discord.Embed, discord.File | None]:
+        embed = await self.get_current_embed()
+        file = None
+        if self.current_tab == "daga":
+            active_row = self.economy.get_active_cock(self.author.id)
+            if active_row:
+                from app.discord_bot.cogs.daga import Cock
+                c = Cock(active_row)
+                img_name = get_cock_image_file(c.name)
+                if img_name:
+                    if Path(img_name).is_absolute():
+                        img_path = Path(img_name)
+                    else:
+                        img_path = ABS_PATH / "modules" / "daga" / img_name
+                    
+                    if img_path.exists():
+                        file = discord.File(img_path, filename="character.png")
+                        embed.set_image(url="attachment://character.png")
+        return embed, file
+
+    async def update_interaction(self, interaction: discord.Interaction):
+        embed, file = await self.get_current_embed_and_file()
+        if file:
+            await interaction.response.edit_message(embed=embed, view=self, attachments=[file])
+        else:
+            await interaction.response.edit_message(embed=embed, view=self, attachments=[])
+
+    async def update_message(self, message: discord.Message):
+        embed, file = await self.get_current_embed_and_file()
+        if file:
+            await message.edit(embed=embed, view=self, attachments=[file])
+        else:
+            await message.edit(embed=embed, view=self, attachments=[])
+
+    async def get_current_embed(self) -> discord.Embed:
+        if self.current_tab == "overview":
+            # Overview Embed
+            profile = self.economy.get_entry(self.author.id)
+            money = profile[1]
+            gold = profile[2]
+            gold_price = self.economy.get_gold_price()
+            loan_amount, _ = self.economy.get_loan(self.author.id)
+            net_worth = money + (gold * gold_price) - loan_amount
+            
+            # Fetch Rank Name
+            from app.discord_bot.modules.profile_renderer import get_rank_info
+            rank_name, _, _ = get_rank_info(net_worth)
+            
+            # Fetch Roulette Title
+            from app.discord_bot.cogs.roulette import get_user_vip
+            rl_stats = self.economy.get_roulette(self.author.id)
+            rl_vip = get_user_vip(rl_stats)
+            rl_title = rl_vip["title"]
+            
+            # Fetch Daga Title
+            active_cock_row = self.economy.get_active_cock(self.author.id)
+            if active_cock_row:
+                from app.discord_bot.cogs.daga import Cock
+                cock = Cock(active_cock_row)
+                daga_title = cock.get_title()
+            else:
+                daga_title = "Chưa xuất trận 🌟"
+            
+            # Fetch Coin Flip Title
+            from app.discord_bot.cogs.coinflip import get_user_vip as get_cf_vip
+            cf_stats = self.economy.get_coinflip(self.author.id)
+            cf_vip = get_cf_vip(cf_stats)
+            cf_title = cf_vip["title"]
+            
+            # Fetch Businesses
+            owned_bizs = []
+            for biz_id, lvl in self.economy.get_businesses(self.author.id):
+                if lvl > 0 and biz_id in BUSINESSES:
+                    owned_bizs.append(f"{BUSINESSES[biz_id]['name']} (Cấp {lvl})")
+            biz_str = ", ".join(owned_bizs) if owned_bizs else "Chưa sở hữu"
+            
+            # Fetch Job Info
+            inventory = self.economy.get_inventory(self.author.id)
+            has_degree = any(item == 'bang_cap' and qty > 0 for item, qty in inventory)
+            has_mine_card = any(item == 'the_tho_mo' and qty > 0 for item, qty in inventory)
+            
+            job_titles = []
+            if has_degree:
+                job_titles.append("Kỹ sư Công nghệ 💻")
+            if has_mine_card:
+                job_titles.append("Thợ mỏ VIP ⛏️")
+            if not job_titles:
+                job_titles.append("Lao động tự do 💼")
+            job_str = " & ".join(job_titles)
+
+            desc = (
+                f"🎖️ **Danh hiệu:**\n"
+                f"• `{rank_name}`\n"
+                f"• `{rl_title}`\n"
+                f"• `{daga_title}`\n"
+                f"• `{cf_title}`\n\n"
+                f"💰 **Số tiền:** `{money:,} VND`\n"
+                f"🟡 **Số vàng:** `{gold:,} thỏi`\n"
+                f"🏢 **Doanh nghiệp:** `{biz_str}`\n"
+                f"💼 **Nghề nghiệp:** `{job_str}`\n\n"
+                f"▼ Sử dụng Menu thả xuống bên dưới để thao tác"
+            )
+            
+            embed = make_embed(
+                title="----------- TỔNG QUAN -----------",
+                description=desc,
+                color=discord.Color.purple()
+            )
+            embed.set_thumbnail(url=self.author.display_avatar.url)
+            embed.set_footer(text=f"🎰 Casino Bot • Bảng Điều Khiển")
+            return embed
+            
+        elif self.current_tab == "biz":
+            return self.cog.get_business_embed(self.author)
+        elif self.current_tab == "invest":
+            return self.cog.get_invest_embed(self.author)
+        elif self.current_tab == "daga":
+            return self.cog.get_daga_embed(self.author)
+        elif self.current_tab == "xe":
+            return self.cog.get_xe_embed(self.author)
+        elif self.current_tab == "mine":
+            # Mine view
+            stats = self.economy.get_simulator_stats(self.author.id)
+            last_mine = stats[1]
+            now = int(time.time())
+            cooldown = 5 * 3600
+            
+            if now - last_mine < cooldown:
+                time_left = cooldown - (now - last_mine)
+                hours = time_left // 3600
+                minutes = (time_left % 3600) // 60
+                mine_status = f"⏳ Đang hồi sức (Sẵn sàng sau **{hours}h {minutes}m**)"
+            else:
+                mine_status = "🟢 Sẵn sàng làm việc!"
+                
+            desc = (
+                f"⛏️ **Khu khai thác mỏ hoàng gia**\n\n"
+                f"• Trạng thái: {mine_status}\n"
+                f"• Yêu cầu: **Thẻ thợ mỏ VIP**\n"
+                f"• Cơ hội đào trúng quặng sắt (kiếm VND) và thỏi vàng lẻ!"
+            )
+            embed = make_embed(
+                title="⛏️ KHU KHAI THÁC MỎ ⛏️",
+                description=desc,
+                color=discord.Color.dark_green()
+            )
+            return embed
+            
+        return make_embed(title="Bảng Điều Khiển")
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.author.id:
+            await interaction.response.send_message("Bảng điều khiển này không phải của bạn!", ephemeral=True)
+            return False
+            
+        if not self.economy.has_claimed_start(interaction.user.id):
+            await interaction.response.send_message("❌ Bạn chưa nhận quà khởi nghiệp! Hãy gõ `i?khoinghiep` trước.", ephemeral=True)
+            return False
+            
+        return True
+
+    async def on_timeout(self):
+        for child in self.children:
+            child.disabled = True
+        try:
+            if self.message:
+                await self.message.edit(view=self)
+        except Exception:
+            pass
+
+class AreaSelect(discord.ui.Select):
+    def __init__(self):
+        options = [
+            discord.SelectOption(label="📊 Tổng Quan", description="Màn hình chính tổng quan tài sản", value="overview", emoji="📊"),
+            discord.SelectOption(label="🏢 Doanh Nghiệp", description="Quản lý & thu hoạch doanh nghiệp", value="biz", emoji="🏢"),
+            discord.SelectOption(label="📈 Chứng Khoán & Crypto", description="Thị trường đầu tư tài chính", value="invest", emoji="📈"),
+            discord.SelectOption(label="⚔️ Đại Chiến Anime", description="Quản lý nhân vật Anime", value="daga", emoji="⚔️"),
+            discord.SelectOption(label="🏎️ Gara Siêu Xe", description="Xem bộ sưu tập siêu xe cá nhân", value="xe", emoji="🏎️"),
+            discord.SelectOption(label="⛏️ Khai Thác Mỏ", description="Đào mỏ quặng kiếm tiền và vàng", value="mine", emoji="⛏️"),
+        ]
+        super().__init__(placeholder="📁 Chọn khu vực quản lý...", min_values=1, max_values=1, options=options)
+
+    async def callback(self, interaction: discord.Interaction):
+        view = self.view
+        view.current_tab = self.values[0]
+        view.setup_components()
+        await view.update_interaction(interaction)
+
+class DailyButton(discord.ui.Button):
+    def __init__(self):
+        super().__init__(label="Điểm Danh", style=discord.ButtonStyle.primary, emoji="🎁")
+
+    async def callback(self, interaction: discord.Interaction):
+        general_cog = interaction.client.get_cog("General")
+        if not general_cog:
+            await interaction.response.send_message("❌ Lỗi: Không tìm thấy module General.", ephemeral=True)
+            return
+        embed = await general_cog.process_daily(interaction.user)
+        await interaction.response.send_message(embed=embed, ephemeral=False)
+        await self.view.update_message(interaction.message)
+
+class WorkButton(discord.ui.Button):
+    def __init__(self):
+        super().__init__(label="Làm Việc", style=discord.ButtonStyle.primary, emoji="💼")
+
+    async def callback(self, interaction: discord.Interaction):
+        general_cog = interaction.client.get_cog("General")
+        if not general_cog:
+            await interaction.response.send_message("❌ Lỗi: Không tìm thấy module General.", ephemeral=True)
+            return
+        embed = await general_cog.process_work(interaction.user)
+        await interaction.response.send_message(embed=embed, ephemeral=False)
+        await self.view.update_message(interaction.message)
+
+class InventoryButton(discord.ui.Button):
+    def __init__(self):
+        super().__init__(label="Kho Đồ", style=discord.ButtonStyle.primary, emoji="📦")
+
+    async def callback(self, interaction: discord.Interaction):
+        embed = self.view.cog.get_inventory_embed(interaction.user)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+class CloseButton(discord.ui.Button):
+    def __init__(self):
+        super().__init__(label="Đóng Bảng Điều Khiển", style=discord.ButtonStyle.danger, emoji="❌")
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.edit_message(content="🔒 Bảng điều khiển đã đóng.", embed=None, view=None)
+
+class BackButton(discord.ui.Button):
+    def __init__(self):
+        super().__init__(label="Quay Lại", style=discord.ButtonStyle.secondary, emoji="🔙")
+
+    async def callback(self, interaction: discord.Interaction):
+        view = self.view
+        view.current_tab = "overview"
+        view.setup_components()
+        await view.update_interaction(interaction)
+
+class CollectButton(discord.ui.Button):
+    def __init__(self):
+        super().__init__(label="Thu Hoạch", style=discord.ButtonStyle.success, emoji="🌾")
+
+    async def callback(self, interaction: discord.Interaction):
+        embed = await self.view.cog.process_collect(interaction.user)
+        await interaction.response.send_message(embed=embed, ephemeral=False)
+        await self.view.update_message(interaction.message)
+
+class MineButton(discord.ui.Button):
+    def __init__(self):
+        super().__init__(label="Đào Mỏ", style=discord.ButtonStyle.success, emoji="⛏️")
+
+    async def callback(self, interaction: discord.Interaction):
+        embed = await self.view.cog.process_mine(interaction.user)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await self.view.update_message(interaction.message)
+
+class TrainButton(discord.ui.Button):
+    def __init__(self):
+        super().__init__(label="Huấn Luyện", style=discord.ButtonStyle.success, emoji="💪")
+
+    async def callback(self, interaction: discord.Interaction):
+        daga_cog = interaction.client.get_cog("Daga")
+        if not daga_cog:
+            await interaction.response.send_message("❌ Lỗi: Không tìm thấy module Đại Chiến Anime.", ephemeral=True)
+            return
+        
+        mock_ctx = InteractionContext(interaction)
+        await daga_cog.daga_train(mock_ctx)
+        
+        try:
+            await self.view.update_message(interaction.message)
+        except Exception:
+            pass
+
+
+class ShopView(discord.ui.View):
+    def __init__(self, author: discord.User | discord.Member, timeout: float = 120.0):
+        super().__init__(timeout=timeout)
+        self.author = author
+        self.category = "career"
+        self.message = None
+        self.update_buttons()
+
+    def update_buttons(self):
+        for child in self.children:
+            if isinstance(child, discord.ui.Button):
+                if child.custom_id == f"shop_{self.category}":
+                    child.style = discord.ButtonStyle.primary
+                else:
+                    child.style = discord.ButtonStyle.secondary
+
+    @discord.ui.button(label="🎓 Nghề Nghiệp & Công Cụ", style=discord.ButtonStyle.primary, custom_id="shop_career")
+    async def view_career(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.category = "career"
+        self.update_buttons()
+        await interaction.response.edit_message(embed=self.get_embed(), view=self)
+
+    @discord.ui.button(label="🎨 Hình Nền & Banner", style=discord.ButtonStyle.secondary, custom_id="shop_banner")
+    async def view_banner(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.category = "banner"
+        self.update_buttons()
+        await interaction.response.edit_message(embed=self.get_embed(), view=self)
+
+    def get_embed(self) -> discord.Embed:
+        if self.category == "career":
+            embed = make_embed(
+                title="🎓 CỬA HÀNG NGHỀ NGHIỆP & CÔNG CỤ 🎓",
+                description="Hãy trang bị thêm thẻ hoặc bằng cấp để nâng cấp bản thân và mở khóa các công việc mới!",
+                color=discord.Color.gold()
+            )
+            for item_id, details in SHOP_ITEMS.items():
+                if not details.get("is_banner"):
+                    cost_str = f"{details['cost']:,} VND" if details['currency'] == "money" else f"{details['cost']} thỏi vàng"
+                    embed.add_field(
+                        name=f"📦 {details['name']} (ID: `{item_id}`)",
+                        value=f"💵 **Giá:** `{cost_str}`\n📝 **Mô tả:** {details['description']}",
+                        inline=False
+                    )
+        else:
+            embed = make_embed(
+                title="🎨 CỬA HÀNG HÌNH NỀN & BANNER 🎨",
+                description="Hãy trang hoàng trang cá nhân sành điệu của bạn bằng các hình nền / banner tuyệt đẹp!",
+                color=discord.Color.purple()
+            )
+            for item_id, details in SHOP_ITEMS.items():
+                if details.get("is_banner"):
+                    cost_str = f"{details['cost']:,} VND" if details['currency'] == "money" else f"{details['cost']} thỏi vàng"
+                    embed.add_field(
+                        name=f"🖼️ {details['name']} (ID: `{item_id}`)",
+                        value=f"💵 **Giá:** `{cost_str}`\n📝 **Mô tả:** {details['description']}",
+                        inline=False
+                    )
+        
+        embed.set_footer(text="Gõ i?buyitem <item_id> để mua đồ.")
+        return embed
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.author.id:
+            await interaction.response.send_message("❌ Bảng điều khiển này không phải của bạn!", ephemeral=True)
+            return False
+        return True
+
+    async def on_timeout(self):
+        for child in self.children:
+            if isinstance(child, discord.ui.Button):
+                child.disabled = True
+        try:
+            if self.message:
+                await self.message.edit(view=self)
+        except Exception:
+            pass
+
 
 class Simulator(commands.Cog):
     def __init__(self, client: commands.Bot):
         self.client = client
         self.economy = getattr(client, "economy", Economy())
         self.update_stock_prices_task.start()
+
+    def cog_unload(self) -> None:
+        self.update_stock_prices_task.cancel()
+
+    @commands.command(
+        brief="Hiển thị bảng điều khiển quản lý tài sản.",
+        usage="menu / panel / dashboard",
+        aliases=["panel", "dashboard", "control", "cp", "bảng"]
+    )
+    async def menu(self, ctx: commands.Context):
+        view = ControlPanelView(self, ctx.author)
+        embed, file = await view.get_current_embed_and_file()
+        if file:
+            msg = await ctx.send(embed=embed, view=view, file=file)
+        else:
+            msg = await ctx.send(embed=embed, view=view)
+        view.message = msg
+
+    def get_inventory_embed(self, user: discord.User | discord.Member) -> discord.Embed:
+        inventory = self.economy.get_inventory(user.id)
+        if not inventory or sum(qty for _, qty in inventory) == 0:
+            embed = make_embed(
+                title=f"🎒 TÚI ĐỒ CỦA {user.name.upper()}",
+                description="Túi đồ của bạn hiện đang trống rỗng.",
+                color=discord.Color.blue()
+            )
+            return embed
+
+        embed = make_embed(
+            title=f"🎒 TÚI ĐỒ CỦA {user.name.upper()}",
+            color=discord.Color.blue()
+        )
+        
+        has_items = False
+        for item_id, qty in inventory:
+            if qty <= 0:
+                continue
+                
+            if item_id in SHOP_ITEMS:
+                item = SHOP_ITEMS[item_id]
+                embed.add_field(
+                    name=f"{item['name']}",
+                    value=f"• Số lượng: **{qty}**\n• Chức năng: *{item['description']}*",
+                    inline=False
+                )
+                has_items = True
+            elif item_id in TREASURES:
+                item = TREASURES[item_id]
+                embed.add_field(
+                    name=f"🏺 {item['name']} (ID: `{item_id}`)",
+                    value=(
+                        f"• Số lượng: **{qty}**\n"
+                        f"• Độ hiếm: `{item['rarity']}`\n"
+                        f"• Giá bán: `{item['value']:,} VND`\n"
+                        f"• *Cổ vật/kho báu sưu tầm.*"
+                    ),
+                    inline=False
+                )
+                has_items = True
+                
+        if not has_items:
+            embed.description = "Túi đồ của bạn hiện đang trống rỗng."
+            
+        return embed
+
+    async def process_mine(self, user: discord.User | discord.Member, ctx: commands.Context | None = None) -> discord.Embed:
+        user_id = user.id
+        
+        # Check Gold Miner Career (the_tho_mo)
+        inventory = self.economy.get_inventory(user_id)
+        has_card = any(item == 'the_tho_mo' and qty > 0 for item, qty in inventory)
+        if not has_card:
+            embed = make_embed(
+                title="❌ CHƯA ĐĂNG KÝ NGHỀ KHAI THÁC VÀNG ❌",
+                description="Yêu cầu phải sở hữu **Nghề khai thác vàng** để đào mỏ! Hãy gõ `i?shop` để đăng ký nghề nghiệp bằng VND trước.",
+                color=discord.Color.red()
+            )
+            return embed
+
+        # Check cooldown
+        stats = self.economy.get_simulator_stats(user_id)
+        last_mine = stats[1]
+        now = int(time.time())
+        cooldown = 5 * 3600 # 5 hours
+        
+        if now - last_mine < cooldown:
+            time_left = cooldown - (now - last_mine)
+            hours = time_left // 3600
+            minutes = (time_left % 3600) // 60
+            
+            embed = make_embed(
+                title="⏳ BẠN ĐANG MỆT ⏳",
+                description=f"Hãy nghỉ ngơi! Bạn có thể tiếp tục đào mỏ sau **{hours} giờ {minutes} phút**.",
+                color=discord.Color.red()
+            )
+            return embed
+
+        # Calculate user's current gold
+        profile = self.economy.get_entry(user_id)
+        current_gold_blocks = profile[2]
+        fractional_gold = stats[3]
+        total_gold = current_gold_blocks + fractional_gold
+
+        # Success rate decreases as total_gold increases
+        # Starting at 80% at 0 gold, decreasing by 0.5% for every gold, floor at 5%
+        success_chance = max(5.0, min(80.0, 80.0 - total_gold * 0.5))
+
+        roll = random.random() * 100
+        dropped_gold = 0.0
+        gold_message = ""
+        success = False
+
+        if roll < success_chance:
+            success = True
+            dropped_gold = round(random.uniform(0.01, 0.50), 2)
+            gold_message = f"\n✨ **ĐẶC BIỆT:** Bạn đào trúng mạch vàng và thu về **{dropped_gold}** Vàng!"
+
+        # Base money reward from normal ores (always awarded)
+        ore_money = random.randint(20_000, 100_000)
+        self.economy.add_money(user_id, ore_money)
+        
+        # Process fractional gold reward if success
+        total_gold_frac = stats[3] + dropped_gold
+        int_gold = int(total_gold_frac)
+        new_frac = round(total_gold_frac - int_gold, 4)
+        
+        if int_gold > 0:
+            self.economy.add_credits(user_id, int_gold)
+            gold_message += f" (Đã quy đổi cộng thêm `{int_gold}` thỏi vàng vào két sắt)"
+
+        # Save stats
+        self.economy.set_simulator_stats(user_id, last_mine=now, fractional_gold=new_frac)
+        
+        log_wallet_change(
+            logger,
+            event="mine_ore",
+            user_id=user_id,
+            money_delta=ore_money,
+            credits_delta=int_gold,
+            ctx=ctx,
+            dropped_gold_frac=dropped_gold,
+            success_chance=success_chance,
+            success=success
+        )
+
+        chance_text = f"🎯 **Tỷ lệ trúng vàng của bạn:** `{success_chance:.2f}%` *(Độ khó tăng dần theo số vàng hiện có: {total_gold:.2f} Vàng)*"
+
+        if success:
+            desc = (
+                f"Bạn đã vác cuốc vào hầm mỏ khai thác vàng...\n\n"
+                f"💰 **Bán quặng thường:** `+{ore_money:,} VND`"
+                f"{gold_message}\n"
+                f"💳 **Vàng lẻ đang tích lũy:** `{new_frac} Vàng` (Đủ `1.0` sẽ tự đổi ra thỏi)\n"
+                f"{chance_text}"
+            )
+            color = discord.Color.gold()
+        else:
+            desc = (
+                f"Bạn đã vác cuốc vào hầm mỏ khai thác vàng...\n\n"
+                f"💰 **Bán quặng thường:** `+{ore_money:,} VND`\n"
+                f"💨 Không tìm thấy vàng trong ca làm việc này. Hãy kiên trì!\n"
+                f"{chance_text}"
+            )
+            color = discord.Color.dark_green()
+
+        embed = make_embed(
+            title="⛏️ KHAI THÁC VÀNG TỰ NHIÊN ⛏️",
+            description=desc,
+            color=color
+        )
+        embed.set_thumbnail(url=user.display_avatar.url)
+        return embed
+
+    def get_business_embed(self, user: discord.User | discord.Member) -> discord.Embed:
+        user_id = user.id
+        owned = dict(self.economy.get_businesses(user_id))
+        
+        embed = make_embed(
+            title="🏢 DANH SÁCH DOANH NGHIỆP CỦA BẠN 🏢",
+            description="Sở hữu doanh nghiệp để nhận thu nhập thụ động mỗi giờ (Cần gõ `i?collect` hoặc bấm nút Thu Hoạch).",
+            color=discord.Color.teal()
+        )
+        
+        stats = self.economy.get_simulator_stats(user_id)
+        last_collect = stats[0]
+        now = int(time.time())
+        
+        for biz_id, details in BUSINESSES.items():
+            lvl = owned.get(biz_id, 0)
+            
+            if lvl > 0:
+                current_revenue = details['base_revenue'] * lvl
+                if details['currency'] == "money":
+                    rev_str = f"{current_revenue:,} VND/giờ"
+                else:
+                    rev_str = f"{current_revenue * 24:.2f} Vàng/ngày"
+                status = f"🟢 Đang hoạt động (Cấp {lvl}{' - Tối đa' if lvl >= 10 else ''})\n📈 Doanh thu hiện tại: `{rev_str}`"
+            else:
+                status = "🔴 Chưa sở hữu"
+                
+            if lvl >= 10:
+                cost_str = "Đã đạt cấp tối đa"
+                next_rev_str = "`Đã đạt cấp tối đa`"
+            else:
+                cost = int(details['base_cost'] * (1.5 ** lvl))
+                cost_str = f"{cost:,} VND" if details['currency'] == "money" else f"{cost} thỏi vàng"
+                next_lvl_revenue = details['base_revenue'] * (lvl + 1)
+                if details['currency'] == "money":
+                    next_rev_str = f"`{next_lvl_revenue:,} VND/giờ`"
+                else:
+                    next_rev_str = f"`{next_lvl_revenue * 24:.2f} Vàng/ngày`"
+                
+            buff_desc = f"\n🌟 **Đặc quyền:** {details['buff']}" if 'buff' in details else ""
+            
+            embed.add_field(
+                name=f"{details['name']}",
+                value=(
+                    f"• Trạng thái: {status}\n"
+                    f"• Chi phí mua/nâng cấp: `{cost_str}`\n"
+                    f"• Doanh thu cấp tiếp theo: {next_rev_str}"
+                    f"{buff_desc}"
+                ),
+                inline=False
+            )
+            
+        if last_collect > 0:
+            elapsed = (now - last_collect) // 60
+            embed.set_footer(text=f"Đã tích lũy doanh thu trong {elapsed} phút qua. Gõ i?collect để nhận.")
+        else:
+            embed.set_footer(text="Gõ i?biz buy <id> hoặc i?biz upgrade <id> để mua/nâng cấp.")
+            
+        return embed
+
+    async def process_collect(self, user: discord.User | discord.Member, ctx: commands.Context | None = None) -> discord.Embed:
+        user_id = user.id
+        owned = dict(self.economy.get_businesses(user_id))
+        
+        if not owned or sum(lvl for lvl in owned.values()) == 0:
+            embed = make_embed(
+                title="❌ CHƯA CÓ DOANH NGHIỆP ❌",
+                description="Bạn chưa sở hữu doanh nghiệp nào! Hãy dùng `i?biz` để mua.",
+                color=discord.Color.red()
+            )
+            return embed
+
+        stats = self.economy.get_simulator_stats(user_id)
+        last_collect = stats[0]
+        now = int(time.time())
+        
+        if last_collect == 0:
+            self.economy.set_simulator_stats(user_id, last_collect=now)
+            embed = make_embed(
+                title="⏱️ BẮT ĐẦU TÍNH DOANH THU ⏱️",
+                description="Đã bắt đầu tính doanh thu cho doanh nghiệp của bạn từ bây giờ.",
+                color=discord.Color.blue()
+            )
+            return embed
+
+        elapsed_sec = now - last_collect
+        if elapsed_sec < 60:
+            embed = make_embed(
+                title="⏳ DOANH THU QUÁ NHỎ ⏳",
+                description="Hãy đợi ít nhất 1 phút để tích lũy doanh thu.",
+                color=discord.Color.red()
+            )
+            return embed
+            
+        hours = elapsed_sec / 3600.0
+        hours = min(24.0, hours)
+        
+        earned_money = 0
+        earned_gold_frac = 0.0
+        
+        for biz_id, lvl in owned.items():
+            if lvl <= 0:
+                continue
+            biz = BUSINESSES[biz_id]
+            revenue = biz['base_revenue'] * lvl
+            
+            if biz['currency'] == "money":
+                earned_money += int(hours * revenue)
+            else:
+                earned_gold_frac += hours * revenue
+
+        total_gold_frac = stats[3] + earned_gold_frac
+        int_gold = int(total_gold_frac)
+        new_frac = round(total_gold_frac - int_gold, 4)
+        
+        if earned_money == 0 and int_gold == 0:
+            embed = make_embed(
+                title="⏳ DOANH THU QUÁ NHỎ ⏳",
+                description=f"Doanh thu tích lũy hiện tại quá ít. Hãy đợi thêm (Đã trôi qua {elapsed_sec // 60} phút).",
+                color=discord.Color.red()
+            )
+            return embed
+
+        if earned_money > 0:
+            self.economy.add_money(user_id, earned_money)
+        if int_gold > 0:
+            self.economy.add_credits(user_id, int_gold)
+
+        self.economy.set_simulator_stats(user_id, last_collect=now, fractional_gold=new_frac)
+        
+        log_wallet_change(
+            logger,
+            event="collect_passive_income",
+            user_id=user_id,
+            money_delta=earned_money,
+            credits_delta=int_gold,
+            ctx=ctx,
+            elapsed_sec=elapsed_sec
+        )
+
+        gold_str = f"\n🟡 **Vàng nhận:** `+{int_gold} thỏi vàng`" if int_gold > 0 else ""
+        
+        embed = make_embed(
+            title="🏢 BÁO CÁO DOANH THU DOANH NGHIỆP 🏢",
+            description=(
+                f"After **{elapsed_sec // 60} phút** làm việc chăm chỉ, các doanh nghiệp của bạn đã báo cáo thu hoạch:\n\n"
+                f"💰 **VND nhận:** `+{earned_money:,} VND`"
+                f"{gold_str}\n"
+                f"💳 **Vàng lẻ tích lũy thêm:** `+{earned_gold_frac:.4f} Vàng` (Số dư dư: `{new_frac} Vàng`)"
+            ),
+            color=discord.Color.green()
+        )
+        embed.set_thumbnail(url=user.display_avatar.url)
+        return embed
+
+    def get_invest_embed(self, user: discord.User | discord.Member) -> discord.Embed:
+        prices = self.economy.get_stock_prices()
+        
+        embed = make_embed(
+            title="📈 THỊ TRƯỜNG CHỨNG KHOÁN & CRYPTO 📈",
+            description="Tỷ giá biến động tự động mỗi 5 phút một lần. Đầu tư bằng tiền mặt VND.",
+            color=discord.Color.blue()
+        )
+        
+        user_portfolio = dict(self.economy.get_portfolio(user.id))
+        
+        for symbol, price, prev, change in prices:
+            trend_str = "📈 TĂNG" if change > 0 else "📉 GIẢM" if change < 0 else "↔️ ỔN ĐỊNH"
+            owned_shares = user_portfolio.get(symbol, 0.0)
+            value = int(owned_shares * price)
+            
+            embed.add_field(
+                name=f"{symbol} ({trend_str})",
+                value=(
+                    f"💵 **Giá hiện tại:** `{price:,} VND` / cổ\n"
+                    f"📊 **Biến động:** `{change:+.2f}%`\n"
+                    f"🎒 **Bạn đang sở hữu:** `{owned_shares:.2f}` cổ (`{value:,} VND`)"
+                ),
+                inline=False
+            )
+            
+        embed.set_footer(text="Gõ i?invest buy <ticker> <số lượng> hoặc i?invest sell <ticker> <số lượng>")
+        return embed
+
+    def get_daga_embed(self, user: discord.User | discord.Member) -> discord.Embed:
+        active_row = self.economy.get_active_cock(user.id)
+        if not active_row:
+            embed = make_embed(
+                title="⚔️ ĐẠI CHIẾN ANIME ⚔️",
+                description="⚠️ **Bạn chưa chọn nhân vật chính xuất trận.**\n\nHãy gõ `i?anime list` để xem các nhân vật bạn đang sở hữu và gõ `i?anime active <ID>` để đặt nhân vật xuất trận!",
+                color=discord.Color.gold()
+            )
+            return embed
+
+        from app.discord_bot.cogs.daga import Cock
+        c = Cock(active_row)
+        
+        rarity_emojis = {
+            "Thường": "<:698204c:1515422780370190377>",
+            "Hiếm": "<:759990b:1515423304620703905>",
+            "Quý": "<:780661a:1515423318587609224>",
+            "Sử Thi": "<:429893s:1515423348014715091>",
+            "Huyền Thoại": "<:915638ss:1515423361310785536>",
+            "Thần Kê": "<:886814sss:1515423524167225415>",
+            "Exclusive": "<a:869826sparklyrainbow:1515427348516831404>"
+        }
+        
+        display_rarity = RARITY_DISPLAY.get(c.rarity, c.rarity)
+        desc = (
+            f"⚔️ **Nhân vật:** `{c.name}`\n"
+            f"⭐ **Độ hiếm:** {rarity_emojis.get(c.rarity, '')} `{display_rarity}`\n"
+            f"📈 **Cấp độ:** `{c.level}` (EXP: `{c.exp}/{c.level * 100}`)\n"
+            f"❤️ **HP:** `{c.hp}` | ⚔️ **ATK:** `{c.atk}` | 🛡️ **DEF:** `{c.df}`\n"
+            f"⚡ **SPD:** `{c.spd}` | 🍀 **LUK:** `{c.luk}`\n"
+            f"⚔️ **Số trận thắng:** `{c.wins}` | 🛡️ **Số trận thua:** `{c.losses}`\n"
+            f"🔥 **Chuỗi thắng hiện tại:** `{c.streak}` ngày"
+        )
+        
+        embed = make_embed(
+            title=f"⚔️ NHÂN VẬT ĐANG XUẤT TRẬN CỦA {user.name.upper()} ⚔️",
+            description=desc,
+            color=discord.Color.gold()
+        )
+        return embed
+
+    def get_xe_embed(self, user: discord.User | discord.Member) -> discord.Embed:
+        cars = self.economy.get_user_cars(user.id)
+        fav_car = self.economy.get_favorite_car(user.id)
+        
+        desc = ""
+        if fav_car:
+            desc += f"🏎️ **Siêu xe yêu thích:** {fav_car[2]} ({fav_car[3]}) - Phiên bản: `{fav_car[5]}` (Serial: `#{fav_car[4]:04d}`)\n\n"
+        
+        if not cars:
+            desc += "🎒 **Bạn chưa sở hữu siêu xe nào!**\nHãy gõ `i?xe` để xem hướng dẫn và tham gia đua xe / đấu giá để có siêu xe nhé!"
+        else:
+            desc += "**Danh sách xe bạn sở hữu:**\n"
+            for car in cars:
+                fav_marker = " ⭐" if car[7] else ""
+                desc += f"• **{car[2]}** ({car[3]}) - Phiên bản: `{car[5]}` (Serial: `#{car[4]:04d}`){fav_marker}\n"
+                
+        embed = make_embed(
+            title=f"🏎️ GARA SIÊU XE CỦA {user.name.upper()} 🏎️",
+            description=desc,
+            color=discord.Color.dark_red()
+        )
+        return embed
 
     def cog_unload(self) -> None:
         self.update_stock_prices_task.cancel()
@@ -119,7 +1141,40 @@ class Simulator(commands.Cog):
                 inventory = self.economy.get_inventory(user_id)
                 inv_count = sum(qty for item, qty in inventory)
                 
+                # Fetch Rank Name
+                from app.discord_bot.modules.profile_renderer import get_rank_info
+                net_worth = money + (gold * gold_price) - loan_amount
+                rank_name, _, _ = get_rank_info(net_worth)
+                
+                # Fetch Roulette Title
+                from app.discord_bot.cogs.roulette import get_user_vip
+                rl_stats = self.economy.get_roulette(user_id)
+                rl_vip = get_user_vip(rl_stats)
+                rl_title = rl_vip["title"]
+                
+                # Fetch Daga Title
+                active_cock_row = self.economy.get_active_cock(user_id)
+                if active_cock_row:
+                    from app.discord_bot.cogs.daga import Cock
+                    cock = Cock(active_cock_row)
+                    daga_title = cock.get_title()
+                else:
+                    daga_title = "Chưa xuất trận 🌟"
+
+                # Fetch Coin Flip Title
+                from app.discord_bot.cogs.coinflip import get_user_vip as get_cf_vip
+                cf_stats = self.economy.get_coinflip(user_id)
+                cf_vip = get_cf_vip(cf_stats)
+                cf_title = cf_vip["title"]
+
                 # Render banner
+                equipped = self.economy.get_equipped_banner(user_id)
+                banner_path = None
+                if equipped and equipped in SHOP_ITEMS:
+                    filename = SHOP_ITEMS[equipped].get("filename")
+                    if filename:
+                        banner_path = Path("pictures/banners") / filename
+                
                 avatar_url = target.display_avatar.with_format("png").url
                 img_buffer = await render_profile_banner(
                     username=target.name,
@@ -129,44 +1184,177 @@ class Simulator(commands.Cog):
                     gold_price=gold_price,
                     loan_amount=loan_amount,
                     biz_count=biz_count,
-                    inv_count=inv_count
+                    inv_count=inv_count,
+                    banner_path=banner_path,
+                    rl_title=rl_title,
+                    daga_title=daga_title,
+                    cf_title=cf_title
                 )
                 
-                filename = f"profile-{user_id}-{uuid4().hex[:6]}.png"
+                is_gif = getattr(img_buffer, "is_gif", False)
+                ext = "gif" if is_gif else "png"
+                filename = f"profile-{user_id}-{uuid4().hex[:6]}.{ext}"
                 file = discord.File(fp=img_buffer, filename=filename)
                 
-                # Build simple embed to hold the image
+                # Render Showcase side-by-side companion image if exists
+                active_cock = self.economy.get_active_cock(user_id)
+                fav_car = self.economy.get_favorite_car(user_id)
+                
+                cock_info = None
+                if active_cock:
+                    cock_info = {
+                        "name": active_cock[2],
+                        "rarity": active_cock[3],
+                        "level": active_cock[4],
+                        "wins": active_cock[15],
+                        "losses": active_cock[16],
+                        "streak": active_cock[17],
+                        "image_filename": get_cock_image_file(active_cock[2])
+                    }
+                    
+                car_info = None
+                if fav_car:
+                    car_info = {
+                        "model": fav_car[2],
+                        "rarity": fav_car[3],
+                        "serial": fav_car[4],
+                        "edition": fav_car[5],
+                        "collection": fav_car[6],
+                        "image_filename": get_car_image_file(fav_car[2])
+                    }
+                    
+                showcase_buffer = await render_showcase_image(cock_info, car_info)
+                showcase_file = None
+                showcase_embed = None
+                
+                if showcase_buffer:
+                    showcase_filename = f"showcase-{user_id}-{uuid4().hex[:6]}.png"
+                    showcase_file = discord.File(fp=showcase_buffer, filename=showcase_filename)
+                    showcase_embed = make_embed(
+                        title="🐓 BẠN ĐỒNG HÀNH & SIÊU XE TRƯNG BÀY 🏎️",
+                        color=discord.Color.dark_theme()
+                    )
+                    showcase_embed.set_image(url=f"attachment://{showcase_filename}")
+
+                # Build embed with stats text below
+                showcase_treasure_id = self.economy.get_showcase_treasure(user_id)
+                showcase_treasure_text = "Chưa trưng bày"
+                if showcase_treasure_id and showcase_treasure_id in TREASURES:
+                    showcase_treasure_text = f"{TREASURES[showcase_treasure_id]['name']} (ID: `{showcase_treasure_id}`)"
+
+                desc = (
+                    f"🎖️ **Danh hiệu:**\n"
+                    f"• `{rank_name}`\n"
+                    f"• `{rl_title}`\n"
+                    f"• `{daga_title}`\n"
+                    f"• `{cf_title}`\n\n"
+                    f"💵 **Tài khoản:** `{money:,} VND`\n"
+                    f"🟡 **Két sắt:** `{gold} Vàng` *(Tỷ giá Vàng: {gold_price:,} VND)*\n"
+                    f"🏢 **Doanh nghiệp:** `{biz_count} Cơ sở`\n"
+                    f"🎒 **Túi đồ:** `{inv_count} Vật phẩm`\n"
+                    f"🏺 **Cổ vật trưng bày:** {showcase_treasure_text}\n"
+                )
+                if loan_amount > 0:
+                    desc += f"🚨 **Khoản nợ hiện tại:** `-{loan_amount:,} VND`\n"
+                    
                 embed = make_embed(
                     title=f"💳 PROFILE CỦA {target.name.upper()}",
+                    description=desc,
                     color=discord.Color.dark_theme()
                 )
                 embed.set_image(url=f"attachment://{filename}")
-                await ctx.send(file=file, embed=embed)
+                
+                files = [file]
+                embeds = [embed]
+                if showcase_file and showcase_embed:
+                    files.append(showcase_file)
+                    embeds.append(showcase_embed)
+                    
+                await ctx.send(files=files, embeds=embeds)
+                
                 img_buffer.close()
+                if showcase_buffer:
+                    showcase_buffer.close()
             except Exception as e:
                 logger.error(f"Failed to generate profile: {e}", exc_info=True)
                 await ctx.send(f"❌ Có lỗi xảy ra khi tạo profile: {e}")
+
+    @commands.command(
+        brief="Trang bị hình nền profile từ kho đồ của bạn.",
+        usage="setbanner / sb [banner_id / reset]",
+        aliases=["sb"]
+    )
+    async def setbanner(self, ctx: commands.Context, banner_id: str | None = None):
+        user_id = ctx.author.id
+        
+        # If no arguments, show their owned banners
+        if not banner_id:
+            inventory = self.economy.get_inventory(user_id)
+            owned_banners = []
+            
+            equipped = self.economy.get_equipped_banner(user_id)
+            
+            for item_id, qty in inventory:
+                if qty > 0 and item_id in SHOP_ITEMS and SHOP_ITEMS[item_id].get("is_banner"):
+                    owned_banners.append((item_id, SHOP_ITEMS[item_id]["name"]))
+                    
+            if not owned_banners:
+                await ctx.send(
+                    "🎒 **Bạn chưa sở hữu banner nào!**\n"
+                    "Hãy gõ `i?shop` để mua banner từ cửa hàng, sau đó gõ `i?setbanner <ID>` để trang bị."
+                )
+                return
+                
+            desc_lines = [
+                "Sử dụng lệnh `i?setbanner <ID>` để trang bị hình nền cho profile của bạn.",
+                "Để gỡ bỏ banner, gõ `i?setbanner reset`.\n",
+                "**Danh sách banner bạn sở hữu:**"
+            ]
+            
+            for bid, name in owned_banners:
+                status = " 🟢 *[Đang trang bị]*" if bid == equipped else ""
+                desc_lines.append(f"• ID: `{bid}` — **{name}**{status}")
+                
+            embed = make_embed(
+                title=f"🎨 KHO BANNER CỦA {ctx.author.name.upper()}",
+                description="\n".join(desc_lines),
+                color=discord.Color.purple()
+            )
+            embed.set_thumbnail(url=ctx.author.display_avatar.url)
+            await ctx.send(embed=embed)
+            return
+
+        # Handle reset
+        if banner_id.lower() in ["reset", "default", "none"]:
+            self.economy.set_equipped_banner(user_id, None)
+            await ctx.send("✅ Đã đặt lại hình nền mặc định cho profile của bạn.")
+            return
+
+        # Handle equip
+        if banner_id not in SHOP_ITEMS or not SHOP_ITEMS[banner_id].get("is_banner"):
+            await ctx.send("❌ **Lỗi:** ID banner không tồn tại! Gõ `i?setbanner` (không kèm ID) để xem các banner bạn sở hữu.")
+            return
+
+        # Check ownership
+        inventory = self.economy.get_inventory(user_id)
+        has_banner = any(item == banner_id and qty > 0 for item, qty in inventory)
+        if not has_banner:
+            await ctx.send(f"❌ **Lỗi:** Bạn chưa sở hữu banner này! Hãy mua nó trong cửa hàng bằng lệnh `i?buyitem {banner_id}`.")
+            return
+
+        # Equip
+        self.economy.set_equipped_banner(user_id, banner_id)
+        await ctx.send(f"✅ Đã trang bị banner **{SHOP_ITEMS[banner_id]['name']}** cho profile của bạn!")
 
     @commands.command(
         brief="Xem cửa hàng bán bằng cấp và công cụ bổ trợ.",
         usage="shop"
     )
     async def shop(self, ctx: commands.Context):
-        embed = make_embed(
-            title="🛒 CỬA HÀNG CÔNG CỤ & BẰNG CẤP 🛒",
-            description="Hãy trang bị thêm các thẻ hoặc bằng cấp để nâng cấp bản thân!",
-            color=discord.Color.gold()
-        )
-        
-        for item_id, details in SHOP_ITEMS.items():
-            cost_str = f"{details['cost']:,} VND" if details['currency'] == "money" else f"{details['cost']} thỏi vàng"
-            embed.add_field(
-                name=f"📦 {details['name']} (ID: `{item_id}`)",
-                value=f"💵 **Giá:** `{cost_str}`\n📝 **Mô tả:** {details['description']}",
-                inline=False
-            )
-        embed.set_footer(text="Gõ !buyitem <item_id> để mua đồ.")
-        await ctx.send(embed=embed)
+        view = ShopView(ctx.author)
+        embed = view.get_embed()
+        msg = await ctx.send(embed=embed, view=view)
+        view.message = msg
 
     @commands.command(
         brief="Mua một vật phẩm từ cửa hàng bằng ID.",
@@ -174,11 +1362,18 @@ class Simulator(commands.Cog):
     )
     async def buyitem(self, ctx: commands.Context, item_id: str):
         if item_id not in SHOP_ITEMS:
-            await ctx.send(f"❌ Vật phẩm ID `{item_id}` không tồn tại. Gõ `!shop` để xem danh sách.")
+            await ctx.send(f"❌ Vật phẩm ID `{item_id}` không tồn tại. Gõ `i?shop` để xem danh sách.")
             return
 
         user_id = ctx.author.id
         item = SHOP_ITEMS[item_id]
+        
+        # Check if it is a banner and they already own it
+        if item.get("is_banner"):
+            inventory = self.economy.get_inventory(user_id)
+            if any(inv_item == item_id and qty > 0 for inv_item, qty in inventory):
+                await ctx.send(f"❌ Bạn đã sở hữu banner này rồi! Không thể mua thêm.")
+                return
         
         # Check current balance
         profile = self.economy.get_entry(user_id)
@@ -217,101 +1412,364 @@ class Simulator(commands.Cog):
         aliases=["inv"]
     )
     async def inventory(self, ctx: commands.Context):
-        inventory = self.economy.get_inventory(ctx.author.id)
-        if not inventory or sum(qty for _, qty in inventory) == 0:
-            await ctx.send("🎒 Túi đồ của bạn hiện đang trống rỗng.")
+        embed = self.get_inventory_embed(ctx.author)
+        await ctx.send(embed=embed)
+
+    @commands.command(
+        brief="Bán cổ vật/kho báu thợ săn thu hoạch được.",
+        usage="sellitem <item_id> [số lượng]"
+    )
+    async def sellitem(self, ctx: commands.Context, item_id: str, quantity: int = 1):
+        if quantity <= 0:
+            await ctx.send("❌ **Lỗi:** Số lượng bán phải lớn hơn 0.")
             return
 
-        embed = make_embed(
-            title=f"🎒 TÚI ĐỒ CỦA {ctx.author.name.upper()}",
-            color=discord.Color.blue()
+        if item_id not in TREASURES:
+            await ctx.send("❌ **Lỗi:** Vật phẩm này không thể bán hoặc không tồn tại! Chỉ có thể bán các cổ vật thợ săn đào được (ví dụ: `t_lop_xe`).")
+            return
+
+        user_id = ctx.author.id
+        treasure = TREASURES[item_id]
+        
+        # Check ownership
+        inventory = self.economy.get_inventory(user_id)
+        owned_qty = next((qty for iid, qty in inventory if iid == item_id), 0)
+        
+        if owned_qty < quantity:
+            await ctx.send(f"❌ **Lỗi:** Bạn không sở hữu đủ vật phẩm này! Bạn chỉ có **{owned_qty}** cái.")
+            return
+
+        # Deduct from inventory
+        new_qty = self.economy.add_inventory_item(user_id, item_id, -quantity)
+        
+        # Clear showcase if item no longer owned
+        if new_qty <= 0:
+            showcase_id = self.economy.get_showcase_treasure(user_id)
+            if showcase_id == item_id:
+                self.economy.set_showcase_treasure(user_id, None)
+        
+        # Add money
+        total_value = treasure["value"] * quantity
+        self.economy.add_money(user_id, total_value)
+        
+        log_wallet_change(
+            logger,
+            event="sell_treasure",
+            user_id=user_id,
+            money_delta=total_value,
+            item_id=item_id,
+            quantity=quantity,
+            ctx=ctx
         )
         
-        for item_id, qty in inventory:
-            if qty > 0 and item_id in SHOP_ITEMS:
-                item = SHOP_ITEMS[item_id]
-                embed.add_field(
-                    name=f"{item['name']}",
-                    value=f"• Số lượng: **{qty}**\n• Chức năng: *{item['description']}*",
-                    inline=False
-                )
+        embed = make_embed(
+            title="💰 BÁN CỔ VẬT THÀNH CÔNG 💰",
+            description=(
+                f"Bạn đã bán **{quantity}x {treasure['name']}** cho bảo tàng thành phố!\n\n"
+                f"💵 **Giá bán mỗi chiếc:** `{treasure['value']:,} VND`\n"
+                f"💰 **Tổng tiền nhận:** `+{total_value:,} VND`\n"
+                f"💳 **Số dư VND hiện tại:** `{self.economy.get_entry(user_id)[1]:,} VND`"
+            ),
+            color=discord.Color.green()
+        )
+        embed.set_thumbnail(url=ctx.author.display_avatar.url)
         await ctx.send(embed=embed)
+
+    @commands.command(
+        brief="Triệu hồi nhân vật, mở hòm trang bị hoặc rương xe gacha.",
+        usage="moruong",
+        aliases=["mởruong", "open"]
+    )
+    async def moruong(self, ctx: commands.Context):
+        view = ChestOpenView(self, ctx.author)
+        embed = view.get_embed()
+        msg = await ctx.send(embed=embed, view=view)
+        view.message = msg
+
+    async def process_chest_open(self, interaction: discord.Interaction, view: discord.ui.View, selected_option: str, quantity: int):
+        user_id = interaction.user.id
+        
+        details = {
+            "banner_thuong": ("🔮 Banner Thường", 1_000_000, "banner", "thuong"),
+            "banner_xin": ("🔮 Banner Xịn", 5_000_000, "banner", "xin"),
+            
+            "box_garage": ("🏎️ Garage Box Xe", 100_000, "box", "1"),
+            "box_premium": ("🏎️ Premium Box Xe", 1_000_000, "box", "2"),
+            "box_luxury": ("🏎️ Luxury Box Xe", 10_000_000, "box", "3"),
+        }
+        
+        name, price_per_one, item_type, tier_id = details[selected_option]
+        total_price = price_per_one * quantity
+        
+        # Check money
+        profile = self.economy.get_entry(user_id)
+        money = profile[1]
+        if money < total_price:
+            await interaction.response.send_message(
+                f"❌ **Lỗi:** Bạn không đủ tiền! Cần `{total_price:,} VND` nhưng bạn chỉ có `{money:,} VND`.",
+                ephemeral=True
+            )
+            return
+
+        # Defer interaction first to acknowledge and allow editing with files
+        await interaction.response.defer()
+
+        # Deduct money
+        self.economy.add_money(user_id, -total_price)
+        log_wallet_change(logger, event="open_chest_menu", user_id=user_id, money_delta=-total_price, chest_type=selected_option, quantity=quantity)
+
+        # Show opening animation
+        anim_embed = make_embed(
+            title="📦 ĐANG MỞ RƯƠNG... 📦",
+            description=f"⏳ **{interaction.user.display_name}** đang mở **{quantity}x {name}** với tổng giá **{total_price:,} VNĐ**...\nHãy chờ xem bạn nhận được gì nhé! 🍀",
+            color=discord.Color.gold()
+        )
+        
+        gif_path = ABS_PATH / "modules" / "daga" / "open_chest.gif"
+        if item_type == "banner":
+            gif_path = ABS_PATH / "modules" / "daga" / "mo_trung.gif"
+
+        file_gif = None
+        if gif_path.exists():
+            file_gif = discord.File(gif_path, filename=gif_path.name)
+            anim_embed.set_image(url=f"attachment://{gif_path.name}")
+        
+        if file_gif:
+            await interaction.message.edit(content=None, embed=anim_embed, view=None, attachments=[file_gif])
+        else:
+            await interaction.message.edit(content=None, embed=anim_embed, view=None, attachments=[])
+        
+        await asyncio.sleep(3)
+
+        results = []
+        if item_type == "banner":
+            from app.discord_bot.cogs.daga import BREEDS, STAT_RANGES, get_cock_image_file
+            rarity_emojis = {
+                "Thường": "<:698204c:1515422780370190377>",
+                "Hiếm": "<:759990b:1515423304620703905>",
+                "Quý": "<:780661a:1515423318587609224>",
+                "Sử Thi": "<:429893s:1515423348014715091>",
+                "Huyền Thoại": "<:915638ss:1515423361310785536>",
+                "Thần Kê": "<:886814sss:1515423524167225415>",
+                "Exclusive": "<a:869826sparklyrainbow:1515427348516831404>"
+            }
+            
+            pity = self.economy.get_pity_golden(user_id)
+            final_pity = pity
+
+            for _ in range(quantity):
+                # Roll secret SSS first
+                r_secret = random.random() * 100
+                is_secret_sss = False
+                if tier_id == "thuong" and r_secret < 0.02:
+                    is_secret_sss = True
+                elif tier_id == "xin" and r_secret < 0.1:
+                    is_secret_sss = True
+
+                rarity = "Thường"
+                is_reset_pity = False
+
+                if is_secret_sss:
+                    rarity = "Thần Kê"
+                    if tier_id == "xin":
+                        final_pity += 1
+                else:
+                    r = random.random() * 100
+                    if tier_id == "thuong":
+                        if r < 60.0:
+                            rarity = "Thường"
+                        elif r < 90.0:
+                            rarity = "Hiếm"
+                        elif r < 99.0:
+                            rarity = "Quý"
+                        elif r < 99.8:
+                            rarity = "Sử Thi"
+                        else:
+                            rarity = "Huyền Thoại"
+                    elif tier_id == "xin":
+                        if final_pity >= 49:
+                            rarity = "Huyền Thoại"
+                            is_reset_pity = True
+                        else:
+                            if r < 40.0:
+                                rarity = "Hiếm"
+                            elif r < 85.0:
+                                rarity = "Quý"
+                            elif r < 97.0:
+                                rarity = "Sử Thi"
+                            else:
+                                rarity = "Huyền Thoại"
+                                is_reset_pity = True
+
+                        if is_reset_pity:
+                            final_pity = 0
+                        else:
+                            final_pity += 1
+
+                breed = random.choice(BREEDS[rarity])
+                ranges = STAT_RANGES[rarity]
+                hp = random.randint(*ranges["hp"])
+                atk = random.randint(*ranges["atk"])
+                df = random.randint(*ranges["df"])
+                spd = random.randint(*ranges["spd"])
+                luk = random.randint(*ranges["luk"])
+                
+                cock_id, is_duplicate, is_upgraded, old_stars, new_stars, new_shards, final_stats = self.economy.add_cock(
+                    user_id, breed, rarity, hp, atk, df, spd, luk
+                )
+                results.append({
+                    "id": cock_id,
+                    "breed": breed,
+                    "rarity": rarity,
+                    "hp": final_stats["hp"],
+                    "atk": final_stats["atk"],
+                    "df": final_stats["df"],
+                    "spd": final_stats["spd"],
+                    "luk": final_stats["luk"],
+                    "is_duplicate": is_duplicate,
+                    "is_upgraded": is_upgraded,
+                    "old_stars": old_stars,
+                    "new_stars": new_stars,
+                    "new_shards": new_shards
+                })
+
+            if tier_id == "xin":
+                self.economy.set_pity_golden(user_id, final_pity)
+
+            from app.discord_bot.cogs.daga import RARITY_DISPLAY
+            # Build result message
+            if quantity == 1:
+                res = results[0]
+                pity_str = f"\n🛡️ **Số lần tích bảo hiểm (Pity SS):** `{final_pity}/50`" if tier_id == "xin" else ""
+                display_rarity = RARITY_DISPLAY.get(res['rarity'], res['rarity'])
+                if res.get("is_duplicate"):
+                    needed = res["new_stars"] + 1
+                    if res["new_shards"] >= needed:
+                        tip_msg = f"*(🎉 Đã tích đủ mảnh trùng! Hãy gõ `i?anime dotpha` để tiến hành đột phá!)*"
+                    else:
+                        tip_msg = f"*(Nhận thêm `{needed - res['new_shards']}` bản trùng nữa để lên {res['new_stars'] + 1} Sao)*"
+                    desc = (
+                        f"🔄 **BẠN NHẬN TRÙNG NHÂN VẬT!** (Tích luỹ mảnh)\n\n"
+                        f"⚔️ **Nhân vật:** `{res['breed']}`\n"
+                        f"⭐ **Độ hiếm:** {rarity_emojis[res['rarity']]} `{display_rarity}`\n"
+                        f"📊 **Tiến trình đột phá:** `[ {res['new_shards']} / {needed} ]` mảnh trùng\n"
+                        f"{tip_msg}"
+                        f"{pity_str}"
+                    )
+                else:
+                    desc = (
+                        f"⚔️ **Nhân vật:** `{res['breed']}`\n"
+                        f"⭐ **Độ hiếm:** {rarity_emojis[res['rarity']]} `{display_rarity}`\n"
+                        f"❤️ **Máu (HP):** `{res['hp']}`\n"
+                        f"⚔️ **Sát thương (ATK):** `{res['atk']}`\n"
+                        f"🛡️ **Phòng thủ (DEF):** `{res['df']}`\n"
+                        f"⚡ **Tốc độ (SPD):** `{res['spd']}`\n"
+                        f"🍀 **May mắn (LUK):** `{res['luk']}`"
+                        f"{pity_str}"
+                    )
+                embed = make_embed(
+                    title="🔮 TRIỆU HỒI THÀNH CÔNG 🔮",
+                    description=desc,
+                    color=discord.Color.green(),
+                )
+                img_name = get_cock_image_file(res['breed'])
+                file_img = None
+                if img_name:
+                    file_img = discord.File(ABS_PATH / "modules" / "daga" / img_name, filename=img_name)
+                    embed.set_thumbnail(url=f"attachment://{img_name}")
+                
+                if file_img:
+                    await interaction.message.edit(embed=embed, view=view, attachments=[file_img])
+                else:
+                    await interaction.message.edit(embed=embed, view=view, attachments=[])
+            else:
+                list_str = ""
+                for res in results:
+                    emoji = rarity_emojis[res['rarity']]
+                    display_rarity = RARITY_DISPLAY.get(res['rarity'], res['rarity'])
+                    if res.get("is_duplicate"):
+                        needed = res["new_stars"] + 1
+                        if res["new_shards"] >= needed:
+                            list_str += f"• `[ID: {res['id']}]` {emoji} **{res['breed']}** ({display_rarity}) | HP: `{res['hp']}` | ATK: `{res['atk']}` | DEF: `{res['df']}` (Trùng - Đủ mảnh đột phá! 💥)\n"
+                        else:
+                            list_str += f"• `[ID: {res['id']}]` {emoji} **{res['breed']}** ({display_rarity}) | HP: `{res['hp']}` | ATK: `{res['atk']}` | DEF: `{res['df']}` (Trùng - Mảnh: `{res['new_shards']}/{needed}`)\n"
+                    else:
+                        list_str += f"• `[ID: {res['id']}]` {emoji} **{res['breed']}** ({display_rarity}) | HP: `{res['hp']}` | ATK: `{res['atk']}` | DEF: `{res['df']}`\n"
+                
+                pity_str = f"\n🛡️ **Bảo hiểm hiện tại (Pity SS):** `{final_pity}/50`" if tier_id == "xin" else ""
+                embed = make_embed(
+                    title=f"🔮 KẾT QUẢ TRIỆU HỒI {quantity} LƯỢT 🔮",
+                    description=f"Chúc mừng bạn đã sở hữu thêm các nhân vật mới:\n\n{list_str}{pity_str}",
+                    color=discord.Color.green()
+                )
+                embed.set_thumbnail(url=interaction.user.display_avatar.url)
+                await interaction.message.edit(embed=embed, view=view, attachments=[])
+
+        elif item_type == "box":
+            from app.discord_bot.cogs.xe import BOX_DETAILS, CAR_RARITIES, CAR_EDITIONS, COLLECTIONS, RARITY_INFO, get_car_image_file, roll_rarity, CAR_QUOTES
+            rarity_emojis = {
+                "Common": "⚪", "Rare": "🟢", "Epic": "🔵", "Legendary": "🟣", "Mythic": "🟡", "Exclusive": "🔴"
+            }
+            
+            box = BOX_DETAILS[tier_id]
+            for _ in range(quantity):
+                rarity = roll_rarity(box["rates"])
+                
+                models = [name for name, r_name in CAR_RARITIES.items() if r_name == rarity]
+                model = random.choice(models)
+                
+                edition = CAR_EDITIONS.get(model, "Standard")
+                self.economy.add_car(user_id, model)
+                results.append({
+                    "model": model,
+                    "rarity": rarity,
+                    "edition": edition,
+                    "emoji": rarity_emojis[rarity]
+                })
+
+            if quantity == 1:
+                res = results[0]
+                desc = (
+                    f"🏎️ **Xe:** **{res['model']}**\n"
+                    f"⭐ **Độ hiếm:** {res['emoji']} `{res['rarity']}`\n"
+                    f"✨ **Phiên bản:** `{res['edition']}`\n\n"
+                    f"*\"{CAR_QUOTES.get(res['model'], 'Một chiếc xe tuyệt vời!')}\"*\n\n"
+                    f"Đã được chuyển vào Garage của bạn (`i?xe garage`)!"
+                )
+                embed = make_embed(
+                    title="🏎️ MỞ BOX XE THÀNH CÔNG 🏎️",
+                    description=desc,
+                    color=discord.Color.green(),
+                )
+                img_name = get_car_image_file(res['model'])
+                file_img = None
+                if img_name:
+                    file_img = discord.File(ABS_PATH / "modules" / "duaxe" / img_name, filename=img_name)
+                    embed.set_thumbnail(url=f"attachment://{img_name}")
+                
+                if file_img:
+                    await interaction.message.edit(embed=embed, view=view, attachments=[file_img])
+                else:
+                    await interaction.message.edit(embed=embed, view=view, attachments=[])
+            else:
+                list_str = ""
+                for res in results:
+                    list_str += f"• {res['emoji']} **{res['model']}** ({res['rarity']}) - `{res['edition']}`\n"
+                
+                embed = make_embed(
+                    title=f"🏎️ KẾT QUẢ MỞ {quantity} BOX XE 🏎️",
+                    description=f"Chúc mừng bạn đã nhận được các xe sau:\n\n{list_str}",
+                    color=discord.Color.green()
+                )
+                embed.set_thumbnail(url=interaction.user.display_avatar.url)
+                await interaction.message.edit(embed=embed, view=view, attachments=[])
 
     @commands.command(
         brief="Đào mỏ khai thác khoáng sản (Yêu cầu Thẻ thợ mỏ VIP). Cooldown 5 tiếng.",
         usage="mine"
     )
     async def mine(self, ctx: commands.Context):
-        user_id = ctx.author.id
-        
-        # Check VIP Miner Card
-        inventory = self.economy.get_inventory(user_id)
-        has_card = any(item == 'the_tho_mo' and qty > 0 for item, qty in inventory)
-        if not has_card:
-            await ctx.send("❌ **Lỗi:** Lệnh này yêu cầu **Thẻ thợ mỏ VIP**! Hãy gõ `!shop` để mua thẻ bằng Vàng trước.")
-            return
-
-        # Check cooldown
-        stats = self.economy.get_simulator_stats(user_id)
-        last_mine = stats[1]
-        now = int(time.time())
-        cooldown = 5 * 3600 # 5 hours
-        
-        if now - last_mine < cooldown:
-            time_left = cooldown - (now - last_mine)
-            hours = time_left // 3600
-            minutes = (time_left % 3600) // 60
-            await ctx.send(f"⏳ **Bạn đang mệt:** Hãy nghỉ ngơi! Bạn có thể tiếp tục đào mỏ sau **{hours} giờ {minutes} phút**.")
-            return
-
-        # Calculate rewards
-        # Dig up scraps (VND)
-        ore_money = random.randint(20_000, 100_000)
-        
-        # 5% chance of getting Gold (0.1 - 0.5 Gold)
-        dropped_gold = 0.0
-        gold_message = ""
-        
-        if random.random() < 0.05:
-            dropped_gold = round(random.uniform(0.1, 0.5), 2)
-            gold_message = f"\n✨ **ĐẶC BIỆT:** Bạn đào trúng mạch vàng và thu về **{dropped_gold}** Vàng!"
-
-        # Process money reward
-        self.economy.add_money(user_id, ore_money)
-        
-        # Process fractional gold reward
-        total_gold_frac = stats[3] + dropped_gold
-        int_gold = int(total_gold_frac)
-        new_frac = round(total_gold_frac - int_gold, 4)
-        
-        if int_gold > 0:
-            self.economy.add_credits(user_id, int_gold)
-            gold_message += f" (Đã quy đổi cộng thêm `{int_gold}` thỏi vàng vào két sắt)"
-
-        # Save stats
-        self.economy.set_simulator_stats(user_id, last_mine=now, fractional_gold=new_frac)
-        
-        log_wallet_change(
-            logger,
-            event="mine_ore",
-            user_id=user_id,
-            money_delta=ore_money,
-            credits_delta=int_gold,
-            ctx=ctx,
-            dropped_gold_frac=dropped_gold
-        )
-
-        embed = make_embed(
-            title="⛏️ CUỘC KHAI THÁC KHOÁNG SẢN ⛏️",
-            description=(
-                f"Bạn đã vác cuốc vào hầm mỏ VIP làm việc cật lực...\n\n"
-                f"💰 **Bán quặng sắt vụn:** `+{ore_money:,} VND`"
-                f"{gold_message}\n"
-                f"💳 **Vàng lẻ đang tích lũy:** `{new_frac} Vàng` (Đủ `1.0` sẽ tự đổi ra thỏi)"
-            ),
-            color=discord.Color.dark_green()
-        )
-        embed.set_thumbnail(url=ctx.author.display_avatar.url)
+        embed = await self.process_mine(ctx.author, ctx)
         await ctx.send(embed=embed)
 
     @commands.group(
@@ -321,58 +1779,7 @@ class Simulator(commands.Cog):
         invoke_without_command=True
     )
     async def business(self, ctx: commands.Context):
-        user_id = ctx.author.id
-        owned = dict(self.economy.get_businesses(user_id))
-        
-        embed = make_embed(
-            title="🏢 DANH SÁCH DOANH NGHIỆP CỦA BẠN 🏢",
-            description="Sở hữu doanh nghiệp để nhận thu nhập thụ động mỗi giờ (Cần gõ `!collect` để thu hoạch).",
-            color=discord.Color.teal()
-        )
-        
-        # Calculate current passive yields
-        stats = self.economy.get_simulator_stats(user_id)
-        last_collect = stats[0]
-        now = int(time.time())
-        
-        for biz_id, details in BUSINESSES.items():
-            lvl = owned.get(biz_id, 0)
-            
-            # calculate upgrade costs & yields
-            cost = int(details['base_cost'] * (1.5 ** lvl))
-            cost_str = f"{cost:,} VND" if details['currency'] == "money" else f"{cost} thỏi vàng"
-            
-            revenue = details['base_revenue'] * (lvl + 1) if lvl > 0 else details['base_revenue']
-            
-            if details['currency'] == "money":
-                rev_str = f"{revenue:,} VND/giờ"
-            else:
-                rev_str = f"{revenue * 24:.2f} Vàng/ngày"
-                
-            status = f"🟢 Đang hoạt động (Cấp {lvl})\n📈 Doanh thu hiện tại: `{rev_str}`" if lvl > 0 else "🔴 Chưa sở hữu"
-            
-            buff_desc = f"\n🌟 **Đặc quyền:** {details['buff']}" if 'buff' in details else ""
-            
-            embed.add_field(
-                name=f"{details['name']}",
-                value=(
-                    f"• Trạng thái: {status}\n"
-                    f"• Chi phí mua/nâng cấp: `{cost_str}`\n"
-                    f"• Doanh thu cấp tiếp theo: "
-                    f"`{details['base_revenue'] * (lvl + 1 + (1 if lvl > 0 else 0)):,} VND/giờ`" if details['currency'] == "money"
-                    else f"`{(details['base_revenue'] * (lvl + 2 if lvl > 0 else 1)) * 24:.2f} Vàng/ngày`"
-                    f"{buff_desc}"
-                ),
-                inline=False
-            )
-            
-        # Show time elapsed
-        if last_collect > 0:
-            elapsed = (now - last_collect) // 60
-            embed.set_footer(text=f"Đã tích lũy doanh thu trong {elapsed} phút qua. Gõ !collect để nhận.")
-        else:
-            embed.set_footer(text="Gõ !biz buy <id> hoặc !biz upgrade <id> để mua/nâng cấp.")
-            
+        embed = self.get_business_embed(ctx.author)
         await ctx.send(embed=embed)
 
     @business.command(name="buy", aliases=["mua", "upgrade", "up", "nangcap"])
@@ -387,6 +1794,10 @@ class Simulator(commands.Cog):
         owned = dict(self.economy.get_businesses(user_id))
         current_lvl = owned.get(biz_id, 0)
         
+        if current_lvl >= 10:
+            await ctx.send(f"❌ Doanh nghiệp **{biz['name']}** của bạn đã đạt cấp độ tối đa (Cấp 10)!")
+            return
+            
         # Calculate cost
         cost = int(biz['base_cost'] * (1.5 ** current_lvl))
         
@@ -430,88 +1841,7 @@ class Simulator(commands.Cog):
         aliases=["thuhoach"]
     )
     async def collect(self, ctx: commands.Context):
-        user_id = ctx.author.id
-        owned = dict(self.economy.get_businesses(user_id))
-        
-        if not owned or sum(lvl for lvl in owned.values()) == 0:
-            await ctx.send("❌ Bạn chưa sở hữu doanh nghiệp nào! Hãy dùng `!biz` để mua.")
-            return
-
-        stats = self.economy.get_simulator_stats(user_id)
-        last_collect = stats[0]
-        now = int(time.time())
-        
-        if last_collect == 0:
-            self.economy.set_simulator_stats(user_id, last_collect=now)
-            await ctx.send("⏱️ Đã bắt đầu tính doanh thu cho doanh nghiệp của bạn từ bây giờ.")
-            return
-
-        # Calculate time elapsed in hours
-        elapsed_sec = now - last_collect
-        if elapsed_sec < 60:
-            await ctx.send("⏳ **Doanh thu quá nhỏ:** Hãy đợi ít nhất 1 phút để tích lũy doanh thu.")
-            return
-            
-        # Idle cap: max 24 hours
-        hours = elapsed_sec / 3600.0
-        hours = min(24.0, hours)
-        
-        # Calculate revenue
-        earned_money = 0
-        earned_gold_frac = 0.0
-        
-        for biz_id, lvl in owned.items():
-            if lvl <= 0:
-                continue
-            biz = BUSINESSES[biz_id]
-            revenue = biz['base_revenue'] * lvl
-            
-            if biz['currency'] == "money":
-                earned_money += int(hours * revenue)
-            else:
-                earned_gold_frac += hours * revenue
-
-        total_gold_frac = stats[3] + earned_gold_frac
-        int_gold = int(total_gold_frac)
-        new_frac = round(total_gold_frac - int_gold, 4)
-        
-        if earned_money == 0 and int_gold == 0:
-            await ctx.send(f"⏳ Doanh thu tích lũy hiện tại quá ít. Hãy đợi thêm (Đã trôi qua {elapsed_sec // 60} phút).")
-            return
-
-        # Distribute earnings
-        if earned_money > 0:
-            self.economy.add_money(user_id, earned_money)
-        if int_gold > 0:
-            self.economy.add_credits(user_id, int_gold)
-
-        # Update collect stats
-        # To avoid time drift, update last_collect to current time
-        self.economy.set_simulator_stats(user_id, last_collect=now, fractional_gold=new_frac)
-        
-        log_wallet_change(
-            logger,
-            event="collect_passive_income",
-            user_id=user_id,
-            money_delta=earned_money,
-            credits_delta=int_gold,
-            ctx=ctx,
-            elapsed_sec=elapsed_sec
-        )
-
-        gold_str = f"\n🟡 **Vàng nhận:** `+{int_gold} thỏi vàng`" if int_gold > 0 else ""
-        
-        embed = make_embed(
-            title="🏢 BÁO CÁO DOANH THU DOANH NGHIỆP 🏢",
-            description=(
-                f"Sau **{elapsed_sec // 60} phút** làm việc chăm chỉ, các doanh nghiệp của bạn đã báo cáo thu hoạch:\n\n"
-                f"💰 **VND nhận:** `+{earned_money:,} VND`"
-                f"{gold_str}\n"
-                f"💳 **Vàng lẻ tích lũy thêm:** `+{earned_gold_frac:.4f} Vàng` (Số dư dư: `{new_frac} Vàng`)"
-            ),
-            color=discord.Color.green()
-        )
-        embed.set_thumbnail(url=ctx.author.display_avatar.url)
+        embed = await self.process_collect(ctx.author, ctx)
         await ctx.send(embed=embed)
 
     @commands.command(
@@ -554,9 +1884,9 @@ class Simulator(commands.Cog):
         robber_money = robber_profile[1]
         
         if random.random() < 0.40:
-            # Success: steal 10% - 30% of target wallet VND
-            steal_pct = random.uniform(0.10, 0.30)
-            steal_amount = int(target_money * steal_pct)
+            # Success: steal a random amount between 10,000 and 1,000,000 VND
+            steal_amount = random.randint(10_000, 1_000_000)
+            steal_amount = min(target_money, steal_amount)
             
             self.economy.add_money(target.id, -steal_amount)
             self.economy.add_money(user_id, steal_amount)
@@ -577,10 +1907,13 @@ class Simulator(commands.Cog):
             embed.set_thumbnail(url=ctx.author.display_avatar.url)
             await ctx.send(embed=embed)
         else:
-            # Failure: get caught and fined 5% of robber money (min 50,000 VND)
-            fine = int(robber_money * 0.05)
-            fine = max(50_000, fine)
-            fine = min(robber_money, fine) # cannot deduct more than they have
+            # Failure: get caught and fined a random 1% to 5% of robber money
+            fine_pct = random.uniform(0.01, 0.05)
+            fine = int(robber_money * fine_pct)
+            if robber_money > 0:
+                fine = max(1, min(robber_money, fine))
+            else:
+                fine = 0
             
             if fine > 0:
                 self.economy.add_money(user_id, -fine)
@@ -606,32 +1939,7 @@ class Simulator(commands.Cog):
         invoke_without_command=True
     )
     async def invest(self, ctx: commands.Context):
-        prices = self.economy.get_stock_prices()
-        
-        embed = make_embed(
-            title="📈 THỊ TRƯỜNG CHỨNG KHOÁN & CRYPTO 📈",
-            description="Tỷ giá biến động tự động mỗi 5 phút một lần. Đầu tư bằng tiền mặt VND.",
-            color=discord.Color.blue()
-        )
-        
-        user_portfolio = dict(self.economy.get_portfolio(ctx.author.id))
-        
-        for symbol, price, prev, change in prices:
-            trend_str = "📈 TĂNG" if change > 0 else "📉 GIẢM" if change < 0 else "↔️ ỔN ĐỊNH"
-            owned_shares = user_portfolio.get(symbol, 0.0)
-            value = int(owned_shares * price)
-            
-            embed.add_field(
-                name=f"{symbol} ({trend_str})",
-                value=(
-                    f"💵 **Giá hiện tại:** `{price:,} VND` / cổ\n"
-                    f"📊 **Biến động:** `{change:+.2f}%`\n"
-                    f"🎒 **Bạn đang sở hữu:** `{owned_shares:.2f}` cổ (`{value:,} VND`)"
-                ),
-                inline=False
-            )
-            
-        embed.set_footer(text="Gõ !invest buy <ticker> <số lượng> hoặc !invest sell <ticker> <số lượng>")
+        embed = self.get_invest_embed(ctx.author)
         await ctx.send(embed=embed)
 
     @invest.command(name="buy", aliases=["mua"])
@@ -734,6 +2042,58 @@ class Simulator(commands.Cog):
             ),
             color=discord.Color.green()
         )
+        await ctx.send(embed=embed)
+
+    @commands.command(
+        brief="Trưng bày cổ vật/kho báu lên trang cá nhân của bạn.",
+        usage="trungbay [item_id hoặc 'huy']",
+        aliases=["showcase"]
+    )
+    async def trungbay(self, ctx: commands.Context, item_id: str = None):
+        user_id = ctx.author.id
+        
+        if not item_id:
+            # Show current showcased treasure
+            current = self.economy.get_showcase_treasure(user_id)
+            if not current or current not in TREASURES:
+                await ctx.send("🏺 Hiện tại bạn **chưa trưng bày** cổ vật nào. Dùng lệnh `i?trungbay <item_id>` để chọn vật phẩm trưng bày.")
+            else:
+                treasure = TREASURES[current]
+                await ctx.send(f"🏺 Cổ vật đang trưng bày của bạn: **{treasure['name']}** (ID: `{current}`).\nDùng lệnh `i?trungbay huy` để hủy trưng bày.")
+            return
+
+        if item_id.lower() in ["huy", "remove", "cancel", "clear"]:
+            self.economy.set_showcase_treasure(user_id, None)
+            await ctx.send("✅ Đã hủy trưng bày cổ vật trên trang cá nhân.")
+            return
+
+        if item_id not in TREASURES:
+            await ctx.send("❌ **Lỗi:** Vật phẩm này không phải là cổ vật hợp lệ để trưng bày! Ví dụ: `t_bat_gom`.")
+            return
+
+        # Check ownership
+        inventory = self.economy.get_inventory(user_id)
+        owned_qty = next((qty for iid, qty in inventory if iid == item_id), 0)
+        
+        if owned_qty <= 0:
+            await ctx.send(f"❌ **Lỗi:** Bạn không sở hữu cổ vật này trong túi đồ để trưng bày!")
+            return
+
+        # Set showcase
+        self.economy.set_showcase_treasure(user_id, item_id)
+        treasure = TREASURES[item_id]
+        
+        embed = make_embed(
+            title="🏺 TRƯNG BÀY CỔ VẬT THÀNH CÔNG 🏺",
+            description=(
+                f"Bạn đã chọn trưng bày **{treasure['name']}** lên trang cá nhân!\n\n"
+                f"✨ **Độ hiếm:** `{treasure['rarity']}`\n"
+                f"💰 **Giá trị cổ vật:** `{treasure['value']:,} VND`\n\n"
+                f"👉 Cổ vật này sẽ được hiển thị khi người khác gõ lệnh `i?profile` của bạn."
+            ),
+            color=discord.Color.gold()
+        )
+        embed.set_thumbnail(url=ctx.author.display_avatar.url)
         await ctx.send(embed=embed)
 
 async def setup(client: commands.Bot):

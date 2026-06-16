@@ -11,13 +11,18 @@ class Help(commands.Cog, name="help"):
         self.client = client
 
     def _format_command(self, command: commands.Command) -> str:
-        base_name = f"{self.client.command_prefix}{command.name}"
-        if not command.aliases:
-            return base_name
-        aliases = ", ".join(
-            f"{self.client.command_prefix}{alias}" for alias in command.aliases
-        )
-        return f"{base_name} ({aliases})"
+        prefix = self.client.command_prefix
+        if isinstance(prefix, list):
+            prefix = prefix[0]
+        base_name = f"🔹 **{prefix}{command.name}**"
+        aliases_str = ""
+        if command.aliases:
+            aliases = ", ".join(
+                f"{prefix}{alias}" for alias in command.aliases
+            )
+            aliases_str = f" ({aliases})"
+        brief = (command.brief or "Không có mô tả.").split('\n')[0].strip()
+        return f"{base_name}{aliases_str} — {brief}"
 
     @commands.command(
         brief="Liệt kê các lệnh và thông tin chi tiết.",
@@ -25,17 +30,66 @@ class Help(commands.Cog, name="help"):
         hidden=True,
     )
     async def help(self, ctx: commands.Context, request: str | None = None):
+        prefix = self.client.command_prefix
+        if isinstance(prefix, list):
+            prefix = prefix[0]
         if not request:
-            embed = make_embed(title="Danh sách lệnh")
-            for name, cog in self.client.cogs.items():
+            embed = make_embed(
+                title="📖 DANH SÁCH LỆNH CASINO BOT 📖",
+                description=f"Sử dụng `{prefix}help <tên_lệnh>` để xem chi tiết cách dùng và ví dụ.",
+                color=discord.Color.blue(),
+            )
+            
+            cog_group_mapping = {
+                "Blackjack": "🎲 Cờ Bạc",
+                "MultiBlackjack": "🎲 Cờ Bạc",
+                "GamblingGames": "🎲 Cờ Bạc",
+                "Daga": "🎲 Cờ Bạc",
+                "Roulette": "🎲 Cờ Bạc",
+                "CoinFlip": "🎲 Cờ Bạc",
+                "HorseRace": "🎲 Cờ Bạc",
+                "Crash": "🎲 Cờ Bạc",
+                "ScratchCard": "🎲 Cờ Bạc",
+                "Bkb": "🎲 Cờ Bạc",
+                "General": "💼 General",
+                "Simulator": "💼 General",
+                "Slots": "🎰 Slots",
+                "AI": "🤖 AI",
+                "Xe": "🏎️ Đua Xe",
+            }
+            
+            groups = {}
+            for cog in self.client.cogs.values():
                 cog_commands = [command for command in cog.get_commands() if not command.hidden]
                 if not cog_commands:
                     continue
-                embed.add_field(
-                    name=name,
-                    value="\n".join(self._format_command(command) for command in cog_commands),
-                    inline=False,
-                )
+                group_name = cog_group_mapping.get(cog.qualified_name, cog.qualified_name)
+                if group_name not in groups:
+                    groups[group_name] = []
+                groups[group_name].extend(cog_commands)
+
+            group_order = ["💼 General", "🎲 Cờ Bạc", "🎰 Slots", "🏎️ Đua Xe", "🤖 AI"]
+            
+            # Show groups in a designated order
+            for group_name in group_order:
+                if group_name in groups:
+                    commands_list = sorted(groups[group_name], key=lambda c: c.name)
+                    commands_str = ", ".join(f"`{cmd.name}`" for cmd in commands_list)
+                    embed.add_field(
+                        name=group_name,
+                        value=commands_str,
+                        inline=False,
+                    )
+                    
+            for group_name in groups:
+                if group_name not in group_order:
+                    commands_list = sorted(groups[group_name], key=lambda c: c.name)
+                    commands_str = ", ".join(f"`{cmd.name}`" for cmd in commands_list)
+                    embed.add_field(
+                        name=group_name,
+                        value=commands_str,
+                        inline=False,
+                    )
 
             fp = os.path.join(ABS_PATH, "modules/cards/aces.png")
             file = discord.File(fp, filename="aces.png")
@@ -46,20 +100,28 @@ class Help(commands.Cog, name="help"):
                 await ctx.invoke(self.client.get_command("help"))
                 return
             embed = make_embed(
-                title=command.name,
+                title=f"🔍 Chi tiết lệnh: {command.name}",
                 description=command.brief,
                 footer="* tùy chọn",
+                color=discord.Color.gold(),
             )
             embed.add_field(
                 name="Cách dùng:",
-                value=f"`{self.client.command_prefix}{command.usage}`",
+                value=f"`{prefix}{command.usage}`",
             )
             if command.aliases:
                 aliases = ", ".join(
-                    f"`{self.client.command_prefix}{alias}`"
+                    f"`{prefix}{alias}`"
                     for alias in command.aliases
                 )
                 embed.add_field(name="Bí danh:", value=aliases)
+            
+            if isinstance(command, commands.Group):
+                subcommands_list = sorted([sub for sub in command.commands if not sub.hidden], key=lambda c: c.name)
+                subcommands = "\n".join(f"🔹 **{sub.name}** — {sub.brief or 'Không có mô tả.'}" for sub in subcommands_list)
+                if subcommands:
+                    embed.add_field(name="Các lệnh con:", value=subcommands, inline=False)
+                    
             file = None
 
         await ctx.send(file=file, embed=embed)

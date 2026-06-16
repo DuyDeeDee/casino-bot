@@ -29,15 +29,7 @@ class GamblingHelpers(commands.Cog, name='General'):
             "Invalid field. Use `balance` or `credits`."
         )
 
-    @commands.command(
-        brief=f"Gives you ${DEFAULT_BET*B_MULT} once every {B_COOLDOWN}hrs",
-        usage="add"
-    )
-    @commands.cooldown(1, B_COOLDOWN*3600, type=commands.BucketType.user)
-    async def add(self, ctx: commands.Context):
-        amount = DEFAULT_BET*B_MULT
-        self.economy.add_money(ctx.author.id, amount)
-        await ctx.send(f"Added ${amount} come back in {B_COOLDOWN}hrs")
+
 
     @commands.command(
         brief="How much money you or someone else has",
