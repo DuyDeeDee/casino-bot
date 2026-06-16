@@ -51,6 +51,7 @@ class Help(commands.Cog, name="help"):
                 "Crash": "🎲 Cờ Bạc",
                 "ScratchCard": "🎲 Cờ Bạc",
                 "Bkb": "🎲 Cờ Bạc",
+                "Baito": "🎲 Cờ Bạc",
                 "General": "💼 General",
                 "Simulator": "💼 General",
                 "Slots": "🎰 Slots",
