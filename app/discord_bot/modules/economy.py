@@ -135,6 +135,8 @@ def _migration_8_add_daga_tables(cur: sqlite3.Cursor) -> None:
         cur.execute("ALTER TABLE economy ADD COLUMN pity_golden INTEGER DEFAULT 0")
     except sqlite3.OperationalError:
         pass
+
+    try:
         cur.execute(
             """CREATE TABLE IF NOT EXISTS user_cocks (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -163,6 +165,7 @@ def _migration_8_add_daga_tables(cur: sqlite3.Cursor) -> None:
         cur.execute("CREATE INDEX IF NOT EXISTS idx_cocks_user ON user_cocks(user_id)")
     except sqlite3.OperationalError:
         pass
+
 
 
 def _migration_9_add_equipped_banner(cur: sqlite3.Cursor) -> None:
