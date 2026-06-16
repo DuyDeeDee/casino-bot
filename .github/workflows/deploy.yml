@@ -1,0 +1,40 @@
+name: Deploy to Azure VM
+
+on:
+  push:
+    branches:
+      - main # Chạy workflow này mỗi khi push lên branch main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to Azure VM via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VM_HOST }}          # Địa chỉ IP công cộng của Azure VM
+          username: ${{ secrets.VM_USERNAME }}  # Username đăng nhập SSH (VD: azureuser, ubuntu)
+          key: ${{ secrets.SSH_PRIVATE_KEY }}   # SSH Private Key (PrivateKey tương ứng để login)
+          port: ${{ secrets.VM_PORT || 22 }}   # Port SSH (mặc định là 22)
+          script: |
+            # Di chuyển vào thư mục chứa code bot
+            cd ${{ secrets.VM_TARGET_DIR }}
+            
+            # Pull code mới nhất từ git
+            git pull origin main
+            
+            # Kích hoạt virtual environment và cập nhật thư viện (nếu dùng venv)
+            if [ -d "venv" ]; then
+              source venv/bin/activate
+              pip install -r requirements.txt
+            else
+              pip install -r requirements.txt
+            fi
+            
+            # Khởi động lại bot bằng PM2 (hoặc Docker)
+            # Dưới đây là lệnh restart với PM2. Thay "casino-bot" bằng tên tiến trình PM2 của bạn.
+            pm2 restart casino-bot || pm2 start main.py --name "casino-bot" --interpreter python3
+            
+            # HOẶC nếu bạn dùng Docker Compose thì uncomment các dòng bên dưới và comment dòng PM2 ở trên:
+            # docker compose down
+            # docker compose up --build -d
