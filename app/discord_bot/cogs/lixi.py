@@ -86,7 +86,7 @@ class LixiView(discord.ui.View):
         self.claims = []  # list of tuples: (user_id, user_name, amount)
         self.claimed_user_ids = set()
         self.message: Optional[discord.Message] = None
-        self.is_finished = False
+        self.lixi_finished = False
 
     async def update_embed(self, status_text: Optional[str] = None):
         desc = ""
@@ -125,7 +125,7 @@ class LixiView(discord.ui.View):
 
     @discord.ui.button(label="🧧 Bốc Lì Xì", style=discord.ButtonStyle.success, custom_id="btn_claim_lixi")
     async def claim_click(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if self.is_finished:
+        if self.lixi_finished:
             await interaction.response.send_message("❌ Bao lì xì này đã kết thúc rồi!", ephemeral=True)
             return
 
@@ -140,7 +140,7 @@ class LixiView(discord.ui.View):
         await interaction.response.defer()
 
         if not self.parts:
-            self.is_finished = True
+            self.lixi_finished = True
             for child in self.children:
                 child.disabled = True
             await self.update_embed("🎉 **Lì xì đã được bốc hết!**")
@@ -164,7 +164,7 @@ class LixiView(discord.ui.View):
         )
 
         if not self.parts:
-            self.is_finished = True
+            self.lixi_finished = True
             for child in self.children:
                 child.disabled = True
             await self.update_embed("🎉 **Lì xì đã được bốc hết!**")
@@ -173,9 +173,9 @@ class LixiView(discord.ui.View):
             await self.update_embed()
 
     async def on_timeout(self):
-        if self.is_finished:
+        if self.lixi_finished:
             return
-        self.is_finished = True
+        self.lixi_finished = True
         for child in self.children:
             child.disabled = True
 
