@@ -18,7 +18,7 @@ CARDS_CONFIG = {
     "bronze": {
         "id": "bronze",
         "name": "🥉 Thẻ Cào Đồng",
-        "price": 500_000,
+        "price": 10_000,
         "win_rate": 0.10,
         "symbols": ["🍀", "⭐", "💰", "🎰", "💎"],
         "multipliers": {"🍀": 2, "⭐": 3, "💰": 4, "🎰": 5, "💎": 8},
@@ -26,7 +26,7 @@ CARDS_CONFIG = {
     "silver": {
         "id": "silver",
         "name": "🥈 Thẻ Cào Bạc",
-        "price": 2_000_000,
+        "price": 50_000,
         "win_rate": 0.07,
         "symbols": ["🍀", "⭐", "💰", "🎰", "💎"],
         "multipliers": {"🍀": 3, "⭐": 4, "💰": 5, "🎰": 8, "💎": 15},
@@ -34,7 +34,7 @@ CARDS_CONFIG = {
     "gold": {
         "id": "gold",
         "name": "🥇 Thẻ Cào Vàng",
-        "price": 10_000_000,
+        "price": 200_000,
         "win_rate": 0.04,
         "symbols": ["🍀", "⭐", "💰", "🎰", "💎"],
         "multipliers": {"🍀": 5, "⭐": 8, "💰": 10, "🎰": 15, "💎": 25},
@@ -42,7 +42,7 @@ CARDS_CONFIG = {
     "diamond": {
         "id": "diamond",
         "name": "💎 Thẻ Cào Kim Cương",
-        "price": 50_000_000,
+        "price": 1_000_000,
         "win_rate": 0.015,
         "symbols": ["🍀", "⭐", "💰", "🎰", "💎"],
         "multipliers": {"🍀": 8, "⭐": 15, "💰": 20, "🎰": 30, "💎": 50},
@@ -54,7 +54,7 @@ EVENT_CARDS = {
     "halloween": {
         "id": "halloween",
         "name": "🎃 Thẻ Halloween",
-        "price": 15_000_000,
+        "price": 300_000,
         "win_rate": 0.05,
         "symbols": ["🍬", "🦇", "👻", "🎃", "💀"],
         "multipliers": {"🍬": 2, "🦇": 4, "👻": 6, "🎃": 10, "💀": 20},
@@ -62,7 +62,7 @@ EVENT_CARDS = {
     "christmas": {
         "id": "christmas",
         "name": "🎄 Thẻ Giáng Sinh",
-        "price": 40_000_000,
+        "price": 800_000,
         "win_rate": 0.03,
         "symbols": ["❄️", "🔔", "🎄", "🦌", "🎅"],
         "multipliers": {"❄️": 3, "🔔": 5, "🎄": 8, "🦌": 12, "🎅": 25},
@@ -70,7 +70,7 @@ EVENT_CARDS = {
     "tet": {
         "id": "tet",
         "name": "🧧 Thẻ Tết",
-        "price": 75_000_000,
+        "price": 1_500_000,
         "win_rate": 0.015,
         "symbols": ["🍊", "🦁", "🧧", "🪙", "🌸"],
         "multipliers": {"🍊": 3, "🦁": 5, "🧧": 10, "🪙": 15, "🌸": 30},
@@ -359,7 +359,26 @@ class ScratchCardPlayView(discord.ui.View):
 
         payout = 0
         result_lines = []
-        is_jackpot = False
+        is_card_jackpot = False
+        won_shared_jackpot = random.random() < 0.0005  # 0.05% chance
+        shared_jackpot_amount = 0
+
+        if won_shared_jackpot:
+            jackpot_str = self.cog.economy.get_setting("scratchcard_jackpot")
+            shared_jackpot_amount = int(jackpot_str) if jackpot_str else 100_000_000
+            self.cog.economy.add_money(self.author.id, shared_jackpot_amount)
+            self.cog.economy.set_setting("scratchcard_jackpot", "100000000")  # Reset setting
+            
+            log_wallet_change(
+                logger,
+                event="scratch_shared_jackpot_win",
+                user_id=self.author.id,
+                money_delta=shared_jackpot_amount,
+                card_type=self.card_cfg["id"]
+            )
+            result_lines.append(
+                f"💥💥💥 **NỔ HŨ JACKPOT CHUNG!** ➔ **+{shared_jackpot_amount:,} VND** 💥💥💥"
+            )
 
         if self.is_win and self.win_sym:
             mult = self.card_cfg["multipliers"][self.win_sym]
@@ -378,9 +397,10 @@ class ScratchCardPlayView(discord.ui.View):
                 f"🎉 **THẮNG x{mult}!** 3× {self.win_sym} ➔ **+{payout:,} VND**"
             )
             if self.win_sym == self.card_cfg["symbols"][-1]:
-                is_jackpot = True
+                is_card_jackpot = True
         else:
-            result_lines.append("😔 Không có 3 ô trùng khớp. Chúc may mắn lần sau!")
+            if not won_shared_jackpot:
+                result_lines.append("😔 Không có 3 ô trùng khớp. Chúc may mắn lần sau!")
 
         if self.has_bonus:
             self.cog.economy.add_money(self.author.id, self.card_cfg["price"])
@@ -399,10 +419,14 @@ class ScratchCardPlayView(discord.ui.View):
         balance = self.cog.economy.get_entry(self.author.id)[1]
         result_lines.append(f"\n💳 Số dư ví: **{balance:,} VND**")
 
-        if is_jackpot:
+        if won_shared_jackpot:
+            title = "💥💥💥 NỔ HŨ JACKPOT CHUNG! 💥💥💥"
+            color = discord.Color.gold()
+            asyncio.create_task(self._announce_jackpot(shared_jackpot_amount))
+        elif is_card_jackpot:
             title = "💥💥💥 JACKPOT SCRATCH CARD! 💥💥💥"
             color = discord.Color.gold()
-            asyncio.create_task(self._announce_jackpot(payout))
+            asyncio.create_task(self._announce_card_jackpot(payout))
         elif payout > 0 or self.has_bonus:
             title = "🎉 CHIẾN THẮNG THẺ CÀO! 🎉"
             color = discord.Color.green()
@@ -420,8 +444,20 @@ class ScratchCardPlayView(discord.ui.View):
         try:
             if self.message and self.message.channel:
                 await self.message.channel.send(
+                    f"💥💥💥 **BÙNG NỔ HŨ JACKPOT SCRATCH CARD!** 💥💥💥\n"
+                    f"🏆 Chúc mừng {self.author.mention} vừa cào trúng **HŨ JACKPOT TÍCH LŨY CHUNG**! 🎉\n"
+                    f"💰 Số tiền nhận được: **+{payout:,} VND**! 🏆🔥🔥\n"
+                    f"🍀 Hũ mới đã được reset về **100,000,000 VND**."
+                )
+        except Exception:
+            pass
+
+    async def _announce_card_jackpot(self, payout: int):
+        try:
+            if self.message and self.message.channel:
+                await self.message.channel.send(
                     f"💥💥💥 **JACKPOT TRÚNG LỚN!** 💥💥💥\n"
-                    f"Chúc mừng {self.author.mention} vừa cào trúng **JACKPOT** "
+                    f"Chúc mừng {self.author.mention} vừa cào trúng **JACKPOT THẺ** "
                     f"của {self.card_cfg['name']}! 🎉\n"
                     f"Nhận về **+{payout:,} VND**! 🏆🔥"
                 )
@@ -473,6 +509,12 @@ class ScratchCardPostView(discord.ui.View):
             money_delta=-self.card_cfg["price"],
             card_type=self.card_cfg["id"],
         )
+
+        # Update shared jackpot
+        added_jackpot = int(self.card_cfg["price"] * 0.05)
+        current_jackpot_str = self.cog.economy.get_setting("scratchcard_jackpot")
+        current_jackpot = int(current_jackpot_str) if current_jackpot_str else 100_000_000
+        self.cog.economy.set_setting("scratchcard_jackpot", str(current_jackpot + added_jackpot))
 
         grid, is_win, win_sym, has_bonus = generate_scratch_grid(self.card_cfg)
         play_view = ScratchCardPlayView(
@@ -535,16 +577,30 @@ class ScratchBulkPostView(discord.ui.View):
             quantity=self.quantity,
         )
 
+        # Update shared jackpot
+        added_jackpot = int(total_price * 0.05)
+        current_jackpot_str = self.cog.economy.get_setting("scratchcard_jackpot")
+        current_jackpot = int(current_jackpot_str) if current_jackpot_str else 100_000_000
+        self.cog.economy.set_setting("scratchcard_jackpot", str(current_jackpot + added_jackpot))
+
         # Defer and run process_bulk
         await interaction.response.defer()
         
-        embed, jackpot_count = self.cog._process_bulk_calculation(self.author, self.card_cfg, self.quantity, total_price)
+        embed, jackpot_count, shared_jackpot_count = self.cog._process_bulk_calculation(self.author, self.card_cfg, self.quantity, total_price)
 
-        if jackpot_count > 0:
+        if shared_jackpot_count > 0:
             try:
                 await interaction.channel.send(
-                    f"💥💥💥 **JACKPOT TỪ COMBO!** 💥💥💥\n"
-                    f"{self.author.mention} trúng **JACKPOT** ({jackpot_count} lần) "
+                    f"💥💥💥 **BÙNG NỔ HŨ JACKPOT CHUNG TỪ COMBO!** 💥💥💥\n"
+                    f"🏆 Chúc mừng {self.author.mention} cào trúng **HŨ JACKPOT CHUNG** ({shared_jackpot_count} lần) từ combo {self.quantity}× {self.card_cfg['name']}! 🎉🏆"
+                )
+            except Exception:
+                pass
+        elif jackpot_count > 0:
+            try:
+                await interaction.channel.send(
+                    f"💥💥💥 **JACKPOT THẺ TỪ COMBO!** 💥💥💥\n"
+                    f"{self.author.mention} cào trúng **JACKPOT THẺ** ({jackpot_count} lần) "
                     f"từ combo {self.quantity}× {self.card_cfg['name']}! 🎉🏆"
                 )
             except Exception:
@@ -654,6 +710,12 @@ class ScratchCard(commands.Cog, name="ScratchCard"):
             quantity=quantity,
         )
 
+        # Update shared jackpot
+        added_jackpot = int(total_price * 0.05)
+        current_jackpot_str = self.economy.get_setting("scratchcard_jackpot")
+        current_jackpot = int(current_jackpot_str) if current_jackpot_str else 100_000_000
+        self.economy.set_setting("scratchcard_jackpot", str(current_jackpot + added_jackpot))
+
         # Bulk mode
         if quantity > 1:
             await self._process_bulk(ctx, card_cfg, quantity, total_price)
@@ -670,9 +732,14 @@ class ScratchCard(commands.Cog, name="ScratchCard"):
     # ── Catalog embed ────────────────────────────────────────────────────
 
     def _catalog_embed(self, available: dict) -> discord.Embed:
+        jackpot_str = self.economy.get_setting("scratchcard_jackpot")
+        jackpot_val = int(jackpot_str) if jackpot_str else 100_000_000
+
         embed = make_embed(
-            title="🎴 THẺ CÀO MAY MẮN — DANH MỤC 🎴",
+            title="🎴 THÈ CÀO MAY MẮN — DANH MỤC 🎴",
             description=(
+                f"🎰 **HŨ JACKPOT TÍCH LŨY CHUNG:** `{jackpot_val:,} VND` 🎰\n"
+                f"🔥 *Mỗi thẻ cào đều có **0.05%** cơ hội trúng trọn hũ Jackpot trên!*\n\n"
                 "Cào ô tìm **3 biểu tượng giống nhau** để nhận thưởng nhân gấp bội!\n\n"
                 "👉 `i?scratch buy <tên>` — mua 1 thẻ\n"
                 "👉 `i?scratch buy <tên> x5` — combo (giảm 10%)\n"
@@ -705,14 +772,33 @@ class ScratchCard(commands.Cog, name="ScratchCard"):
         card_cfg: dict,
         quantity: int,
         total_price: int,
-    ) -> tuple[discord.Embed, int]:
+    ) -> tuple[discord.Embed, int, int]:
         user_id = author.id
         lines = []
         total_payout = 0
         bonus_count = 0
         jackpot_count = 0
+        shared_jackpot_count = 0
 
         for i in range(1, quantity + 1):
+            won_shared = random.random() < 0.0005  # 0.05% chance
+            shared_amount = 0
+            if won_shared:
+                jackpot_str = self.economy.get_setting("scratchcard_jackpot")
+                shared_amount = int(jackpot_str) if jackpot_str else 100_000_000
+                self.economy.add_money(user_id, shared_amount)
+                self.economy.set_setting("scratchcard_jackpot", "100000000")  # Reset setting
+                total_payout += shared_amount
+                shared_jackpot_count += 1
+                
+                log_wallet_change(
+                    logger,
+                    event="scratch_shared_jackpot_win_bulk",
+                    user_id=user_id,
+                    money_delta=shared_amount,
+                    card_type=card_cfg["id"]
+                )
+
             grid, is_win, win_sym, has_bonus = generate_scratch_grid(card_cfg)
             payout = 0
             desc = ""
@@ -723,11 +809,17 @@ class ScratchCard(commands.Cog, name="ScratchCard"):
                 total_payout += payout
                 if win_sym == card_cfg["symbols"][-1]:
                     jackpot_count += 1
-                    desc = f"🏆 **JACKPOT** 3× {win_sym} (`+{payout:,}`)"
+                    desc = f"🏆 **JACKPOT THẺ** 3× {win_sym} (`+{payout:,}`)"
                 else:
                     desc = f"🟢 3× {win_sym} (`+{payout:,}`)"
             else:
                 desc = "🔴 Thua"
+
+            if won_shared:
+                if desc and desc != "🔴 Thua":
+                    desc = f"💥 **NỔ HŨ CHUNG** (`+{shared_amount:,}`) & {desc}"
+                else:
+                    desc = f"💥 **NỔ HŨ CHUNG** (`+{shared_amount:,}`)"
 
             if has_bonus:
                 bonus_count += 1
@@ -758,7 +850,7 @@ class ScratchCard(commands.Cog, name="ScratchCard"):
             ),
             color=color,
         )
-        return embed, jackpot_count
+        return embed, jackpot_count, shared_jackpot_count
 
     async def _process_bulk(
         self,
@@ -767,16 +859,24 @@ class ScratchCard(commands.Cog, name="ScratchCard"):
         quantity: int,
         total_price: int,
     ):
-        embed, jackpot_count = self._process_bulk_calculation(ctx.author, card_cfg, quantity, total_price)
+        embed, jackpot_count, shared_jackpot_count = self._process_bulk_calculation(ctx.author, card_cfg, quantity, total_price)
         view = ScratchBulkPostView(self, ctx.author, card_cfg, quantity)
         msg = await ctx.send(embed=embed, view=view)
         view.message = msg
 
-        if jackpot_count > 0:
+        if shared_jackpot_count > 0:
             try:
                 await ctx.send(
-                    f"💥💥💥 **JACKPOT TỪ COMBO!** 💥💥💥\n"
-                    f"{ctx.author.mention} trúng **JACKPOT** ({jackpot_count} lần) "
+                    f"💥💥💥 **BÙNG NỔ HŨ JACKPOT CHUNG TỪ COMBO!** 💥💥💥\n"
+                    f"🏆 Chúc mừng {ctx.author.mention} đã xuất sắc cào trúng **HŨ JACKPOT CHUNG** ({shared_jackpot_count} lần) từ combo {quantity}× {card_cfg['name']}! 🎉🏆"
+                )
+            except Exception:
+                pass
+        elif jackpot_count > 0:
+            try:
+                await ctx.send(
+                    f"💥💥💥 **JACKPOT THẺ TỪ COMBO!** 💥💥💥\n"
+                    f"{ctx.author.mention} cào trúng **JACKPOT THẺ** ({jackpot_count} lần) "
                     f"từ combo {quantity}× {card_cfg['name']}! 🎉🏆"
                 )
             except Exception:
