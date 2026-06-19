@@ -16,5 +16,6 @@ from .crash import Crash
 from .scratchcard import ScratchCard
 from .bkb import Bkb
 from .baito import Baito
+from .lixi import Lixi
 
 

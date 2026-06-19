@@ -23,6 +23,7 @@ from app.discord_bot.cogs import (
     ScratchCard,
     Bkb,
     Baito,
+    Lixi,
 )
 
 from app.discord_bot.modules.economy import Economy
@@ -48,6 +49,7 @@ COGS = (
     ScratchCard,
     Bkb,
     Baito,
+    Lixi,
 )
 
 
