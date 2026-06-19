@@ -268,6 +268,12 @@ class TaiXiuBetModal(discord.ui.Modal):
         if self.side == "xiu" and user.id in self.lobby_view.tai_bets:
             await interaction.response.send_message("❌ Bạn đã đặt cược ở cửa **TÀI** rồi! Bạn không thể đặt cược hai bên.", ephemeral=True)
             return
+        if self.side == "chan" and user.id in self.lobby_view.le_bets:
+            await interaction.response.send_message("❌ Bạn đã đặt cược ở cửa **LẺ** rồi! Bạn không thể đặt cược cả Chẵn và Lẻ.", ephemeral=True)
+            return
+        if self.side == "le" and user.id in self.lobby_view.chan_bets:
+            await interaction.response.send_message("❌ Bạn đã đặt cược ở cửa **CHẴN** rồi! Bạn không thể đặt cược cả Chẵn và Lẻ.", ephemeral=True)
+            return
 
         profile = self.lobby_view.cog.economy.get_entry(user.id)
         current_money = profile[1]
@@ -290,8 +296,15 @@ class TaiXiuBetModal(discord.ui.Modal):
         
         if self.side == "tai":
             self.lobby_view.tai_bets[user.id] = self.lobby_view.tai_bets.get(user.id, 0) + amount
-        else:
+        elif self.side == "xiu":
             self.lobby_view.xiu_bets[user.id] = self.lobby_view.xiu_bets.get(user.id, 0) + amount
+        elif self.side == "chan":
+            self.lobby_view.chan_bets[user.id] = self.lobby_view.chan_bets.get(user.id, 0) + amount
+        elif self.side == "le":
+            self.lobby_view.le_bets[user.id] = self.lobby_view.le_bets.get(user.id, 0) + amount
+        elif self.side.isdigit():
+            num = int(self.side)
+            self.lobby_view.number_bets[num][user.id] = self.lobby_view.number_bets[num].get(user.id, 0) + amount
             
         self.lobby_view.user_names[user.id] = user.display_name
         
@@ -308,6 +321,27 @@ class TaiXiuBetModal(discord.ui.Modal):
         await self.lobby_view.update_message()
 
 
+class TaiXiuNumberSelect(discord.ui.Select):
+    def __init__(self):
+        options = [
+            discord.SelectOption(label="Cược số 1 🎲", value="1"),
+            discord.SelectOption(label="Cược số 2 🎲", value="2"),
+            discord.SelectOption(label="Cược số 3 🎲", value="3"),
+            discord.SelectOption(label="Cược số 4 🎲", value="4"),
+            discord.SelectOption(label="Cược số 5 🎲", value="5"),
+            discord.SelectOption(label="Cược số 6 🎲", value="6"),
+        ]
+        super().__init__(placeholder="Chọn số xúc xắc muốn cược...", min_values=1, max_values=1, options=options, row=1)
+
+    async def callback(self, interaction: discord.Interaction):
+        view: TaiXiuLobbyView = self.view
+        if view.is_closed:
+            await interaction.response.send_message("❌ Phiên cược đã kết thúc!", ephemeral=True)
+            return
+        modal = TaiXiuBetModal(side=self.values[0], lobby_view=view)
+        await interaction.response.send_modal(modal)
+
+
 class TaiXiuLobbyView(discord.ui.View):
     def __init__(self, cog, session_id: int, timeout: float = 40.0):
         super().__init__(timeout=timeout)
@@ -315,10 +349,14 @@ class TaiXiuLobbyView(discord.ui.View):
         self.session_id = session_id
         self.tai_bets = {}
         self.xiu_bets = {}
+        self.chan_bets = {}
+        self.le_bets = {}
+        self.number_bets = {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}}
         self.user_names = {}
         self.is_closed = False
         self.message = None
         self.seconds_remaining = 30
+        self.add_item(TaiXiuNumberSelect())
 
     async def update_message(self):
         if self.message:
@@ -337,6 +375,8 @@ class TaiXiuLobbyView(discord.ui.View):
     def create_embed(self) -> discord.Embed:
         tai_total = sum(self.tai_bets.values())
         xiu_total = sum(self.xiu_bets.values())
+        chan_total = sum(self.chan_bets.values())
+        le_total = sum(self.le_bets.values())
         
         tai_list = []
         for uid, amt in self.tai_bets.items():
@@ -347,19 +387,38 @@ class TaiXiuLobbyView(discord.ui.View):
         for uid, amt in self.xiu_bets.items():
             name = self.user_names.get(uid, f"User {uid}")
             xiu_list.append(f"• **{name}**: `{amt:,} VND`")
+
+        chan_list = []
+        for uid, amt in self.chan_bets.items():
+            name = self.user_names.get(uid, f"User {uid}")
+            chan_list.append(f"• **{name}**: `{amt:,} VND`")
+
+        le_list = []
+        for uid, amt in self.le_bets.items():
+            name = self.user_names.get(uid, f"User {uid}")
+            le_list.append(f"• **{name}**: `{amt:,} VND`")
             
         tai_list_str = "\n".join(tai_list) if tai_list else "*Chưa có*"
         xiu_list_str = "\n".join(xiu_list) if xiu_list else "*Chưa có*"
+        chan_list_str = "\n".join(chan_list) if chan_list else "*Chưa có*"
+        le_list_str = "\n".join(le_list) if le_list else "*Chưa có*"
         
         currency = "<a:emoji_287:1514350238687821845>"
+
+        jackpot_str = self.cog.economy.get_setting("taixiu_jackpot")
+        jackpot_val = int(jackpot_str) if jackpot_str else 100_000_000
         
         embed = make_embed(
             title=f"🎲 PHIÊN TÀI XỈU #{self.session_id} 🎲",
-            description=f"⏳ **Thời gian đặt cược còn lại:** `{self.seconds_remaining} giây`\n\n👉 Nhấp vào nút bên dưới để chọn cửa và đặt cược.",
+            description=(
+                f"🎰 **HŨ JACKPOT TÀI XỈU:** `{jackpot_val:,} VND` 🎰\n"
+                f"🔥 *Bão (3 xúc xắc giống nhau) nổ Hũ chia tỉ lệ cược của tất cả người chơi!*\n\n"
+                f"⏳ **Thời gian đặt cược còn lại:** `{self.seconds_remaining} giây`\n\n"
+                f"👉 Nhấp vào nút/chọn menu bên dưới để chọn cửa cược."
+            ),
             color=discord.Color.dark_theme()
         )
         
-        # Put Tai and Xiu side-by-side using inline fields
         embed.add_field(
             name="🔵 TÀI (11-18)",
             value=f"👥 Tổng: **{tai_total:,}** {currency}\n{tai_list_str}",
@@ -370,11 +429,43 @@ class TaiXiuLobbyView(discord.ui.View):
             value=f"👥 Tổng: **{xiu_total:,}** {currency}\n{xiu_list_str}",
             inline=True
         )
+        embed.add_field(name="\u200b", value="\u200b", inline=True)
+
+        embed.add_field(
+            name="🟣 CHẴN",
+            value=f"👥 Tổng: **{chan_total:,}** {currency}\n{chan_list_str}",
+            inline=True
+        )
+        embed.add_field(
+            name="🟡 LẺ",
+            value=f"👥 Tổng: **{le_total:,}** {currency}\n{le_list_str}",
+            inline=True
+        )
+        embed.add_field(name="\u200b", value="\u200b", inline=True)
+
+        # Specific numbers summary
+        num_totals = {n: sum(self.number_bets[n].values()) for n in range(1, 7)}
+        num_lines = []
+        for n in range(1, 7):
+            tot = num_totals[n]
+            if tot > 0:
+                users = []
+                for uid, amt in self.number_bets[n].items():
+                    name = self.user_names.get(uid, f"User {uid}")
+                    users.append(f"**{name}** (`{amt:,}`)")
+                num_lines.append(f"🎲 **Số {n}**: Tổng `{tot:,}` VND ({', '.join(users)})")
+
+        num_str = "\n".join(num_lines) if num_lines else "*Chưa có*"
+        embed.add_field(
+            name="🎲 CƯỢC SỐ XÚC XẮC CỤ THỂ",
+            value=num_str,
+            inline=False
+        )
         
         embed.set_image(url="attachment://taixiu.png")
         return embed
 
-    @discord.ui.button(label="TÀI", style=discord.ButtonStyle.primary, emoji="🔵")
+    @discord.ui.button(label="TÀI", style=discord.ButtonStyle.primary, emoji="🔵", row=0)
     async def bet_tai(self, interaction: discord.Interaction, button: discord.ui.Button):
         if self.is_closed:
             await interaction.response.send_message("❌ Phiên cược đã kết thúc!", ephemeral=True)
@@ -382,7 +473,7 @@ class TaiXiuLobbyView(discord.ui.View):
         modal = TaiXiuBetModal(side="tai", lobby_view=self)
         await interaction.response.send_modal(modal)
 
-    @discord.ui.button(label="XỈU", style=discord.ButtonStyle.danger, emoji="🔴")
+    @discord.ui.button(label="XỈU", style=discord.ButtonStyle.danger, emoji="🔴", row=0)
     async def bet_xiu(self, interaction: discord.Interaction, button: discord.ui.Button):
         if self.is_closed:
             await interaction.response.send_message("❌ Phiên cược đã kết thúc!", ephemeral=True)
@@ -390,7 +481,23 @@ class TaiXiuLobbyView(discord.ui.View):
         modal = TaiXiuBetModal(side="xiu", lobby_view=self)
         await interaction.response.send_modal(modal)
 
-    @discord.ui.button(label="HỦY CƯỢC", style=discord.ButtonStyle.secondary, emoji="❌")
+    @discord.ui.button(label="CHẴN", style=discord.ButtonStyle.primary, emoji="🟣", row=0)
+    async def bet_chan(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.is_closed:
+            await interaction.response.send_message("❌ Phiên cược đã kết thúc!", ephemeral=True)
+            return
+        modal = TaiXiuBetModal(side="chan", lobby_view=self)
+        await interaction.response.send_modal(modal)
+
+    @discord.ui.button(label="LẺ", style=discord.ButtonStyle.danger, emoji="🟡", row=0)
+    async def bet_le(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.is_closed:
+            await interaction.response.send_message("❌ Phiên cược đã kết thúc!", ephemeral=True)
+            return
+        modal = TaiXiuBetModal(side="le", lobby_view=self)
+        await interaction.response.send_modal(modal)
+
+    @discord.ui.button(label="HỦY CƯỢC", style=discord.ButtonStyle.secondary, emoji="❌", row=2)
     async def cancel_bet(self, interaction: discord.Interaction, button: discord.ui.Button):
         if self.is_closed:
             await interaction.response.send_message("❌ Phiên cược đã kết thúc! Không thể hủy cược.", ephemeral=True)
@@ -398,13 +505,30 @@ class TaiXiuLobbyView(discord.ui.View):
             
         user = interaction.user
         refund_amount = 0
-        side = None
+        refund_details = []
+        
         if user.id in self.tai_bets:
-            refund_amount = self.tai_bets.pop(user.id)
-            side = "tai"
-        elif user.id in self.xiu_bets:
-            refund_amount = self.xiu_bets.pop(user.id)
-            side = "xiu"
+            amt = self.tai_bets.pop(user.id)
+            refund_amount += amt
+            refund_details.append(f"TAI: {amt:,} VND")
+        if user.id in self.xiu_bets:
+            amt = self.xiu_bets.pop(user.id)
+            refund_amount += amt
+            refund_details.append(f"XIU: {amt:,} VND")
+        if user.id in self.chan_bets:
+            amt = self.chan_bets.pop(user.id)
+            refund_amount += amt
+            refund_details.append(f"CHAN: {amt:,} VND")
+        if user.id in self.le_bets:
+            amt = self.le_bets.pop(user.id)
+            refund_amount += amt
+            refund_details.append(f"LE: {amt:,} VND")
+            
+        for n in range(1, 7):
+            if user.id in self.number_bets[n]:
+                amt = self.number_bets[n].pop(user.id)
+                refund_amount += amt
+                refund_details.append(f"SO_{n}: {amt:,} VND")
             
         if refund_amount > 0:
             self.cog.economy.add_money(user.id, refund_amount)
@@ -414,7 +538,7 @@ class TaiXiuLobbyView(discord.ui.View):
                 event="taixiu_cancel_bet",
                 user_id=user.id,
                 money_delta=refund_amount,
-                side=side,
+                refund_details="; ".join(refund_details),
                 bet_amount=refund_amount,
             )
             await interaction.response.send_message(f"✅ Đã hủy cược thành công! Hoàn lại **{refund_amount:,} VND** vào ví.", ephemeral=True)
@@ -422,7 +546,7 @@ class TaiXiuLobbyView(discord.ui.View):
         else:
             await interaction.response.send_message("❌ Bạn chưa đặt cược trong phiên này!", ephemeral=True)
 
-    @discord.ui.button(label="LỊCH SỬ", style=discord.ButtonStyle.secondary, emoji="📜")
+    @discord.ui.button(label="LỊCH SỬ", style=discord.ButtonStyle.secondary, emoji="📜", row=2)
     async def view_history(self, interaction: discord.Interaction, button: discord.ui.Button):
         history = self.cog.taixiu_history
         if not history:
@@ -733,83 +857,195 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
             # Add to history
             self.taixiu_history.append((session_id, dice, total, result_text))
             self.taixiu_history = self.taixiu_history[-10:]
-                
+            
+            # Calculate session bets per user
+            session_bets = {}
+            for uid, amt in view.tai_bets.items():
+                session_bets[uid] = session_bets.get(uid, 0) + amt
+            for uid, amt in view.xiu_bets.items():
+                session_bets[uid] = session_bets.get(uid, 0) + amt
+            for uid, amt in view.chan_bets.items():
+                session_bets[uid] = session_bets.get(uid, 0) + amt
+            for uid, amt in view.le_bets.items():
+                session_bets[uid] = session_bets.get(uid, 0) + amt
+            for n in range(1, 7):
+                for uid, amt in view.number_bets[n].items():
+                    session_bets[uid] = session_bets.get(uid, 0) + amt
+
+            # Check for jackpot (Bão)
+            is_jackpot_triggered = False
+            jackpot_winners = []
+            jackpot_val_won = 0
+            if dice[0] == dice[1] == dice[2]:
+                total_session_bets = sum(session_bets.values())
+                if total_session_bets > 0:
+                    is_jackpot_triggered = True
+                    jackpot_str = self.economy.get_setting("taixiu_jackpot")
+                    jackpot_val = int(jackpot_str) if jackpot_str else 100_000_000
+                    jackpot_val_won = jackpot_val
+                    for uid, amt in session_bets.items():
+                        share = int(jackpot_val * (amt / total_session_bets))
+                        if share > 0:
+                            self.economy.add_money(uid, share)
+                            jackpot_winners.append((uid, share))
+                            log_wallet_change(
+                                logger,
+                                event="taixiu_jackpot_win",
+                                user_id=uid,
+                                money_delta=share,
+                                ctx=ctx,
+                                session_id=session_id,
+                            )
+                    self.economy.set_setting("taixiu_jackpot", "100000000")
+
+            # Determine winners, losers and payouts
             winners = []
             winner_mentions = []
             losers = []
+            user_ids = set(session_bets.keys())
             
-            for uid, amt in view.tai_bets.items():
+            for uid in user_ids:
                 name = view.user_names.get(uid, f"User {uid}")
-                if winning_side == "tai":
-                    self.economy.add_money(uid, 2 * amt)
+                total_payout = 0
+                total_bet_for_user = session_bets[uid]
+                details = []
+                
+                # Tai
+                if uid in view.tai_bets:
+                    amt = view.tai_bets[uid]
+                    if winning_side == "tai":
+                        total_payout += 2 * amt
+                        details.append(f"Tài: +{amt:,} VND")
+                    else:
+                        details.append(f"Tài: -{amt:,} VND")
+                        
+                # Xiu
+                if uid in view.xiu_bets:
+                    amt = view.xiu_bets[uid]
+                    if winning_side == "xiu":
+                        total_payout += 2 * amt
+                        details.append(f"Xỉu: +{amt:,} VND")
+                    else:
+                        details.append(f"Xỉu: -{amt:,} VND")
+                        
+                # Chan
+                if uid in view.chan_bets:
+                    amt = view.chan_bets[uid]
+                    if total % 2 == 0:
+                        total_payout += 2 * amt
+                        details.append(f"Chẵn: +{amt:,} VND")
+                    else:
+                        details.append(f"Chẵn: -{amt:,} VND")
+                        
+                # Le
+                if uid in view.le_bets:
+                    amt = view.le_bets[uid]
+                    if total % 2 != 0:
+                        total_payout += 2 * amt
+                        details.append(f"Lẻ: +{amt:,} VND")
+                    else:
+                        details.append(f"Lẻ: -{amt:,} VND")
+                        
+                # Numbers 1-6
+                for n in range(1, 7):
+                    if uid in view.number_bets[n]:
+                        amt = view.number_bets[n][uid]
+                        matches = dice.count(n)
+                        if matches > 0:
+                            payout = (matches + 1) * amt
+                            total_payout += payout
+                            details.append(f"Số {n} (x{matches}): +{matches * amt:,} VND")
+                        else:
+                            details.append(f"Số {n}: -{amt:,} VND")
+                            
+                net_profit = total_payout - total_bet_for_user
+                if total_payout > 0:
+                    self.economy.add_money(uid, total_payout)
                     new_bal = self.economy.get_entry(uid)[1]
-                    winners.append(f"• **{name}**: Thắng `+{amt:,} VND` (Số dư: `{new_bal:,} VND`)")
-                    winner_mentions.append(f"<@{uid}>")
+                    details_str = ", ".join(details)
+                    if net_profit > 0:
+                        winners.append(f"• **{name}**: Thắng `+{net_profit:,} VND` ({details_str}) (Số dư: `{new_bal:,} VND`)")
+                        winner_mentions.append(f"<@{uid}>")
+                    elif net_profit == 0:
+                        winners.append(f"• **{name}**: Hòa vốn `{net_profit:,} VND` ({details_str}) (Số dư: `{new_bal:,} VND`)")
+                    else:
+                        losers.append(f"• **{name}**: Thua lỗ `-{abs(net_profit):,} VND` ({details_str}) (Số dư: `{new_bal:,} VND`)")
+                        
                     log_wallet_change(
                         logger,
-                        event="taixiu_payout_win",
+                        event="taixiu_payout_resolved",
                         user_id=uid,
-                        money_delta=amt,
+                        money_delta=net_profit,
                         ctx=ctx,
-                        bet=amt,
+                        payout=total_payout,
+                        net_profit=net_profit,
                         session_id=session_id,
                     )
                 else:
                     new_bal = self.economy.get_entry(uid)[1]
-                    losers.append(f"• **{name}**: Thua `-{amt:,} VND` (Số dư: `{new_bal:,} VND`)")
+                    details_str = ", ".join(details)
+                    losers.append(f"• **{name}**: Thua `-{total_bet_for_user:,} VND` ({details_str}) (Số dư: `{new_bal:,} VND`)")
                     log_wallet_change(
                         logger,
-                        event="taixiu_payout_lose",
+                        event="taixiu_payout_resolved",
                         user_id=uid,
-                        money_delta=-amt,
+                        money_delta=-total_bet_for_user,
                         ctx=ctx,
-                        bet=amt,
+                        payout=0,
+                        net_profit=-total_bet_for_user,
                         session_id=session_id,
                     )
-                    
-            for uid, amt in view.xiu_bets.items():
-                name = view.user_names.get(uid, f"User {uid}")
-                if winning_side == "xiu":
-                    self.economy.add_money(uid, 2 * amt)
-                    new_bal = self.economy.get_entry(uid)[1]
-                    winners.append(f"• **{name}**: Thắng `+{amt:,} VND` (Số dư: `{new_bal:,} VND`)")
-                    winner_mentions.append(f"<@{uid}>")
-                    log_wallet_change(
-                        logger,
-                        event="taixiu_payout_win",
-                        user_id=uid,
-                        money_delta=amt,
-                        ctx=ctx,
-                        bet=amt,
-                        session_id=session_id,
-                    )
-                else:
-                    new_bal = self.economy.get_entry(uid)[1]
-                    losers.append(f"• **{name}**: Thua `-{amt:,} VND` (Số dư: `{new_bal:,} VND`)")
-                    log_wallet_change(
-                        logger,
-                        event="taixiu_payout_lose",
-                        user_id=uid,
-                        money_delta=-amt,
-                        ctx=ctx,
-                        bet=amt,
-                        session_id=session_id,
-                    )
-                    
+
+            # Calculate total lost bets to add to jackpot
+            total_lost_in_session = 0
+            if winning_side != "tai":
+                total_lost_in_session += sum(view.tai_bets.values())
+            if winning_side != "xiu":
+                total_lost_in_session += sum(view.xiu_bets.values())
+            if total % 2 != 0:
+                total_lost_in_session += sum(view.chan_bets.values())
+            if total % 2 == 0:
+                total_lost_in_session += sum(view.le_bets.values())
+            for n in range(1, 7):
+                for uid, amt in view.number_bets[n].items():
+                    if dice.count(n) == 0:
+                        total_lost_in_session += amt
+
+            # Add lost bets to the jackpot
+            if total_lost_in_session > 0:
+                jackpot_str = self.economy.get_setting("taixiu_jackpot")
+                jackpot_val = int(jackpot_str) if jackpot_str else 100_000_000
+                new_jackpot = jackpot_val + total_lost_in_session
+                self.economy.set_setting("taixiu_jackpot", str(new_jackpot))
+
             dice_emojis = {1: "1️⃣", 2: "2️⃣", 3: "3️⃣", 4: "4️⃣", 5: "5️⃣", 6: "6️⃣"}
             dice_str = " ".join(dice_emojis[d] for d in dice)
             
             winner_section = "\n".join(winners) if winners else "*Không có*"
             loser_section = "\n".join(losers) if losers else "*Không có*"
             
+            # Format jackpot display in description
+            jackpot_section = ""
+            if is_jackpot_triggered:
+                if jackpot_winners:
+                    jw_lines = []
+                    for uid, share in jackpot_winners:
+                        name = view.user_names.get(uid, f"User {uid}")
+                        jw_lines.append(f"🎉 **{name}**: Nhận `+{share:,} VND` từ Hũ Jackpot!")
+                    jackpot_section = f"\n\n💥 **NỔ HŨ JACKPOT TÀI XỈU!** 💥\n" + "\n".join(jw_lines)
+                else:
+                    jackpot_section = f"\n\n💥 **NỔ HŨ JACKPOT TÀI XỈU!** 💥\n*Không có người chơi thắng cuộc hợp lệ.*"
+            
+            chan_le_text = "CHẴN" if total % 2 == 0 else "LẺ"
             result_desc = (
                 f"🎲 **Kết quả:** {dice_str}\n"
-                f"📊 **Tổng số nút:** `{total}` ➔ **{result_text}!**\n\n"
+                f"📊 **Tổng số nút:** `{total}` ➔ **{result_text}** và **{chan_le_text}**!\n"
+                f"{jackpot_section}\n\n"
                 f"🏆 **Danh sách thắng cuộc:**\n{winner_section}\n\n"
                 f"💸 **Danh sách thua cuộc:**\n{loser_section}"
             )
             
-            color = discord.Color.green() if winners else discord.Color.red()
+            color = discord.Color.green() if winner_mentions else discord.Color.red()
             
             result_embed = make_embed(
                 title=f"🎲 KẾT QUẢ TÀI XỈU #{session_id} 🎲",
@@ -819,6 +1055,8 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
             result_embed.set_image(url="attachment://taixiu.png")
             
             result_label = f"{result_text} - {total}"
+            if dice[0] == dice[1] == dice[2]:
+                result_label = f"BÃO - {total}"
                 
             img_bytes = generate_taixiu_image(
                 0,
@@ -830,6 +1068,10 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
             file = discord.File(img_bytes, filename="taixiu.png")
             
             await message.edit(embed=result_embed, attachments=[file], view=view)
+            
+            if is_jackpot_triggered and jackpot_winners:
+                jw_mentions = [f"<@{uid}>" for uid, _ in jackpot_winners]
+                await ctx.send(f"🎉💥 **JACKPOT CỰC ĐẠI ĐÃ NỔ!** Chúc mừng {', '.join(jw_mentions)} đã chia nhau hũ Jackpot trị giá **{jackpot_val_won:,} VND**! 💥🎉")
             
             if winner_mentions:
                 await ctx.send(f"🎉 Chúc mừng các đại gia đã chiến thắng phiên #{session_id}: {', '.join(winner_mentions)}!")
