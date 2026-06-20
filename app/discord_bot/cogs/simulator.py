@@ -1884,9 +1884,13 @@ class Simulator(commands.Cog):
         robber_money = robber_profile[1]
         
         if random.random() < 0.40:
-            # Success: steal a random amount between 10,000 and 1,000,000 VND
-            steal_amount = random.randint(10_000, 1_000_000)
-            steal_amount = min(target_money, steal_amount)
+            # Success: steal a random 1% to 5% of target's money
+            steal_pct = random.uniform(0.01, 0.05)
+            steal_amount = int(target_money * steal_pct)
+            if target_money > 0:
+                steal_amount = max(1, min(target_money, steal_amount))
+            else:
+                steal_amount = 0
             
             self.economy.add_money(target.id, -steal_amount)
             self.economy.add_money(user_id, steal_amount)

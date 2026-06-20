@@ -365,9 +365,9 @@ class ScratchCardPlayView(discord.ui.View):
 
         if won_shared_jackpot:
             jackpot_str = self.cog.economy.get_setting("scratchcard_jackpot")
-            shared_jackpot_amount = int(jackpot_str) if jackpot_str else 100_000_000
+            shared_jackpot_amount = int(jackpot_str) if jackpot_str else 0
             self.cog.economy.add_money(self.author.id, shared_jackpot_amount)
-            self.cog.economy.set_setting("scratchcard_jackpot", "100000000")  # Reset setting
+            self.cog.economy.set_setting("scratchcard_jackpot", "0")  # Reset setting
             
             log_wallet_change(
                 logger,
@@ -416,6 +416,15 @@ class ScratchCardPlayView(discord.ui.View):
                 f"(hoàn `+{self.card_cfg['price']:,} VND`)"
             )
 
+        # Update shared jackpot with the net loss of this scratchcard
+        if not won_shared_jackpot:
+            total_return = payout + (self.card_cfg["price"] if self.has_bonus else 0)
+            lost_amount = self.card_cfg["price"] - total_return
+            if lost_amount > 0:
+                current_jackpot_str = self.cog.economy.get_setting("scratchcard_jackpot")
+                current_jackpot = int(current_jackpot_str) if current_jackpot_str else 0
+                self.cog.economy.set_setting("scratchcard_jackpot", str(current_jackpot + lost_amount))
+
         balance = self.cog.economy.get_entry(self.author.id)[1]
         result_lines.append(f"\n💳 Số dư ví: **{balance:,} VND**")
 
@@ -447,7 +456,7 @@ class ScratchCardPlayView(discord.ui.View):
                     f"💥💥💥 **BÙNG NỔ HŨ JACKPOT SCRATCH CARD!** 💥💥💥\n"
                     f"🏆 Chúc mừng {self.author.mention} vừa cào trúng **HŨ JACKPOT TÍCH LŨY CHUNG**! 🎉\n"
                     f"💰 Số tiền nhận được: **+{payout:,} VND**! 🏆🔥🔥\n"
-                    f"🍀 Hũ mới đã được reset về **100,000,000 VND**."
+                    f"🍀 Hũ mới đã được reset về **0 VND**."
                 )
         except Exception:
             pass
@@ -510,12 +519,6 @@ class ScratchCardPostView(discord.ui.View):
             card_type=self.card_cfg["id"],
         )
 
-        # Update shared jackpot
-        added_jackpot = int(self.card_cfg["price"] * 0.05)
-        current_jackpot_str = self.cog.economy.get_setting("scratchcard_jackpot")
-        current_jackpot = int(current_jackpot_str) if current_jackpot_str else 100_000_000
-        self.cog.economy.set_setting("scratchcard_jackpot", str(current_jackpot + added_jackpot))
-
         grid, is_win, win_sym, has_bonus = generate_scratch_grid(self.card_cfg)
         play_view = ScratchCardPlayView(
             self.cog, self.author, self.card_cfg, grid, is_win, win_sym, has_bonus
@@ -576,12 +579,6 @@ class ScratchBulkPostView(discord.ui.View):
             card_type=self.card_cfg["id"],
             quantity=self.quantity,
         )
-
-        # Update shared jackpot
-        added_jackpot = int(total_price * 0.05)
-        current_jackpot_str = self.cog.economy.get_setting("scratchcard_jackpot")
-        current_jackpot = int(current_jackpot_str) if current_jackpot_str else 100_000_000
-        self.cog.economy.set_setting("scratchcard_jackpot", str(current_jackpot + added_jackpot))
 
         # Defer and run process_bulk
         await interaction.response.defer()
@@ -710,12 +707,6 @@ class ScratchCard(commands.Cog, name="ScratchCard"):
             quantity=quantity,
         )
 
-        # Update shared jackpot
-        added_jackpot = int(total_price * 0.05)
-        current_jackpot_str = self.economy.get_setting("scratchcard_jackpot")
-        current_jackpot = int(current_jackpot_str) if current_jackpot_str else 100_000_000
-        self.economy.set_setting("scratchcard_jackpot", str(current_jackpot + added_jackpot))
-
         # Bulk mode
         if quantity > 1:
             await self._process_bulk(ctx, card_cfg, quantity, total_price)
@@ -733,7 +724,7 @@ class ScratchCard(commands.Cog, name="ScratchCard"):
 
     def _catalog_embed(self, available: dict) -> discord.Embed:
         jackpot_str = self.economy.get_setting("scratchcard_jackpot")
-        jackpot_val = int(jackpot_str) if jackpot_str else 100_000_000
+        jackpot_val = int(jackpot_str) if jackpot_str else 0
 
         embed = make_embed(
             title="🎴 THÈ CÀO MAY MẮN — DANH MỤC 🎴",
@@ -780,14 +771,17 @@ class ScratchCard(commands.Cog, name="ScratchCard"):
         jackpot_count = 0
         shared_jackpot_count = 0
 
+        jackpot_str = self.economy.get_setting("scratchcard_jackpot")
+        current_jackpot_val = int(jackpot_str) if jackpot_str else 0
+        price_per_card = total_price / quantity
+
         for i in range(1, quantity + 1):
             won_shared = random.random() < 0.0005  # 0.05% chance
             shared_amount = 0
             if won_shared:
-                jackpot_str = self.economy.get_setting("scratchcard_jackpot")
-                shared_amount = int(jackpot_str) if jackpot_str else 100_000_000
+                shared_amount = current_jackpot_val
                 self.economy.add_money(user_id, shared_amount)
-                self.economy.set_setting("scratchcard_jackpot", "100000000")  # Reset setting
+                current_jackpot_val = 0
                 total_payout += shared_amount
                 shared_jackpot_count += 1
                 
@@ -826,10 +820,18 @@ class ScratchCard(commands.Cog, name="ScratchCard"):
                 total_payout += card_cfg["price"]
                 desc += " + 🎁 Free"
 
+            if not won_shared:
+                total_return_this_card = payout + (card_cfg["price"] if has_bonus else 0)
+                lost_this_card = price_per_card - total_return_this_card
+                if lost_this_card > 0:
+                    current_jackpot_val += int(lost_this_card)
+
             lines.append(f"• **#{i:02d}**: {desc}")
 
         if total_payout > 0:
             self.economy.add_money(user_id, total_payout)
+
+        self.economy.set_setting("scratchcard_jackpot", str(current_jackpot_val))
 
         net = total_payout - total_price
         sign = "+" if net >= 0 else ""
