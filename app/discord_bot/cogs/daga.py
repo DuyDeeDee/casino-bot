@@ -1945,7 +1945,7 @@ class Daga(commands.Cog, name="Daga"):
             f"🔹 `{prefix}anime info [ID_nhân_vật]` — Xem chi tiết chỉ số của nhân vật.\n"
             f"🔹 `{prefix}anime skill [tên_nhân_vật]` — Xem thông tin chi tiết kỹ năng của nhân vật.\n"
             f"🔹 `{prefix}anime team` — Quản lý đội hình 3 nhân vật tham gia thi đấu.\n"
-            f"🔹 `{prefix}inv` (hoặc `inventory`) — Xem kho đồ cá nhân (vật phẩm, đá nâng cấp, mảnh nhân vật).\n\n"
+            f"🔹 `{prefix}anime inv` (hoặc `inventory`) — Xem kho đồ cá nhân (vật phẩm, đá nâng cấp, mảnh nhân vật).\n\n"
             f"💪 **Nuôi dưỡng & Huấn luyện:**\n"
             f"🔹 `{prefix}anime feed [ID_vật_phẩm] [số_lượng]` — Sử dụng vật phẩm/đá nâng cấp cho nhân vật (ID 1-15).\n"
             f"🔹 `{prefix}anime train` — Huấn luyện nhân vật chính tăng chỉ số ngẫu nhiên (Hồi chiêu 1 giờ).\n"
@@ -1971,6 +1971,15 @@ class Daga(commands.Cog, name="Daga"):
         embeds = view.get_embeds()
         msg = await ctx.send(embed=embeds[0], view=view)
         view.message = msg
+
+    @daga_group.command(name="inventory", brief="Xem các vật phẩm bạn đang sở hữu trong túi đồ.", aliases=["inv"])
+    async def daga_inventory(self, ctx: commands.Context):
+        simulator_cog = self.client.get_cog("Simulator")
+        if simulator_cog:
+            embed = simulator_cog.get_inventory_embed(ctx.author)
+            await ctx.send(embed=embed)
+        else:
+            await ctx.send("❌ Hệ thống túi đồ tạm thời không khả dụng.")
 
     @daga_group.command(name="shop", brief="Xem các thẻ triệu hồi, gacha banner và vật phẩm nâng cấp cho nhân vật.")
     async def daga_shop(self, ctx: commands.Context):
