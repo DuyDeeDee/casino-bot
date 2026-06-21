@@ -40,8 +40,15 @@ class AIHelper(commands.Cog, name="AI"):
             logger.info("OpenRouter API configured for AI helper.")
         elif HAS_GENAI and self.gemini_key:
             try:
-                self.client_ai = genai.Client(api_key=self.gemini_key)
-                logger.info("Gemini API configured for AI helper.")
+                if self.gemini_key.startswith("om-"):
+                    self.client_ai = genai.Client(
+                        api_key=self.gemini_key,
+                        http_options=types.HttpOptions(base_url="https://api.openmodel.ai")
+                    )
+                    logger.info("Gemini API configured for AI helper via OpenModel gateway.")
+                else:
+                    self.client_ai = genai.Client(api_key=self.gemini_key)
+                    logger.info("Gemini API configured for AI helper.")
             except Exception as e:
                 logger.error("Failed to initialize genai Client: %s", e)
         else:
@@ -170,8 +177,9 @@ class AIHelper(commands.Cog, name="AI"):
             elif self.client_ai:
                 import time
                 config = types.GenerateContentConfig(system_instruction=system_inst)
+                model_name = "gemini-3.5-flash" if (self.gemini_key and self.gemini_key.startswith("om-")) else "gemini-3.1-flash-lite"
                 response = self.client_ai.models.generate_content_stream(
-                    model="gemini-3.1-flash-lite",
+                    model=model_name,
                     contents=prompt_text,
                     config=config
                 )
