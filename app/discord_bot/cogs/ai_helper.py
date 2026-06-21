@@ -30,17 +30,22 @@ class AIHelper(commands.Cog, name="AI"):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.client_ai = None
-        if HAS_GENAI:
-            api_key = os.getenv("GEMINI_API_KEY")
-            if api_key:
-                try:
-                    self.client_ai = genai.Client(api_key=api_key)
-                except Exception as e:
-                    logger.error("Failed to initialize genai Client: %s", e)
-            else:
-                logger.warning("GEMINI_API_KEY environment variable is not set. AI command will be disabled.")
+        self.deepseek_key = os.getenv("DEEPSEEK_API_KEY")
+        self.openrouter_key = os.getenv("OPENROUTER_API_KEY")
+        self.gemini_key = os.getenv("GEMINI_API_KEY")
+
+        if self.deepseek_key:
+            logger.info("DeepSeek API configured for AI helper.")
+        elif self.openrouter_key:
+            logger.info("OpenRouter API configured for AI helper.")
+        elif HAS_GENAI and self.gemini_key:
+            try:
+                self.client_ai = genai.Client(api_key=self.gemini_key)
+                logger.info("Gemini API configured for AI helper.")
+            except Exception as e:
+                logger.error("Failed to initialize genai Client: %s", e)
         else:
-            logger.warning("google-genai library is not installed. AI command will be disabled.")
+            logger.warning("No valid AI API keys found. AI command will be disabled.")
 
     async def tra_loi_ai(
         self,
@@ -49,8 +54,8 @@ class AIHelper(commands.Cog, name="AI"):
         prompt_text: str,
         mentions: list[discord.User | discord.Member] | None = None
     ):
-        if not self.client_ai:
-            await context_channel.send("❌ **Lỗi:** Tính năng AI chưa được cấu hình hoặc thiếu biến môi trường `GEMINI_API_KEY`.")
+        if not self.deepseek_key and not self.openrouter_key and not self.client_ai:
+            await context_channel.send("❌ **Lỗi:** Tính năng AI chưa được cấu hình. Vui lòng cung cấp `DEEPSEEK_API_KEY` hoặc `GEMINI_API_KEY`.")
             return
 
         tin_nhan = await context_channel.send("🤔 Đang suy nghĩ...")
@@ -68,25 +73,81 @@ class AIHelper(commands.Cog, name="AI"):
                     ) + "\n- Nếu người dùng yêu cầu tương tác, chửi, nói chuyện hoặc nhắc tới những người này, hãy dùng đúng tag Discord tương ứng của họ (ví dụ: <@ID>) trong câu trả lời của mày."
                     system_inst += others_info
 
-            config = types.GenerateContentConfig(system_instruction=system_inst)
-            response = self.client_ai.models.generate_content_stream(
-                model="gemini-3.1-flash-lite",
-                contents=prompt_text,
-                config=config
-            )
-            
             cau_tra_loi = ""
-            dem_chunk = 0
 
-            for chunk in response:
-                if chunk.text:
-                    cau_tra_loi += chunk.text
-                    dem_chunk += 1
+            # Check if using DeepSeek or OpenRouter (OpenAI-compatible)
+            if self.deepseek_key or self.openrouter_key:
+                import aiohttp
+                import json
+                
+                if self.deepseek_key:
+                    url = "https://api.deepseek.com/chat/completions"
+                    model = "deepseek-chat"
+                    api_key = self.deepseek_key
+                else:
+                    url = "https://openrouter.ai/api/v1/chat/completions"
+                    model = "google/gemini-2.5-flash"
+                    api_key = self.openrouter_key
 
-                    if dem_chunk % 3 == 0:
-                        if len(cau_tra_loi) <= 2000:
-                            await tin_nhan.edit(content=cau_tra_loi)
-                        await asyncio.sleep(0.5)
+                headers = {
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json"
+                }
+                payload = {
+                    "model": model,
+                    "messages": [
+                        {"role": "system", "content": system_inst},
+                        {"role": "user", "content": prompt_text}
+                    ],
+                    "stream": True
+                }
+
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(url, headers=headers, json=payload) as response:
+                        if response.status != 200:
+                            error_text = await response.text()
+                            raise RuntimeError(f"API Error {response.status}: {error_text}")
+                            
+                        dem_chunk = 0
+                        async for line in response.content:
+                            line_str = line.decode('utf-8').strip()
+                            if line_str.startswith("data: "):
+                                data_json = line_str[6:]
+                                if data_json == "[DONE]":
+                                    break
+                                try:
+                                    data = json.loads(data_json)
+                                    delta = data["choices"][0]["delta"]
+                                    content = delta.get("content", "")
+                                    if content:
+                                        cau_tra_loi += content
+                                        dem_chunk += 1
+                                        if dem_chunk % 3 == 0:
+                                            if len(cau_tra_loi) <= 2000:
+                                                await tin_nhan.edit(content=cau_tra_loi)
+                                            await asyncio.sleep(0.5)
+                                except Exception:
+                                    pass
+
+            # Otherwise, use Gemini GenAI SDK
+            elif self.client_ai:
+                config = types.GenerateContentConfig(system_instruction=system_inst)
+                response = self.client_ai.models.generate_content_stream(
+                    model="gemini-3.1-flash-lite",
+                    contents=prompt_text,
+                    config=config
+                )
+                
+                dem_chunk = 0
+                for chunk in response:
+                    if chunk.text:
+                        cau_tra_loi += chunk.text
+                        dem_chunk += 1
+
+                        if dem_chunk % 3 == 0:
+                            if len(cau_tra_loi) <= 2000:
+                                await tin_nhan.edit(content=cau_tra_loi)
+                            await asyncio.sleep(0.5)
 
             if len(cau_tra_loi) <= 2000:
                 await tin_nhan.edit(content=cau_tra_loi)
