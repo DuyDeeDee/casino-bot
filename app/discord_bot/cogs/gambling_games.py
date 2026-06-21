@@ -406,7 +406,7 @@ class TaiXiuLobbyView(discord.ui.View):
         currency = "<a:emoji_287:1514350238687821845>"
 
         jackpot_str = self.cog.economy.get_setting("taixiu_jackpot")
-        jackpot_val = int(jackpot_str) if jackpot_str else 100_000_000
+        jackpot_val = int(jackpot_str) if jackpot_str else 0
         
         embed = make_embed(
             title=f"🎲 PHIÊN TÀI XỈU #{self.session_id} 🎲",
@@ -881,7 +881,7 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
                 if total_session_bets > 0:
                     is_jackpot_triggered = True
                     jackpot_str = self.economy.get_setting("taixiu_jackpot")
-                    jackpot_val = int(jackpot_str) if jackpot_str else 100_000_000
+                    jackpot_val = int(jackpot_str) if jackpot_str else 0
                     jackpot_val_won = jackpot_val
                     for uid, amt in session_bets.items():
                         share = int(jackpot_val * (amt / total_session_bets))
@@ -896,7 +896,7 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
                                 ctx=ctx,
                                 session_id=session_id,
                             )
-                    self.economy.set_setting("taixiu_jackpot", "100000000")
+                    self.economy.set_setting("taixiu_jackpot", "0")
 
             # Determine winners, losers and payouts
             winners = []
@@ -1014,7 +1014,7 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
             # Add lost bets to the jackpot
             if total_lost_in_session > 0:
                 jackpot_str = self.economy.get_setting("taixiu_jackpot")
-                jackpot_val = int(jackpot_str) if jackpot_str else 100_000_000
+                jackpot_val = int(jackpot_str) if jackpot_str else 0
                 new_jackpot = jackpot_val + total_lost_in_session
                 self.economy.set_setting("taixiu_jackpot", str(new_jackpot))
 
