@@ -1335,6 +1335,66 @@ PVE_STAGES = {
 
 
 
+
+class PvePostBattleView(discord.ui.View):
+    def __init__(self, cog, author_id, current_floor, unlocked_floor):
+        super().__init__(timeout=60)
+        self.cog = cog
+        self.author_id = author_id
+        self.current_floor = current_floor
+        self.unlocked_floor = unlocked_floor
+        self.message = None
+        
+        self.btn_prev.disabled = (self.current_floor <= 1)
+        self.btn_next.disabled = (self.current_floor >= 50 or self.unlocked_floor <= self.current_floor)
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.author_id:
+            await interaction.response.send_message("Lệnh này không phải của bạn!", ephemeral=True)
+            return False
+        return True
+
+    async def disable_all(self, interaction):
+        for child in self.children:
+            child.disabled = True
+        try:
+            await interaction.message.edit(view=self)
+        except Exception:
+            pass
+
+    @discord.ui.button(label="⏪ Tầng trước", style=discord.ButtonStyle.secondary)
+    async def btn_prev(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
+        await self.disable_all(interaction)
+        ctx = await self.cog.client.get_context(interaction.message)
+        ctx.author = interaction.user
+        await self.cog._execute_pve_fight(ctx, self.current_floor - 1)
+
+    @discord.ui.button(label="🔄 Đấu lại", style=discord.ButtonStyle.primary)
+    async def btn_replay(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
+        await self.disable_all(interaction)
+        ctx = await self.cog.client.get_context(interaction.message)
+        ctx.author = interaction.user
+        await self.cog._execute_pve_fight(ctx, self.current_floor)
+
+    @discord.ui.button(label="⏩ Tầng tiếp theo", style=discord.ButtonStyle.success)
+    async def btn_next(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
+        await self.disable_all(interaction)
+        ctx = await self.cog.client.get_context(interaction.message)
+        ctx.author = interaction.user
+        await self.cog._execute_pve_fight(ctx, self.current_floor + 1)
+
+    async def on_timeout(self):
+        for child in self.children:
+            child.disabled = True
+        try:
+            if self.message:
+                await self.message.edit(view=self)
+        except Exception:
+            pass
+
 class Daga(commands.Cog, name="Daga"):
     def __init__(self, client: commands.Bot):
         self.client = client
@@ -3083,9 +3143,7 @@ class Daga(commands.Cog, name="Daga"):
         await ctx.send(embed=embed)
 
 
-    @daga_group.command(name="pve", brief="Tham gia Tháp Đại Chiến Anime — leo tháp 50 tầng!", aliases=["tower", "climb"])
-    @commands.cooldown(1, 5, type=commands.BucketType.user)
-    async def anime_pve(self, ctx: commands.Context):
+    async def _execute_pve_fight(self, ctx: commands.Context, floor: int):
         team_rows = self.economy.get_team_cocks(ctx.author.id)
         team_cocks = [Cock(r) for r in team_rows.values() if r]
 
@@ -3094,11 +3152,6 @@ class Daga(commands.Cog, name="Daga"):
             return
         if len(team_cocks) < 3:
             await ctx.send("⚠️ **Cảnh báo:** Đội hình của bạn chưa đủ 3 nhân vật, sức mạnh sẽ yếu hơn!")
-
-        floor = self.economy.get_pve_cooldown(ctx.author.id, "tower_floor")
-        if floor <= 0:
-            floor = 1
-            self.economy.set_pve_cooldown(ctx.author.id, "tower_floor", 1)
 
         if floor > 50:
             now = int(time.time())
@@ -3145,7 +3198,13 @@ class Daga(commands.Cog, name="Daga"):
             exp_won = boss_data["reward_exp"]
             self.economy.add_money(ctx.author.id, money_won)
             log_wallet_change(logger, event=f"pve_tower_floor_{floor}_win", user_id=ctx.author.id, money_delta=money_won)
-            self.economy.set_pve_cooldown(ctx.author.id, "tower_floor", floor + 1)
+            
+            current_db_floor = self.economy.get_pve_cooldown(ctx.author.id, "tower_floor")
+            if current_db_floor == floor:
+                self.economy.set_pve_cooldown(ctx.author.id, "tower_floor", floor + 1)
+                unlocked_floor = floor + 1
+            else:
+                unlocked_floor = current_db_floor
 
             for p_cock in team_cocks:
                 self.economy.update_cock(p_cock.id, exp=p_cock.exp + exp_won)
@@ -3158,6 +3217,8 @@ class Daga(commands.Cog, name="Daga"):
             shards_won = boss_data.get("reward_shards", 0)
             if shards_won > 0:
                 self.economy.add_inventory_item(ctx.author.id, "item_character_shard", shards_won)
+
+            view = PvePostBattleView(self, ctx.author.id, floor, unlocked_floor)
 
             if floor == 50:
                 breed = random.choice(BREEDS["Thần Kê"])
@@ -3179,7 +3240,8 @@ class Daga(commands.Cog, name="Daga"):
                     ),
                     color=discord.Color.gold()
                 )
-                await ctx.send(embed=victory_embed)
+                msg = await ctx.send(embed=victory_embed, view=view)
+                view.message = msg
             else:
                 success_embed = make_embed(
                     title=f"🎉 VƯỢT TẦNG {floor} THÀNH CÔNG! 🎉",
@@ -3193,17 +3255,29 @@ class Daga(commands.Cog, name="Daga"):
                 )
                 if shards_won > 0:
                     success_embed.description += f"\n🔮 `+{shards_won} Mảnh nhân vật`"
-                await ctx.send(embed=success_embed)
+                msg = await ctx.send(embed=success_embed, view=view)
+                view.message = msg
         else:
+            unlocked_floor = self.economy.get_pve_cooldown(ctx.author.id, "tower_floor")
             exp_won = int(boss_data["reward_exp"] * 0.2)
             for p_cock in team_cocks:
                 self.economy.update_cock(p_cock.id, exp=p_cock.exp + exp_won)
                 updated_row = self.economy.get_cock(p_cock.id)
                 if updated_row:
                     self._level_up_cock(Cock(updated_row))
-            await ctx.send(f"💀 **Thất bại ở tầng {floor}!** Hãy nâng cấp đội hình và thử lại.")
+            
+            view = PvePostBattleView(self, ctx.author.id, floor, unlocked_floor)
+            msg = await ctx.send(f"💀 **Thất bại ở tầng {floor}!** Hãy nâng cấp đội hình và thử lại.", view=view)
+            view.message = msg
 
-
+    @daga_group.command(name="pve", brief="Tham gia Tháp Đại Chiến Anime — leo tháp 50 tầng!", aliases=["tower", "climb"])
+    @commands.cooldown(1, 5, type=commands.BucketType.user)
+    async def anime_pve(self, ctx: commands.Context):
+        floor = self.economy.get_pve_cooldown(ctx.author.id, "tower_floor")
+        if floor <= 0:
+            floor = 1
+            self.economy.set_pve_cooldown(ctx.author.id, "tower_floor", 1)
+        await self._execute_pve_fight(ctx, floor)
 
 async def setup(client: commands.Bot):
     await client.add_cog(Daga(client))
