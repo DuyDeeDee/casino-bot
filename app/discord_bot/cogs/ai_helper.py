@@ -35,7 +35,7 @@ class AIHelper(commands.Cog, name="AI"):
         self.gemini_key = os.getenv("GEMINI_API_KEY")
 
         if self.deepseek_key:
-            logger.info("DeepSeek API configured for AI helper.")
+            logger.info("DeepSeek/OpenModel API configured for AI helper.")
         elif self.openrouter_key:
             logger.info("OpenRouter API configured for AI helper.")
         elif HAS_GENAI and self.gemini_key:
@@ -80,27 +80,55 @@ class AIHelper(commands.Cog, name="AI"):
                 import aiohttp
                 import json
                 
+                is_openmodel = False
                 if self.deepseek_key:
-                    url = "https://api.deepseek.com/chat/completions"
-                    model = "deepseek-chat"
+                    # Configurable base URL & Model for custom endpoints like openmodel.ai
                     api_key = self.deepseek_key
+                    url = os.getenv("DEEPSEEK_API_URL")
+                    if api_key.startswith("om-"):
+                        is_openmodel = True
+                        if not url:
+                            url = "https://api.openmodel.ai/v1/messages"
+                    else:
+                        if not url:
+                            url = "https://api.deepseek.com/chat/completions"
+                    
+                    model = os.getenv("DEEPSEEK_MODEL")
+                    if not model:
+                        model = "deepseek-v4-flash" if is_openmodel else "deepseek-chat"
                 else:
                     url = "https://openrouter.ai/api/v1/chat/completions"
                     model = "google/gemini-2.5-flash"
                     api_key = self.openrouter_key
 
-                headers = {
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json"
-                }
-                payload = {
-                    "model": model,
-                    "messages": [
-                        {"role": "system", "content": system_inst},
-                        {"role": "user", "content": prompt_text}
-                    ],
-                    "stream": True
-                }
+                if is_openmodel:
+                    headers = {
+                        "X-API-Key": api_key,
+                        "Content-Type": "application/json",
+                        "anthropic-version": "2023-06-01"
+                    }
+                    payload = {
+                        "model": model,
+                        "messages": [
+                            {"role": "user", "content": prompt_text}
+                        ],
+                        "system": system_inst,
+                        "max_tokens": 4096,
+                        "stream": True
+                    }
+                else:
+                    headers = {
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json"
+                    }
+                    payload = {
+                        "model": model,
+                        "messages": [
+                            {"role": "system", "content": system_inst},
+                            {"role": "user", "content": prompt_text}
+                        ],
+                        "stream": True
+                    }
 
                 async with aiohttp.ClientSession() as session:
                     async with session.post(url, headers=headers, json=payload) as response:
@@ -113,12 +141,20 @@ class AIHelper(commands.Cog, name="AI"):
                             line_str = line.decode('utf-8').strip()
                             if line_str.startswith("data: "):
                                 data_json = line_str[6:]
-                                if data_json == "[DONE]":
+                                if not is_openmodel and data_json == "[DONE]":
                                     break
                                 try:
                                     data = json.loads(data_json)
-                                    delta = data["choices"][0]["delta"]
-                                    content = delta.get("content", "")
+                                    if is_openmodel:
+                                        if data.get("type") == "content_block_delta":
+                                            delta = data.get("delta", {})
+                                            content = delta.get("text", "")
+                                        else:
+                                            content = ""
+                                    else:
+                                        delta = data["choices"][0]["delta"]
+                                        content = delta.get("content", "")
+                                        
                                     if content:
                                         cau_tra_loi += content
                                         dem_chunk += 1
