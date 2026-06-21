@@ -480,6 +480,36 @@ class Cock:
         return "Người Mới 🌟"
 
 
+
+def get_team_synergy(cocks: list) -> tuple[float, float, str | None, int]:
+    """Calculate team synergy based on character series.
+    Returns (atk_mult, def_mult, series_name, count)"""
+    if len(cocks) < 2:
+        return (1.0, 1.0, None, 0)
+    
+    series_count = {}
+    for c in cocks:
+        info = CHARACTER_INFO_MAP.get(c.name, None)
+        if info:
+            s = info["series"]
+            series_count[s] = series_count.get(s, 0) + 1
+    
+    best_series = None
+    best_count = 0
+    for s, cnt in series_count.items():
+        if cnt > best_count:
+            best_count = cnt
+            best_series = s
+    
+    if best_count >= 3:
+        return (1.15, 1.10, f"Đội Hình Đồng Bộ ({best_series})", best_count)
+    elif best_count >= 2:
+        return (1.05, 1.0, best_series, best_count)
+    return (1.0, 1.0, None, 0)
+
+
+
+
 BREEDS = {
     "Thường": ["Usopp", "Krillin", "Zenitsu"],
     "Hiếm": ["Killua", "Sakura", "Trunks"],
@@ -1196,6 +1226,115 @@ class NangSaoInteractiveView(discord.ui.View):
             pass
 
 
+
+class PveBoss:
+    def __init__(self, data):
+        self.name = data["name"]
+        self.hp = data["hp"]
+        self.max_hp = data.get("max_hp", data["hp"])
+        self.atk = data["atk"]
+        self.df = data["df"]
+        self.spd = data["spd"]
+        self.luk = data["luk"]
+        self.skills = data.get("skills", [])
+        self.level = 50
+        self.stars = 0
+        self.shards = 0
+        self.weapon = "None"
+        self.armor = "None"
+        self.charm = "None"
+
+    @property
+    def display_name(self) -> str:
+        return self.name
+
+    def get_max_hp(self) -> int:
+        return self.max_hp
+
+    def get_atk(self) -> int:
+        return self.atk
+
+    def get_df(self) -> int:
+        return self.df
+
+    def get_spd(self) -> int:
+        return self.spd
+
+    def get_luk(self) -> int:
+        return self.luk
+
+    def get_crit_chance(self) -> float:
+        return 5.0
+
+    def get_dodge_bonus(self) -> float:
+        return 0.0
+
+    def get_active_set(self) -> str:
+        return "None"
+
+
+
+PVE_STAGES = {
+    "tower": [
+        {"floor": 1, "name": "Quỷ Nhện Hạ Cấp", "series": "Kimetsu", "hp": 300, "atk": 25, "df": 15, "spd": 12, "luk": 5, "skills": [], "reward_money": 5000, "reward_exp": 30},
+        {"floor": 2, "name": "Zombie Titan Nhỏ", "series": "AOT", "hp": 350, "atk": 28, "df": 18, "spd": 10, "luk": 5, "skills": [], "reward_money": 6000, "reward_exp": 35},
+        {"floor": 3, "name": "Akatsuki Tép Riu", "series": "Naruto", "hp": 400, "atk": 32, "df": 20, "spd": 14, "luk": 6, "skills": [], "reward_money": 7000, "reward_exp": 40},
+        {"floor": 4, "name": "Saiyan Lính Thường", "series": "Dragon Ball", "hp": 450, "atk": 35, "df": 22, "spd": 15, "luk": 6, "skills": [], "reward_money": 8000, "reward_exp": 45},
+        {"floor": 5, "name": "Doma", "series": "Kimetsu", "hp": 800, "atk": 55, "df": 40, "spd": 25, "luk": 10, "skills": [], "reward_money": 15000, "reward_exp": 80, "reward_shards": 1},
+        {"floor": 6, "name": "Cướp Biển Vô Danh", "series": "One Piece", "hp": 500, "atk": 38, "df": 24, "spd": 16, "luk": 7, "skills": [], "reward_money": 9000, "reward_exp": 50},
+        {"floor": 7, "name": "Quỷ Nhện Trung Cấp", "series": "Kimetsu", "hp": 550, "atk": 42, "df": 26, "spd": 17, "luk": 7, "skills": [], "reward_money": 10000, "reward_exp": 55},
+        {"floor": 8, "name": "Hollow Cấp Thấp", "series": "Bleach", "hp": 600, "atk": 45, "df": 28, "spd": 18, "luk": 8, "skills": [], "reward_money": 11000, "reward_exp": 60},
+        {"floor": 9, "name": "Cursed Spirit Thường", "series": "Jujutsu Kaisen", "hp": 650, "atk": 48, "df": 30, "spd": 19, "luk": 8, "skills": [], "reward_money": 12000, "reward_exp": 65},
+        {"floor": 10, "name": "Muzan", "series": "Kimetsu", "hp": 1500, "atk": 80, "df": 55, "spd": 35, "luk": 15, "skills": [], "reward_money": 30000, "reward_exp": 150, "reward_shards": 2},
+        {"floor": 11, "name": "Titan 5m", "series": "AOT", "hp": 700, "atk": 50, "df": 32, "spd": 20, "luk": 9, "skills": [], "reward_money": 13000, "reward_exp": 70},
+        {"floor": 12, "name": "Ninja Âm Bộ", "series": "Naruto", "hp": 750, "atk": 52, "df": 34, "spd": 22, "luk": 9, "skills": [], "reward_money": 14000, "reward_exp": 75},
+        {"floor": 13, "name": "Frieza Soldier", "series": "Dragon Ball", "hp": 800, "atk": 55, "df": 36, "spd": 23, "luk": 10, "skills": [], "reward_money": 15000, "reward_exp": 80},
+        {"floor": 14, "name": "Marine Captain", "series": "One Piece", "hp": 850, "atk": 58, "df": 38, "spd": 24, "luk": 10, "skills": [], "reward_money": 16000, "reward_exp": 85},
+        {"floor": 15, "name": "Titan Thủy Tổ", "series": "AOT", "hp": 1800, "atk": 90, "df": 65, "spd": 30, "luk": 12, "skills": [], "reward_money": 35000, "reward_exp": 160, "reward_shards": 2},
+        {"floor": 16, "name": "Arrancar Cấp Thấp", "series": "Bleach", "hp": 900, "atk": 60, "df": 40, "spd": 25, "luk": 11, "skills": [], "reward_money": 17000, "reward_exp": 90},
+        {"floor": 17, "name": "Cursed Spirit Đặc Cấp", "series": "Jujutsu Kaisen", "hp": 950, "atk": 63, "df": 42, "spd": 26, "luk": 11, "skills": [], "reward_money": 18000, "reward_exp": 95},
+        {"floor": 18, "name": "Quincy Thường", "series": "Bleach", "hp": 1000, "atk": 65, "df": 44, "spd": 27, "luk": 12, "skills": [], "reward_money": 19000, "reward_exp": 100},
+        {"floor": 19, "name": "Homunculus", "series": "FMA", "hp": 1050, "atk": 68, "df": 46, "spd": 28, "luk": 12, "skills": [], "reward_money": 20000, "reward_exp": 105},
+        {"floor": 20, "name": "Titan Thủy Tổ Thức Tỉnh", "series": "AOT", "hp": 2200, "atk": 100, "df": 75, "spd": 35, "luk": 15, "skills": [], "reward_money": 45000, "reward_exp": 200, "reward_shards": 3},
+        {"floor": 21, "name": "Espada Số 9", "series": "Bleach", "hp": 1100, "atk": 70, "df": 48, "spd": 29, "luk": 13, "skills": [], "reward_money": 22000, "reward_exp": 110},
+        {"floor": 22, "name": "Demon Cấp S", "series": "One Punch Man", "hp": 1150, "atk": 72, "df": 50, "spd": 30, "luk": 13, "skills": [], "reward_money": 23000, "reward_exp": 115},
+        {"floor": 23, "name": "Chimera Ant Binh", "series": "HxH", "hp": 1200, "atk": 75, "df": 52, "spd": 31, "luk": 14, "skills": [], "reward_money": 24000, "reward_exp": 120},
+        {"floor": 24, "name": "Pillar Man", "series": "JoJo", "hp": 1250, "atk": 78, "df": 54, "spd": 32, "luk": 14, "skills": [], "reward_money": 25000, "reward_exp": 125},
+        {"floor": 25, "name": "Madara (Giả)", "series": "Naruto", "hp": 2500, "atk": 110, "df": 80, "spd": 38, "luk": 16, "skills": [], "reward_money": 50000, "reward_exp": 220, "reward_shards": 3},
+        {"floor": 26, "name": "Walpurgis", "series": "Madoka", "hp": 1300, "atk": 80, "df": 56, "spd": 33, "luk": 15, "skills": [], "reward_money": 27000, "reward_exp": 130},
+        {"floor": 27, "name": "Demon King Soldier", "series": "Seven Deadly Sins", "hp": 1350, "atk": 82, "df": 58, "spd": 34, "luk": 15, "skills": [], "reward_money": 28000, "reward_exp": 135},
+        {"floor": 28, "name": "Nomu Cao Cấp", "series": "MHA", "hp": 1400, "atk": 85, "df": 60, "spd": 35, "luk": 16, "skills": [], "reward_money": 30000, "reward_exp": 140},
+        {"floor": 29, "name": "Gillian", "series": "Bleach", "hp": 1450, "atk": 88, "df": 62, "spd": 36, "luk": 16, "skills": [], "reward_money": 32000, "reward_exp": 145},
+        {"floor": 30, "name": "Kaguya", "series": "Naruto", "hp": 3000, "atk": 120, "df": 90, "spd": 42, "luk": 18, "skills": [], "reward_money": 60000, "reward_exp": 250, "reward_shards": 4},
+        {"floor": 31, "name": "Vasto Lorde", "series": "Bleach", "hp": 1500, "atk": 90, "df": 64, "spd": 37, "luk": 17, "skills": [], "reward_money": 34000, "reward_exp": 150},
+        {"floor": 32, "name": "Royal Guard", "series": "HxH", "hp": 1550, "atk": 92, "df": 66, "spd": 38, "luk": 17, "skills": [], "reward_money": 36000, "reward_exp": 155},
+        {"floor": 33, "name": "Demon Dragon", "series": "One Punch Man", "hp": 1600, "atk": 95, "df": 68, "spd": 39, "luk": 18, "skills": [], "reward_money": 38000, "reward_exp": 160},
+        {"floor": 34, "name": "Stand User Cấp A", "series": "JoJo", "hp": 1650, "atk": 98, "df": 70, "spd": 40, "luk": 18, "skills": [], "reward_money": 40000, "reward_exp": 165},
+        {"floor": 35, "name": "Cell Hoàn Hảo", "series": "Dragon Ball", "hp": 3500, "atk": 130, "df": 95, "spd": 45, "luk": 20, "skills": [], "reward_money": 70000, "reward_exp": 280, "reward_shards": 4},
+        {"floor": 36, "name": "Espada Số 4", "series": "Bleach", "hp": 1700, "atk": 100, "df": 72, "spd": 41, "luk": 19, "skills": [], "reward_money": 42000, "reward_exp": 170},
+        {"floor": 37, "name": "Demon Cấp Dragon", "series": "One Punch Man", "hp": 1750, "atk": 102, "df": 74, "spd": 42, "luk": 19, "skills": [], "reward_money": 44000, "reward_exp": 175},
+        {"floor": 38, "name": "Chimera Ant King Guard", "series": "HxH", "hp": 1800, "atk": 105, "df": 76, "spd": 43, "luk": 20, "skills": [], "reward_money": 46000, "reward_exp": 180},
+        {"floor": 39, "name": "Quincy Sternritter", "series": "Bleach", "hp": 1850, "atk": 108, "df": 78, "spd": 44, "luk": 20, "skills": [], "reward_money": 48000, "reward_exp": 185},
+        {"floor": 40, "name": "Majin Buu Hung Ác", "series": "Dragon Ball", "hp": 4000, "atk": 140, "df": 100, "spd": 48, "luk": 22, "skills": [], "reward_money": 80000, "reward_exp": 300, "reward_shards": 5},
+        {"floor": 41, "name": "Aizen Hollowfied", "series": "Bleach", "hp": 1900, "atk": 110, "df": 80, "spd": 45, "luk": 21, "skills": [], "reward_money": 52000, "reward_exp": 195},
+        {"floor": 42, "name": "Meruem Guard", "series": "HxH", "hp": 1950, "atk": 112, "df": 82, "spd": 46, "luk": 21, "skills": [], "reward_money": 54000, "reward_exp": 200},
+        {"floor": 43, "name": "Boros", "series": "One Punch Man", "hp": 2000, "atk": 115, "df": 84, "spd": 47, "luk": 22, "skills": [], "reward_money": 56000, "reward_exp": 205},
+        {"floor": 44, "name": "Dio Over Heaven", "series": "JoJo", "hp": 2050, "atk": 118, "df": 86, "spd": 48, "luk": 22, "skills": [], "reward_money": 58000, "reward_exp": 210},
+        {"floor": 45, "name": "Kaido Người Cá", "series": "One Piece", "hp": 4500, "atk": 150, "df": 110, "spd": 50, "luk": 24, "skills": [], "reward_money": 100000, "reward_exp": 350, "reward_shards": 5},
+        {"floor": 46, "name": "Yhwach Fragment", "series": "Bleach", "hp": 2100, "atk": 120, "df": 88, "spd": 49, "luk": 23, "skills": [], "reward_money": 65000, "reward_exp": 220},
+        {"floor": 47, "name": "Goku Black", "series": "Dragon Ball", "hp": 2200, "atk": 125, "df": 90, "spd": 50, "luk": 23, "skills": [], "reward_money": 70000, "reward_exp": 230},
+        {"floor": 48, "name": "Sukuna 2 Ngón", "series": "Jujutsu Kaisen", "hp": 2300, "atk": 130, "df": 92, "spd": 51, "luk": 24, "skills": [], "reward_money": 75000, "reward_exp": 240},
+        {"floor": 49, "name": "Madara Thật", "series": "Naruto", "hp": 2500, "atk": 135, "df": 95, "spd": 52, "luk": 25, "skills": [], "reward_money": 80000, "reward_exp": 250},
+        {"floor": 50, "name": "Im Sama", "series": "One Piece", "hp": 5500, "atk": 170, "df": 130, "spd": 60, "luk": 30, "skills": [], "reward_money": 200000, "reward_exp": 500, "reward_shards": 10},
+    ],
+    "raid": [
+        {"name": "Sukuna Hoàn Chỉnh", "series": "Jujutsu Kaisen", "hp": 25000, "atk": 200, "df": 150, "spd": 80, "luk": 40, "skills": [], "reward_money": 500000, "reward_exp": 1000},
+    ],
+}
+
+
+
+
 class Daga(commands.Cog, name="Daga"):
     def __init__(self, client: commands.Bot):
         self.client = client
@@ -1301,6 +1440,377 @@ class Daga(commands.Cog, name="Daga"):
                 f"Bạn có đồng ý bán nhân vật này đi không?",
                 view=view
             )
+
+
+    async def _run_team_pve_battle(self, ctx, team_members: list, boss_data: dict, stage_type: str) -> tuple:
+        c_list = team_members
+        c2 = PveBoss(boss_data)
+        boss_max_hp = c2.get_max_hp()
+
+        combat_state = {}
+        for c in c_list:
+            p_st = {
+                "hp": c.get_max_hp(), "max_hp": c.get_max_hp(),
+                "base_atk": c.get_atk(), "base_df": c.get_df(),
+                "base_spd": c.get_spd(), "base_luk": c.get_luk(),
+                "active_used": False, "ultimate_used": False,
+                "awakening_used": False, "awakened_turns": 0,
+                "stunned": 0, "burn_turns": 0, "poison_turns": 0, "poison_dmg": 0,
+                "shield_turns": 0, "reflect_pct": 0.0, "spd_debuff_turns": 0,
+                "atk_buff_turns": 0, "atk_buff_mult": 1.0,
+                "def_buff_turns": 0, "def_buff_mult": 1.0,
+                "all_stats_buff_turns": 0, "dodge_buff": 0, "crit_rate_buff": 0,
+                "immune_hits": 0, "absorb_heal_turns": 0,
+                "copied_passive": None, "atk_reduction_pct": 0.0,
+                "tu_linh_triggered": False, "rebirth_triggered": False,
+                "permanent_dmg_buff": 1.0, "next_atk_buff": 1.0,
+            }
+            if "Krillin" in c.name: p_st["max_hp"] = int(p_st["max_hp"] * 1.08); p_st["hp"] = p_st["max_hp"]
+            if "Levi" in c.name: p_st["base_spd"] = int(p_st["base_spd"] * 1.15); p_st["dodge_buff"] += 10
+            if "Zoro" in c.name: p_st["base_df"] = int(p_st["base_df"] * 1.10); p_st["base_atk"] = int(p_st["base_atk"] * 1.10)
+            if "Akame" in c.name: p_st["crit_rate_buff"] += 15
+            if "Gojo" in c.name: p_st["dodge_buff"] += 20; p_st["crit_rate_buff"] += 15
+            if "Meliodas" in c.name: p_st["base_atk"] = int(p_st["base_atk"] * 1.20)
+            if "Goku" in c.name: p_st["dodge_buff"] += 35
+            combat_state[c.id] = p_st
+
+        boss_state = {
+            "hp": c2.hp, "max_hp": boss_max_hp,
+            "base_atk": c2.get_atk(), "base_df": c2.get_df(),
+            "base_spd": c2.get_spd(), "base_luk": c2.get_luk(),
+            "active_used": False, "ultimate_used": False,
+            "awakening_used": False, "awakened_turns": 0,
+            "stunned": 0, "burn_turns": 0, "poison_turns": 0, "poison_dmg": 0,
+            "shield_turns": 0, "reflect_pct": 0.0, "spd_debuff_turns": 0,
+            "atk_buff_turns": 0, "atk_buff_mult": 1.0,
+            "def_buff_turns": 0, "def_buff_mult": 1.0,
+            "all_stats_buff_turns": 0, "dodge_buff": 0, "crit_rate_buff": 0,
+            "immune_hits": 0, "absorb_heal_turns": 0,
+            "copied_passive": None, "atk_reduction_pct": 0.0,
+            "tu_linh_triggered": False, "rebirth_triggered": False,
+            "permanent_dmg_buff": 1.0, "next_atk_buff": 1.0,
+        }
+        combat_state["boss"] = boss_state
+
+        atk_mult, def_mult, syn_series, syn_count = get_team_synergy(c_list)
+        if syn_series:
+            for c in c_list:
+                combat_state[c.id]["base_atk"] = int(combat_state[c.id]["base_atk"] * atk_mult)
+                combat_state[c.id]["base_df"] = int(combat_state[c.id]["base_df"] * def_mult)
+
+        prep_desc = f"Đội hình ra trận đánh {c2.name}!"
+        if syn_series:
+            prep_desc += f"\n🔥 Đồng bộ {syn_series} ({syn_count}/3)!"
+
+        frame_data = render_fight_frame(
+            c_list[0].name, combat_state[c_list[0].id]["max_hp"], combat_state[c_list[0].id]["max_hp"], get_cock_image_file(c_list[0].name, True),
+            c2.name, boss_state["max_hp"], boss_state["max_hp"], get_cock_image_file(c2.name, True),
+            "CHUẨN BỊ XUẤT TRẬN 🥊", prep_desc
+        )
+        file = discord.File(frame_data, filename="battle_prep.png")
+        embed = make_embed(title="🏰 THÁP ĐẠI CHIẾN ANIME", description=f"⚔️ **Đội hình** vs **{c2.display_name}**", color=discord.Color.gold())
+        embed.set_image(url="attachment://battle_prep.png")
+        message = await ctx.send(embed=embed, file=file)
+
+        battle_logs = []
+        round_cnt = 1
+        max_animated_rounds = 10
+        active_idx = 0
+
+        while active_idx < len(c_list) and boss_state["hp"] > 0 and round_cnt <= 30:
+            ca = c_list[active_idx]
+            ca_st = combat_state[ca.id]
+            round_logs = [f"🥊 **HIỆP {round_cnt}** — {ca.name} vs {c2.name}"]
+
+            if ca_st["hp"] <= 0:
+                active_idx += 1
+                if active_idx < len(c_list):
+                    round_logs.append(f"⚔️ **{c_list[active_idx].name}** bước vào trận chiến!")
+                round_cnt += 1
+                battle_logs.extend(round_logs)
+                continue
+
+            # Simple attack exchange
+            p_atk = ca_st["base_atk"]
+            b_atk = boss_state["base_atk"]
+            p_df = ca_st["base_df"]
+            b_df = boss_state["base_df"]
+
+            # Player attacks boss
+            p_dmg = max(1, int((p_atk - b_df / 2) * random.uniform(0.9, 1.1)))
+            is_crit = random.random() < 0.15
+            if is_crit:
+                p_dmg = int(p_dmg * 2.0)
+                round_logs.append(f"💥 {ca.name} tung đòn chí mạng gây {p_dmg} sát thương!")
+            else:
+                round_logs.append(f"⚔️ {ca.name} tấn công gây {p_dmg} sát thương!")
+            boss_state["hp"] -= p_dmg
+
+            if boss_state["hp"] <= 0:
+                round_logs.append(f"💀 **{c2.name}** đã bị hạ gục!")
+                battle_logs.extend(round_logs)
+                break
+
+            # Boss attacks player
+            b_dmg = max(1, int((b_atk - p_df / 2) * random.uniform(0.9, 1.1)))
+            dodge_chance = ca_st["dodge_buff"] + ca.get_dodge_bonus()
+            if random.random() * 100 < dodge_chance:
+                round_logs.append(f"💨 {ca.name} né đòn nhanh như chớp!")
+            else:
+                ca_st["hp"] -= b_dmg
+                round_logs.append(f"⚔️ {c2.name} tấn công gây {b_dmg} sát thương!")
+                if ca_st["hp"] <= 0:
+                    round_logs.append(f"💀 **{ca.name}** đã bị hạ gục!")
+                    active_idx += 1
+                    if active_idx < len(c_list):
+                        round_logs.append(f"⚔️ **{c_list[active_idx].name}** bước vào trận chiến!")
+
+            battle_logs.extend(round_logs)
+
+            if round_cnt <= max_animated_rounds and active_idx < len(c_list) and boss_state["hp"] > 0:
+                curr_c = c_list[active_idx]
+                non_header = [l for l in round_logs if not l.startswith("🥊")]
+                preview = "\n".join(non_header[-3:])
+                frame_data = render_fight_frame(
+                    curr_c.name, max(0, combat_state[curr_c.id]["hp"]), combat_state[curr_c.id]["max_hp"], get_cock_image_file(curr_c.name, True),
+                    c2.name, max(0, boss_state["hp"]), boss_state["max_hp"], get_cock_image_file(c2.name, True),
+                    f"HIỆP {round_cnt} 🟢", preview
+                )
+                file = discord.File(frame_data, filename=f"battle_{round_cnt}.png")
+                embed = make_embed(title="🏰 THÁP ĐẠI CHIẾN ANIME", description=f"⚔️ **Đội hình** vs **{c2.display_name}**", color=discord.Color.gold())
+                embed.set_image(url=f"attachment://battle_{round_cnt}.png")
+                try:
+                    await message.edit(embed=embed, attachments=[file])
+                except Exception:
+                    pass
+                await asyncio.sleep(2.0)
+            round_cnt += 1
+
+        player_won = boss_state["hp"] <= 0
+
+        final_round_text = "THẮNG LỢI (KO) 🏆" if player_won else "THẤT BẠI (KO) 💀"
+        final_log = f"Tổ đội đã đánh bại {c2.name}!" if player_won else f"{c2.name} đã quét sạch tổ đội!"
+
+        last_idx = min(len(c_list) - 1, active_idx)
+        final_frame_data = render_fight_frame(
+            c_list[last_idx].name, max(0, combat_state[c_list[last_idx].id]["hp"]), combat_state[c_list[last_idx].id]["max_hp"], get_cock_image_file(c_list[last_idx].name, True),
+            c2.name, max(0, boss_state["hp"]), boss_state["max_hp"], get_cock_image_file(c2.name, True),
+            final_round_text, final_log
+        )
+        final_file = discord.File(final_frame_data, filename="battle_final.png")
+        embed_color = discord.Color.green() if player_won else discord.Color.red()
+        embed = make_embed(title=final_round_text, description=final_log, color=embed_color)
+        embed.set_image(url="attachment://battle_final.png")
+        try:
+            await message.edit(embed=embed, attachments=[final_file])
+        except Exception:
+            await ctx.send(embed=embed, file=final_file)
+
+        damage_dealt = boss_data["hp"] - max(0, boss_state["hp"])
+        return player_won, damage_dealt
+
+    async def _run_team_pvp_battle(self, ctx, team_a: list, team_b: list, author: discord.Member, opponent: discord.Member, bet: int) -> tuple:
+        c_list_a = team_a
+        c_list_b = team_b
+
+        combat_state = {}
+        for c in c_list_a + c_list_b:
+            p_st = {
+                "hp": c.get_max_hp(), "max_hp": c.get_max_hp(),
+                "base_atk": c.get_atk(), "base_df": c.get_df(),
+                "base_spd": c.get_spd(), "base_luk": c.get_luk(),
+                "active_used": False, "ultimate_used": False,
+                "awakening_used": False, "awakened_turns": 0,
+                "stunned": 0, "burn_turns": 0, "poison_turns": 0, "poison_dmg": 0,
+                "shield_turns": 0, "reflect_pct": 0.0, "spd_debuff_turns": 0,
+                "atk_buff_turns": 0, "atk_buff_mult": 1.0,
+                "def_buff_turns": 0, "def_buff_mult": 1.0,
+                "all_stats_buff_turns": 0, "dodge_buff": 0, "crit_rate_buff": 0,
+                "immune_hits": 0, "absorb_heal_turns": 0,
+                "copied_passive": None, "atk_reduction_pct": 0.0,
+                "tu_linh_triggered": False, "rebirth_triggered": False,
+                "permanent_dmg_buff": 1.0, "next_atk_buff": 1.0,
+            }
+            if "Krillin" in c.name: p_st["max_hp"] = int(p_st["max_hp"] * 1.08); p_st["hp"] = p_st["max_hp"]
+            if "Levi" in c.name: p_st["base_spd"] = int(p_st["base_spd"] * 1.15); p_st["dodge_buff"] += 10
+            if "Zoro" in c.name: p_st["base_df"] = int(p_st["base_df"] * 1.10); p_st["base_atk"] = int(p_st["base_atk"] * 1.10)
+            if "Akame" in c.name: p_st["crit_rate_buff"] += 15
+            if "Gojo" in c.name: p_st["dodge_buff"] += 20; p_st["crit_rate_buff"] += 15
+            if "Meliodas" in c.name: p_st["base_atk"] = int(p_st["base_atk"] * 1.20)
+            if "Goku" in c.name: p_st["dodge_buff"] += 35
+            combat_state[c.id] = p_st
+
+        atk_mult_a, def_mult_a, syn_a, syn_cnt_a = get_team_synergy(c_list_a)
+        if syn_a:
+            for c in c_list_a:
+                combat_state[c.id]["base_atk"] = int(combat_state[c.id]["base_atk"] * atk_mult_a)
+                combat_state[c.id]["base_df"] = int(combat_state[c.id]["base_df"] * def_mult_a)
+
+        atk_mult_b, def_mult_b, syn_b, syn_cnt_b = get_team_synergy(c_list_b)
+        if syn_b:
+            for c in c_list_b:
+                combat_state[c.id]["base_atk"] = int(combat_state[c.id]["base_atk"] * atk_mult_b)
+                combat_state[c.id]["base_df"] = int(combat_state[c.id]["base_df"] * def_mult_b)
+
+        prep_desc = f"Đại chiến Anime giữa {author.display_name} và {opponent.display_name}!"
+        if syn_a: prep_desc += f"\n🔴 **{author.display_name}**: Đồng bộ {syn_a.upper()} ({syn_cnt_a}/3)"
+        if syn_b: prep_desc += f"\n🔵 **{opponent.display_name}**: Đồng bộ {syn_b.upper()} ({syn_cnt_b}/3)"
+
+        frame_data = render_fight_frame(
+            c_list_a[0].name, combat_state[c_list_a[0].id]["max_hp"], combat_state[c_list_a[0].id]["max_hp"], get_cock_image_file(c_list_a[0].name, True),
+            c_list_b[0].name, combat_state[c_list_b[0].id]["max_hp"], combat_state[c_list_b[0].id]["max_hp"], get_cock_image_file(c_list_b[0].name, True),
+            "CHUẨN BỊ XUẤT TRẬN 🥊", prep_desc
+        )
+        file = discord.File(frame_data, filename="battle_prep.png")
+        embed = make_embed(title="🏟️ ĐẠI CHIẾN ANIME TRỰC TIẾP", description=f"⚔️ **Đội hình {author.display_name}** vs **Đội hình {opponent.display_name}**", color=discord.Color.gold())
+        embed.set_image(url="attachment://battle_prep.png")
+        message = await ctx.send(embed=embed, file=file)
+
+        battle_logs = []
+        round_cnt = 1
+        max_animated_rounds = 10
+        active_a = 0
+        active_b = 0
+
+        while active_a < len(c_list_a) and active_b < len(c_list_b) and round_cnt <= 30:
+            round_logs = []
+            ca = c_list_a[active_a]
+            cb = c_list_b[active_b]
+            ca_st = combat_state[ca.id]
+            cb_st = combat_state[cb.id]
+
+            round_logs.append(f"🥊 **VÒNG {round_cnt}**")
+            round_logs.append(f"1️⃣ **{ca.name}** (của {author.display_name}) vs 2️⃣ **{cb.name}** (của {opponent.display_name})")
+
+            spd1 = ca_st["base_spd"]
+            spd2 = cb_st["base_spd"]
+            if spd1 > spd2:
+                order = [(ca, cb, ca_st, cb_st), (cb, ca, cb_st, ca_st)]
+            elif spd2 > spd1:
+                order = [(cb, ca, cb_st, ca_st), (ca, cb, ca_st, cb_st)]
+            else:
+                order = [(ca, cb, ca_st, cb_st), (cb, ca, cb_st, ca_st)]
+
+            for attacker, defender, ast, dst in order:
+                if ast["hp"] <= 0 or dst["hp"] <= 0:
+                    continue
+
+                if ast["stunned"] > 0:
+                    round_logs.append(f"💫 {attacker.name} bị choáng, không thể hành động!")
+                    ast["stunned"] -= 1
+                    continue
+
+                # Dodge check
+                dodge_chance = dst["dodge_buff"] + defender.get_dodge_bonus()
+                if random.random() * 100 < dodge_chance:
+                    round_logs.append(f"💨 {defender.name} né đòn nhanh như chớp!")
+                    continue
+
+                base_atk = ast["base_atk"]
+                opp_df = dst["base_df"]
+                damage = max(1, int((base_atk - opp_df / 2) * random.uniform(0.9, 1.1)))
+
+                crit_chance = attacker.get_luk() * 0.5 + 5 + attacker.get_crit_chance() + ast["crit_rate_buff"]
+                is_crit = random.random() * 100 < crit_chance
+                if is_crit:
+                    damage = int(damage * 2.0)
+                    round_logs.append(f"💥 Đòn Đánh Chí Mạng từ {attacker.name}!")
+
+                if dst["immune_hits"] > 0:
+                    dst["immune_hits"] -= 1
+                    round_logs.append(f"🛡️ Hào quang bảo vệ chặn đứng đòn đánh!")
+                    continue
+
+                dst["hp"] -= damage
+                round_logs.append(f"⚔️ {attacker.name} tấn công gây {damage} DMG!")
+
+            battle_logs.extend(round_logs)
+
+            if combat_state[ca.id]["hp"] <= 0:
+                round_logs.append(f"💀 **{ca.name}** đã bị hạ gục!")
+                active_a += 1
+                if active_a < len(c_list_a):
+                    round_logs.append(f"⚔️ **{c_list_a[active_a].name}** ra trận thay thế!")
+
+            if combat_state[cb.id]["hp"] <= 0:
+                round_logs.append(f"💀 **{cb.name}** đã bị hạ gục!")
+                active_b += 1
+                if active_b < len(c_list_b):
+                    round_logs.append(f"⚔️ **{c_list_b[active_b].name}** ra trận thay thế!")
+
+            if round_cnt <= max_animated_rounds and active_a < len(c_list_a) and active_b < len(c_list_b):
+                non_header = [l for l in round_logs if not l.startswith("🥊") and not l.startswith("1️⃣")]
+                preview = "\n".join(non_header[-3:])
+                frame_data = render_fight_frame(
+                    c_list_a[active_a].name, combat_state[c_list_a[active_a].id]["hp"], combat_state[c_list_a[active_a].id]["max_hp"], get_cock_image_file(c_list_a[active_a].name, True),
+                    c_list_b[active_b].name, combat_state[c_list_b[active_b].id]["hp"], combat_state[c_list_b[active_b].id]["max_hp"], get_cock_image_file(c_list_b[active_b].name, True),
+                    f"HIỆP PVP {round_cnt} 🟢", preview
+                )
+                file = discord.File(frame_data, filename=f"battle_{round_cnt}.png")
+                embed = make_embed(title="🏟️ ĐẠI CHIẾN ANIME TRỰC TIẾP", description=f"⚔️ **Đội hình {author.display_name}** vs **Đội hình {opponent.display_name}**", color=discord.Color.gold())
+                embed.set_image(url=f"attachment://battle_{round_cnt}.png")
+                try:
+                    await message.edit(embed=embed, attachments=[file])
+                except Exception:
+                    pass
+                await asyncio.sleep(2.0)
+
+            round_cnt += 1
+
+        won_a = None
+        if active_a >= len(c_list_a) and active_b < len(c_list_b):
+            won_a = False
+        elif active_b >= len(c_list_b) and active_a < len(c_list_a):
+            won_a = True
+
+        winner = author if won_a is True else (opponent if won_a is False else None)
+        loser = opponent if won_a is True else (author if won_a is False else None)
+
+        if winner is None:
+            final_round_text = "HÒA NHAU 🤝"
+            final_log = "Trận đấu bất phân thắng bại!"
+            embed_title = "🤝 TRẬN ĐẤU HÒA NHAU 🤝"
+            desc = (
+                f"🏟️ **SÂN ĐẤU ĐÁ GÀ TRỰC TIẾP**\n"
+                f"⚔️ Đội hình của {author.display_name} vs Đội hình của {opponent.display_name}\n\n"
+                f"📝 **Diễn biến hiệp cuối:**\n"
+                f"... {final_log}"
+            )
+            embed_color = discord.Color.light_grey()
+        else:
+            final_round_text = "KẾT THÚC (KO) 🏆"
+            final_log = f"Đội hình của {winner.display_name} giành chiến thắng!"
+            embed_title = f"🏆 {winner.display_name.upper()} CHIẾN THẮNG 🏆"
+            log_preview = "\n".join(battle_logs[-6:])
+            desc = (
+                f"🏟️ **SÂN ĐẤU ĐÁ GÀ TRỰC TIẾP**\n"
+                f"⚔️ Đội hình của {author.display_name} vs Đội hình của {opponent.display_name}\n\n"
+                f"📝 **Diễn biến hiệp cuối:**\n"
+                f"... {log_preview}\n\n"
+                f"🏆 **Người chiến thắng:** {winner.mention}\n"
+                f"💰 **Số tiền nhận:** `+{bet:,} VND` (và **+150 EXP**)\n\n"
+                f"💸 **Người thua cuộc:** {loser.mention}\n"
+                f"📉 **Số tiền mất:** `-{bet:,} VND` (và **+20 EXP**)"
+            )
+            embed_color = discord.Color.green() if winner == author else discord.Color.red()
+
+        last_show_a = min(len(c_list_a) - 1, active_a)
+        last_show_b = min(len(c_list_b) - 1, active_b)
+
+        final_frame_data = render_fight_frame(
+            c_list_a[last_show_a].name, max(0, combat_state[c_list_a[last_show_a].id]["hp"]), combat_state[c_list_a[last_show_a].id]["max_hp"], get_cock_image_file(c_list_a[last_show_a].name, True),
+            c_list_b[last_show_b].name, max(0, combat_state[c_list_b[last_show_b].id]["hp"]), combat_state[c_list_b[last_show_b].id]["max_hp"], get_cock_image_file(c_list_b[last_show_b].name, True),
+            final_round_text, final_log
+        )
+        final_file = discord.File(final_frame_data, filename="battle_final.png")
+        embed = make_embed(title=embed_title, description=desc, color=embed_color)
+        embed.set_image(url="attachment://battle_final.png")
+        try:
+            await message.edit(embed=embed, attachments=[final_file])
+        except Exception:
+            await ctx.send(embed=embed, file=final_file)
+
+        return won_a, battle_logs
 
     @commands.group(
         name="anime",
@@ -1630,6 +2140,148 @@ class Daga(commands.Cog, name="Daga"):
 
         self.economy.set_active_cock(ctx.author.id, cock_id)
         await ctx.send(f"✅ Đã chọn **{cock_row[2]}** (ID: {cock_id}) làm nhân vật chính xuất trận!")
+
+    @daga_group.group(
+        name="team",
+        brief="Quản lý đội hình 3 nhân vật tham gia thi đấu.",
+        usage="team [subcommand]",
+        invoke_without_command=True,
+    )
+    async def anime_team(self, ctx: commands.Context):
+        team_rows = self.economy.get_team_cocks(ctx.author.id)
+        embed = discord.Embed(title=f"⚔️ ĐỘI HÌNH CỦA {ctx.author.display_name}", color=discord.Color.gold())
+        embed.set_thumbnail(url=ctx.author.display_avatar.url)
+        team_cocks = {pos: Cock(row) if row else None for pos, row in team_rows.items()}
+        pos_labels = {1: "1️⃣", 2: "2️⃣", 3: "3️⃣"}
+        rarity_colors = {"Thường": "⚪", "Hiếm": "🟢", "Quý": "🔵", "Sử Thi": "🟣", "Huyền Thoại": "🟡", "Thần Kê": "🔴", "Exclusive": "👑"}
+        desc_lines = ["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]
+        total_power = 0
+        cocks_list = []
+        for pos in (1, 2, 3):
+            c = team_cocks[pos]
+            if c:
+                cocks_list.append(c)
+                power = c.get_max_hp() + c.get_atk() + c.get_df() + c.get_spd() + c.get_luk()
+                total_power += power
+                rarity_emoji = rarity_colors.get(c.rarity, "⚪")
+                desc_lines.append(f"{pos_labels[pos]} {rarity_emoji} **{c.display_name}** — Lv.{c.level}")
+                desc_lines.append(f"   ❤️ {c.get_max_hp()} | ⚔️ {c.get_atk()} | 🛡️ {c.get_df()} | ⚡ {c.get_spd()}")
+            else:
+                desc_lines.append(f"{pos_labels[pos]} 🔲 _Trống_ — Chưa xếp nhân vật")
+        desc_lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        atk_mult, def_mult, syn_series, syn_count = get_team_synergy(cocks_list)
+        if syn_series:
+            desc_lines.append(f"🔥 **Đồng bộ:** {syn_series} ({syn_count}/3)")
+            if atk_mult > 1.0: desc_lines.append(f"   ⚔️ +{int((atk_mult-1)*100)}% ATK")
+            if def_mult > 1.0: desc_lines.append(f"   🛡️ +{int((def_mult-1)*100)}% DEF")
+        desc_lines.append(f"\n💪 **Tổng Chiến Lực:** `{total_power:,}`")
+        prefix = ctx.prefix or "i?"
+        desc_lines.append(f"*{prefix}anime team set <vị_trí> <ID> để thay đổi*")
+        embed.description = "\n".join(desc_lines)
+        await ctx.send(embed=embed)
+
+    @anime_team.command(name="set", brief="Đặt nhân vật vào vị trí 1/2/3 trong đội hình.")
+    async def anime_team_set(self, ctx: commands.Context, position: int, cock_id: int):
+        if position not in (1, 2, 3):
+            await ctx.send("❌ Vị trí phải là 1, 2 hoặc 3!")
+            return
+        cock_row = self.economy.get_cock(cock_id)
+        if not cock_row:
+            await ctx.send(f"❌ Không tìm thấy nhân vật với ID `{cock_id}`.")
+            return
+        if cock_row[1] != ctx.author.id:
+            await ctx.send("❌ Nhân vật này không thuộc sở hữu của bạn!")
+            return
+        old_team = self.economy.get_team_cocks(ctx.author.id)
+        target_occupant_row = old_team[position]
+        cock_old_pos = None
+        for p, r in old_team.items():
+            if r and r[0] == cock_id:
+                cock_old_pos = p
+                break
+        self.economy.set_team_position(ctx.author.id, cock_id, position)
+        cock_name = cock_row[2]
+        if cock_old_pos is not None and target_occupant_row:
+            occ_name = target_occupant_row[2]
+            await ctx.send(f"🔄 Hoán đổi vị trí! **{cock_name}**: Vị trí {cock_old_pos} → Vị trí {position}; **{occ_name}**: Vị trí {position} → Vị trí {cock_old_pos}")
+        elif target_occupant_row:
+            occ_name = target_occupant_row[2]
+            await ctx.send(f"✅ Đã đặt **{cock_name}** vào Vị trí {position}! ⚠️ Lưu ý: **{occ_name}** đã bị đẩy ra khỏi đội.")
+        else:
+            await ctx.send(f"✅ Đã đặt **{cock_name}** vào Vị trí {position}!")
+
+    @anime_team.command(name="remove", brief="Rút nhân vật khỏi vị trí đã chọn trong đội hình.", aliases=["rm"])
+    async def anime_team_remove(self, ctx: commands.Context, position: int):
+        if position not in (1, 2, 3):
+            await ctx.send("❌ Vị trí phải là 1, 2 hoặc 3!")
+            return
+        team_rows = self.economy.get_team_cocks(ctx.author.id)
+        target_row = team_rows[position]
+        if not target_row:
+            await ctx.send(f"❌ Vị trí {position} hiện đang trống, không có gì để rút!")
+            return
+        cock_name = target_row[2]
+        self.economy.remove_from_team(ctx.author.id, position)
+        remaining_rows = self.economy.get_team_cocks(ctx.author.id)
+        remaining_count = sum(1 for r in remaining_rows.values() if r)
+        await ctx.send(f"❌ Đã rút **{cock_name}** khỏi Vị trí {position}. Vị trí {position} hiện đang trống — đội chỉ còn {remaining_count} người! ⚠️ Đội thiếu người sẽ yếu hơn khi đánh Tower/PvP.")
+
+    @anime_team.command(name="auto", brief="Tự động xếp đội hình gồm 3 nhân vật mạnh nhất.")
+    async def anime_team_auto(self, ctx: commands.Context):
+        all_cocks = self.economy.get_cocks(ctx.author.id)
+        if not all_cocks or len(all_cocks) < 1:
+            await ctx.send("❌ Bạn chưa có nhân vật nào!")
+            return
+        sorted_cocks = sorted(all_cocks, key=lambda r: Cock(r).get_max_hp() + Cock(r).get_atk() + Cock(r).get_df() + Cock(r).get_spd() + Cock(r).get_luk(), reverse=True)
+        proposed = sorted_cocks[:3]
+        proposed_ids = [r[0] for r in proposed]
+
+        desc = "📋 **Đề xuất đội hình mới:**\n"
+        for i, row in enumerate(proposed):
+            c = Cock(row)
+            power = c.get_max_hp() + c.get_atk() + c.get_df() + c.get_spd() + c.get_luk()
+            desc += f"  {i+1}️⃣ **{c.display_name}** (ID: {c.id}) — Chiến lực: `{power:,}`\n"
+        desc += "\n✅ Bấm nút bên dưới để áp dụng!"
+
+        class AutoTeamView(discord.ui.View):
+            def __init__(self, author, economy, ids):
+                super().__init__(timeout=60)
+                self.author = author
+                self.economy = economy
+                self.ids = ids
+
+            @discord.ui.button(label="✅ Áp dụng", style=discord.ButtonStyle.green)
+            async def accept(self, interaction: discord.Interaction, _):
+                if interaction.user.id != self.author.id:
+                    await interaction.response.send_message("❌ Bạn không phải chủ đội hình này!", ephemeral=True)
+                    return
+                self.economy.clear_team(self.author.id)
+                for i, cid in enumerate(self.ids):
+                    self.economy.set_team_position(self.author.id, cid, i + 1)
+                await interaction.response.send_message("✅ Đã áp dụng đội hình mới thành công!")
+                self.stop()
+
+            @discord.ui.button(label="❌ Giữ đội cũ", style=discord.ButtonStyle.red)
+            async def decline(self, interaction: discord.Interaction, _):
+                if interaction.user.id != self.author.id:
+                    await interaction.response.send_message("❌ Bạn không phải chủ đội hình này!", ephemeral=True)
+                    return
+                await interaction.response.send_message("❌ Đã hủy. Giữ nguyên đội hình cũ.")
+                self.stop()
+
+        view = AutoTeamView(ctx.author, self.economy, proposed_ids)
+        embed = make_embed(title="🤖 TỰ ĐỘNG XẾP ĐỘI", description=desc, color=discord.Color.blue())
+        await ctx.send(embed=embed, view=view)
+
+    @anime_team.command(name="power", brief="Xem tổng chiến lực đội hình.")
+    async def anime_team_power(self, ctx: commands.Context):
+        team_rows = self.economy.get_team_cocks(ctx.author.id)
+        team_cocks = [Cock(r) for r in team_rows.values() if r]
+        if not team_cocks:
+            await ctx.send("❌ Đội hình trống!")
+            return
+        total_power = sum(c.get_max_hp() + c.get_atk() + c.get_df() + c.get_spd() + c.get_luk() for c in team_cocks)
+        await ctx.send(f"💪 **Tổng Chiến Lực đội hình:** `{total_power:,}`")
 
     @daga_group.command(name="feed", brief="Sử dụng vật phẩm nâng cấp từ kho đồ để tăng EXP cho nhân vật.", aliases=["upgrade_exp", "use"])
     async def daga_feed(self, ctx: commands.Context, food_id: str | None = None, quantity: int = 1):
@@ -2025,29 +2677,32 @@ class Daga(commands.Cog, name="Daga"):
         if opponent.bot:
             await ctx.send("❌ Bạn không thể thách đấu với bot!")
             return
-
         if opponent.id == ctx.author.id:
             await ctx.send("❌ Bạn không thể tự thách đấu với chính mình!")
             return
 
-        # Check user cocks
-        author_cock_row = self.economy.get_active_cock(ctx.author.id)
-        if not author_cock_row:
-            await ctx.send("❌ Bạn chưa có chiến kê chính xuất trận. Hãy dùng `i?daga active`.")
+        author_team_rows = self.economy.get_team_cocks(ctx.author.id)
+        author_team = [Cock(r) for r in author_team_rows.values() if r]
+        if not author_team:
+            await ctx.send("❌ Bạn chưa có nhân vật nào trong đội hình! Hãy dùng `i?anime team set <vt> <ID>` để sắp xếp đội hình.")
             return
 
-        opponent_cock_row = self.economy.get_active_cock(opponent.id)
-        if not opponent_cock_row:
-            await ctx.send(f"❌ Đối thủ {opponent.mention} chưa có chiến kê chính xuất trận để thi đấu.")
+        opponent_team_rows = self.economy.get_team_cocks(opponent.id)
+        opponent_team = [Cock(r) for r in opponent_team_rows.values() if r]
+        if not opponent_team:
+            await ctx.send(f"❌ Đối thủ {opponent.mention} chưa có nhân vật nào trong đội hình để thi đấu.")
             return
 
-        # Validate bet amounts
+        if len(author_team) < 3:
+            await ctx.send(f"⚠️ **Cảnh báo:** Đội hình của bạn chưa đủ 3 nhân vật, sức mạnh sẽ yếu hơn!")
+        if len(opponent_team) < 3:
+            await ctx.send(f"⚠️ **Cảnh báo đối thủ:** Đội hình của {opponent.mention} chưa đủ 3 nhân vật, sức mạnh sẽ yếu hơn!")
+
         try:
             validate_money_bet(self.economy, ctx.author.id, bet)
         except Exception as exc:
             await ctx.send(f"❌ **Bạn không đủ tiền cược:** {exc}")
             return
-
         try:
             validate_money_bet(self.economy, opponent.id, bet)
         except Exception:
@@ -2055,20 +2710,19 @@ class Daga(commands.Cog, name="Daga"):
             return
 
         view = AcceptFightView(opponent, ctx.author, bet)
-        msg = await ctx.send(f"🥊 {opponent.mention}, bạn có đồng ý lời thách đấu đá gà mức cược **{bet:,} VND** từ {ctx.author.mention} không?", view=view)
-
+        await ctx.send(f"🥊 {opponent.mention}, bạn có đồng ý lời thách đấu đá gà mức cược **{bet:,} VND** từ {ctx.author.mention} không?", view=view)
         await view.wait()
-
         if not view.accepted:
             return
 
-        # Re-check money & cocks before fighting (just in case they lost it while waiting)
-        author_cock_row = self.economy.get_active_cock(ctx.author.id)
-        opponent_cock_row = self.economy.get_active_cock(opponent.id)
-        if not author_cock_row or not opponent_cock_row:
-            await ctx.send("❌ Trận đấu bị hủy: Một trong hai người chơi không còn chiến kê chính xuất trận.")
-            return
+        author_team_rows = self.economy.get_team_cocks(ctx.author.id)
+        author_team = [Cock(r) for r in author_team_rows.values() if r]
+        opponent_team_rows = self.economy.get_team_cocks(opponent.id)
+        opponent_team = [Cock(r) for r in opponent_team_rows.values() if r]
 
+        if not author_team or not opponent_team:
+            await ctx.send("❌ Trận đấu bị hủy: Một trong hai người chơi không còn nhân vật nào trong đội hình.")
+            return
         try:
             validate_money_bet(self.economy, ctx.author.id, bet)
             validate_money_bet(self.economy, opponent.id, bet)
@@ -2076,927 +2730,43 @@ class Daga(commands.Cog, name="Daga"):
             await ctx.send("❌ Trận đấu bị hủy: Một trong hai người chơi không còn đủ tiền đặt cược.")
             return
 
-        # Instantiate cocks
-        c1 = Cock(author_cock_row)
-        c2 = Cock(opponent_cock_row)
+        won_a, battle_logs = await self._run_team_pvp_battle(ctx, author_team, opponent_team, ctx.author, opponent, bet)
 
-        hp1 = c1.get_max_hp()
-        hp2 = c2.get_max_hp()
+        if won_a is None:
+            return
 
-        # Initialize combat states
-        combat_state = {
-            c1.id: {
-                "hp": hp1,
-                "max_hp": hp1,
-                "base_atk": c1.get_atk(),
-                "base_df": c1.get_df(),
-                "base_spd": c1.get_spd(),
-                "base_luk": c1.get_luk(),
-                
-                "active_used": False,
-                "ultimate_used": False,
-                "awakening_used": False,
-                "awakened_turns": 0,
-                
-                "stunned": 0,
-                "burn_turns": 0,
-                "poison_turns": 0,
-                "poison_dmg": 0,
-                
-                "shield_turns": 0,
-                "reflect_pct": 0.0,
-                "spd_debuff_turns": 0,
-                "atk_buff_turns": 0,
-                "atk_buff_mult": 1.0,
-                "def_buff_turns": 0,
-                "def_buff_mult": 1.0,
-                "all_stats_buff_turns": 0,
-                
-                "dodge_buff": 0,
-                "crit_rate_buff": 0,
-                
-                "immune_hits": 0,
-                "absorb_heal_turns": 0,
-                
-                "copied_passive": None,
-                "atk_reduction_pct": 0.0,
-                "tu_linh_triggered": False,
-                "rebirth_triggered": False,
-                "permanent_dmg_buff": 1.0,
-                "next_atk_buff": 1.0,
-            },
-            c2.id: {
-                "hp": hp2,
-                "max_hp": hp2,
-                "base_atk": c2.get_atk(),
-                "base_df": c2.get_df(),
-                "base_spd": c2.get_spd(),
-                "base_luk": c2.get_luk(),
-                
-                "active_used": False,
-                "ultimate_used": False,
-                "awakening_used": False,
-                "awakened_turns": 0,
-                
-                "stunned": 0,
-                "burn_turns": 0,
-                "poison_turns": 0,
-                "poison_dmg": 0,
-                
-                "shield_turns": 0,
-                "reflect_pct": 0.0,
-                "spd_debuff_turns": 0,
-                "atk_buff_turns": 0,
-                "atk_buff_mult": 1.0,
-                "def_buff_turns": 0,
-                "def_buff_mult": 1.0,
-                "all_stats_buff_turns": 0,
-                
-                "dodge_buff": 0,
-                "crit_rate_buff": 0,
-                
-                "immune_hits": 0,
-                "absorb_heal_turns": 0,
-                
-                "copied_passive": None,
-                "atk_reduction_pct": 0.0,
-                "tu_linh_triggered": False,
-                "rebirth_triggered": False,
-                "permanent_dmg_buff": 1.0,
-                "next_atk_buff": 1.0,
-            }
-        }
+        winner = ctx.author if won_a else opponent
+        loser = opponent if won_a else ctx.author
+        winner_team = author_team if won_a else opponent_team
+        loser_team = opponent_team if won_a else author_team
 
-        # Apply start-of-combat passives
-        for c_obj, cid in [(c1, c1.id), (c2, c2.id)]:
-            ast = combat_state[cid]
-            name = c_obj.name
-            
-            if "Krillin" in name:
-                ast["max_hp"] = int(ast["max_hp"] * 1.08)
-                ast["hp"] = ast["max_hp"]
-            if "Levi" in name:
-                ast["base_spd"] = int(ast["base_spd"] * 1.15)
-                ast["dodge_buff"] += 10
-            if "Zoro" in name:
-                ast["base_df"] = int(ast["base_df"] * 1.10)
-                ast["base_atk"] = int(ast["base_atk"] * 1.10)
-            if "Akame" in name:
-                ast["crit_rate_buff"] += 15
-            if "Gojo" in name:
-                ast["dodge_buff"] += 20
-                ast["crit_rate_buff"] += 15
-            if "Meliodas" in name:
-                ast["base_atk"] = int(ast["base_atk"] * 1.20)
-            if "Goku" in name:
-                ast["dodge_buff"] += 35
+        self.economy.add_money(winner.id, bet)
+        self.economy.add_money(loser.id, -bet)
+        log_wallet_change(logger, event="daga_pvp_winner", user_id=winner.id, money_delta=bet, ctx=ctx, opponent_id=loser.id)
+        log_wallet_change(logger, event="daga_pvp_loser", user_id=loser.id, money_delta=-bet, ctx=ctx, opponent_id=winner.id)
 
-        # Sharingan Kakashi passive check
-        for attacker, defender in [(c1, c2), (c2, c1)]:
-            ast = combat_state[attacker.id]
-            dst = combat_state[defender.id]
-            if "Kakashi" in attacker.name:
-                if random.random() < 0.25:
-                    ast["copied_passive"] = defender.name
-                    # Instantly apply copied passive stats
-                    if "Krillin" in defender.name:
-                        ast["max_hp"] = int(ast["max_hp"] * 1.08)
-                        ast["hp"] = ast["max_hp"]
-                    if "Levi" in defender.name:
-                        ast["base_spd"] = int(ast["base_spd"] * 1.15)
-                        ast["dodge_buff"] += 10
-                    if "Zoro" in defender.name:
-                        ast["base_df"] = int(ast["base_df"] * 1.10)
-                        ast["base_atk"] = int(ast["base_atk"] * 1.10)
-                    if "Akame" in defender.name:
-                        ast["crit_rate_buff"] += 15
-                    if "Gojo" in defender.name:
-                        ast["dodge_buff"] += 20
-                        ast["crit_rate_buff"] += 15
-                    if "Meliodas" in defender.name:
-                        ast["base_atk"] = int(ast["base_atk"] * 1.20)
-                    if "Goku" in defender.name:
-                        ast["dodge_buff"] += 35
+        for p_cock in winner_team:
+            self.economy.update_cock(p_cock.id, wins=p_cock.wins + 1, streak=p_cock.streak + 1, exp=p_cock.exp + 150)
+            updated_row = self.economy.get_cock(p_cock.id)
+            if updated_row:
+                lvl_up, start_lvl, end_lvl = self._level_up_cock(Cock(updated_row))
+                if lvl_up:
+                    await ctx.send(f"🎉 **{p_cock.name}** đã tăng từ cấp {start_lvl} lên cấp {end_lvl}!")
 
-        def get_current_atk(cid):
-            ast = combat_state[cid]
-            c_obj = c1 if cid == c1.id else c2
-            name = c_obj.name
-            
-            atk = ast["base_atk"]
-            
-            # Dynamic passives
-            if "Trunks" in name or ast["copied_passive"] == "Trunks":
-                if ast["hp"] < ast["max_hp"] * 0.5:
-                    atk = int(atk * 1.10)
-            if "Ichigo" in name or ast["copied_passive"] == "Ichigo":
-                if ast["hp"] < ast["max_hp"] * 0.4:
-                    atk = int(atk * 1.25)
-            if "Vegeta" in name or ast["copied_passive"] == "Vegeta":
-                if ast["hp"] < ast["max_hp"] * 0.3:
-                    atk = int(atk * 1.30)
-                    
-            mult = ast["atk_buff_mult"]
-            if ast["atk_buff_turns"] <= 0:
-                mult = 1.0
-                
-            if ast["all_stats_buff_turns"] > 0:
-                mult *= 1.40
-                
-            if "Saitama" in name:
-                debuff = 1.0
-            else:
-                debuff = 1.0 - ast["atk_reduction_pct"]
-                
-            return int(atk * mult * debuff)
+        for p_cock in loser_team:
+            self.economy.update_cock(p_cock.id, losses=p_cock.losses + 1, streak=0, exp=p_cock.exp + 20)
+            updated_row = self.economy.get_cock(p_cock.id)
+            if updated_row:
+                lvl_up, start_lvl, end_lvl = self._level_up_cock(Cock(updated_row))
+                if lvl_up:
+                    await ctx.send(f"🎉 **{p_cock.name}** đã tăng từ cấp {start_lvl} lên cấp {end_lvl}!")
 
-        def get_current_df(cid):
-            ast = combat_state[cid]
-            df = ast["base_df"]
-            mult = ast["def_buff_mult"]
-            if ast["def_buff_turns"] <= 0:
-                mult = 1.0
-            if ast["all_stats_buff_turns"] > 0:
-                mult *= 1.40
-            return int(df * mult)
-
-        def get_current_spd(cid):
-            ast = combat_state[cid]
-            c_obj = c1 if cid == c1.id else c2
-            name = c_obj.name
-            spd = ast["base_spd"]
-            
-            if "Zenitsu" in name or ast["copied_passive"] == "Zenitsu":
-                if ast["hp"] < ast["max_hp"] * 0.3:
-                    spd = int(spd * 1.10)
-                    
-            mult = 1.0
-            if ast["spd_debuff_turns"] > 0:
-                mult *= 0.80
-                
-            if ast["all_stats_buff_turns"] > 0:
-                mult *= 1.40
-                
-            return int(spd * mult)
-
-        def get_current_crit(cid):
-            ast = combat_state[cid]
-            c_obj = c1 if cid == c1.id else c2
-            name = c_obj.name
-            crit = c_obj.get_luk() * 0.5 + 5 + c_obj.get_crit_chance() + ast["crit_rate_buff"]
-            
-            if "Usopp" in name or ast["copied_passive"] == "Usopp":
-                if ast["hp"] < ast["max_hp"] * 0.5:
-                    crit += 5
-            if ast["all_stats_buff_turns"] > 0:
-                crit += 10
-            return crit
-
-        def get_current_dodge(cid):
-            ast = combat_state[cid]
-            c_obj = c1 if cid == c1.id else c2
-            name = c_obj.name
-            dodge = c_obj.get_dodge_bonus() + ast["dodge_buff"]
-            if ast["all_stats_buff_turns"] > 0:
-                dodge += 10
-            return dodge
-
-        def check_hp_skills(cid, logs):
-            c_state = combat_state[cid]
-            c_obj = c1 if cid == c1.id else c2
-            name = c_obj.name
-            
-            if c_obj.get_active_set() == "Mythic" and c_state["hp"] < c_state["max_hp"] * 0.2 and not c_state["tu_linh_triggered"]:
-                heal = int(c_state["max_hp"] * 0.15)
-                c_state["hp"] = min(c_state["max_hp"], c_state["hp"] + heal)
-                c_state["tu_linh_triggered"] = True
-                logs.append(f"🔮 **[Bộ Tứ Linh]** Hồi sinh {heal} HP cứu sinh cho {c_obj.name}!")
-                
-            if c_state["hp"] <= 0:
-                return
-                
-            if c_state["hp"] < c_state["max_hp"] * 0.5 and not c_state["awakening_used"]:
-                if "Gojo Satoru" in name:
-                    c_state["awakening_used"] = True
-                    c_state["immune_hits"] = 1
-                    logs.append(f"🔱 **[{c_obj.name}]** kích hoạt **[Vô Hạn Tuyệt Đối]**! Miễn nhiễm 1 đòn chí mạng tiếp theo!")
-                elif "Itachi" in name:
-                    c_state["awakening_used"] = True
-                    c_state["def_buff_turns"] = 3
-                    c_state["def_buff_mult"] = 1.5
-                    logs.append(f"🔱 **[{c_obj.name}]** kích hoạt **[Susanoo]**! Tăng +50% thủ trong 3 lượt!")
-                elif "Vegeta" in name:
-                    c_state["awakening_used"] = True
-                    c_state["all_stats_buff_turns"] = 2
-                    logs.append(f"🔱 **[{c_obj.name}]** kích hoạt **[Super Saiyan Blue]**! Tăng +40% toàn bộ chỉ số trong 2 lượt!")
-                elif "Goku" in name:
-                    c_state["awakening_used"] = True
-                    c_state["immune_hits"] = 2
-                    c_state["atk_buff_turns"] = 2
-                    c_state["atk_buff_mult"] = 1.5
-                    logs.append(f"🔱 **[{c_obj.name}]** kích hoạt **[MUI Mastered]**! Miễn nhiễm 2 đòn tiếp theo và tăng +50% ATK trong 2 lượt!")
-                elif "Luffy" in name:
-                    c_state["awakening_used"] = True
-                    c_state["absorb_heal_turns"] = 2
-                    logs.append(f"🔱 **[{c_obj.name}]** kích hoạt **[Gear Fifth]**! Biến đòn tấn công của địch thành hồi phục 20% sát thương nhận trong 2 lượt!")
-                elif "Naruto" in name:
-                    c_state["awakening_used"] = True
-                    c_state["awakened_turns"] = 3
-                    logs.append(f"🔱 **[{c_obj.name}]** kích hoạt **[Chế Độ Baryon]**! Rút cạn tuổi thọ địch, khiến địch mất 8% HP tối đa mỗi lượt trong 3 lượt!")
-                elif "Saitama" in name:
-                    c_state["awakening_used"] = True
-                    c_state["awakened_turns"] = 1
-                    logs.append(f"🔱 **[{c_obj.name}]** kích hoạt **[Không Giới Hạn]**! Chuẩn bị tung đòn cực mạnh bằng 30% HP hiện tại của đối thủ!")
-
-        # Render initial preparation frame
-        frame_data = render_fight_frame(
-            c1.name, combat_state[c1.id]["max_hp"], combat_state[c1.id]["max_hp"], get_cock_image_file(c1.name, True),
-            c2.name, combat_state[c2.id]["max_hp"], combat_state[c2.id]["max_hp"], get_cock_image_file(c2.name, True),
-            "CHUẨN BỊ XUẤT TRẬN 🥊", f"Nhân vật của {ctx.author.display_name} thách đấu {opponent.display_name}!"
-        )
-        file = discord.File(frame_data, filename="battle_prep.png")
-        embed = make_embed(
-            title="🏟️ ĐẠI CHIẾN ANIME TRỰC TIẾP",
-            description=f"⚔️ **{c1.display_name}** vs **{c2.display_name}**",
-            color=discord.Color.gold()
-        )
-        embed.set_image(url="attachment://battle_prep.png")
-        message = await ctx.send(embed=embed, file=file)
-
-        battle_logs = []
-        round_cnt = 1
-        max_animated_rounds = 10
-        fast_forwarded = False
-        
-        while combat_state[c1.id]["hp"] > 0 and combat_state[c2.id]["hp"] > 0 and round_cnt <= 30:
-            round_logs = []
-            round_logs.append(f"🟢 **[Hiệp {round_cnt}]**")
-            
-            # Naruto passive: reduces enemy ATK by 5% each round (up to 25% max)
-            for c_obj, cid in [(c1, c1.id), (c2, c2.id)]:
-                opp_id = c2.id if cid == c1.id else c1.id
-                if "Naruto" in c_obj.name or combat_state[cid]["copied_passive"] == "Naruto":
-                    if combat_state[opp_id]["atk_reduction_pct"] < 0.25:
-                        combat_state[opp_id]["atk_reduction_pct"] += 0.05
-            
-            # Determine speed order
-            spd1 = get_current_spd(c1.id)
-            spd2 = get_current_spd(c2.id)
-            
-            if spd1 > spd2:
-                order = [(c1, c2, 1), (c2, c1, 2)]
-            elif spd2 > spd1:
-                order = [(c2, c1, 2), (c1, c2, 1)]
-            else:
-                if c1.get_luk() >= c2.get_luk():
-                    order = [(c1, c2, 1), (c2, c1, 2)]
-                else:
-                    order = [(c2, c1, 2), (c1, c2, 1)]
-
-            for attacker, defender, num in order:
-                ast = combat_state[attacker.id]
-                dst = combat_state[defender.id]
-                
-                if ast["hp"] <= 0 or dst["hp"] <= 0:
-                    continue
-                
-                # Burn check at start of action
-                if ast["burn_turns"] > 0:
-                    burn_dmg = int(ast["max_hp"] * 0.08 if "Itachi" in defender.name else ast["max_hp"] * 0.05)
-                    ast["hp"] -= burn_dmg
-                    round_logs.append(f"🔥 {attacker.name} bị thiêu đốt, mất {burn_dmg} HP!")
-                    ast["burn_turns"] -= 1
-                    
-                    check_hp_skills(attacker.id, round_logs)
-                    check_hp_skills(defender.id, round_logs)
-                    
-                    if ast["hp"] <= 0:
-                        round_logs.append(f"💀 {attacker.name} đã gục ngã vì bị bỏng thiêu đốt!")
-                        continue
-                        
-                # Poison check at start of action
-                if ast["poison_turns"] > 0:
-                    poison_dmg = int(ast["max_hp"] * 0.05)
-                    ast["hp"] -= poison_dmg
-                    round_logs.append(f"☠️ {attacker.name} bị trúng độc Murasame, mất {poison_dmg} HP!")
-                    ast["poison_turns"] -= 1
-                    
-                    check_hp_skills(attacker.id, round_logs)
-                    check_hp_skills(defender.id, round_logs)
-                    
-                    if ast["hp"] <= 0:
-                        round_logs.append(f"💀 {attacker.name} đã gục ngã vì độc tố phát tác!")
-                        continue
-
-                # Naruto Baryon Mode Awakening tick
-                if "Naruto" in attacker.name and ast["awakened_turns"] > 0:
-                    naruto_aw_dmg = int(dst["max_hp"] * 0.08)
-                    dst["hp"] -= naruto_aw_dmg
-                    round_logs.append(f"🔱 Chế độ Baryon rút tuổi thọ, {defender.name} mất {naruto_aw_dmg} HP!")
-                    ast["awakened_turns"] -= 1
-                    
-                    check_hp_skills(attacker.id, round_logs)
-                    check_hp_skills(defender.id, round_logs)
-                    
-                    if dst["hp"] <= 0:
-                        round_logs.append(f"💀 {defender.name} đã gục ngã trước sức mạnh Baryon Mode!")
-                        continue
-                
-                # Turn-start regeneration passives
-                if "Sakura" in attacker.name or ast["copied_passive"] == "Sakura":
-                    heal_amt = int(ast["max_hp"] * 0.08)
-                    ast["hp"] = min(ast["max_hp"], ast["hp"] + heal_amt)
-                    round_logs.append(f"✨ Hồi Phục: {attacker.name} hồi {heal_amt} HP!")
-                
-                if "Luffy (Gear 5)" in attacker.name or ast["copied_passive"] == "Luffy (Gear 5)":
-                    heal_amt = int(ast["max_hp"] * 0.05)
-                    ast["hp"] = min(ast["max_hp"], ast["hp"] + heal_amt)
-                    round_logs.append(f"✨ Thần Mặt Trời Nika: {attacker.name} hồi {heal_amt} HP!")
-                    if ast["stunned"] > 0:
-                        ast["stunned"] = 0
-                        round_logs.append(f"✨ {attacker.name} miễn nhiễm và hóa giải trạng thái Choáng!")
-                
-                # Stun check
-                if ast["stunned"] > 0:
-                    round_logs.append(f"💫 {attacker.name} bị choáng, không thể ra đòn!")
-                    ast["stunned"] -= 1
-                    
-                    if ast["atk_buff_turns"] > 0:
-                        ast["atk_buff_turns"] -= 1
-                    if ast["def_buff_turns"] > 0:
-                        ast["def_buff_turns"] -= 1
-                    if ast["all_stats_buff_turns"] > 0:
-                        ast["all_stats_buff_turns"] -= 1
-                    if ast["absorb_heal_turns"] > 0:
-                        ast["absorb_heal_turns"] -= 1
-                    if ast["shield_turns"] > 0:
-                        ast["shield_turns"] -= 1
-                        if ast["shield_turns"] == 0:
-                            ast["reflect_pct"] = 0.0
-                    if ast["spd_debuff_turns"] > 0:
-                        ast["spd_debuff_turns"] -= 1
-                    continue
-
-                # Skill selection check
-                is_skill_attack = False
-                skill_type = ""
-                skill_name = ""
-                dmg_multiplier = 1.0
-                ignore_def_pct = 0.0
-                ignore_buffs = False
-                is_multi_hit = False
-                multi_hits_count = 1
-                multi_hit_pcts = []
-                poison_apply = 0
-                burn_apply = 0
-                stun_apply = 0
-                
-                cast_name = attacker.name
-                if "Itachi" in attacker.name and random.random() < 0.15:
-                    cast_name = defender.name
-                    round_logs.append(f"👁️ **[Mangekyou Sharingan]** Itachi dùng Sharingan sao chép kỹ năng của **{defender.name}**!")
-                    
-                is_sr_or_above = False
-                for rarity, names in BREEDS.items():
-                    if rarity in ["Quý", "Sử Thi", "Huyền Thoại", "Thần Kê", "Exclusive"]:
-                        if any(n in cast_name for n in names):
-                            is_sr_or_above = True
-                            break
-                            
-                if is_sr_or_above and round_cnt >= 2 and not ast["ultimate_used"] and random.random() < 0.30:
-                    is_skill_attack = True
-                    skill_type = "ultimate"
-                    ast["ultimate_used"] = True
-                elif random.random() < 0.35:
-                    is_skill_attack = True
-                    skill_type = "active"
-                    
-                if is_skill_attack:
-                    if skill_type == "ultimate":
-                        if "Levi" in cast_name:
-                            skill_name = "Nhân Loại Mạnh Nhất"
-                            dmg_multiplier = 2.50
-                            ignore_def_pct = 1.0
-                            round_logs.append(f"🌀 **[{attacker.name}]** kích hoạt tuyệt chiêu **[Nhân Loại Mạnh Nhất]**!")
-                        elif "Zoro" in cast_name:
-                            skill_name = "Địa Ngục Chín Lưỡi"
-                            dmg_multiplier = 3.0
-                            round_logs.append(f"🌀 **[{attacker.name}]** kích hoạt tuyệt chiêu **[Địa Ngục Chín Lưỡi]**!")
-                        elif "Akame" in cast_name:
-                            skill_name = "Một Kiếm Tử Thần"
-                            dmg_multiplier = 2.80
-                            round_logs.append(f"🌀 **[{attacker.name}]** kích hoạt tuyệt chiêu **[Một Kiếm Tử Thần]**!")
-                        elif "Kakashi" in cast_name:
-                            skill_name = "Kamui"
-                            dmg_multiplier = 3.20
-                            ignore_buffs = True
-                            round_logs.append(f"🌀 **[{attacker.name}]** kích hoạt tuyệt chiêu **[Kamui]**!")
-                        elif "Meliodas" in cast_name:
-                            skill_name = "Assault Mode"
-                            dmg_multiplier = 3.50
-                            ast["all_stats_buff_turns"] = 2
-                            round_logs.append(f"🌀 **[{attacker.name}]** kích hoạt tuyệt chiêu **[Assault Mode]**! Tăng +30% tất cả chỉ số trong 2 lượt!")
-                        elif "Ichigo" in cast_name:
-                            skill_name = "Mugetsu"
-                            dmg_multiplier = 4.0
-                            round_logs.append(f"🌀 **[{attacker.name}]** kích hoạt tuyệt chiêu **[Mugetsu]**!")
-                        elif "Gojo" in cast_name:
-                            skill_name = "Hư Không Tím"
-                            dmg_multiplier = 4.50
-                            round_logs.append(f"🌀 **[{attacker.name}]** kích hoạt tuyệt chiêu **[Hư Không Tím]**!")
-                        elif "Itachi" in cast_name:
-                            skill_name = "Tsukuyomi"
-                            dmg_multiplier = 3.80
-                            stun_apply = 2
-                            round_logs.append(f"🌀 **[{attacker.name}]** kích hoạt tuyệt chiêu **[Tsukuyomi]**!")
-                        elif "Vegeta" in cast_name:
-                            skill_name = "Big Bang Attack"
-                            dmg_multiplier = 4.20
-                            round_logs.append(f"🌀 **[{attacker.name}]** kích hoạt tuyệt chiêu **[Big Bang Attack]**!")
-                        elif "Goku" in cast_name:
-                            skill_name = "Ultra Instinct"
-                            dmg_multiplier = 5.0
-                            ast["dodge_buff"] += 50
-                            ast["dodge_buff_turns"] = 2
-                            round_logs.append(f"🌀 **[{attacker.name}]** kích hoạt tuyệt chiêu **[Ultra Instinct]**! Tăng +50% né đòn trong 2 lượt!")
-                        elif "Luffy" in cast_name:
-                            skill_name = "Bajrang Gun"
-                            dmg_multiplier = 5.20
-                            round_logs.append(f"🌀 **[{attacker.name}]** kích hoạt tuyệt chiêu **[Bajrang Gun]**!")
-                        elif "Naruto" in cast_name:
-                            skill_name = "Kurama Baryon"
-                            dmg_multiplier = 5.10
-                            dst["base_spd"] = int(dst["base_spd"] * 0.80)
-                            round_logs.append(f"🌀 **[{attacker.name}]** kích hoạt tuyệt chiêu **[Kurama Baryon]**! Giảm -20% tốc độ địch vĩnh viễn!")
-                        elif "Saitama" in cast_name:
-                            skill_name = "Consecutive Punches"
-                            is_multi_hit = True
-                            multi_hits_count = 5
-                            multi_hit_pcts = [1.20, 1.20, 1.20, 1.20, 1.20]
-                            round_logs.append(f"🌀 **[{attacker.name}]** kích hoạt tuyệt chiêu **[Consecutive Punches]**! Tấn công liên tiếp 5 phát!")
-                        else:
-                            is_skill_attack = False
-                            
-                    elif skill_type == "active":
-                        if "Usopp" in cast_name:
-                            skill_name = "Bắn Tỉa"
-                            dmg_multiplier = 1.20
-                            round_logs.append(f"💫 **[{attacker.name}]** dùng kỹ năng **[Bắn Tỉa]**!")
-                        elif "Krillin" in cast_name:
-                            skill_name = "Kienzan"
-                            dmg_multiplier = 1.15
-                            ignore_def_pct = 0.10
-                            round_logs.append(f"💫 **[{attacker.name}]** dùng kỹ năng **[Kienzan]**!")
-                        elif "Zenitsu" in cast_name:
-                            skill_name = "Sấm Nhất Kiếm"
-                            dmg_multiplier = 1.30
-                            round_logs.append(f"💫 **[{attacker.name}]** dùng kỹ năng **[Sấm Nhất Kiếm]**!")
-                        elif "Killua" in cast_name:
-                            skill_name = "Godspeed"
-                            is_multi_hit = True
-                            multi_hits_count = 2
-                            multi_hit_pcts = [0.80, 0.80]
-                            round_logs.append(f"💫 **[{attacker.name}]** dùng kỹ năng **[Godspeed]**!")
-                        elif "Sakura" in cast_name:
-                            skill_name = "Chakra Punch"
-                            dmg_multiplier = 1.25
-                            stun_apply = 1
-                            if random.random() >= 0.30:
-                                stun_apply = 0
-                            round_logs.append(f"💫 **[{attacker.name}]** dùng kỹ năng **[Chakra Punch]**!")
-                        elif "Trunks" in cast_name:
-                            skill_name = "Kiếm Thần"
-                            dmg_multiplier = 1.35
-                            round_logs.append(f"💫 **[{attacker.name}]** dùng kỹ năng **[Kiếm Thần]**!")
-                        elif "Levi" in cast_name:
-                            skill_name = "Tấn Công Xoáy"
-                            is_multi_hit = True
-                            multi_hits_count = 3
-                            multi_hit_pcts = [0.70, 0.70, 0.70]
-                            round_logs.append(f"💫 **[{attacker.name}]** dùng kỹ năng **[Tấn Công Xoáy]**!")
-                        elif "Zoro" in cast_name:
-                            skill_name = "Santoryu"
-                            is_multi_hit = True
-                            multi_hits_count = 3
-                            multi_hit_pcts = [0.75, 0.75, 0.75]
-                            round_logs.append(f"💫 **[{attacker.name}]** dùng kỹ năng **[Santoryu]**!")
-                        elif "Akame" in cast_name:
-                            skill_name = "Murasame"
-                            dmg_multiplier = 1.40
-                            poison_apply = 3
-                            round_logs.append(f"💫 **[{attacker.name}]** dùng kỹ năng **[Murasame]**!")
-                        elif "Kakashi" in cast_name:
-                            skill_name = "Chidori"
-                            dmg_multiplier = 1.60
-                            stun_apply = 1
-                            if random.random() >= 0.40:
-                                stun_apply = 0
-                            round_logs.append(f"💫 **[{attacker.name}]** dùng kỹ năng **[Chidori]**!")
-                        elif "Meliodas" in cast_name:
-                            skill_name = "Full Counter"
-                            ast["reflect_pct"] = 2.0
-                            ast["shield_turns"] = 1
-                            round_logs.append(f"💫 **[{attacker.name}]** dùng kỹ năng **[Full Counter]** chuẩn bị phản lại 200% sát thương!")
-                            if ast["atk_buff_turns"] > 0:
-                                ast["atk_buff_turns"] -= 1
-                            if ast["def_buff_turns"] > 0:
-                                ast["def_buff_turns"] -= 1
-                            if ast["all_stats_buff_turns"] > 0:
-                                ast["all_stats_buff_turns"] -= 1
-                            if ast["absorb_heal_turns"] > 0:
-                                ast["absorb_heal_turns"] -= 1
-                            if ast["spd_debuff_turns"] > 0:
-                                ast["spd_debuff_turns"] -= 1
-                            continue
-                        elif "Ichigo" in cast_name:
-                            skill_name = "Getsuga Tensho"
-                            dmg_multiplier = 1.55
-                            round_logs.append(f"💫 **[{attacker.name}]** dùng kỹ năng **[Getsuga Tensho]**!")
-                        elif "Gojo" in cast_name:
-                            skill_name = "Thuật Thức Vô Hạn"
-                            dmg_multiplier = 1.80
-                            dst["spd_debuff_turns"] = 2
-                            round_logs.append(f"💫 **[{attacker.name}]** dùng kỹ năng **[Thuật Thức Vô Hạn]**!")
-                        elif "Itachi" in cast_name:
-                            skill_name = "Amaterasu"
-                            dmg_multiplier = 1.70
-                            burn_apply = 3
-                            round_logs.append(f"💫 **[{attacker.name}]** dùng kỹ năng **[Amaterasu]**!")
-                        elif "Vegeta" in cast_name:
-                            skill_name = "Final Flash"
-                            dmg_multiplier = 1.75
-                            round_logs.append(f"💫 **[{attacker.name}]** dùng kỹ năng **[Final Flash]**!")
-                        elif "Goku" in cast_name:
-                            skill_name = "Kamehameha x10"
-                            dmg_multiplier = 2.0
-                            round_logs.append(f"💫 **[{attacker.name}]** dùng kỹ năng **[Kamehameha x10]**!")
-                        elif "Luffy" in cast_name:
-                            skill_name = "Gomu Thunder"
-                            dmg_multiplier = 2.10
-                            round_logs.append(f"💫 **[{attacker.name}]** dùng kỹ năng **[Gomu Thunder]**!")
-                        elif "Naruto" in cast_name:
-                            skill_name = "Rasengan Siêu Lớn"
-                            dmg_multiplier = 2.05
-                            round_logs.append(f"💫 **[{attacker.name}]** dùng kỹ năng **[Rasengan Siêu Lớn]**!")
-                        elif "Saitama" in cast_name:
-                            skill_name = "Serious Punch"
-                            dmg_multiplier = 2.20
-                            ignore_def_pct = 1.0
-                            round_logs.append(f"💫 **[{attacker.name}]** dùng kỹ năng **[Serious Punch]**!")
-
-                # Hit resolution
-                hits_to_run = []
-                if is_skill_attack and is_multi_hit:
-                    hits_to_run = multi_hit_pcts
-                else:
-                    hits_to_run = [dmg_multiplier]
-                    
-                for hit_idx, current_mult in enumerate(hits_to_run):
-                    if dst["hp"] <= 0 or ast["hp"] <= 0:
-                        break
-                        
-                    if dst["immune_hits"] > 0:
-                        dst["immune_hits"] -= 1
-                        if is_multi_hit:
-                            round_logs.append(f"🛡️ Đòn {hit_idx+1} bị {defender.name} vô hiệu hóa bằng Vô Hạn Tuyệt Đối!")
-                        else:
-                            round_logs.append(f"🛡️ Đòn tấn công bị {defender.name} vô hiệu hóa bằng Vô Hạn Tuyệt Đối!")
-                        continue
-                        
-                    spd_diff = get_current_spd(defender.id) - get_current_spd(attacker.id)
-                    dodge_chance = max(5, min(75, spd_diff * 0.5 + 5 + get_current_dodge(defender.id)))
-                    
-                    if random.random() * 100 < dodge_chance:
-                        if is_multi_hit:
-                            round_logs.append(f"💨 Đòn {hit_idx+1} bị {defender.name} né!")
-                        else:
-                            round_logs.append(f"💨 {attacker.name} tấn công trượt! {defender.name} né đòn!")
-                        continue
-                        
-                    crit_chance = get_current_crit(attacker.id)
-                    crit_chance = max(5, min(95, crit_chance))
-                    is_crit = False if (is_skill_attack and skill_name != "Một Kiếm Tử Thần") else (random.random() * 100 < crit_chance)
-                    
-                    enemy_df = get_current_df(defender.id)
-                    if ignore_def_pct > 0:
-                        enemy_df = int(enemy_df * (1.0 - ignore_def_pct))
-                        
-                    base_dmg = get_current_atk(attacker.id) - (enemy_df / 2.0)
-                    base_dmg = max(1, base_dmg) * current_mult
-                    
-                    dmg_mult = ast["permanent_dmg_buff"] * ast["next_atk_buff"]
-                    if attacker.get_active_set() == "Common":
-                        dmg_mult *= 1.1
-                        
-                    damage_float = base_dmg * dmg_mult * random.uniform(0.9, 1.1)
-                    crit_mult = 2.2 if ("Killua" in attacker.name or ast["copied_passive"] == "Killua") else (2.3 if ("Itachi" in attacker.name or ast["copied_passive"] == "Itachi") else 2.0)
-                    
-                    if is_crit:
-                        damage = int(damage_float * crit_mult)
-                        if skill_name == "Một Kiếm Tử Thần":
-                            damage = int(damage * 1.5)
-                        damage = max(1, damage)
-                        round_logs.append(f"💥 Đòn chí mạng gây {damage} sát thương!")
-                    else:
-                        damage = int(damage_float)
-                        damage = max(1, damage)
-                        if is_skill_attack:
-                            if is_multi_hit:
-                                round_logs.append(f"⚔️ Đòn {hit_idx+1} gây {damage} sát thương!")
-                            else:
-                                round_logs.append(f"⚔️ Gây {damage} sát thương từ chiêu thức [{skill_name}]!")
-                        else:
-                            round_logs.append(f"⚔️ Gây {damage} sát thương!")
-                            
-                    ast["next_atk_buff"] = 1.0
-                    
-                    if "Saitama" in attacker.name and ast["awakened_turns"] > 0:
-                        extra_dmg = int(dst["hp"] * 0.30)
-                        damage += extra_dmg
-                        ast["awakened_turns"] = 0
-                        round_logs.append(f"🔱 [Không Giới Hạn] Saitama tung đòn đấm phá vỡ giới hạn, gây thêm {extra_dmg} sát thương (30% HP đối thủ)!")
-                        
-                    if dst["shield_turns"] > 0 and not ignore_buffs:
-                        damage = int(damage * 0.5)
-                        damage = max(1, damage)
-                        round_logs.append(f"🛡️ Khiên của {defender.name} giảm bớt sát thương còn {damage}!")
-                        
-                    if dst["absorb_heal_turns"] > 0 and not ignore_buffs:
-                        heal_amt = int(damage * 0.20)
-                        dst["hp"] = min(dst["max_hp"], dst["hp"] + heal_amt)
-                        round_logs.append(f"🥁 [Gear Fifth] Luffy hấp thụ đòn đánh, hồi phục {heal_amt} HP!")
-                    else:
-                        dst["hp"] -= damage
-                        
-                    if not is_skill_attack:
-                        lifesteal_amt = int(damage * 0.10)
-                        if lifesteal_amt > 0:
-                            ast["hp"] = min(ast["max_hp"], ast["hp"] + lifesteal_amt)
-                            round_logs.append(f"🩸 {attacker.name} hút {lifesteal_amt} HP từ đối thủ!")
-                            
-                    if dst["reflect_pct"] > 0 and not ignore_buffs:
-                        reflect_dmg = int(damage * dst["reflect_pct"])
-                        reflect_dmg = max(1, reflect_dmg)
-                        ast["hp"] -= reflect_dmg
-                        round_logs.append(f"💥 Bị phản phản {reflect_dmg} sát thương từ phản đòn!")
-                        
-                    if poison_apply > 0:
-                        dst["poison_turns"] = poison_apply
-                        round_logs.append(f"☠️ {defender.name} đã bị trúng độc nguyền rủa 3 lượt!")
-                        poison_apply = 0
-                    if burn_apply > 0:
-                        dst["burn_turns"] = burn_apply
-                        round_logs.append(f"🔥 {defender.name} đã bị thiêu đốt bởi ngọn lửa đen 3 lượt!")
-                        burn_apply = 0
-                    if stun_apply > 0:
-                        dst["stunned"] = stun_apply
-                        round_logs.append(f"💫 {defender.name} đã bị choáng trong {stun_apply} lượt!")
-                        stun_apply = 0
-                        
-                    check_hp_skills(attacker.id, round_logs)
-                    check_hp_skills(defender.id, round_logs)
-
-                # Post-skill check for Mugetsu self-damage
-                if is_skill_attack and skill_name == "Mugetsu":
-                    self_dmg = int(ast["hp"] * 0.20)
-                    ast["hp"] -= self_dmg
-                    round_logs.append(f"⚡ Ichigo mất {self_dmg} HP do phản lực của Mugetsu!")
-                    check_hp_skills(attacker.id, round_logs)
-
-                # End of turn count updates
-                if ast["atk_buff_turns"] > 0:
-                    ast["atk_buff_turns"] -= 1
-                if ast["def_buff_turns"] > 0:
-                    ast["def_buff_turns"] -= 1
-                if ast["all_stats_buff_turns"] > 0:
-                    ast["all_stats_buff_turns"] -= 1
-                if ast["absorb_heal_turns"] > 0:
-                    ast["absorb_heal_turns"] -= 1
-                if ast["shield_turns"] > 0:
-                    ast["shield_turns"] -= 1
-                    if ast["shield_turns"] == 0:
-                        ast["reflect_pct"] = 0.0
-                if ast["spd_debuff_turns"] > 0:
-                    ast["spd_debuff_turns"] -= 1
-                if "dodge_buff_turns" in ast and ast["dodge_buff_turns"] > 0:
-                    ast["dodge_buff_turns"] -= 1
-                    if ast["dodge_buff_turns"] == 0:
-                        ast["dodge_buff"] -= 50
-
-            battle_logs.extend(round_logs)
-
-            if round_cnt > max_animated_rounds:
-                fast_forwarded = True
-                round_cnt += 1
-                continue
-
-            non_header_logs = [l for l in round_logs if not l.startswith("🟢")]
-            log_preview = "\n".join(non_header_logs[-3:])
-            
-            frame_data = render_fight_frame(
-                c1.name, combat_state[c1.id]["hp"], combat_state[c1.id]["max_hp"], get_cock_image_file(c1.name, True),
-                c2.name, combat_state[c2.id]["hp"], combat_state[c2.id]["max_hp"], get_cock_image_file(c2.name, True),
-                f"HIỆP {round_cnt} 🟢", log_preview
-            )
-            
-            file = discord.File(frame_data, filename=f"battle_{round_cnt}.png")
-            embed = make_embed(
-                title="🏟️ ĐẠI CHIẾN ANIME TRỰC TIẾP",
-                description=f"⚔️ **{c1.display_name}** vs **{c2.display_name}**",
-                color=discord.Color.gold()
-            )
-            embed.set_image(url=f"attachment://battle_{round_cnt}.png")
-            
-            try:
-                await message.edit(embed=embed, attachments=[file])
-            except Exception as e:
-                logger.error(f"Error editing battle message: {e}")
-                
-            await asyncio.sleep(2.0)
-            round_cnt += 1
-
-        # Sync back final HPs for the checks below
-        hp1 = combat_state[c1.id]["hp"]
-        hp2 = combat_state[c2.id]["hp"]
-
-        # Determine winner
-        if hp1 <= 0 and hp2 <= 0:
-            winner = None
-            loser = None
-        elif hp1 <= 0:
-            winner = opponent
-            loser = ctx.author
-            winner_cock = c2
-            loser_cock = c1
-        elif hp2 <= 0:
-            winner = ctx.author
-            loser = opponent
-            winner_cock = c1
-            loser_cock = c2
-        else:
-            p1 = hp1 / c1.get_max_hp()
-            p2 = hp2 / c2.get_max_hp()
-            if p1 > p2:
-                winner = ctx.author
-                loser = opponent
-                winner_cock = c1
-                loser_cock = c2
-            elif p2 > p1:
-                winner = opponent
-                loser = ctx.author
-                winner_cock = c2
-                loser_cock = c1
-            else:
-                winner = None
-                loser = None
-
-        if winner is None:
-            embed_title = "🤝 TRẬN ĐẤU HÒA 🤝"
-            desc = f"Sau 30 hiệp tranh tài khốc liệt, cả hai chiến kê **{c1.display_name}** và **{c2.display_name}** đều kiệt sức. Trận đấu bất phân thắng bại!\nTiền cược được hoàn trả."
-            embed_color = discord.Color.blue()
-        else:
-            self.economy.add_money(winner.id, bet)
-            self.economy.add_money(loser.id, -bet)
-            
-            self.economy.update_cock(
-                winner_cock.id,
-                wins=winner_cock.wins + 1,
-                streak=winner_cock.streak + 1,
-                exp=winner_cock.exp + 150,
-            )
-            self.economy.update_cock(
-                loser_cock.id,
-                losses=loser_cock.losses + 1,
-                streak=0,
-                exp=loser_cock.exp + 20,
-            )
-            
-            log_wallet_change(
-                logger,
-                event="daga_pvp_winner",
-                user_id=winner.id,
-                money_delta=bet,
-                ctx=ctx,
-                opponent_id=loser.id,
-                winner_cock_id=winner_cock.id,
-            )
-            
-            log_wallet_change(
-                logger,
-                event="daga_pvp_loser",
-                user_id=loser.id,
-                money_delta=-bet,
-                ctx=ctx,
-                opponent_id=winner.id,
-                loser_cock_id=loser_cock.id,
-            )
-            
-            winner_row = self.economy.get_cock(winner_cock.id)
-            loser_row = self.economy.get_cock(loser_cock.id)
-            
-            lvl_up_winner_msg = ""
-            if winner_row:
-                lvl_up_w, start_lvl_w, end_lvl_w = self._level_up_cock(Cock(winner_row))
-                if lvl_up_w:
-                    lvl_up_winner_msg = f"\n🎉 **Chiến kê {winner_cock.name} đã tăng từ cấp {start_lvl_w} lên cấp {end_lvl_w}!**"
-                    
-            lvl_up_loser_msg = ""
-            if loser_row:
-                lvl_up_l, start_lvl_l, end_lvl_l = self._level_up_cock(Cock(loser_row))
-                if lvl_up_l:
-                    lvl_up_loser_msg = f"\n🎉 **Chiến kê {loser_cock.name} đã tăng từ cấp {start_lvl_l} lên cấp {end_lvl_l}!**"
-
-            log_preview = "\n".join(battle_logs[-6:])
-            
-            embed_title = f"🏆 {winner.display_name.upper()} CHIẾN THẮNG 🏆"
-            desc = (
-                f"🏟️ **SÂN ĐẤU ĐÁ GÀ TRỰC TIẾP**\n"
-                f"🐓 **{c1.display_name}** ({ctx.author.display_name}) vs 🐓 **{c2.display_name}** ({opponent.display_name})\n\n"
-                f"📝 **Diễn biến hiệp cuối:**\n"
-                f"... {log_preview}\n\n"
-                f"🏆 **Người chiến thắng:** {winner.mention}\n"
-                f"💰 **Số tiền nhận:** `+{bet:,} VND` (và **+150 EXP**){lvl_up_winner_msg}\n\n"
-                f"💸 **Người thua cuộc:** {loser.mention}\n"
-                f"📉 **Số tiền mất:** `-{bet:,} VND` (và **+20 EXP**){lvl_up_loser_msg}"
-            )
-            embed_color = discord.Color.green() if winner == ctx.author else discord.Color.red()
-
-        # Render final KO/Draw frame
-        if winner is None:
-            final_round_text = "HÒA NHAU 🤝"
-            final_log = "Trận đấu bất phân thắng bại!"
-        else:
-            final_round_text = "KẾT THÚC (KO) 🏆"
-            final_log = f"{winner_cock.name} giành chiến thắng!"
-
-        final_frame_data = render_fight_frame(
-            c1.name, max(0, hp1), c1.get_max_hp(), get_cock_image_file(c1.name, True),
-            c2.name, max(0, hp2), c2.get_max_hp(), get_cock_image_file(c2.name, True),
-            final_round_text, final_log
-        )
-        
-        final_file = discord.File(final_frame_data, filename="battle_final.png")
-        embed = make_embed(
-            title=embed_title,
-            description=desc,
-            color=embed_color,
-        )
-        embed.set_image(url="attachment://battle_final.png")
-        
-        try:
-            await message.edit(embed=embed, attachments=[final_file])
-        except Exception as e:
-            logger.error(f"Error editing final battle message: {e}")
-            await ctx.send(embed=embed, file=final_file)
-
-        # Trigger random post-battle event checks for both players
-        if winner:
-            winner_row = self.economy.get_cock(winner_cock.id)
-            if winner_row:
-                await self._trigger_random_event(ctx, Cock(winner_row))
-            loser_row = self.economy.get_cock(loser_cock.id)
-            if loser_row:
-                await self._trigger_random_event(ctx, Cock(loser_row))
+        winner_row = self.economy.get_cock(winner_team[0].id)
+        if winner_row:
+            await self._trigger_random_event(ctx, Cock(winner_row))
+        loser_row = self.economy.get_cock(loser_team[0].id)
+        if loser_row:
+            await self._trigger_random_event(ctx, Cock(loser_row))
 
     @daga_group.command(name="top", brief="Xem bảng xếp hạng sư kê giỏi nhất.")
     async def daga_top(self, ctx: commands.Context):
@@ -3198,6 +2968,128 @@ class Daga(commands.Cog, name="Daga"):
             color=discord.Color.purple()
         )
         await ctx.send(embed=embed)
+
+
+    @daga_group.command(name="pve", brief="Tham gia Tháp Đại Chiến Anime — leo tháp 50 tầng!", aliases=["tower", "climb"])
+    @commands.cooldown(1, 5, type=commands.BucketType.user)
+    async def anime_pve(self, ctx: commands.Context):
+        team_rows = self.economy.get_team_cocks(ctx.author.id)
+        team_cocks = [Cock(r) for r in team_rows.values() if r]
+
+        if not team_cocks:
+            await ctx.send("❌ **Bạn chưa có nhân vật nào trong đội hình!** Hãy dùng `i?anime team set <vt> <ID>` để sắp xếp đội hình.")
+            return
+        if len(team_cocks) < 3:
+            await ctx.send("⚠️ **Cảnh báo:** Đội hình của bạn chưa đủ 3 nhân vật, sức mạnh sẽ yếu hơn!")
+
+        floor = self.economy.get_pve_cooldown(ctx.author.id, "tower_floor")
+        if floor <= 0:
+            floor = 1
+            self.economy.set_pve_cooldown(ctx.author.id, "tower_floor", 1)
+
+        if floor > 50:
+            now = int(time.time())
+            last_claim = self.economy.get_pve_cooldown(ctx.author.id, "tower_daily_claim")
+            last_date = time.strftime('%Y-%m-%d', time.localtime(last_claim)) if last_claim else ""
+            current_date = time.strftime('%Y-%m-%d', time.localtime(now))
+            embed = make_embed(
+                title="🏰 THÁP ĐẠI CHIẾN ANIME — HOÀN THÀNH 🏰",
+                description=(
+                    f"🏆 **Xin chúc mừng!** Bạn đã chinh phục toàn bộ 50 tầng của Tháp Đại Chiến.\n"
+                    f"👑 **Danh hiệu:** `Người Chinh Phục Tháp`\n\n"
+                    f"🔁 **Phần thưởng lặp lại hàng ngày:** `2,000,000 VND / ngày`"
+                ),
+                color=discord.Color.gold()
+            )
+            await ctx.send(embed=embed)
+            if last_date == current_date:
+                await ctx.send("❌ **Bạn đã nhận phần thưởng lặp lại hôm nay rồi!** Hãy quay lại vào ngày mai nhé. 🌟")
+            else:
+                self.economy.add_money(ctx.author.id, 2000000)
+                self.economy.set_pve_cooldown(ctx.author.id, "tower_daily_claim", now)
+                log_wallet_change(logger, event="pve_tower_daily_repeat_reward", user_id=ctx.author.id, money_delta=2000000)
+                await ctx.send("🎁 **Nhận thưởng lặp lại:** Bạn đã nhận **+2,000,000 VND** thành công! 💰")
+            return
+
+        boss_data = PVE_STAGES["tower"][floor - 1]
+        team_names = ", ".join(c.name for c in team_cocks)
+        start_embed = make_embed(
+            title=f"🏰 THÁP ĐẠI CHIẾN — TẦNG {floor} / 50 🏰",
+            description=(
+                f"👤 **Đội hình khiêu chiến:** {team_names}\n"
+                f"👹 **Đối thủ:** `{boss_data['name']}` ({boss_data['series']})\n"
+                f"📊 **Chỉ số:** HP `{boss_data['hp']:,}` | ATK `{boss_data['atk']}` | DEF `{boss_data['df']}`\n\n"
+                f"⚔️ **Chuẩn bị vào trận...**"
+            ),
+            color=discord.Color.blue()
+        )
+        await ctx.send(embed=start_embed)
+
+        won, damage_dealt = await self._run_team_pve_battle(ctx, team_cocks, boss_data, "tower")
+
+        if won:
+            money_won = boss_data["reward_money"]
+            exp_won = boss_data["reward_exp"]
+            self.economy.add_money(ctx.author.id, money_won)
+            log_wallet_change(logger, event=f"pve_tower_floor_{floor}_win", user_id=ctx.author.id, money_delta=money_won)
+            self.economy.set_pve_cooldown(ctx.author.id, "tower_floor", floor + 1)
+
+            for p_cock in team_cocks:
+                self.economy.update_cock(p_cock.id, exp=p_cock.exp + exp_won)
+                updated_row = self.economy.get_cock(p_cock.id)
+                if updated_row:
+                    lvl_up, start_lvl, end_lvl = self._level_up_cock(Cock(updated_row))
+                    if lvl_up:
+                        await ctx.send(f"🎉 **NHÂN VẬT ĐÃ TĂNG CẤP!** `{p_cock.name}` tăng từ cấp `{start_lvl}` lên cấp `{end_lvl}`! 🐓")
+
+            shards_won = boss_data.get("reward_shards", 0)
+            if shards_won > 0:
+                self.economy.add_inventory_item(ctx.author.id, "item_character_shard", shards_won)
+
+            if floor == 50:
+                breed = random.choice(BREEDS["Thần Kê"])
+                ranges = STAT_RANGES["Thần Kê"]
+                hp = random.randint(*ranges["hp"])
+                atk = random.randint(*ranges["atk"])
+                df = random.randint(*ranges["df"])
+                spd = random.randint(*ranges["spd"])
+                luk = random.randint(*ranges["luk"])
+                self.economy.add_cock(ctx.author.id, breed, "Thần Kê", hp, atk, df, spd, luk)
+                self.economy.add_inventory_item(ctx.author.id, "item_character_shard", 15)
+                victory_embed = make_embed(
+                    title="🎉 CHIẾN TÍCH THẦN THOẠI — CHINH PHỤC THÁP 🎉",
+                    description=(
+                        f"🏆 **Xin chúc mừng {ctx.author.mention}!** Bạn đã chinh phục Tháp Đại Chiến!\n\n"
+                        f"🔮 **Mảnh nhân vật:** `+15 Mảnh`\n"
+                        f"🐓 **Nhân vật Thần Kê đặc biệt:** `{breed}`\n\n"
+                        f"🔁 Kể từ ngày mai, bạn có thể nhận **+2,000,000 VND / ngày** làm phần thưởng lặp lại!"
+                    ),
+                    color=discord.Color.gold()
+                )
+                await ctx.send(embed=victory_embed)
+            else:
+                success_embed = make_embed(
+                    title=f"🎉 VƯỢT TẦNG {floor} THÀNH CÔNG! 🎉",
+                    description=(
+                        f"Bạn đã vượt qua tầng **{floor}** thành công và mở khóa tầng **{floor+1}**!\n\n"
+                        f"🏆 **Phần thưởng nhận được:**\n"
+                        f"💰 `+{money_won:,} VND`\n"
+                        f"🔰 `+{exp_won} EXP`"
+                    ),
+                    color=discord.Color.green()
+                )
+                if shards_won > 0:
+                    success_embed.description += f"\n🔮 `+{shards_won} Mảnh nhân vật`"
+                await ctx.send(embed=success_embed)
+        else:
+            exp_won = int(boss_data["reward_exp"] * 0.2)
+            for p_cock in team_cocks:
+                self.economy.update_cock(p_cock.id, exp=p_cock.exp + exp_won)
+                updated_row = self.economy.get_cock(p_cock.id)
+                if updated_row:
+                    self._level_up_cock(Cock(updated_row))
+            await ctx.send(f"💀 **Thất bại ở tầng {floor}!** Hãy nâng cấp đội hình và thử lại.")
+
 
 
 async def setup(client: commands.Bot):

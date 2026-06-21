@@ -11,7 +11,7 @@ from app.config import config
 Entry = Tuple[int, int, int]
 DATABASE_PATH = Path(config.storage.database_path)
 LEGACY_DATABASE_PATH = Path(__file__).resolve().parents[3] / "economy.db"
-SCHEMA_VERSION = 18
+SCHEMA_VERSION = 19
 
 
 logger = logging.getLogger(__name__)
@@ -345,6 +345,32 @@ def _migration_18_add_baito_table(cur: sqlite3.Cursor) -> None:
         pass
 
 
+def _migration_19_add_pve_tables(cur: sqlite3.Cursor) -> None:
+    try:
+        cur.execute(
+            """CREATE TABLE IF NOT EXISTS user_pve_cooldowns (
+            user_id INTEGER NOT NULL,
+            stage_type TEXT NOT NULL,
+            last_fight INTEGER DEFAULT 0,
+            PRIMARY KEY (user_id, stage_type)
+        )"""
+        )
+    except sqlite3.OperationalError:
+        pass
+
+    try:
+        cur.execute(
+            """CREATE TABLE IF NOT EXISTS user_world_boss_damage (
+            user_id INTEGER NOT NULL PRIMARY KEY,
+            damage INTEGER DEFAULT 0,
+            fights_today INTEGER DEFAULT 0,
+            last_fight_time INTEGER DEFAULT 0
+        )"""
+        )
+    except sqlite3.OperationalError:
+        pass
+
+
 MIGRATIONS: dict[int, Callable[[sqlite3.Cursor], None]] = {
     1: _migration_1_create_economy,
     2: _migration_2_add_indexes,
@@ -364,6 +390,7 @@ MIGRATIONS: dict[int, Callable[[sqlite3.Cursor], None]] = {
     16: _migration_16_add_showcase_treasure,
     17: _migration_17_add_bkb_tables,
     18: _migration_18_add_baito_table,
+    19: _migration_19_add_pve_tables,
 }
 
 
@@ -810,8 +837,67 @@ class Economy:
         return self.cur.fetchone()
 
     def set_active_cock(self, user_id: int, cock_id: int) -> None:
-        self.cur.execute("UPDATE user_cocks SET is_active=0 WHERE user_id=?", (user_id,))
+        # Check if this cock is already in position 2 or 3
+        self.cur.execute("SELECT is_active FROM user_cocks WHERE user_id=? AND id=?", (user_id, cock_id))
+        row = self.cur.fetchone()
+        if row and row[0] in (2, 3):
+            # Clear its old position
+            self.cur.execute("UPDATE user_cocks SET is_active=0 WHERE user_id=? AND is_active=?", (user_id, row[0]))
+        # Clear the old position 1 (set it to inactive)
+        self.cur.execute("UPDATE user_cocks SET is_active=0 WHERE user_id=? AND is_active=1", (user_id,))
+        # Set new cock to position 1
         self.cur.execute("UPDATE user_cocks SET is_active=1 WHERE user_id=? AND id=?", (user_id, cock_id))
+        self.conn.commit()
+
+    def get_team_cocks(self, user_id: int) -> dict:
+        self.cur.execute("SELECT * FROM user_cocks WHERE user_id=? AND is_active IN (1, 2, 3)", (user_id,))
+        rows = self.cur.fetchall()
+        team = {1: None, 2: None, 3: None}
+        for r in rows:
+            pos = r[14]  # is_active column index
+            if pos in (1, 2, 3):
+                team[pos] = r
+        return team
+
+    def set_team_position(self, user_id: int, cock_id: int, position: int) -> None:
+        if position not in (1, 2, 3):
+            return
+            
+        # 1. Check if the cock is already in the team at some position
+        self.cur.execute("SELECT is_active FROM user_cocks WHERE user_id=? AND id=?", (user_id, cock_id))
+        row = self.cur.fetchone()
+        if not row:
+            return  # Cock not owned or doesn't exist
+            
+        current_pos = row[0]
+        
+        # 2. Check if another cock is currently in the target position
+        self.cur.execute("SELECT id FROM user_cocks WHERE user_id=? AND is_active=?", (user_id, position))
+        target_row = self.cur.fetchone()
+        
+        if current_pos in (1, 2, 3):
+            # If already on the team: Swap!
+            if target_row:
+                # Move the occupant of the target position to the current position
+                self.cur.execute("UPDATE user_cocks SET is_active=? WHERE id=?", (current_pos, target_row[0]))
+            # Move the setting cock to the new target position
+            self.cur.execute("UPDATE user_cocks SET is_active=? WHERE id=?", (position, cock_id))
+        else:
+            # If new to the team:
+            if target_row:
+                # Displace the occupant (set is_active to 0)
+                self.cur.execute("UPDATE user_cocks SET is_active=0 WHERE id=?", (target_row[0],))
+            # Set the cock to the target position
+            self.cur.execute("UPDATE user_cocks SET is_active=? WHERE id=?", (position, cock_id))
+            
+        self.conn.commit()
+
+    def remove_from_team(self, user_id: int, position: int) -> None:
+        self.cur.execute("UPDATE user_cocks SET is_active=0 WHERE user_id=? AND is_active=?", (user_id, position))
+        self.conn.commit()
+
+    def clear_team(self, user_id: int) -> None:
+        self.cur.execute("UPDATE user_cocks SET is_active=0 WHERE user_id=? AND is_active IN (1, 2, 3)", (user_id,))
         self.conn.commit()
 
     def update_cock(self, cock_id: int, **kwargs) -> None:
@@ -1365,4 +1451,62 @@ class Economy:
             query = f"UPDATE user_baito SET {', '.join(updates)} WHERE user_id=?"
             self.cur.execute(query, tuple(params))
             self.conn.commit()
+
+    def get_pve_cooldown(self, user_id: int, stage_type: str) -> int:
+        self.cur.execute(
+            "SELECT last_fight FROM user_pve_cooldowns WHERE user_id=? AND stage_type=?",
+            (user_id, stage_type),
+        )
+        row = self.cur.fetchone()
+        return row[0] if row else 0
+
+    def set_pve_cooldown(self, user_id: int, stage_type: str, timestamp: int) -> None:
+        self.cur.execute(
+            "INSERT OR REPLACE INTO user_pve_cooldowns(user_id, stage_type, last_fight) VALUES(?, ?, ?)",
+            (user_id, stage_type, int(timestamp)),
+        )
+        self.conn.commit()
+
+    def get_world_boss_stats(self, user_id: int) -> tuple[int, int, int]:
+        self.cur.execute(
+            "SELECT damage, fights_today, last_fight_time FROM user_world_boss_damage WHERE user_id=?",
+            (user_id,),
+        )
+        row = self.cur.fetchone()
+        if row is None:
+            self.cur.execute(
+                "INSERT OR IGNORE INTO user_world_boss_damage(user_id, damage, fights_today, last_fight_time) VALUES(?, 0, 0, 0)",
+                (user_id,),
+            )
+            self.conn.commit()
+            return (0, 0, 0)
+        return row
+
+    def update_world_boss_damage(self, user_id: int, damage_dealt: int, now_ts: int) -> None:
+        stats = self.get_world_boss_stats(user_id)
+        
+        # check if it's a new day
+        import time
+        last_date = time.strftime('%Y-%m-%d', time.localtime(stats[2]))
+        current_date = time.strftime('%Y-%m-%d', time.localtime(now_ts))
+        
+        if last_date != current_date:
+            fights_today = 1
+        else:
+            fights_today = stats[1] + 1
+            
+        new_damage = stats[0] + damage_dealt
+        self.cur.execute(
+            "INSERT OR REPLACE INTO user_world_boss_damage(user_id, damage, fights_today, last_fight_time) VALUES(?, ?, ?, ?)",
+            (user_id, new_damage, fights_today, int(now_ts)),
+        )
+        self.conn.commit()
+
+    def get_all_world_boss_contributors(self) -> list[tuple[int, int]]:
+        self.cur.execute("SELECT user_id, damage FROM user_world_boss_damage WHERE damage > 0 ORDER BY damage DESC")
+        return self.cur.fetchall()
+
+    def reset_world_boss_stats(self) -> None:
+        self.cur.execute("DELETE FROM user_world_boss_damage")
+        self.conn.commit()
 
