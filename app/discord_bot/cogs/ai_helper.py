@@ -136,7 +136,8 @@ class AIHelper(commands.Cog, name="AI"):
                             error_text = await response.text()
                             raise RuntimeError(f"API Error {response.status}: {error_text}")
                             
-                        dem_chunk = 0
+                        import time
+                        last_edit_time = time.time()
                         async for line in response.content:
                             line_str = line.decode('utf-8').strip()
                             if line_str.startswith("data: "):
@@ -157,16 +158,17 @@ class AIHelper(commands.Cog, name="AI"):
                                         
                                     if content:
                                         cau_tra_loi += content
-                                        dem_chunk += 1
-                                        if dem_chunk % 3 == 0:
+                                        current_time = time.time()
+                                        if current_time - last_edit_time > 1.2:
                                             if len(cau_tra_loi) <= 2000:
                                                 await tin_nhan.edit(content=cau_tra_loi)
-                                            await asyncio.sleep(0.5)
+                                            last_edit_time = current_time
                                 except Exception:
                                     pass
 
             # Otherwise, use Gemini GenAI SDK
             elif self.client_ai:
+                import time
                 config = types.GenerateContentConfig(system_instruction=system_inst)
                 response = self.client_ai.models.generate_content_stream(
                     model="gemini-3.1-flash-lite",
@@ -174,16 +176,15 @@ class AIHelper(commands.Cog, name="AI"):
                     config=config
                 )
                 
-                dem_chunk = 0
+                last_edit_time = time.time()
                 for chunk in response:
                     if chunk.text:
                         cau_tra_loi += chunk.text
-                        dem_chunk += 1
-
-                        if dem_chunk % 3 == 0:
+                        current_time = time.time()
+                        if current_time - last_edit_time > 1.2:
                             if len(cau_tra_loi) <= 2000:
                                 await tin_nhan.edit(content=cau_tra_loi)
-                            await asyncio.sleep(0.5)
+                            last_edit_time = current_time
 
             if len(cau_tra_loi) <= 2000:
                 await tin_nhan.edit(content=cau_tra_loi)
