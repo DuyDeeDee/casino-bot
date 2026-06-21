@@ -1972,14 +1972,73 @@ class Daga(commands.Cog, name="Daga"):
         msg = await ctx.send(embed=embeds[0], view=view)
         view.message = msg
 
-    @daga_group.command(name="inventory", brief="Xem các vật phẩm bạn đang sở hữu trong túi đồ.", aliases=["inv"])
+    @daga_group.command(name="inventory", brief="Xem kho đồ cá nhân (vật phẩm, đá nâng cấp, mảnh nhân vật).", aliases=["inv"])
     async def daga_inventory(self, ctx: commands.Context):
-        simulator_cog = self.client.get_cog("Simulator")
-        if simulator_cog:
-            embed = simulator_cog.get_inventory_embed(ctx.author)
-            await ctx.send(embed=embed)
-        else:
-            await ctx.send("❌ Hệ thống túi đồ tạm thời không khả dụng.")
+        inventory = self.economy.get_inventory(ctx.author.id)
+        
+        # Filter items
+        shard_list = []
+        stone_list = []
+        food_list = []
+        gear_list = []
+        
+        for item_id, qty in inventory:
+            if qty <= 0:
+                continue
+            if item_id == "item_character_shard":
+                name = INVENTORY_FOOD_NAMES.get(item_id, "Mảnh nhân vật")
+                shard_list.append((name, qty))
+            elif item_id.startswith("item_stone_"):
+                name = INVENTORY_FOOD_NAMES.get(item_id, item_id)
+                stone_list.append((name, qty))
+            elif item_id.startswith("food_"):
+                name = INVENTORY_FOOD_NAMES.get(item_id, item_id)
+                food_list.append((name, qty))
+            elif item_id in INVENTORY_GEAR_NAMES:
+                name = INVENTORY_GEAR_NAMES.get(item_id, item_id)
+                gear_list.append((name, qty))
+                
+        embed = make_embed(
+            title=f"🎒 KHO ĐỒ ANIME - {ctx.author.name.upper()}",
+            color=discord.Color.purple()
+        )
+        embed.set_thumbnail(url=ctx.author.display_avatar.url)
+        
+        has_items = False
+        
+        if shard_list:
+            has_items = True
+            desc = ""
+            for name, qty in shard_list:
+                desc += f"• {name}: **{qty}** mảnh\n"
+            embed.add_field(name="🔮 Mảnh Nhân Vật", value=desc, inline=False)
+            
+        if stone_list:
+            has_items = True
+            desc = ""
+            for name, qty in stone_list:
+                desc += f"• {name}: **{qty}** viên\n"
+            embed.add_field(name="💎 Đá Nâng Cấp & Đột Phá", value=desc, inline=False)
+            
+        if food_list:
+            has_items = True
+            desc = ""
+            for name, qty in food_list:
+                desc += f"• {name}: **{qty}** cái\n"
+            embed.add_field(name="📕 Vật Phẩm Kinh Nghiệm", value=desc, inline=False)
+            
+        if gear_list:
+            has_items = True
+            desc = ""
+            for name, qty in gear_list:
+                desc += f"• {name}: **{qty}** chiếc\n"
+            embed.add_field(name="⚔️ Trang Bị", value=desc, inline=False)
+            
+        if not has_items:
+            embed.description = "Kho đồ Anime của bạn hiện đang trống rỗng. Hãy mua vật phẩm nâng cấp bằng lệnh `i?anime shop` hoặc tham gia PVE/PVP để nhận quà nhé!"
+            
+        embed.set_footer(text=f"Sử dụng vật phẩm bằng lệnh: i?anime feed <ID_vật_phẩm> <số_lượng>")
+        await ctx.send(embed=embed)
 
     @daga_group.command(name="shop", brief="Xem các thẻ triệu hồi, gacha banner và vật phẩm nâng cấp cho nhân vật.")
     async def daga_shop(self, ctx: commands.Context):
