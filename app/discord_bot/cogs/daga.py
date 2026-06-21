@@ -54,7 +54,20 @@ def get_cock_image_file(name: str, fallback_to_default: bool = False) -> str | N
         "Krillin": "krillin.png",
         "Zenitsu": "zenitsu.png",
         "Luffy": "luffy-gear-5.png",
-        "Luffy Gear 4": "luffy-gear-5.png"
+        "Luffy Gear 4": "luffy-gear-5.png",
+        "Doma": "douma.png",
+        "Muzan": "Muzan.png",
+        "Titan Thủy Tổ": "titan thuỷ tổ.png",
+        "Titan Thủy Tổ Thức Tỉnh": "titan thuỷ tổ.png",
+        "Madara (Giả)": "Madara.png",
+        "Madara Thật": "Madara.png",
+        "Kaguya": "Kaguya Otsutsuki.png",
+        "Cell Hoàn Hảo": "perfect cell.png",
+        "Majin Buu Hung Ác": "Majin Buu.png",
+        "Kaido Người Cá": "Kaido.png",
+        "Im Sama": "Imu.png",
+        "Sukuna 2 Ngón": "Sukuna.png",
+        "Sukuna Hoàn Chỉnh": "Sukuna.png"
     }
     
     for key, filename in mapping.items():
@@ -186,7 +199,7 @@ def process_cock_image(filename: str, face_right: bool) -> Image.Image | None:
     should_flip = (face_right and orig_left) or (not face_right and not orig_left)
     
     img = Image.open(path).convert("RGBA")
-    img = img.resize((200, 200), Image.Resampling.LANCZOS)
+    img = img.resize((160, 160), Image.Resampling.LANCZOS)
     
     if should_flip:
         if filename_name in has_banner:
@@ -238,14 +251,14 @@ def render_fight_frame(
     if c1_img_name:
         left_img = process_cock_image(c1_img_name, face_right=True)
         if left_img:
-            bg.paste(left_img, (50, 140), mask=left_img)
+            bg.paste(left_img, (50, 180), mask=left_img)
             left_img.close()
             
     # 4. Load and paste Right Cock (User 2) - face left
     if c2_img_name:
         right_img = process_cock_image(c2_img_name, face_right=False)
         if right_img:
-            bg.paste(right_img, (550, 140), mask=right_img)
+            bg.paste(right_img, (590, 180), mask=right_img)
             right_img.close()
             
     # 5. Fonts
