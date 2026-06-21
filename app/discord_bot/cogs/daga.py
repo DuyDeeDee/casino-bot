@@ -1502,15 +1502,26 @@ class Daga(commands.Cog, name="Daga"):
         if syn_series:
             prep_desc += f"\n🔥 Đồng bộ {syn_series} ({syn_count}/3)!"
 
-        frame_data = render_fight_frame(
-            c_list[0].name, combat_state[c_list[0].id]["max_hp"], combat_state[c_list[0].id]["max_hp"], get_cock_image_file(c_list[0].name, True),
-            c2.name, boss_state["max_hp"], boss_state["max_hp"], get_cock_image_file(c2.name, True),
-            "CHUẨN BỊ XUẤT TRẬN 🥊", prep_desc
-        )
-        file = discord.File(frame_data, filename="battle_prep.png")
-        embed = make_embed(title="🏰 THÁP ĐẠI CHIẾN ANIME", description=f"⚔️ **Đội hình** vs **{c2.display_name}**", color=discord.Color.gold())
-        embed.set_image(url="attachment://battle_prep.png")
-        message = await ctx.send(embed=embed, file=file)
+        # Determine if we should render images
+        use_image = (stage_type != "tower") or (boss_data.get("floor", 0) % 5 == 0)
+
+        if use_image:
+            frame_data = render_fight_frame(
+                c_list[0].name, combat_state[c_list[0].id]["max_hp"], combat_state[c_list[0].id]["max_hp"], get_cock_image_file(c_list[0].name, True),
+                c2.name, boss_state["max_hp"], boss_state["max_hp"], get_cock_image_file(c2.name, True),
+                "CHUẨN BỊ XUẤT TRẬN 🥊", prep_desc
+            )
+            file = discord.File(frame_data, filename="battle_prep.png")
+            embed = make_embed(title="🏰 THÁP ĐẠI CHIẾN ANIME", description=f"⚔️ **Đội hình** vs **{c2.display_name}**", color=discord.Color.gold())
+            embed.set_image(url="attachment://battle_prep.png")
+            message = await ctx.send(embed=embed, file=file)
+        else:
+            embed = make_embed(
+                title="🏰 THÁP ĐẠI CHIẾN ANIME",
+                description=f"⚔️ {prep_desc}\n\n**Chuẩn bị vào trận đấu với {c2.display_name}...**",
+                color=discord.Color.gold()
+            )
+            message = await ctx.send(embed=embed)
 
         battle_logs = []
         round_cnt = 1
@@ -1571,18 +1582,31 @@ class Daga(commands.Cog, name="Daga"):
                 curr_c = c_list[active_idx]
                 non_header = [l for l in round_logs if not l.startswith("🥊")]
                 preview = "\n".join(non_header[-3:])
-                frame_data = render_fight_frame(
-                    curr_c.name, max(0, combat_state[curr_c.id]["hp"]), combat_state[curr_c.id]["max_hp"], get_cock_image_file(curr_c.name, True),
-                    c2.name, max(0, boss_state["hp"]), boss_state["max_hp"], get_cock_image_file(c2.name, True),
-                    f"HIỆP {round_cnt} 🟢", preview
-                )
-                file = discord.File(frame_data, filename=f"battle_{round_cnt}.png")
-                embed = make_embed(title="🏰 THÁP ĐẠI CHIẾN ANIME", description=f"⚔️ **Đội hình** vs **{c2.display_name}**", color=discord.Color.gold())
-                embed.set_image(url=f"attachment://battle_{round_cnt}.png")
-                try:
-                    await message.edit(embed=embed, attachments=[file])
-                except Exception:
-                    pass
+                if use_image:
+                    frame_data = render_fight_frame(
+                        curr_c.name, max(0, combat_state[curr_c.id]["hp"]), combat_state[curr_c.id]["max_hp"], get_cock_image_file(curr_c.name, True),
+                        c2.name, max(0, boss_state["hp"]), boss_state["max_hp"], get_cock_image_file(c2.name, True),
+                        f"HIỆP {round_cnt} 🟢", preview
+                    )
+                    file = discord.File(frame_data, filename=f"battle_{round_cnt}.png")
+                    embed = make_embed(title="🏰 THÁP ĐẠI CHIẾN ANIME", description=f"⚔️ **Đội hình** vs **{c2.display_name}**", color=discord.Color.gold())
+                    embed.set_image(url=f"attachment://battle_{round_cnt}.png")
+                    try:
+                        await message.edit(embed=embed, attachments=[file])
+                    except Exception:
+                        pass
+                else:
+                    desc = (
+                        f"🥊 **HIỆP {round_cnt}**\n"
+                        f"👤 **{curr_c.name}**: `{max(0, combat_state[curr_c.id]['hp'])}/{combat_state[curr_c.id]['max_hp']} HP`\n"
+                        f"👹 **{c2.name}**: `{max(0, boss_state['hp'])}/{boss_state['max_hp']} HP`\n\n"
+                        f"{preview}"
+                    )
+                    embed = make_embed(title="🏰 THÁP ĐẠI CHIẾN ANIME", description=desc, color=discord.Color.gold())
+                    try:
+                        await message.edit(embed=embed)
+                    except Exception:
+                        pass
                 await asyncio.sleep(2.0)
             round_cnt += 1
 
@@ -1591,24 +1615,35 @@ class Daga(commands.Cog, name="Daga"):
         final_round_text = "THẮNG LỢI (KO) 🏆" if player_won else "THẤT BẠI (KO) 💀"
         final_log = f"Tổ đội đã đánh bại {c2.name}!" if player_won else f"{c2.name} đã quét sạch tổ đội!"
 
-        last_idx = min(len(c_list) - 1, active_idx)
-        final_frame_data = render_fight_frame(
-            c_list[last_idx].name, max(0, combat_state[c_list[last_idx].id]["hp"]), combat_state[c_list[last_idx].id]["max_hp"], get_cock_image_file(c_list[last_idx].name, True),
-            c2.name, max(0, boss_state["hp"]), boss_state["max_hp"], get_cock_image_file(c2.name, True),
-            final_round_text, final_log
-        )
-        final_file = discord.File(final_frame_data, filename="battle_final.png")
         embed_color = discord.Color.green() if player_won else discord.Color.red()
-        embed = make_embed(title=final_round_text, description=final_log, color=embed_color)
-        embed.set_image(url="attachment://battle_final.png")
-        try:
-            await message.edit(embed=embed, attachments=[final_file])
-        except Exception:
-            await ctx.send(embed=embed, file=final_file)
+        if use_image:
+            last_idx = min(len(c_list) - 1, active_idx)
+            final_frame_data = render_fight_frame(
+                c_list[last_idx].name, max(0, combat_state[c_list[last_idx].id]["hp"]), combat_state[c_list[last_idx].id]["max_hp"], get_cock_image_file(c_list[last_idx].name, True),
+                c2.name, max(0, boss_state["hp"]), boss_state["max_hp"], get_cock_image_file(c2.name, True),
+                final_round_text, final_log
+            )
+            final_file = discord.File(final_frame_data, filename="battle_final.png")
+            embed = make_embed(title=final_round_text, description=final_log, color=embed_color)
+            embed.set_image(url="attachment://battle_final.png")
+            try:
+                await message.edit(embed=embed, attachments=[final_file])
+            except Exception:
+                await ctx.send(embed=embed, file=final_file)
+        else:
+            final_desc = (
+                f"🏆 **KẾT QUẢ TRẬN ĐẤU**\n\n"
+                f"{final_log}\n\n"
+                f"Tổng số hiệp: `{round_cnt - 1}`"
+            )
+            embed = make_embed(title=final_round_text, description=final_desc, color=embed_color)
+            try:
+                await message.edit(embed=embed, attachments=[])
+            except Exception:
+                await ctx.send(embed=embed)
 
         damage_dealt = boss_data["hp"] - max(0, boss_state["hp"])
         return player_won, damage_dealt
-
     async def _run_team_pvp_battle(self, ctx, team_a: list, team_b: list, author: discord.Member, opponent: discord.Member, bet: int) -> tuple:
         c_list_a = team_a
         c_list_b = team_b
