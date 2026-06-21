@@ -1869,12 +1869,15 @@ class Daga(commands.Cog, name="Daga"):
             f"👤 **Quản lý nhân vật:**\n"
             f"🔹 `{prefix}anime list` — Xem danh sách các nhân vật đang sở hữu.\n"
             f"🔹 `{prefix}anime active <ID_nhân_vật>` — Đặt nhân vật làm chính xuất trận.\n"
-            f"🔹 `{prefix}anime info [ID_nhân_vật]` — Xem chi tiết chỉ số của nhân vật.\n\n"
+            f"🔹 `{prefix}anime info [ID_nhân_vật]` — Xem chi tiết chỉ số của nhân vật.\n"
+            f"🔹 `{prefix}anime skill <tên_nhân_vật>` — Xem thông tin chi tiết kỹ năng của nhân vật.\n"
+            f"🔹 `{prefix}anime team` — Quản lý đội hình 3 nhân vật tham gia thi đấu.\n\n"
             f"💪 **Nuôi dưỡng & Huấn luyện:**\n"
             f"🔹 `{prefix}anime feed [ID_vật_phẩm] [số_lượng]` — Sử dụng vật phẩm/đá nâng cấp cho nhân vật (ID 1-15).\n"
             f"🔹 `{prefix}anime train` — Huấn luyện nhân vật tăng chỉ số ngẫu nhiên (Hồi chiêu 1 giờ).\n\n"
             f"⚔️ **Thi đấu & Bảng xếp hạng:**\n"
-            f"🔹 `{prefix}anime fight @người_chơi [tiền_cược]` — Thách đấu PvP đặt cược.\n"
+            f"🔹 `{prefix}anime fight @người_chơi [tiền_cược]` — Thách đấu PvP đội hình 3v3 KOF-style đặt cược.\n"
+            f"🔹 `{prefix}anime pve` — Leo Tháp Đại Chiến 50 tầng thử thách nhận quà khủng.\n"
             f"🔹 `{prefix}anime top` — Xem bảng xếp hạng Bậc Thầy có nhiều trận thắng nhất.\n"
         )
         
@@ -2317,6 +2320,81 @@ class Daga(commands.Cog, name="Daga"):
             return
         total_power = sum(c.get_max_hp() + c.get_atk() + c.get_df() + c.get_spd() + c.get_luk() for c in team_cocks)
         await ctx.send(f"💪 **Tổng Chiến Lực đội hình:** `{total_power:,}`")
+
+    @daga_group.command(name="skill", brief="Xem thông tin chi tiết kỹ năng của các nhân vật.", aliases=["skills", "kynang"])
+    async def anime_skill(self, ctx: commands.Context, *, character_name: str | None = None):
+        if not character_name:
+            prefix = ctx.prefix or "i?"
+            char_list = ", ".join(f"`{k}`" for k in CHARACTER_INFO_MAP.keys())
+            embed = make_embed(
+                title="📜 DANH SÁCH CHIẾN BINH ANIME 📜",
+                description=(
+                    f"Để xem chi tiết kỹ năng của một nhân vật, hãy dùng lệnh:\n"
+                    f"`{prefix}anime skill <tên_nhân_vật>`\n\n"
+                    f"**Các nhân vật hiện có:**\n{char_list}"
+                ),
+                color=discord.Color.blue()
+            )
+            await ctx.send(embed=embed)
+            return
+
+        character_name = character_name.strip()
+        found_key = None
+        for k in CHARACTER_INFO_MAP.keys():
+            if character_name.lower() in k.lower() or k.lower() in character_name.lower():
+                found_key = k
+                break
+
+        if not found_key:
+            await ctx.send(f"❌ Không tìm thấy nhân vật nào có tên tương tự như `{character_name}`.")
+            return
+
+        info = CHARACTER_INFO_MAP[found_key]
+        upgraded_skill = UPGRADED_SKILL_MAP.get(found_key, "Chưa rõ")
+
+        # Compile battle bonus descriptions based on code mechanics
+        combat_bonus = "Chỉ số cơ bản."
+        if "Krillin" in found_key:
+            combat_bonus = "➕ Tăng **8% HP tối đa** khi vào trận."
+        elif "Levi" in found_key:
+            combat_bonus = "➕ Tăng **15% Tốc độ (SPD)** và **10% Tỷ lệ né tránh (Dodge)**."
+        elif "Zoro" in found_key:
+            combat_bonus = "➕ Tăng **10% Sát thương (ATK)** và **10% Phòng thủ (DEF)**."
+        elif "Akame" in found_key:
+            combat_bonus = "➕ Tăng **15% Tỷ lệ chí mạng (Crit Chance)**."
+        elif "Gojo" in found_key:
+            combat_bonus = "➕ Tăng **20% Tỷ lệ né tránh (Dodge)** và **15% Tỷ lệ chí mạng (Crit Chance)**."
+        elif "Meliodas" in found_key:
+            combat_bonus = "➕ Tăng **20% Sát thương (ATK)**."
+        elif "Goku" in found_key:
+            combat_bonus = "➕ Tăng **35% Tỷ lệ né tránh (Dodge)**."
+
+        desc = (
+            f"📺 **Series:** `{info['series']}`\n\n"
+            f"🔥 **Kỹ năng chủ động (Active):** `{info['active']}`\n"
+            f"⭐ *Chiêu thức đặc trưng kích hoạt khi tấn công đối thủ.*\n\n"
+            f"✨ **Kỹ năng bị động (Passive):** `{info['passive']}`\n"
+            f"🛡️ *Bổ trợ tự động giúp tăng cường sức mạnh chiến đấu.*\n\n"
+            f"🌟 **Kỹ năng tối thượng (Đột Phá):** `{upgraded_skill}`\n"
+            f"👑 *Mở khóa khi nâng cấp sao cho nhân vật.*\n\n"
+            f"⚔️ **Hiệu ứng thực chiến:**\n{combat_bonus}"
+        )
+
+        embed = make_embed(
+            title=f"⚔️ KỸ NĂNG NHÂN VẬT: {found_key} ⚔️",
+            description=desc,
+            color=discord.Color.gold()
+        )
+        
+        img_name = get_cock_image_file(found_key)
+        if img_name:
+            file = discord.File(ABS_PATH / "modules" / "daga" / img_name, filename=img_name)
+            embed.set_thumbnail(url=f"attachment://{img_name}")
+            await ctx.send(embed=embed, file=file)
+        else:
+            embed.set_thumbnail(url=ctx.author.display_avatar.url)
+            await ctx.send(embed=embed)
+
 
     @daga_group.command(name="feed", brief="Sử dụng vật phẩm nâng cấp từ kho đồ để tăng EXP cho nhân vật.", aliases=["upgrade_exp", "use"])
     async def daga_feed(self, ctx: commands.Context, food_id: str | None = None, quantity: int = 1):
