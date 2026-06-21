@@ -1408,6 +1408,16 @@ class Simulator(commands.Cog):
 
 
     @commands.command(
+        brief="Xem các vật phẩm bạn đang sở hữu trong túi đồ.",
+        usage="inventory / inv",
+        aliases=["inv"]
+    )
+    async def inventory(self, ctx: commands.Context):
+        embed = self.get_inventory_embed(ctx.author)
+        await ctx.send(embed=embed)
+
+
+    @commands.command(
         brief="Bán cổ vật/kho báu thợ săn thu hoạch được.",
         usage="sellitem <item_id> [số lượng]"
     )
