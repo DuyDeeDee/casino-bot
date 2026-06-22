@@ -458,6 +458,19 @@ async def render_showcase_image(
     if not cock_info and not car_info:
         return None
 
+    def resize_contain(image: Image.Image, max_w: int, max_h: int) -> Image.Image:
+        original_w, original_h = image.size
+        aspect_ratio = original_w / original_h
+
+        if original_w / max_w > original_h / max_h:
+            new_w = max_w
+            new_h = max(1, int(max_w / aspect_ratio))
+        else:
+            new_h = max_h
+            new_w = max(1, int(max_h * aspect_ratio))
+
+        return image.resize((new_w, new_h), Image.Resampling.LANCZOS)
+
     width, height = 800, 240
     # Create background image with dark gradient
     gradient = Image.new("RGBA", (1, 2))
@@ -526,16 +539,22 @@ async def render_showcase_image(
         img_file = cock_info.get("image_filename")
         cock_img = None
         if img_file:
-            path = ABS_PATH / "modules" / "daga" / img_file
+            if Path(img_file).is_absolute():
+                path = Path(img_file)
+            else:
+                path = ABS_PATH / "modules" / "daga" / img_file
             if path.exists():
                 try:
                     cock_img = Image.open(path).convert("RGBA")
-                    cock_img = cock_img.resize((130, 130), Image.Resampling.LANCZOS)
+                    cock_img = resize_contain(cock_img, 130, 150)
                 except Exception as e:
                     logger.error(f"Failed to load cock image: {e}")
         
         if cock_img:
-            img.paste(cock_img, (cock_x + 20, panel_y + 30), mask=cock_img)
+            new_w, new_h = cock_img.size
+            paste_x = cock_x + 85 - (new_w // 2)
+            paste_y = panel_y + 95 - (new_h // 2)
+            img.paste(cock_img, (paste_x, paste_y), mask=cock_img)
             cock_img.close()
         else:
             draw.ellipse([cock_x + 20, panel_y + 30, cock_x + 150, panel_y + 160], fill=(100, 100, 100, 255))
@@ -595,12 +614,15 @@ async def render_showcase_image(
             if path.exists():
                 try:
                     car_img = Image.open(path).convert("RGBA")
-                    car_img = car_img.resize((150, 90), Image.Resampling.LANCZOS)
+                    car_img = resize_contain(car_img, 150, 110)
                 except Exception as e:
                     logger.error(f"Failed to load car image: {e}")
                     
         if car_img:
-            img.paste(car_img, (car_x + 15, panel_y + 50), mask=car_img)
+            new_w, new_h = car_img.size
+            paste_x = car_x + 90 - (new_w // 2)
+            paste_y = panel_y + 95 - (new_h // 2)
+            img.paste(car_img, (paste_x, paste_y), mask=car_img)
             car_img.close()
         else:
             draw.ellipse([car_x + 20, panel_y + 45, car_x + 150, panel_y + 145], fill=(100, 100, 100, 255))

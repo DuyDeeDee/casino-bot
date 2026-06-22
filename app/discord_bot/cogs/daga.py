@@ -530,7 +530,7 @@ BREEDS = {
     "Sử Thi": ["Kakashi", "Meliodas", "Ichigo"],
     "Huyền Thoại": ["Gojo Satoru", "Itachi Uchiha", "Vegeta"],
     "Thần Kê": ["Goku (Ultra Instinct)", "Luffy (Gear 5)", "Naruto (Baryon Mode)", "Saitama"],
-    "Exclusive": ["Luffy"]
+    "Exclusive": ["Luffy", "Snorlax"]
 }
 
 CHARACTER_INFO_MAP = {
@@ -554,7 +554,8 @@ CHARACTER_INFO_MAP = {
     "Luffy": {"series": "One Piece", "active": "Gomu Thunder", "passive": "Nika"},
     "Luffy Gear 4": {"series": "One Piece", "active": "Gear 4 - Leo Bazooka", "passive": "Nika"},
     "Naruto (Baryon Mode)": {"series": "Naruto", "active": "Rasengan Siêu Lớn", "passive": "Baryon"},
-    "Saitama": {"series": "One Punch Man", "active": "Serious Punch", "passive": "Một Đấm"}
+    "Saitama": {"series": "One Punch Man", "active": "Serious Punch", "passive": "Một Đấm"},
+    "Snorlax": {"series": "Pokemon", "active": "Body Slam", "passive": "Thick Fat"}
 }
 
 UPGRADED_SKILL_MAP = {
@@ -578,7 +579,8 @@ UPGRADED_SKILL_MAP = {
     "Luffy": "⚡ Bajrang Gun (Thần Sấm Khổng Lồ)",
     "Luffy Gear 4": "🦍 Gear 4 - King Cobra",
     "Naruto (Baryon Mode)": "🔥 Chế Độ Baryon (Baryon Mode)",
-    "Saitama": "💥 Cú Đấm Nghiêm Túc"
+    "Saitama": "💥 Cú Đấm Nghiêm Túc",
+    "Snorlax": "💤 Hyper Beam (Tia Sáng Hủy Diệt)"
 }
 
 RARITY_DISPLAY = {
@@ -3190,12 +3192,28 @@ class Daga(commands.Cog, name="Daga"):
             stars_str = f" ({cstars}⭐)" if cstars > 0 else ""
             await ctx.send(f"✅ Đã bán chiến kê **{row[2]}**{stars_str} (ID: `{cock_id}`) thành công, nhận được **+{price:,} VND**! 💰")
 
-    @daga_group.command(name="giveexclusive", brief="[ADMIN] Tặng nhân vật độc quyền Luffy cho người chơi.", hidden=True)
+    @daga_group.command(name="giveexclusive", brief="[ADMIN] Tặng nhân vật độc quyền cho người chơi.", hidden=True)
     @commands.is_owner()
-    async def give_exclusive_cock(self, ctx: commands.Context, member: discord.Member):
+    async def give_exclusive_cock(self, ctx: commands.Context, member: discord.Member, character_name: str = "Luffy"):
         from app.discord_bot.cogs.daga import BREEDS, STAT_RANGES
         
-        breed = "Luffy"
+        matched_breed = None
+        for b in BREEDS["Exclusive"]:
+            if b.lower() == character_name.lower().strip():
+                matched_breed = b
+                break
+        
+        if not matched_breed:
+            for r, list_b in BREEDS.items():
+                for b in list_b:
+                    if b.lower() == character_name.lower().strip():
+                        matched_breed = b
+                        break
+        
+        if not matched_breed:
+            matched_breed = character_name.strip().title()
+
+        breed = matched_breed
         rarity = "Exclusive"
         
         ranges = STAT_RANGES[rarity]

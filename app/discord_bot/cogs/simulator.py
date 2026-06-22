@@ -1720,8 +1720,20 @@ class Simulator(commands.Cog):
                 models = [name for name, r_name in CAR_RARITIES.items() if r_name == rarity]
                 model = random.choice(models)
                 
-                edition = CAR_EDITIONS.get(model, "Standard")
-                self.economy.add_car(user_id, model)
+                edition = "Stock"
+                if model in CAR_EDITIONS:
+                    if random.random() < 0.30:
+                        edition = random.choice(CAR_EDITIONS[model][1:])
+                
+                col_name = "Other"
+                for c_name, c_models in COLLECTIONS.items():
+                    if model in c_models:
+                        col_name = c_name
+                        break
+                
+                serial = random.randint(1, 9999)
+                self.economy.add_user_car(user_id, model, rarity, serial, edition, col_name)
+                
                 results.append({
                     "model": model,
                     "rarity": rarity,
