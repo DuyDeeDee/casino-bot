@@ -1418,7 +1418,7 @@ class Simulator(commands.Cog):
 
 
     @commands.command(
-        brief="Bán cổ vật/kho báu thợ săn thu hoạch được.",
+        brief="Bán cổ vật/kho báu thợ săn hoặc bằng cấp đã mua.",
         usage="sellitem <item_id> [số lượng]"
     )
     async def sellitem(self, ctx: commands.Context, item_id: str, quantity: int = 1):
@@ -1426,56 +1426,121 @@ class Simulator(commands.Cog):
             await ctx.send("❌ **Lỗi:** Số lượng bán phải lớn hơn 0.")
             return
 
-        if item_id not in TREASURES:
-            await ctx.send("❌ **Lỗi:** Vật phẩm này không thể bán hoặc không tồn tại! Chỉ có thể bán các cổ vật thợ săn đào được (ví dụ: `t_lop_xe`).")
-            return
-
         user_id = ctx.author.id
-        treasure = TREASURES[item_id]
-        
-        # Check ownership
-        inventory = self.economy.get_inventory(user_id)
-        owned_qty = next((qty for iid, qty in inventory if iid == item_id), 0)
-        
-        if owned_qty < quantity:
-            await ctx.send(f"❌ **Lỗi:** Bạn không sở hữu đủ vật phẩm này! Bạn chỉ có **{owned_qty}** cái.")
+
+        if item_id in SHOP_ITEMS:
+            item = SHOP_ITEMS[item_id]
+            if item.get("is_banner"):
+                await ctx.send("❌ **Lỗi:** Không thể bán hình nền/banner profile!")
+                return
+            
+            # Check ownership
+            inventory = self.economy.get_inventory(user_id)
+            owned_qty = next((qty for iid, qty in inventory if iid == item_id), 0)
+            
+            if owned_qty < quantity:
+                await ctx.send(f"❌ **Lỗi:** Bạn không sở hữu đủ vật phẩm này! Bạn chỉ có **{owned_qty}** cái.")
+                return
+
+            # Deduct from inventory
+            new_qty = self.economy.add_inventory_item(user_id, item_id, -quantity)
+            
+            # Calculate 75% refund
+            refund_value = int(item["cost"] * 0.75) * quantity
+            currency = item.get("currency", "money")
+            
+            if currency == "money":
+                self.economy.add_money(user_id, refund_value)
+                log_wallet_change(
+                    logger,
+                    event="sell_degree",
+                    user_id=user_id,
+                    money_delta=refund_value,
+                    item_id=item_id,
+                    quantity=quantity,
+                    ctx=ctx
+                )
+                currency_name = "VND"
+                balance_msg = f"💳 **Số dư VND hiện tại:** `{self.economy.get_entry(user_id)[1]:,} VND`"
+            else: # gold
+                self.economy.add_credits(user_id, refund_value)
+                log_wallet_change(
+                    logger,
+                    event="sell_degree",
+                    user_id=user_id,
+                    credits_delta=refund_value,
+                    item_id=item_id,
+                    quantity=quantity,
+                    ctx=ctx
+                )
+                currency_name = "thỏi vàng"
+                balance_msg = f"🪙 **Số dư Vàng hiện tại:** `{self.economy.get_entry(user_id)[2]:,} thỏi vàng`"
+                
+            embed = make_embed(
+                title="💰 BÁN BẰNG CẤP THÀNH CÔNG 💰",
+                description=(
+                    f"Bạn đã bán thành công **{quantity}x {item['name']}**!\n\n"
+                    f"💵 **Giá bán lại mỗi chiếc (75%):** `{int(item['cost'] * 0.75):,} {currency_name}`\n"
+                    f"💰 **Tổng tiền nhận lại:** `+{refund_value:,} {currency_name}`\n"
+                    f"{balance_msg}"
+                ),
+                color=discord.Color.green()
+            )
+            embed.set_thumbnail(url=ctx.author.display_avatar.url)
+            await ctx.send(embed=embed)
             return
 
-        # Deduct from inventory
-        new_qty = self.economy.add_inventory_item(user_id, item_id, -quantity)
-        
-        # Clear showcase if item no longer owned
-        if new_qty <= 0:
-            showcase_id = self.economy.get_showcase_treasure(user_id)
-            if showcase_id == item_id:
-                self.economy.set_showcase_treasure(user_id, None)
-        
-        # Add money
-        total_value = treasure["value"] * quantity
-        self.economy.add_money(user_id, total_value)
-        
-        log_wallet_change(
-            logger,
-            event="sell_treasure",
-            user_id=user_id,
-            money_delta=total_value,
-            item_id=item_id,
-            quantity=quantity,
-            ctx=ctx
-        )
-        
-        embed = make_embed(
-            title="💰 BÁN CỔ VẬT THÀNH CÔNG 💰",
-            description=(
-                f"Bạn đã bán **{quantity}x {treasure['name']}** cho bảo tàng thành phố!\n\n"
-                f"💵 **Giá bán mỗi chiếc:** `{treasure['value']:,} VND`\n"
-                f"💰 **Tổng tiền nhận:** `+{total_value:,} VND`\n"
-                f"💳 **Số dư VND hiện tại:** `{self.economy.get_entry(user_id)[1]:,} VND`"
-            ),
-            color=discord.Color.green()
-        )
-        embed.set_thumbnail(url=ctx.author.display_avatar.url)
-        await ctx.send(embed=embed)
+        elif item_id in TREASURES:
+            treasure = TREASURES[item_id]
+            
+            # Check ownership
+            inventory = self.economy.get_inventory(user_id)
+            owned_qty = next((qty for iid, qty in inventory if iid == item_id), 0)
+            
+            if owned_qty < quantity:
+                await ctx.send(f"❌ **Lỗi:** Bạn không sở hữu đủ vật phẩm này! Bạn chỉ có **{owned_qty}** cái.")
+                return
+
+            # Deduct from inventory
+            new_qty = self.economy.add_inventory_item(user_id, item_id, -quantity)
+            
+            # Clear showcase if item no longer owned
+            if new_qty <= 0:
+                showcase_id = self.economy.get_showcase_treasure(user_id)
+                if showcase_id == item_id:
+                    self.economy.set_showcase_treasure(user_id, None)
+            
+            # Add money
+            total_value = treasure["value"] * quantity
+            self.economy.add_money(user_id, total_value)
+            
+            log_wallet_change(
+                logger,
+                event="sell_treasure",
+                user_id=user_id,
+                money_delta=total_value,
+                item_id=item_id,
+                quantity=quantity,
+                ctx=ctx
+            )
+            
+            embed = make_embed(
+                title="💰 BÁN CỔ VẬT THÀNH CÔNG 💰",
+                description=(
+                    f"Bạn đã bán **{quantity}x {treasure['name']}** cho bảo tàng thành phố!\n\n"
+                    f"💵 **Giá bán mỗi chiếc:** `{treasure['value']:,} VND`\n"
+                    f"💰 **Tổng tiền nhận:** `+{total_value:,} VND`\n"
+                    f"💳 **Số dư VND hiện tại:** `{self.economy.get_entry(user_id)[1]:,} VND`"
+                ),
+                color=discord.Color.green()
+            )
+            embed.set_thumbnail(url=ctx.author.display_avatar.url)
+            await ctx.send(embed=embed)
+            return
+
+        else:
+            await ctx.send("❌ **Lỗi:** Vật phẩm này không thể bán hoặc không tồn tại! Chỉ có thể bán các cổ vật thợ săn đào được hoặc bằng cấp nghề nghiệp.")
+            return
 
     @commands.command(
         brief="Triệu hồi nhân vật, mở hòm trang bị hoặc rương xe gacha.",
