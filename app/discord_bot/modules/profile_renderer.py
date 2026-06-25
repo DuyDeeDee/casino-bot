@@ -238,8 +238,12 @@ def draw_profile_content(
         if badge_path:
             try:
                 with Image.open(badge_path) as b_img:
+                    # Auto-crop transparent boundaries to avoid small size due to margins
+                    bbox = b_img.getbbox()
+                    if bbox:
+                        b_img = b_img.crop(bbox)
                     w, h = b_img.size
-                    scaled_h = 60  # Increased badge image height for much higher visibility
+                    scaled_h = 54  # 54px is a very prominent, clean height after removing transparent padding
                     scaled_w = int(w * (scaled_h / h)) if h > 0 else scaled_h
                 badges.append({
                     "text": text,
@@ -328,7 +332,11 @@ def draw_profile_content(
             if b["is_image"]:
                 try:
                     with Image.open(b["path"]) as badge_img:
-                        resized_badge = badge_img.convert("RGBA").resize((badge_w, badge_h), Image.Resampling.LANCZOS)
+                        # Auto-crop transparent boundaries to avoid small size due to margins
+                        bbox = badge_img.getbbox()
+                        if bbox:
+                            badge_img = badge_img.crop(bbox)
+                        resized_badge = badge_img.convert("RGBA").resize((badge_w, b["height"]), Image.Resampling.LANCZOS)
                         overlay.paste(resized_badge, (current_x, offset_y), mask=resized_badge)
                         resized_badge.close()
                 except Exception as e:
