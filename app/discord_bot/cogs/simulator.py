@@ -460,22 +460,19 @@ class ControlPanelView(discord.ui.View):
                 job_titles.append("Lao động tự do 💼")
             job_str = " & ".join(job_titles)
 
+            from app.discord_bot.modules.profile_renderer import strip_emoji
+            display_rank = strip_emoji(rank_name)
+            display_rl = strip_emoji(rl_title) if rl_title else ""
+            display_daga = strip_emoji(daga_title) if daga_title else ""
+            display_cf = strip_emoji(cf_title) if cf_title else ""
+
             desc = (
                 f"🎖️ **Danh hiệu:**\n"
-                f"• {rank_name}\n"
-                f"• {rl_title}\n"
-                f"• {daga_title}\n"
-                f"• {cf_title}\n"
-            )
-            
-            # Check for custom badge emojis
-            titles_list = [rank_name, rl_title, daga_title, cf_title]
-            custom_emojis = get_custom_emojis_for_user(self.client, titles_list)
-            if custom_emojis:
-                desc += " ".join(custom_emojis) + "\n"
-                
-            desc += (
-                f"\n💰 **Số tiền:** `{money:,} VND`\n"
+                f"• {display_rank}\n"
+                f"• {display_rl}\n"
+                f"• {display_daga}\n"
+                f"• {display_cf}\n\n"
+                f"💰 **Số tiền:** `{money:,} VND`\n"
                 f"🟡 **Số vàng:** `{gold:,} thỏi`\n"
                 f"🏢 **Doanh nghiệp:** `{biz_str}`\n"
                 f"💼 **Nghề nghiệp:** `{job_str}`\n\n"
@@ -1320,27 +1317,19 @@ class Simulator(commands.Cog):
                 if showcase_treasure_id and showcase_treasure_id in TREASURES:
                     showcase_treasure_text = f"{TREASURES[showcase_treasure_id]['name']} (ID: `{showcase_treasure_id}`)"
 
-                display_rank = rank_name
-                display_rl = rl_title if rl_title else ""
-                display_daga = daga_title if daga_title else ""
-                display_cf = cf_title if cf_title else ""
+                from app.discord_bot.modules.profile_renderer import strip_emoji
+                display_rank = strip_emoji(rank_name)
+                display_rl = strip_emoji(rl_title) if rl_title else ""
+                display_daga = strip_emoji(daga_title) if daga_title else ""
+                display_cf = strip_emoji(cf_title) if cf_title else ""
 
                 desc = (
                     f"🎖️ **Danh hiệu:**\n"
                     f"• {display_rank}\n"
                     f"• {display_rl}\n"
                     f"• {display_daga}\n"
-                    f"• {display_cf}\n"
-                )
-                
-                # Check for custom badge emojis
-                titles_list = [rank_name, rl_title, daga_title, cf_title]
-                custom_emojis = get_custom_emojis_for_user(self.client, titles_list)
-                if custom_emojis:
-                    desc += " ".join(custom_emojis) + "\n"
-                    
-                desc += (
-                    f"\n💵 **Tài khoản:** `{money:,} VND`\n"
+                    f"• {display_cf}\n\n"
+                    f"💵 **Tài khoản:** `{money:,} VND`\n"
                     f"🟡 **Két sắt:** `{gold} Vàng` *(Tỷ giá Vàng: {gold_price:,} VND)*\n"
                     f"🏢 **Doanh nghiệp:** `{biz_count} Cơ sở`\n"
                     f"🎒 **Túi đồ:** `{inv_count} Vật phẩm`\n"
