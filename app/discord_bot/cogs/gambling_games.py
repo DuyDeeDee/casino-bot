@@ -662,9 +662,17 @@ class BauCuaLobbyView(discord.ui.View):
         totals = {m: sum(self.bets[m].values()) for m in self.bets}
         mascot_names_viet = {"nai": "🦌 NAI", "bau": "🍐 BẦU", "ga": "🐓 GÀ", "ca": "🐟 CÁ", "cua": "🦀 CUA", "tom": "🦐 TÔM"}
         
+        jackpot_str = self.cog.economy.get_setting("baucua_jackpot")
+        jackpot_val = int(jackpot_str) if jackpot_str else 0
+        
         embed = make_embed(
             title=f"🦀 PHIÊN BẦU CUA #{self.session_id} 🦀",
-            description=f"⏳ **Thời gian đặt cược còn lại:** `{self.seconds_remaining} giây`\n\n👉 Nhấp vào các nút bên dưới để chọn linh vật cược.",
+            description=(
+                f"🎰 **HŨ JACKPOT BẦU CUA:** `{jackpot_val:,} VND` 🎰\n"
+                f"🔥 *Bão (3 linh vật giống nhau) nổ Hũ chia tỉ lệ cược của tất cả người chơi!*\n\n"
+                f"⏳ **Thời gian đặt cược còn lại:** `{self.seconds_remaining} giây`\n\n"
+                f"👉 Nhấp vào các nút bên dưới để chọn linh vật cược."
+            ),
             color=discord.Color.dark_theme()
         )
         
@@ -1142,6 +1150,38 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
             self.baucua_history.append((session_id, dice))
             self.baucua_history = self.baucua_history[-10:]
             
+            # Calculate total bets per user in session
+            session_bets = {}
+            for mascot in view.bets:
+                for uid, amt in view.bets[mascot].items():
+                    session_bets[uid] = session_bets.get(uid, 0) + amt
+
+            # Check for jackpot (Bão - 3 identical mascots)
+            is_jackpot_triggered = False
+            jackpot_winners = []
+            jackpot_val_won = 0
+            if dice[0] == dice[1] == dice[2]:
+                total_session_bets = sum(session_bets.values())
+                if total_session_bets > 0:
+                    is_jackpot_triggered = True
+                    jackpot_str = self.economy.get_setting("baucua_jackpot")
+                    jackpot_val = int(jackpot_str) if jackpot_str else 0
+                    jackpot_val_won = jackpot_val
+                    for uid, amt in session_bets.items():
+                        share = int(jackpot_val * (amt / total_session_bets))
+                        if share > 0:
+                            self.economy.add_money(uid, share)
+                            jackpot_winners.append((uid, share))
+                            log_wallet_change(
+                                logger,
+                                event="baucua_jackpot_win",
+                                user_id=uid,
+                                money_delta=share,
+                                ctx=ctx,
+                                session_id=session_id,
+                            )
+                    self.economy.set_setting("baucua_jackpot", "0")
+
             winners = []
             winner_mentions = []
             losers = []
@@ -1208,15 +1248,41 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
                         net_profit=-total_bet_for_user,
                         session_id=session_id,
                     )
+
+            # Calculate total lost bets to add to jackpot
+            total_lost_in_session = 0
+            for mascot in view.bets:
+                if dice.count(mascot) == 0:
+                    total_lost_in_session += sum(view.bets[mascot].values())
+
+            # Add lost bets to the jackpot
+            if total_lost_in_session > 0:
+                jackpot_str = self.economy.get_setting("baucua_jackpot")
+                jackpot_val = int(jackpot_str) if jackpot_str else 0
+                new_jackpot = jackpot_val + total_lost_in_session
+                self.economy.set_setting("baucua_jackpot", str(new_jackpot))
                     
             mascot_emojis = {"ca": "🐟", "cua": "🦀", "tom": "🦐", "nai": "🦌", "bau": "🍐", "ga": "🐓"}
             dice_str = " ".join(mascot_emojis[d] for d in dice)
             
             winner_section = "\n".join(winners) if winners else "*Không có*"
             loser_section = "\n".join(losers) if losers else "*Không có*"
+
+            # Format jackpot display in description
+            jackpot_section = ""
+            if is_jackpot_triggered:
+                if jackpot_winners:
+                    jw_lines = []
+                    for uid, share in jackpot_winners:
+                        name = view.user_names.get(uid, f"User {uid}")
+                        jw_lines.append(f"🎉 **{name}**: Nhận `+{share:,} VND` từ Hũ Jackpot!")
+                    jackpot_section = f"\n\n💥 **NỔ HŨ JACKPOT BẦU CUA!** 💥\n" + "\n".join(jw_lines)
+                else:
+                    jackpot_section = f"\n\n💥 **NỔ HŨ JACKPOT BẦU CUA!** 💥\n*Không có người chơi thắng cuộc hợp lệ.*"
             
             result_desc = (
-                f"🎲 **Kết quả lắc:** {dice_str}\n\n"
+                f"🎲 **Kết quả lắc:** {dice_str}\n"
+                f"{jackpot_section}\n\n"
                 f"🏆 **Danh sách thắng cuộc:**\n{winner_section}\n\n"
                 f"💸 **Danh sách thua cuộc:**\n{loser_section}"
             )
@@ -1231,6 +1297,8 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
             result_embed.set_image(url="attachment://baucua.png")
             
             result_label = " • ".join(mascot_names_viet[d].upper() for d in dice)
+            if dice[0] == dice[1] == dice[2]:
+                result_label = f"BÃO {mascot_names_viet[dice[0]].upper()}"
             
             img_bytes = generate_baucua_image(
                 0,
@@ -1242,6 +1310,10 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
             
             await message.edit(embed=result_embed, attachments=[file], view=view)
             
+            if is_jackpot_triggered and jackpot_winners:
+                jw_mentions = [f"<@{uid}>" for uid, _ in jackpot_winners]
+                await ctx.send(f"🎉💥 **JACKPOT BẦU CUA CỰC ĐẠI ĐÃ NỔ!** Chúc mừng {', '.join(jw_mentions)} đã chia nhau hũ Jackpot trị giá **{jackpot_val_won:,} VND**! 💥🎉")
+
             if winner_mentions:
                 await ctx.send(f"🎉 Chúc mừng các đại gia đã chiến thắng phiên #{session_id}: {', '.join(winner_mentions)}!")
         except Exception as e:

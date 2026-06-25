@@ -161,12 +161,12 @@ def draw_profile_content(
     font_widget_val = load_font("bold", 15)
     
     # 5. Gather Badges
-    badges = []
+    raw_badges = []
     
     # Wealth Badge
     net_worth = money + (gold * gold_price) - loan_amount
     rank_name, badge_bg, badge_fg = get_rank_info(net_worth)
-    badges.append((rank_name, badge_bg, badge_fg))
+    raw_badges.append((rank_name, badge_bg, badge_fg))
     
     # Roulette Title Badge
     if rl_title:
@@ -182,7 +182,7 @@ def draw_profile_content(
                 rl_bg = (112, 128, 144)  # Slate Gray
             else:
                 rl_bg = (160, 82, 45)  # Sienna
-            badges.append((clean_rl, rl_bg, (255, 255, 255)))
+            raw_badges.append((clean_rl, rl_bg, (255, 255, 255)))
             
     # Daga Title Badge
     if daga_title:
@@ -200,7 +200,7 @@ def draw_profile_content(
                 dg_bg = (46, 139, 87)  # Sea Green
             else:
                 dg_bg = (105, 105, 105)  # Dim Gray
-            badges.append((clean_daga, dg_bg, (255, 255, 255)))
+            raw_badges.append((clean_daga, dg_bg, (255, 255, 255)))
             
     # Coin Flip Title Badge
     if cf_title:
@@ -214,12 +214,61 @@ def draw_profile_content(
                 cf_bg = (46, 139, 87)  # Sea Green
             else:
                 cf_bg = (160, 82, 45)  # Sienna
-            badges.append((clean_cf, cf_bg, (255, 255, 255)))
+            raw_badges.append((clean_cf, cf_bg, (255, 255, 255)))
 
     # Loan Warning Badge
     if loan_amount > 0:
         loan_text = f"Nợ: -{format_money_short(loan_amount)}"
-        badges.append((loan_text, (139, 0, 0), (255, 255, 255)))
+        raw_badges.append((loan_text, (139, 0, 0), (255, 255, 255)))
+
+    # Resolve image or text format for each badge
+    badges = []
+    badge_dir = Path("pictures/danh hiệu")
+    
+    for text, bg_color, fg_color in raw_badges:
+        badge_path = None
+        if badge_dir.exists():
+            filenames_to_try = [f"{text}.png", f"{text.lower()}.png", f"{text.strip().lower()}.png"]
+            for fname in filenames_to_try:
+                p = badge_dir / fname
+                if p.exists():
+                    badge_path = p
+                    break
+                    
+        if badge_path:
+            try:
+                with Image.open(badge_path) as b_img:
+                    w, h = b_img.size
+                    scaled_h = 60  # Increased badge image height for much higher visibility
+                    scaled_w = int(w * (scaled_h / h)) if h > 0 else scaled_h
+                badges.append({
+                    "text": text,
+                    "bg_color": bg_color,
+                    "fg_color": fg_color,
+                    "path": badge_path,
+                    "width": scaled_w,
+                    "height": scaled_h,
+                    "is_image": True
+                })
+            except Exception as e:
+                logger.error(f"Error loading badge image {badge_path}: {e}")
+                badge_path = None
+                
+        if not badge_path:
+            try:
+                text_w = font_badge.getlength(text)
+            except AttributeError:
+                text_w = len(text) * 10
+            badge_w = int(text_w + 24)
+            badges.append({
+                "text": text,
+                "bg_color": bg_color,
+                "fg_color": fg_color,
+                "path": None,
+                "width": badge_w,
+                "height": 32,
+                "is_image": False
+            })
         
     # Calculate text layout dynamically and center it vertically
     # 1. Group badges into rows
@@ -230,20 +279,15 @@ def draw_profile_content(
     max_badges_width = 760 - start_x  # boundary is 760
     spacing = 10
     
-    for text, bg_color, fg_color in badges:
-        try:
-            text_w = font_badge.getlength(text)
-        except AttributeError:
-            text_w = len(text) * 10
-        badge_w = int(text_w + 24)
-        
+    for b in badges:
+        badge_w = b["width"]
         if current_row_width + badge_w > max_badges_width:
             if current_row:
                 badge_rows.append(current_row)
-            current_row = [(text, bg_color, fg_color, badge_w)]
+            current_row = [b]
             current_row_width = badge_w
         else:
-            current_row.append((text, bg_color, fg_color, badge_w))
+            current_row.append(b)
             current_row_width += badge_w + spacing
             
     if current_row:
@@ -252,14 +296,16 @@ def draw_profile_content(
     # 2. Compute heights
     username_height = 34  # font size 34
     spacing_between = 15
-    badge_h = 32
     badge_row_gap = 8
     
-    num_rows = len(badge_rows)
-    if num_rows > 0:
-        total_text_height = username_height + spacing_between + num_rows * badge_h + (num_rows - 1) * badge_row_gap
-    else:
-        total_text_height = username_height
+    total_text_height = username_height
+    if len(badge_rows) > 0:
+        total_text_height += spacing_between
+        for i, row in enumerate(badge_rows):
+            row_h = max(b["height"] for b in row)
+            total_text_height += row_h
+            if i < len(badge_rows) - 1:
+                total_text_height += badge_row_gap
         
     # 3. Vertically center the text block
     start_y = (height - total_text_height) // 2
@@ -270,16 +316,32 @@ def draw_profile_content(
     # 5. Draw Badges
     current_y = start_y + username_height + spacing_between
     for row in badge_rows:
+        row_h = max(b["height"] for b in row)
         current_x = start_x
-        for text, bg_color, fg_color, badge_w in row:
-            overlay_draw.rounded_rectangle(
-                [current_x, current_y, current_x + badge_w, current_y + badge_h],
-                radius=8,
-                fill=bg_color
-            )
-            overlay_draw.text((current_x + 12, current_y + 5), text, font=font_badge, fill=fg_color)
+        for b in row:
+            badge_w = b["width"]
+            badge_h = b["height"]
+            
+            # Align badge vertically center within the row
+            offset_y = current_y + (row_h - badge_h) // 2
+            
+            if b["is_image"]:
+                try:
+                    with Image.open(b["path"]) as badge_img:
+                        resized_badge = badge_img.convert("RGBA").resize((badge_w, badge_h), Image.Resampling.LANCZOS)
+                        overlay.paste(resized_badge, (current_x, offset_y), mask=resized_badge)
+                        resized_badge.close()
+                except Exception as e:
+                    logger.error(f"Error rendering badge image {b['path']}: {e}")
+            else:
+                overlay_draw.rounded_rectangle(
+                    [current_x, offset_y, current_x + badge_w, offset_y + badge_h],
+                    radius=8,
+                    fill=b["bg_color"]
+                )
+                overlay_draw.text((current_x + 12, offset_y + 5), b["text"], font=font_badge, fill=b["fg_color"])
             current_x += badge_w + spacing
-        current_y += badge_h + badge_row_gap
+        current_y += row_h + badge_row_gap
 
     # Paste transparent overlay onto the base image
     img.paste(overlay, (0, 0), mask=overlay)

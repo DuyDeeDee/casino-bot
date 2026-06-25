@@ -17,6 +17,51 @@ from app.discord_bot.cogs.daga import get_cock_image_file, RARITY_DISPLAY
 
 logger = logging.getLogger(__name__)
 
+
+def remove_vietnamese_accents(s: str) -> str:
+    s = s.lower()
+    replacements = {
+        'à': 'a', 'á': 'a', 'ả': 'a', 'ã': 'a', 'ạ': 'a',
+        'ă': 'a', 'ằ': 'a', 'ắ': 'a', 'ẳ': 'a', 'ẵ': 'a', 'ặ': 'a',
+        'â': 'a', 'ầ': 'a', 'ấ': 'a', 'ẩ': 'a', 'ẫ': 'a', 'ậ': 'a',
+        'đ': 'd',
+        'è': 'e', 'é': 'e', 'ẻ': 'e', 'ẽ': 'e', 'ẹ': 'e',
+        'ê': 'e', 'ề': 'e', 'ế': 'e', 'ể': 'e', 'ễ': 'e', 'ệ': 'e',
+        'ì': 'i', 'í': 'i', 'ỉ': 'i', 'ĩ': 'i', 'ị': 'i',
+        'ò': 'o', 'ó': 'o', 'ỏ': 'o', 'õ': 'o', 'ọ': 'o',
+        'ô': 'o', 'ồ': 'o', 'ố': 'o', 'ổ': 'o', 'ỗ': 'o', 'ộ': 'o',
+        'ơ': 'o', 'ờ': 'o', 'ớ': 'o', 'ở': 'o', 'ỡ': 'o', 'ợ': 'o',
+        'ù': 'u', 'ú': 'u', 'ủ': 'u', 'ũ': 'u', 'ụ': 'u',
+        'ư': 'u', 'ừ': 'u', 'ứ': 'u', 'ử': 'u', 'ữ': 'u', 'ự': 'u',
+        'ỳ': 'y', 'ý': 'y', 'ỷ': 'y', 'ỹ': 'y', 'ỵ': 'y'
+    }
+    for char, replacement in replacements.items():
+        s = s.replace(char, replacement)
+    return s
+
+
+def get_custom_emoji_or_default(bot, title_text: str) -> str:
+    if not title_text:
+        return ""
+    
+    # Strip emojis to get clean name
+    from app.discord_bot.modules.profile_renderer import strip_emoji
+    clean_name = strip_emoji(title_text)
+    if not clean_name:
+        return title_text
+        
+    # Normalize to lowercase and remove accents/spaces
+    no_accents = remove_vietnamese_accents(clean_name)
+    normalized = "".join(c for c in no_accents if c.isalnum() or c == ' ').strip().lower().replace(" ", "_")
+    normalized_no_underscore = normalized.replace("_", "")
+    
+    for emoji in bot.emojis:
+        name_lower = emoji.name.lower()
+        if name_lower in (normalized, normalized_no_underscore):
+            return f"{emoji} {clean_name}"
+            
+    return title_text
+
 # Business configs
 BUSINESSES = {
     "iot": {
@@ -391,12 +436,17 @@ class ControlPanelView(discord.ui.View):
                 job_titles.append("Lao động tự do 💼")
             job_str = " & ".join(job_titles)
 
+            display_rank = get_custom_emoji_or_default(self.client, rank_name)
+            display_rl = get_custom_emoji_or_default(self.client, rl_title) if rl_title else ""
+            display_daga = get_custom_emoji_or_default(self.client, daga_title) if daga_title else ""
+            display_cf = get_custom_emoji_or_default(self.client, cf_title) if cf_title else ""
+
             desc = (
                 f"🎖️ **Danh hiệu:**\n"
-                f"• `{rank_name}`\n"
-                f"• `{rl_title}`\n"
-                f"• `{daga_title}`\n"
-                f"• `{cf_title}`\n\n"
+                f"• {display_rank}\n"
+                f"• {display_rl}\n"
+                f"• {display_daga}\n"
+                f"• {display_cf}\n\n"
                 f"💰 **Số tiền:** `{money:,} VND`\n"
                 f"🟡 **Số vàng:** `{gold:,} thỏi`\n"
                 f"🏢 **Doanh nghiệp:** `{biz_str}`\n"
@@ -1242,12 +1292,17 @@ class Simulator(commands.Cog):
                 if showcase_treasure_id and showcase_treasure_id in TREASURES:
                     showcase_treasure_text = f"{TREASURES[showcase_treasure_id]['name']} (ID: `{showcase_treasure_id}`)"
 
+                display_rank = get_custom_emoji_or_default(self.bot, rank_name)
+                display_rl = get_custom_emoji_or_default(self.bot, rl_title) if rl_title else ""
+                display_daga = get_custom_emoji_or_default(self.bot, daga_title) if daga_title else ""
+                display_cf = get_custom_emoji_or_default(self.bot, cf_title) if cf_title else ""
+
                 desc = (
                     f"🎖️ **Danh hiệu:**\n"
-                    f"• `{rank_name}`\n"
-                    f"• `{rl_title}`\n"
-                    f"• `{daga_title}`\n"
-                    f"• `{cf_title}`\n\n"
+                    f"• {display_rank}\n"
+                    f"• {display_rl}\n"
+                    f"• {display_daga}\n"
+                    f"• {display_cf}\n\n"
                     f"💵 **Tài khoản:** `{money:,} VND`\n"
                     f"🟡 **Két sắt:** `{gold} Vàng` *(Tỷ giá Vàng: {gold_price:,} VND)*\n"
                     f"🏢 **Doanh nghiệp:** `{biz_count} Cơ sở`\n"

@@ -42,7 +42,10 @@ async def test_rendering():
             loan_amount=loan_amount,
             biz_count=biz_count,
             inv_count=inv_count,
-            banner_path=gif_path
+            banner_path=gif_path,
+            rl_title="💎 Cao Thủ Roulette",
+            daga_title="Chiến Kê 🏆",
+            cf_title="Vua Roulette"
         )
         is_gif = getattr(gif_buffer, "is_gif", False)
         print(f"  Success! Buffer is_gif: {is_gif}")
@@ -67,7 +70,10 @@ async def test_rendering():
             loan_amount=loan_amount,
             biz_count=biz_count,
             inv_count=inv_count,
-            banner_path=None # fallback
+            banner_path=None, # fallback
+            rl_title="💎 Cao Thủ Roulette",
+            daga_title="Chiến Kê 🏆",
+            cf_title="Vua Roulette"
         )
         is_gif = getattr(png_buffer, "is_gif", False)
         print(f"  Success! Buffer is_gif: {is_gif}")
