@@ -133,7 +133,7 @@ def draw_profile_content(
     
     # 2. Draw Avatar
     avatar_size = 180
-    avatar_x, avatar_y = 40, (height - avatar_size) // 2
+    avatar_x, avatar_y = 40, 70
     
     if avatar_img:
         # Make circle mask
@@ -159,6 +159,24 @@ def draw_profile_content(
     font_badge = load_font("bold", 17)
     font_widget_title = load_font("regular", 11)
     font_widget_val = load_font("bold", 15)
+
+    # Draw Username under the avatar, centered horizontally at x = 130
+    username_font = font_title
+    try:
+        username_w = username_font.getlength(username)
+    except AttributeError:
+        username_w = len(username) * 20
+        
+    if username_w > 200:
+        username_font = load_font("bold", 24)
+        try:
+            username_w = username_font.getlength(username)
+        except AttributeError:
+            username_w = len(username) * 14
+            
+    username_x = 130 - int(username_w // 2)
+    username_y = 265
+    overlay_draw.text((username_x, username_y), username, font=username_font, fill=(255, 255, 255, 255))
     
     # 5. Gather Badges
     raw_badges = []
@@ -238,13 +256,21 @@ def draw_profile_content(
         if badge_path:
             try:
                 with Image.open(badge_path) as b_img:
-                    # Auto-crop transparent boundaries to avoid small size due to margins
+                    # Auto-crop transparent boundaries
                     bbox = b_img.getbbox()
                     if bbox:
                         b_img = b_img.crop(bbox)
                     w, h = b_img.size
-                    scaled_h = 54  # 54px is a very prominent, clean height after removing transparent padding
+                    # Scale to a prominent height
+                    scaled_h = 180
                     scaled_w = int(w * (scaled_h / h)) if h > 0 else scaled_h
+                    
+                    # Cap width to fit within center area of the right side (max 460px)
+                    max_w = 460
+                    if scaled_w > max_w:
+                        scaled_h = int(scaled_h * (max_w / scaled_w))
+                        scaled_w = max_w
+                        
                 badges.append({
                     "text": text,
                     "bg_color": bg_color,
@@ -273,90 +299,23 @@ def draw_profile_content(
                 "height": 32,
                 "is_image": False
             })
-        
-    # Calculate text layout dynamically and center it vertically
+
     # Separate top image-based badges from bottom text-based badges
     top_image_badges = [b for b in badges if b["is_image"]]
     bottom_badges = [b for b in badges if not b["is_image"]]
     
-    # Resize top image badges to a massive height (180px) to make them look like a crown/crest!
-    for b in top_image_badges:
-        target_h = 180
-        try:
-            with Image.open(b["path"]) as b_img:
-                bbox = b_img.getbbox()
-                if bbox:
-                    b_img = b_img.crop(bbox)
-                w, h = b_img.size
-                scaled_w = int(w * (target_h / h)) if h > 0 else target_h
-                scaled_h = target_h
-                
-                # Cap the width to prevent clipping out of the banner boundary (max 500px)
-                max_w = 500
-                if scaled_w > max_w:
-                    scaled_h = int(scaled_h * (max_w / scaled_w))
-                    scaled_w = max_w
-                b["width"] = scaled_w
-                b["height"] = scaled_h
-        except Exception:
-            b["width"] = target_h
-            b["height"] = target_h
-            
-    # 1. Group bottom text-based badges into rows
-    badge_rows = []
-    current_row = []
-    current_row_width = 0
-    start_x = 260
-    max_badges_width = 760 - start_x  # boundary is 760
-    spacing = 10
+    # We display at the center of the right area (from x = 260 to x = 760, center x = 510, center y = 200)
+    center_x = 510
+    center_y = 200
     
-    for b in bottom_badges:
-        badge_w = b["width"]
-        if current_row_width + badge_w > max_badges_width:
-            if current_row:
-                badge_rows.append(current_row)
-            current_row = [b]
-            current_row_width = badge_w
-        else:
-            current_row.append(b)
-            current_row_width += badge_w + spacing
-            
-    if current_row:
-        badge_rows.append(current_row)
-
-    # 2. Compute heights
-    username_height = 34  # font size 34
-    spacing_between = 15
-    badge_row_gap = 8
-    
-    total_text_height = username_height
-    
-    top_row_h = 0
     if top_image_badges:
-        top_row_h = max(b["height"] for b in top_image_badges)
-        total_text_height += top_row_h + spacing_between
-        
-    num_bottom_rows = len(badge_rows)
-    if num_bottom_rows > 0:
-        total_text_height += spacing_between
-        bottom_rows_h = 0
-        for i, row in enumerate(badge_rows):
-            row_h = max(b["height"] for b in row)
-            bottom_rows_h += row_h
-            if i < num_bottom_rows - 1:
-                bottom_rows_h += badge_row_gap
-        total_text_height += bottom_rows_h
-        
-    # 3. Vertically center the text block
-    start_y = (height - total_text_height) // 2
-    
-    # 4. Draw Top Image Badges
-    current_y = start_y
-    if top_image_badges:
-        current_x = start_x
+        # Draw top image badges centered in the right portion
+        total_w = sum(b["width"] for b in top_image_badges) + 10 * (len(top_image_badges) - 1)
+        current_x = center_x - total_w // 2
         for b in top_image_badges:
             badge_w = b["width"]
             badge_h = b["height"]
+            badge_y = center_y - badge_h // 2
             try:
                 with Image.open(b["path"]) as badge_img:
                     # Auto-crop transparent boundaries to avoid small size due to margins
@@ -364,36 +323,62 @@ def draw_profile_content(
                     if bbox:
                         badge_img = badge_img.crop(bbox)
                     resized_badge = badge_img.convert("RGBA").resize((badge_w, badge_h), Image.Resampling.LANCZOS)
-                    overlay.paste(resized_badge, (current_x, current_y), mask=resized_badge)
+                    overlay.paste(resized_badge, (current_x, badge_y), mask=resized_badge)
                     resized_badge.close()
             except Exception as e:
-                logger.error(f"Error rendering top badge image {b['path']}: {e}")
-            current_x += badge_w + spacing
-        current_y += top_row_h + spacing_between
+                logger.error(f"Error rendering centered image badge {b['path']}: {e}")
+            current_x += badge_w + 10
+    else:
+        # Fallback: Draw bottom text badges centered in the right portion
+        badge_rows = []
+        current_row = []
+        current_row_width = 0
+        max_badges_width = 460  # max width allowed
+        spacing = 10
         
-    # 5. Draw Username
-    overlay_draw.text((start_x, current_y), username, font=font_title, fill=(255, 255, 255, 255))
-    current_y += username_height + spacing_between
-    
-    # 6. Draw Bottom Text-based Badges
-    for row in badge_rows:
-        row_h = max(b["height"] for b in row)
-        current_x = start_x
-        for b in row:
+        for b in bottom_badges:
             badge_w = b["width"]
-            badge_h = b["height"]
+            if current_row_width + badge_w > max_badges_width:
+                if current_row:
+                    badge_rows.append((current_row, current_row_width - spacing))
+                current_row = [b]
+                current_row_width = badge_w + spacing
+            else:
+                current_row.append(b)
+                current_row_width += badge_w + spacing
+                
+        if current_row:
+            badge_rows.append((current_row, current_row_width - spacing))
             
-            # Align badge vertically center within the row
-            offset_y = current_y + (row_h - badge_h) // 2
-            
-            overlay_draw.rounded_rectangle(
-                [current_x, offset_y, current_x + badge_w, offset_y + badge_h],
-                radius=8,
-                fill=b["bg_color"]
-            )
-            overlay_draw.text((current_x + 12, offset_y + 5), b["text"], font=font_badge, fill=b["fg_color"])
-            current_x += badge_w + spacing
-        current_y += row_h + badge_row_gap
+        # Compute total height of fallback rows
+        badge_row_gap = 8
+        total_rows_h = 0
+        num_rows = len(badge_rows)
+        if num_rows > 0:
+            for i, (row, row_w) in enumerate(badge_rows):
+                row_h = max(b["height"] for b in row)
+                total_rows_h += row_h
+                if i < num_rows - 1:
+                    total_rows_h += badge_row_gap
+                    
+        # Draw fallback rows centered
+        current_y = center_y - total_rows_h // 2
+        for row, row_w in badge_rows:
+            row_h = max(b["height"] for b in row)
+            current_x = center_x - row_w // 2
+            for b in row:
+                badge_w = b["width"]
+                badge_h = b["height"]
+                offset_y = current_y + (row_h - badge_h) // 2
+                
+                overlay_draw.rounded_rectangle(
+                    [current_x, offset_y, current_x + badge_w, offset_y + badge_h],
+                    radius=8,
+                    fill=b["bg_color"]
+                )
+                overlay_draw.text((current_x + 12, offset_y + 5), b["text"], font=font_badge, fill=b["fg_color"])
+                current_x += badge_w + spacing
+            current_y += row_h + badge_row_gap
 
     # Paste transparent overlay onto the base image
     img.paste(overlay, (0, 0), mask=overlay)
