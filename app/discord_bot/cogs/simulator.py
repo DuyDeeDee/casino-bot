@@ -1292,10 +1292,10 @@ class Simulator(commands.Cog):
                 if showcase_treasure_id and showcase_treasure_id in TREASURES:
                     showcase_treasure_text = f"{TREASURES[showcase_treasure_id]['name']} (ID: `{showcase_treasure_id}`)"
 
-                display_rank = get_custom_emoji_or_default(self.bot, rank_name)
-                display_rl = get_custom_emoji_or_default(self.bot, rl_title) if rl_title else ""
-                display_daga = get_custom_emoji_or_default(self.bot, daga_title) if daga_title else ""
-                display_cf = get_custom_emoji_or_default(self.bot, cf_title) if cf_title else ""
+                display_rank = get_custom_emoji_or_default(self.client, rank_name)
+                display_rl = get_custom_emoji_or_default(self.client, rl_title) if rl_title else ""
+                display_daga = get_custom_emoji_or_default(self.client, daga_title) if daga_title else ""
+                display_cf = get_custom_emoji_or_default(self.client, cf_title) if cf_title else ""
 
                 desc = (
                     f"🎖️ **Danh hiệu:**\n"
