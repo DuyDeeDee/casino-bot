@@ -279,18 +279,28 @@ def draw_profile_content(
     top_image_badges = [b for b in badges if b["is_image"]]
     bottom_badges = [b for b in badges if not b["is_image"]]
     
-    # Resize top image badges to a massive height (90px) to make them look like a crown/crest!
+    # Resize top image badges to a massive height (180px) to make them look like a crown/crest!
     for b in top_image_badges:
-        b["height"] = 90
+        target_h = 180
         try:
             with Image.open(b["path"]) as b_img:
                 bbox = b_img.getbbox()
                 if bbox:
                     b_img = b_img.crop(bbox)
                 w, h = b_img.size
-                b["width"] = int(w * (90 / h)) if h > 0 else 90
+                scaled_w = int(w * (target_h / h)) if h > 0 else target_h
+                scaled_h = target_h
+                
+                # Cap the width to prevent clipping out of the banner boundary (max 500px)
+                max_w = 500
+                if scaled_w > max_w:
+                    scaled_h = int(scaled_h * (max_w / scaled_w))
+                    scaled_w = max_w
+                b["width"] = scaled_w
+                b["height"] = scaled_h
         except Exception:
-            b["width"] = 90
+            b["width"] = target_h
+            b["height"] = target_h
             
     # 1. Group bottom text-based badges into rows
     badge_rows = []
@@ -323,7 +333,7 @@ def draw_profile_content(
     
     top_row_h = 0
     if top_image_badges:
-        top_row_h = 90
+        top_row_h = max(b["height"] for b in top_image_badges)
         total_text_height += top_row_h + spacing_between
         
     num_bottom_rows = len(badge_rows)
