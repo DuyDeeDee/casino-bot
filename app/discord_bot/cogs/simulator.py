@@ -205,7 +205,7 @@ SHOP_ITEMS = {
     },
     "banner_zee": {
         "name": "Banner Zee 🌌",
-        "cost": 50_000_000,
+        "cost": 1,
         "currency": "money",
         "description": "Hình nền Zee lung linh huyền ảo.",
         "is_banner": True,
