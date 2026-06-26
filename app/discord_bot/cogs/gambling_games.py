@@ -239,37 +239,49 @@ def generate_baucua_image(seconds_remaining: int, bets: dict, result_text: str =
     return output
 
 
-def calculate_taixiu_payout(dice: list[int], view) -> int:
+def calculate_taixiu_payout(dice: list[int], view, tax_rate: float = 0.0) -> int:
     total = sum(dice)
     if 3 <= total <= 10:
         winning_side = "xiu"
     else:
         winning_side = "tai"
         
-    payout = 0
+    payout_before_tax = 0
+    total_winning_bets = 0
     
     # Tai bets
     if winning_side == "tai":
-        payout += 2 * sum(view.tai_bets.values())
+        payout_before_tax += 2 * sum(view.tai_bets.values())
+        total_winning_bets += sum(view.tai_bets.values())
         
     # Xiu bets
     if winning_side == "xiu":
-        payout += 2 * sum(view.xiu_bets.values())
+        payout_before_tax += 2 * sum(view.xiu_bets.values())
+        total_winning_bets += sum(view.xiu_bets.values())
         
     # Chan bets
     if total % 2 == 0:
-        payout += 2 * sum(view.chan_bets.values())
+        payout_before_tax += 2 * sum(view.chan_bets.values())
+        total_winning_bets += sum(view.chan_bets.values())
         
     # Le bets
     if total % 2 != 0:
-        payout += 2 * sum(view.le_bets.values())
+        payout_before_tax += 2 * sum(view.le_bets.values())
+        total_winning_bets += sum(view.le_bets.values())
         
     # Number bets
     for n in range(1, 7):
         matches = dice.count(n)
         if matches > 0:
-            payout += (matches + 1) * sum(view.number_bets[n].values())
+            payout_before_tax += (matches + 1) * sum(view.number_bets[n].values())
+            total_winning_bets += sum(view.number_bets[n].values())
             
+    net_win = payout_before_tax - total_winning_bets
+    tax = 0
+    if net_win > 0:
+        tax = int(net_win * tax_rate)
+        
+    payout = payout_before_tax - tax
     return payout
 
 
@@ -892,6 +904,9 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
             threshold_str = self.economy.get_setting("taixiu_anti_bankruptcy_threshold")
             threshold = int(threshold_str) if threshold_str is not None else 10000000  # Default 10M VND
             
+            tax_rate_str = self.economy.get_setting("taixiu_tax_rate")
+            tax_rate = float(tax_rate_str) if tax_rate_str is not None else 0.0
+            
             # Calculate total bets placed in this session
             total_session_bets = (
                 sum(view.tai_bets.values()) +
@@ -903,7 +918,7 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
             
             # 1. Roll fair random dice
             fair_dice = [random.randint(1, 6) for _ in range(3)]
-            fair_payout = calculate_taixiu_payout(fair_dice, view)
+            fair_payout = calculate_taixiu_payout(fair_dice, view, tax_rate)
             fair_loss = fair_payout - total_session_bets
             
             # 2. Check if we override with a rigged outcome
@@ -917,7 +932,7 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
                     for d2 in range(1, 7):
                         for d3 in range(1, 7):
                             cand_dice = [d1, d2, d3]
-                            pay = calculate_taixiu_payout(cand_dice, view)
+                            pay = calculate_taixiu_payout(cand_dice, view, tax_rate)
                             candidates.append((pay, cand_dice))
                 
                 # Sort by payout ascending
@@ -1002,17 +1017,23 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
             losers = []
             user_ids = set(session_bets.keys())
             
+            tax_rate_str = self.economy.get_setting("taixiu_tax_rate")
+            tax_rate = float(tax_rate_str) if tax_rate_str is not None else 0.0
+            total_tax_collected = 0
+            
             for uid in user_ids:
                 name = view.user_names.get(uid, f"User {uid}")
-                total_payout = 0
+                total_payout_before_tax = 0
                 total_bet_for_user = session_bets[uid]
                 details = []
+                winning_bet_amt = 0
                 
                 # Tai
                 if uid in view.tai_bets:
                     amt = view.tai_bets[uid]
                     if winning_side == "tai":
-                        total_payout += 2 * amt
+                        total_payout_before_tax += 2 * amt
+                        winning_bet_amt += amt
                         details.append(f"Tài: +{amt:,} VND")
                     else:
                         details.append(f"Tài: -{amt:,} VND")
@@ -1021,7 +1042,8 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
                 if uid in view.xiu_bets:
                     amt = view.xiu_bets[uid]
                     if winning_side == "xiu":
-                        total_payout += 2 * amt
+                        total_payout_before_tax += 2 * amt
+                        winning_bet_amt += amt
                         details.append(f"Xỉu: +{amt:,} VND")
                     else:
                         details.append(f"Xỉu: -{amt:,} VND")
@@ -1030,7 +1052,8 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
                 if uid in view.chan_bets:
                     amt = view.chan_bets[uid]
                     if total % 2 == 0:
-                        total_payout += 2 * amt
+                        total_payout_before_tax += 2 * amt
+                        winning_bet_amt += amt
                         details.append(f"Chẵn: +{amt:,} VND")
                     else:
                         details.append(f"Chẵn: -{amt:,} VND")
@@ -1039,7 +1062,8 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
                 if uid in view.le_bets:
                     amt = view.le_bets[uid]
                     if total % 2 != 0:
-                        total_payout += 2 * amt
+                        total_payout_before_tax += 2 * amt
+                        winning_bet_amt += amt
                         details.append(f"Lẻ: +{amt:,} VND")
                     else:
                         details.append(f"Lẻ: -{amt:,} VND")
@@ -1051,11 +1075,23 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
                         matches = dice.count(n)
                         if matches > 0:
                             payout = (matches + 1) * amt
-                            total_payout += payout
+                            total_payout_before_tax += payout
+                            winning_bet_amt += amt
                             details.append(f"Số {n} (x{matches}): +{matches * amt:,} VND")
                         else:
                             details.append(f"Số {n}: -{amt:,} VND")
                             
+                # Calculate tax
+                net_win = total_payout_before_tax - winning_bet_amt
+                tax = 0
+                if net_win > 0:
+                    tax = int(net_win * tax_rate)
+                    total_tax_collected += tax
+                
+                total_payout = total_payout_before_tax - tax
+                if tax > 0:
+                    details.append(f"Phế: -{tax:,} VND")
+                    
                 net_profit = total_payout - total_bet_for_user
                 if total_payout > 0:
                     self.economy.add_money(uid, total_payout)
@@ -1109,11 +1145,12 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
                     if dice.count(n) == 0:
                         total_lost_in_session += amt
 
-            # Add lost bets to the jackpot
-            if total_lost_in_session > 0:
+            # Add lost bets and tax to the jackpot
+            jackpot_addition = total_lost_in_session + total_tax_collected
+            if jackpot_addition > 0:
                 jackpot_str = self.economy.get_setting("taixiu_jackpot")
                 jackpot_val = int(jackpot_str) if jackpot_str else 0
-                new_jackpot = jackpot_val + total_lost_in_session
+                new_jackpot = jackpot_val + jackpot_addition
                 self.economy.set_setting("taixiu_jackpot", str(new_jackpot))
 
             dice_emojis = {1: "1️⃣", 2: "2️⃣", 3: "3️⃣", 4: "4️⃣", 5: "5️⃣", 6: "6️⃣"}

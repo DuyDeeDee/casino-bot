@@ -1254,7 +1254,7 @@ class GamblingHelpers(commands.Cog, name="General"):
         key: str = "status",
         value: str | None = None,
     ):
-        """[ADMIN] Cấu hình tỷ lệ siết (rig_rate), ngưỡng chống sập (threshold) và tỷ lệ nổ hũ (jackpot_rate) của Tài Xỉu."""
+        """[ADMIN] Cấu hình tỷ lệ siết (rig_rate), ngưỡng chống sập (threshold), tỷ lệ nổ hũ (jackpot_rate) và tỷ lệ thuế (tax_rate) của Tài Xỉu."""
         key = key.lower().strip()
         
         if key in ("status", "info", "view"):
@@ -1269,17 +1269,22 @@ class GamblingHelpers(commands.Cog, name="General"):
             jackpot_rate = float(jackpot_rate_str) if jackpot_rate_str is not None else 1.0
             overall_jackpot_rate = jackpot_rate * (6.0 / 216.0)
             
+            tax_rate_str = self.economy.get_setting("taixiu_tax_rate")
+            tax_rate = float(tax_rate_str) if tax_rate_str is not None else 0.0
+            
             embed = make_embed(
                 title="⚙️ CẤU HÌNH TÀI XỈU (ADMIN ONLY)",
                 description=(
                     f"• **Tỷ lệ siết kết quả (rig_rate):** `{rig_rate * 100}%` (Cơ hội bẻ cầu để bot trả thưởng ít nhất)\n"
                     f"• **Ngưỡng chống sập (threshold):** `{threshold:,} VND` (Tự động bẻ cầu nếu bot bị lỗ vượt quá mức này ở 1 phiên)\n"
                     f"• **Tỷ lệ nổ hũ tổng thể (jackpot_rate):** `{overall_jackpot_rate * 100:.6f}%` (Cơ hội nổ hũ ở mỗi phiên chơi)\n"
-                    f"  *(Tỷ lệ kích hoạt khi xúc xắc ra bão: {jackpot_rate * 100:.4f}%)\n\n"
+                    f"  *(Tỷ lệ kích hoạt khi xúc xắc ra bão: {jackpot_rate * 100:.4f}%)\n"
+                    f"• **Tỷ lệ thuế cược thắng (tax_rate):** `{tax_rate * 100}%` (Số tiền thắng được trích đưa vào hũ jackpot)\n\n"
                     f"💡 *Để thay đổi, hãy gõ:*\n"
                     f"• `{ctx.prefix}settxconfig rig_rate <0.0 - 1.0>`\n"
                     f"• `{ctx.prefix}settxconfig threshold <số_tiền_VND>`\n"
-                    f"• `{ctx.prefix}settxconfig jackpot_rate <tỷ_lệ_%, vd: 0.001%>`"
+                    f"• `{ctx.prefix}settxconfig jackpot_rate <tỷ_lệ_%, vd: 0.001%>`\n"
+                    f"• `{ctx.prefix}settxconfig tax_rate <tỷ_lệ_%, vd: 5%>`"
                 ),
                 color=discord.Color.dark_red()
             )
@@ -1335,8 +1340,24 @@ class GamblingHelpers(commands.Cog, name="General"):
                 )
             except ValueError:
                 await ctx.send("❌ **Lỗi:** Tỷ lệ nổ hũ phải là số thập phân dương hoặc tỷ lệ phần trăm (ví dụ: `0.001%` hoặc `0.00001`).")
+                
+        elif key in ("tax_rate", "taxrate", "tax", "phe", "phế"):
+            try:
+                val_str = value.strip()
+                if val_str.endswith("%"):
+                    rate = float(val_str[:-1].strip()) / 100.0
+                else:
+                    rate = float(val_str)
+                
+                if not (0.0 <= rate <= 1.0):
+                    raise ValueError()
+                    
+                self.economy.set_setting("taixiu_tax_rate", str(rate))
+                await ctx.send(f"✅ Đã thiết lập tỷ lệ thuế cược thắng Tài Xỉu thành **{rate * 100}%**.")
+            except ValueError:
+                await ctx.send("❌ **Lỗi:** Tỷ lệ thuế phải là số thập phân nằm trong khoảng từ `0.0` đến `1.0` hoặc dạng phần trăm (ví dụ: `5%` hoặc `0.05`).")
         else:
-            await ctx.send(f"❌ **Lỗi:** Không hỗ trợ cấu hình cho khóa `{key}`. Chỉ hỗ trợ: `rig_rate`, `threshold`, `jackpot_rate`, `status`.")
+            await ctx.send(f"❌ **Lỗi:** Không hỗ trợ cấu hình cho khóa `{key}`. Chỉ hỗ trợ: `rig_rate`, `threshold`, `jackpot_rate`, `tax_rate`, `status`.")
 
 
 async def setup(client: commands.Bot):
