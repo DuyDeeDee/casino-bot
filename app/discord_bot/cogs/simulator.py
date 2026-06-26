@@ -1315,7 +1315,7 @@ class Simulator(commands.Cog):
                     showcase_file = discord.File(fp=showcase_buffer, filename=showcase_filename)
                     showcase_embed = make_embed(
                         title="🐓 BẠN ĐỒNG HÀNH & SIÊU XE TRƯNG BÀY 🏎️",
-                        color=discord.Color.dark_theme()
+                        color=discord.Color.purple()
                     )
                     showcase_embed.set_image(url=f"attachment://{showcase_filename}")
 
@@ -1349,7 +1349,7 @@ class Simulator(commands.Cog):
                 embed = make_embed(
                     title=f"💳 PROFILE CỦA {target.name.upper()}",
                     description=desc,
-                    color=discord.Color.dark_theme()
+                    color=discord.Color.purple()
                 )
                 embed.set_image(url=f"attachment://{filename}")
                 
