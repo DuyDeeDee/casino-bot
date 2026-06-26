@@ -3,6 +3,26 @@ import logging
 import discord
 from discord.ext import commands
 
+# Force all embeds in the bot to use purple color
+_original_embed_init = discord.Embed.__init__
+
+def _custom_embed_init(self, *args, **kwargs):
+    kwargs['color'] = discord.Color.purple()
+    _original_embed_init(self, *args, **kwargs)
+    self._colour = discord.Color.purple()
+
+@property
+def _forced_color(self):
+    return discord.Color.purple()
+
+@_forced_color.setter
+def _forced_color(self, val):
+    self._colour = discord.Color.purple()
+
+discord.Embed.__init__ = _custom_embed_init
+discord.Embed.color = _forced_color
+discord.Embed.colour = _forced_color
+
 from app.config import config
 from app.discord_bot.cogs import (
     Blackjack,
