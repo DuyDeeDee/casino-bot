@@ -742,3 +742,98 @@ async def render_showcase_image(
     output.seek(0)
     img.close()
     return output
+
+
+async def render_money_card(
+    username: str,
+    avatar_url: str,
+    money: int,
+    gold: int,
+    role_text: str
+) -> BytesIO:
+    """Renders a beautiful balance (i?money) card image and returns it as a BytesIO buffer."""
+    width = 600
+    height = 310
+    
+    # 1. Create transparent base image
+    img = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    
+    # 2. Draw outer card background with rounded corners
+    draw.rounded_rectangle([10, 10, width - 10, height - 10], radius=16, fill=(43, 45, 49, 255))
+    
+    # 3. Fetch and process avatar
+    avatar_bytes = await fetch_avatar(avatar_url)
+    avatar_img = None
+    avatar_size = 80
+    avatar_x, avatar_y = 35, 30
+    
+    if avatar_bytes:
+        try:
+            avatar_img = Image.open(BytesIO(avatar_bytes)).convert("RGBA")
+            avatar_img = avatar_img.resize((avatar_size, avatar_size), Image.Resampling.LANCZOS)
+            
+            mask = Image.new("L", (avatar_size, avatar_size), 0)
+            mask_draw = ImageDraw.Draw(mask)
+            mask_draw.ellipse((0, 0, avatar_size, avatar_size), fill=255)
+            
+            avatar_circle = Image.new("RGBA", (avatar_size, avatar_size), (0, 0, 0, 0))
+            avatar_circle.paste(avatar_img, (0, 0), mask=mask)
+            img.paste(avatar_circle, (avatar_x, avatar_y), mask=avatar_circle)
+            avatar_circle.close()
+            mask.close()
+        except Exception as e:
+            logger.error(f"Failed to render money card avatar: {e}")
+            avatar_img = None
+            
+    if not avatar_img:
+        # Fallback circle
+        draw.ellipse([avatar_x, avatar_y, avatar_x + avatar_size, avatar_y + avatar_size], fill=(100, 100, 100, 255))
+        
+    # Avatar outline border (purple)
+    draw.ellipse([avatar_x - 3, avatar_y - 3, avatar_x + avatar_size + 3, avatar_y + avatar_size + 3], outline=(148, 0, 211, 255), width=3)
+    
+    # 4. Load Fonts
+    font_username = load_font("bold", 24)
+    font_role = load_font("bold", 12)
+    font_section_title = load_font("regular", 11)
+    font_section_val = load_font("bold", 26)
+    font_section_unit = load_font("regular", 11)
+    
+    # Draw User Info (Username and Role)
+    draw.text((130, 35), username, font=font_username, fill=(255, 255, 255, 255))
+    draw.text((130, 68), role_text, font=font_role, fill=(148, 155, 164, 255))
+    
+    # 5. Draw Middle Cards (SỐ DƯ and THỎI VÀNG)
+    # Box 1: SỐ DƯ (Left)
+    draw.rounded_rectangle([35, 125, 285, 225], radius=10, fill=(35, 36, 40, 255), outline=(184, 134, 11, 100), width=1)
+    draw.text((50, 135), "💰 SỐ DƯ", font=font_section_title, fill=(148, 155, 164, 255))
+    draw.text((50, 158), f"{money:,}", font=font_section_val, fill=(255, 215, 0, 255)) # Gold color
+    draw.text((50, 195), "VND", font=font_section_unit, fill=(148, 155, 164, 255))
+    
+    # Box 2: THỎI VÀNG (Right)
+    draw.rounded_rectangle([315, 125, 565, 225], radius=10, fill=(35, 36, 40, 255), outline=(184, 134, 11, 100), width=1)
+    draw.text((330, 135), "🪙 THỎI VÀNG", font=font_section_title, fill=(148, 155, 164, 255))
+    draw.text((330, 158), f"{gold:,}", font=font_section_val, fill=(255, 255, 255, 255)) # White
+    draw.text((330, 195), "thỏi vàng", font=font_section_unit, fill=(148, 155, 164, 255))
+    
+    # 6. Draw Footer Card
+    draw.rounded_rectangle([35, 240, 565, 275], radius=8, fill=(30, 31, 34, 255))
+    draw.text((50, 250), "📅 Cập nhật lúc", font=font_section_title, fill=(148, 155, 164, 255))
+    
+    # Timestamp: MM/DD/YYYY — HH:MM:SS
+    from datetime import datetime
+    current_time_str = datetime.now().strftime("%m/%d/%Y — %H:%M:%S")
+    try:
+        ts_w = font_section_title.getlength(current_time_str)
+    except AttributeError:
+        ts_w = len(current_time_str) * 7
+    ts_x = 550 - int(ts_w)
+    draw.text((ts_x, 250), current_time_str, font=font_section_title, fill=(148, 155, 164, 255))
+    
+    # Return as BytesIO
+    buf = BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+    img.close()
+    return buf

@@ -216,14 +216,53 @@ class GamblingHelpers(commands.Cog, name="General"):
     async def money(self, ctx: commands.Context, user: discord.Member | None = None):
         target_user = user or ctx.author
         profile = self.economy.get_entry(target_user.id)
-        embed = make_embed(
-            title=target_user.name,
-            description=(
-                "**{:,} VND**".format(profile[1]) + "\n**{:,}** thỏi vàng".format(profile[2])
-            ),
-        )
-        embed.set_thumbnail(url=target_user.display_avatar.url)
-        await ctx.send(embed=embed)
+        
+        try:
+            from app.discord_bot.modules.profile_renderer import render_money_card
+            from uuid import uuid4
+            
+            # Determine role text dynamically
+            if isinstance(target_user, discord.Member):
+                if target_user.guild.owner_id == target_user.id:
+                    role_text = "CHỦ SỞ HỮU • CẤP TỐI CAO"
+                elif target_user.guild_permissions.administrator:
+                    role_text = "QUẢN TRỊ VIÊN • CẤP CAO"
+                elif target_user.guild_permissions.manage_guild or target_user.guild_permissions.kick_members:
+                    role_text = "ĐIỀU HÀNH VIÊN • CẤP TRUNG"
+                else:
+                    role_text = "THÀNH VIÊN • CẤP THƯỜNG"
+            else:
+                role_text = "THÀNH VIÊN • CẤP THƯỜNG"
+                
+            avatar_url = target_user.display_avatar.with_format("png").url
+            img_buffer = await render_money_card(
+                username=target_user.name,
+                avatar_url=avatar_url,
+                money=profile[1],
+                gold=profile[2],
+                role_text=role_text
+            )
+            
+            filename = f"money-{target_user.id}-{uuid4().hex[:6]}.png"
+            file = discord.File(fp=img_buffer, filename=filename)
+            
+            embed = make_embed(
+                color=discord.Color.purple()
+            )
+            embed.set_image(url=f"attachment://{filename}")
+            
+            await ctx.send(file=file, embed=embed)
+            img_buffer.close()
+        except Exception as e:
+            logger.error(f"Failed to render money card: {e}", exc_info=True)
+            embed = make_embed(
+                title=target_user.name,
+                description=(
+                    "**{:,} VND**".format(profile[1]) + "\n**{:,}** thỏi vàng".format(profile[2])
+                ),
+            )
+            embed.set_thumbnail(url=target_user.display_avatar.url)
+            await ctx.send(embed=embed)
 
     @commands.command(
         brief="Hiển thị bảng xếp hạng những người giàu nhất",
