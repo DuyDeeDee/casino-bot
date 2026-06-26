@@ -27,34 +27,59 @@ VIP_TIERS = [
         "max_bet": 1_000_000,
         "emoji": "🥉",
         "req_plays": 0,
+        "req_achievements": 0,
+        "win_bonus": 0.0,
+        "loss_refund": 0.0,
+        "chip_rate": 1,
+        "lucky_mult": 1.0,
     },
     {
         "name": "Silver",
         "title": "🍀 Con Cưng Thần May",
         "max_bet": 3_000_000,
         "emoji": "🥈",
-        "req_plays": 10,
+        "req_plays": 100,
+        "req_achievements": 1,
+        "win_bonus": 0.02,
+        "loss_refund": 0.0,
+        "chip_rate": 1,
+        "lucky_mult": 1.0,
     },
     {
         "name": "Gold",
         "title": "💎 Cao Thủ Roulette",
         "max_bet": 6_000_000,
         "emoji": "🥇",
-        "req_plays": 50,
+        "req_plays": 500,
+        "req_achievements": 3,
+        "win_bonus": 0.05,
+        "loss_refund": 0.05,
+        "chip_rate": 1,
+        "lucky_mult": 1.0,
     },
     {
         "name": "Diamond",
         "title": "👑 Vua Roulette",
         "max_bet": 10_000_000,
         "emoji": "💎",
-        "req_plays": 150,
+        "req_plays": 1500,
+        "req_achievements": 5,
+        "win_bonus": 0.08,
+        "loss_refund": 0.10,
+        "chip_rate": 2,
+        "lucky_mult": 1.0,
     },
     {
         "name": "Legend",
         "title": "🎲 Huyền Thoại Casino",
         "max_bet": 20_000_000,
         "emoji": "👑",
-        "req_plays": 300,  # Requires all 7 achievements as well
+        "req_plays": 3500,
+        "req_achievements": 7,
+        "win_bonus": 0.12,
+        "loss_refund": 0.15,
+        "chip_rate": 2,
+        "lucky_mult": 1.5,
     },
 ]
 
@@ -62,17 +87,62 @@ VIP_TIERS = [
 def get_user_vip(stats: dict) -> dict:
     plays = stats.get("plays", 0)
     achievements = stats.get("achievements", [])
-    has_all_achievements = len(achievements) >= 7
+    num_ach = len(achievements)
     
-    if plays >= 300 and has_all_achievements:
+    if plays >= 3500 and num_ach >= 7:
         return VIP_TIERS[4]
-    if plays >= 150:
+    if plays >= 1500 and num_ach >= 5:
         return VIP_TIERS[3]
-    if plays >= 50:
+    if plays >= 500 and num_ach >= 3:
         return VIP_TIERS[2]
-    if plays >= 10:
+    if plays >= 100 and num_ach >= 1:
         return VIP_TIERS[1]
     return VIP_TIERS[0]
+
+
+def get_vip_buffs_description(vip: dict) -> str:
+    buffs = []
+    if vip["win_bonus"] > 0:
+        buffs.append(f"➕ Tăng thưởng thắng cược: `+{vip['win_bonus']*100:.0f}%` payout")
+    if vip["loss_refund"] > 0:
+        buffs.append(f"🛡️ Bảo hiểm hoàn cược thua: `{vip['loss_refund']*100:.0f}%` số tiền thua")
+    if vip["chip_rate"] > 1:
+        buffs.append(f"⚡ Tốc độ tích lũy Chip May Mắn: x{vip['chip_rate']}")
+    if vip["lucky_mult"] > 1.0:
+        buffs.append(f"🌟 Nhân thưởng số may mắn hàng ngày: x{vip['lucky_mult']}")
+    
+    if not buffs:
+        return "❌ Chưa có đặc quyền VIP nào hoạt động."
+    return "\n".join(f"• {b}" for b in buffs)
+
+
+def get_next_vip_requirement(plays: int, achievements: list) -> str:
+    num_ach = len(achievements)
+    
+    # VIP levels index: 0=Bronze, 1=Silver, 2=Gold, 3=Diamond, 4=Legend
+    current_tier_idx = 0
+    if plays >= 3500 and num_ach >= 7:
+        current_tier_idx = 4
+    elif plays >= 1500 and num_ach >= 5:
+        current_tier_idx = 3
+    elif plays >= 500 and num_ach >= 3:
+        current_tier_idx = 2
+    elif plays >= 100 and num_ach >= 1:
+        current_tier_idx = 1
+        
+    if current_tier_idx == 4:
+        return "✨ Bạn đã đạt cấp bậc cao nhất (Huyền Thoại Casino)!"
+        
+    next_tier = VIP_TIERS[current_tier_idx + 1]
+    req_plays = next_tier["req_plays"]
+    req_ach = next_tier["req_achievements"]
+    
+    return (
+        f"➡️ **Tiến trình VIP tiếp theo ({next_tier['emoji']} {next_tier['name']}):**\n"
+        f"• Số ván chơi: `{plays}/{req_plays}`\n"
+        f"• Thành tựu đạt được: `{num_ach}/{req_ach}`"
+    )
+
 
 
 def get_daily_lucky_number(user_id: int) -> int:
@@ -698,7 +768,8 @@ class RouletteLobbyView(discord.ui.View):
         
         desc = (
             f"**CẤP BẬC VIP:** {vip['emoji']} **{vip['title']}**\n"
-            f"💰 Hạn mức cược tối đa: Không giới hạn\n"
+            f"⭐ **Đặc quyền VIP đang kích hoạt:**\n{get_vip_buffs_description(vip)}\n\n"
+            f"{get_next_vip_requirement(plays, ach_list)}\n\n"
             f"🍀 Số may mắn hôm nay: **{lucky_number}** (Thưởng x40 khi cược trúng)\n"
             f"⚡ Chip May Mắn hiện có: **{stats['chips']}/10** (Thưởng thêm `+{stats['chips'] * 0.5}%`)\n\n"
             f"📊 **BẢNG THỐNG KÊ CHI TIẾT:**\n"
@@ -764,7 +835,8 @@ class Roulette(commands.Cog, name="Roulette"):
             
             desc = (
                 f"**CẤP BẬC VIP:** {vip['emoji']} **{vip['title']}**\n"
-                f"💰 Hạn mức cược tối đa: Không giới hạn\n"
+                f"⭐ **Đặc quyền VIP đang kích hoạt:**\n{get_vip_buffs_description(vip)}\n\n"
+                f"{get_next_vip_requirement(plays, ach_list)}\n\n"
                 f"🍀 Số may mắn hôm nay: **{lucky_number}** (Thưởng x40 khi cược trúng)\n"
                 f"⚡ Chip May Mắn hiện có: **{stats['chips']}/10** (Thưởng thêm `+{stats['chips'] * 0.5}%`)\n\n"
                 f"📊 **BẢNG THỐNG KÊ CHI TIẾT:**\n"
@@ -804,6 +876,7 @@ class Roulette(commands.Cog, name="Roulette"):
                 f"Chào mừng bạn đến với **Roulette Châu Âu (Bàn Multiplayer)** 🎡\n\n"
                 f"🍀 Số may mắn của bạn hôm nay: **{lucky_number}** (Thưởng x40 khi cược đơn trúng!)\n"
                 f"👑 VIP Rank của bạn: {vip['emoji']} **{vip['title']}**\n"
+                f"⭐ **Đặc quyền VIP đang kích hoạt:**\n{get_vip_buffs_description(vip)}\n\n"
                 f"💰 Giới hạn cược: Không giới hạn\n"
                 f"⚡ Chip May Mắn hiện tại: **{stats['chips']}/10**\n\n"
                 f"Mọi người hãy chọn các nút cược bên dưới để tham gia đặt cược!"
@@ -940,16 +1013,26 @@ class Roulette(commands.Cog, name="Roulette"):
         payout = 0
         chips_delta = 0
         new_chips_count = stats["chips"]
+        vip_win_bonus = 0
+        refund = 0
+        chip_rate = vip.get("chip_rate", 1)
         
         if won:
+            is_lucky_hit = (bet_type == "number" and bet_choice == str(lucky_number))
             multiplier = get_payout_multiplier(bet_type, bet_choice, lucky_number)
+            if is_lucky_hit and vip.get("lucky_mult", 1.0) > 1.0:
+                multiplier = int(multiplier * vip["lucky_mult"])
+                
             base_payout = bet_amount * multiplier
             
             # Luck chip bonus logic
             chip_bonus_percent = stats["chips"] * 0.005 # 0.5% per chip
             chip_bonus = int(base_payout * chip_bonus_percent)
             
-            payout = base_payout + chip_bonus
+            # VIP win bonus
+            vip_win_bonus = int(base_payout * vip.get("win_bonus", 0.0))
+            
+            payout = base_payout + chip_bonus + vip_win_bonus
             profit = payout - bet_amount
             
             # Consume all chips
@@ -965,20 +1048,26 @@ class Roulette(commands.Cog, name="Roulette"):
                 payout=payout,
                 base_payout=base_payout,
                 chip_bonus=chip_bonus,
+                vip_win_bonus=vip_win_bonus,
                 profit=profit,
             )
         else:
             payout = 0
-            profit = -bet_amount
+            refund = int(bet_amount * vip.get("loss_refund", 0.0))
+            profit = -bet_amount + refund
             
-            # Accumulate 1 chip (max 10)
+            if refund > 0:
+                self.economy.add_money(user_id, refund)
+            
+            # Accumulate chips (max 10)
             if stats["chips"] < 10:
-                new_chips_count = stats["chips"] + 1
+                new_chips_count = min(10, stats["chips"] + chip_rate)
             log_wallet_change(
                 logger,
                 event="roulette_payout_lose",
                 user_id=user_id,
-                money_delta=0,
+                money_delta=refund,
+                refund=refund,
                 profit=profit,
             )
             
@@ -1051,12 +1140,14 @@ class Roulette(commands.Cog, name="Roulette"):
                     f"• Thưởng thêm từ **{stats['chips']} Chip May Mắn**: `+{chip_bonus_percent*100:.1f}%` (+{chip_bonus:,} VNĐ)\n"
                     f"👉 *Toàn bộ chip đã được tiêu hao về 0.*\n"
                 )
+            if vip_win_bonus > 0:
+                desc += f"• Thưởng thêm từ **VIP {vip['name']}** (`+{vip['win_bonus']*100:.0f}%`): `+{vip_win_bonus:,} VNĐ`\n"
             desc += f"🏆 **Tổng thực nhận:** `+{payout:,} VNĐ` (**Lợi nhuận:** `+{profit:,} VNĐ`)\n"
         else:
-            desc += (
-                f"💔 **Thua cuộc:** `-{bet_amount:,} VNĐ`\n"
-                f"🍀 *Bạn tích lũy thêm 1 Chip May Mắn!* (Số chip hiện có: **{new_chips_count}/10**)\n"
-            )
+            desc += f"💔 **Thua cuộc:** `-{bet_amount:,} VNĐ`\n"
+            if refund > 0:
+                desc += f"🛡️ **Bảo hiểm VIP {vip['name']}** (`{vip['loss_refund']*100:.0f}%`): Hoàn lại `+{refund:,} VNĐ`\n"
+            desc += f"🍀 *Bạn tích lũy thêm {chip_rate} Chip May Mắn!* (Số chip hiện có: **{new_chips_count}/10**)\n"
             
         # Add win streak indicators
         if won:
@@ -1109,6 +1200,7 @@ class Roulette(commands.Cog, name="Roulette"):
                 f"Chào mừng bạn đến với **Roulette Châu Âu (Bàn Multiplayer)** 🎡\n\n"
                 f"🍀 Số may mắn của chủ bàn hôm nay: **{lucky_number}**\n"
                 f"👑 VIP Rank của chủ bàn: {vip['emoji']} **{vip['title']}**\n"
+                f"⭐ **Đặc quyền VIP của chủ bàn:**\n{get_vip_buffs_description(vip)}\n\n"
                 f"💰 Giới hạn cược: Không giới hạn\n"
                 f"⚡ Chip May Mắn chủ bàn: **{stats['chips']}/10**\n\n"
                 f"Mọi người hãy chọn các nút cược bên dưới để tham gia đặt cược!"
@@ -1244,11 +1336,14 @@ class Roulette(commands.Cog, name="Roulette"):
             user_display = user.display_name if user else f"ID: {u_id}"
             
             stats = self.economy.get_roulette(u_id)
+            vip = get_user_vip(stats)
+            chip_rate = vip.get("chip_rate", 1)
             lucky_number = get_daily_lucky_number(u_id)
             
             u_total_bet = sum(b["amount"] for b in u_bets)
             u_total_payout = 0
             u_total_profit = 0
+            u_total_refund = 0
             any_won = False
             details_logs = []
             
@@ -1258,25 +1353,42 @@ class Roulette(commands.Cog, name="Roulette"):
                 
                 if won:
                     any_won = True
+                    is_lucky_hit = (b["type"] == "number" and b["choice"] == str(lucky_number))
                     multiplier = get_payout_multiplier(b["type"], b["choice"], lucky_number)
+                    if is_lucky_hit and vip.get("lucky_mult", 1.0) > 1.0:
+                        multiplier = int(multiplier * vip["lucky_mult"])
+                        
                     base_payout = b["amount"] * multiplier
                     
                     # Chip bonus
                     chip_bonus_percent = stats["chips"] * 0.005
                     chip_bonus = int(base_payout * chip_bonus_percent)
                     
-                    payout = base_payout + chip_bonus
+                    # VIP Win Bonus
+                    vip_win_bonus = int(base_payout * vip.get("win_bonus", 0.0))
+                    
+                    payout = base_payout + chip_bonus + vip_win_bonus
                     p_profit = payout - b["amount"]
                     
                     u_total_payout += payout
                     u_total_profit += p_profit
                     
-                    bonus_str = f" (+{chip_bonus:,} VNĐ từ {stats['chips']} Chip)" if chip_bonus > 0 else ""
-                    details_logs.append(f"  🟢 **{viet_choice}** (Cược: `{b['amount']:,}`): **Thắng!** +`{payout:,}` VNĐ{bonus_str}")
+                    bonus_str = []
+                    if chip_bonus > 0:
+                        bonus_str.append(f"+{chip_bonus:,} VNĐ từ {stats['chips']} Chip")
+                    if vip_win_bonus > 0:
+                        bonus_str.append(f"+{vip_win_bonus:,} VNĐ từ VIP")
+                    
+                    bonus_desc = f" ({', '.join(bonus_str)})" if bonus_str else ""
+                    details_logs.append(f"  🟢 **{viet_choice}** (Cược: `{b['amount']:,}`): **Thắng!** +`{payout:,}` VNĐ{bonus_desc}")
                 else:
-                    p_profit = -b["amount"]
+                    refund = int(b["amount"] * vip.get("loss_refund", 0.0))
+                    p_profit = -b["amount"] + refund
                     u_total_profit += p_profit
-                    details_logs.append(f"  🔴 **{viet_choice}** (Cược: `{b['amount']:,}`): **Thua!**")
+                    u_total_refund += refund
+                    
+                    refund_str = f" (Hoàn tiền VIP: `+{refund:,}` VNĐ)" if refund > 0 else ""
+                    details_logs.append(f"  🔴 **{viet_choice}** (Cược: `{b['amount']:,}`): **Thua!**{refund_str}")
             
             overall_net_profit += u_total_profit
             
@@ -1284,24 +1396,29 @@ class Roulette(commands.Cog, name="Roulette"):
             new_chips_count = stats["chips"]
             if any_won:
                 new_chips_count = 0
-                if u_total_payout > 0:
-                    self.economy.add_money(u_id, u_total_payout)
+                total_to_add = u_total_payout + u_total_refund
+                if total_to_add > 0:
+                    self.economy.add_money(u_id, total_to_add)
                     log_wallet_change(
                         logger,
                         event="roulette_multi_payout_win",
                         user_id=u_id,
-                        money_delta=u_total_payout,
+                        money_delta=total_to_add,
                         payout=u_total_payout,
+                        refund=u_total_refund,
                         profit=u_total_profit,
                     )
             else:
                 if stats["chips"] < 10:
-                    new_chips_count = stats["chips"] + 1
+                    new_chips_count = min(10, stats["chips"] + chip_rate)
+                if u_total_refund > 0:
+                    self.economy.add_money(u_id, u_total_refund)
                 log_wallet_change(
                     logger,
                     event="roulette_multi_payout_lose",
                     user_id=u_id,
-                    money_delta=0,
+                    money_delta=u_total_refund,
+                    refund=u_total_refund,
                     profit=u_total_profit,
                 )
                 
@@ -1353,11 +1470,11 @@ class Roulette(commands.Cog, name="Roulette"):
             # Format results for this player
             user_res_str = f"👤 **{user_display}**:\n" + "\n".join(details_logs) + "\n"
             if u_total_profit > 0:
-                user_res_str += f"  💰 **Tổng thực nhận:** `+{u_total_profit:,} VNĐ`"
+                user_res_str += f"  💰 **Tổng thực nhận:** `+{u_total_payout + u_total_refund:,} VNĐ` (Lợi nhuận ròng: `{u_total_profit:+,} VNĐ`)"
             elif u_total_profit < 0:
-                user_res_str += f"  💸 **Tổng thực nhận:** `{u_total_profit:,} VNĐ` (Tích lũy 1 chip, hiện có: **{new_chips_count}/10**)"
+                user_res_str += f"  💸 **Tổng thực nhận:** `{u_total_payout + u_total_refund:,} VNĐ` (Lợi nhuận ròng: `{u_total_profit:,} VNĐ` | Tích lũy {chip_rate} chip, hiện có: **{new_chips_count}/10**)"
             else:
-                user_res_str += f"  ⚖️ **Tổng thực nhận:** `0 VNĐ`"
+                user_res_str += f"  ⚖️ **Tổng thực nhận:** `{u_total_payout + u_total_refund:,} VNĐ` (Lợi nhuận ròng: `0 VNĐ`)"
                 
             if newly_unlocked:
                 user_res_str += f"\n  🏆 *Thành tựu mới:* {', '.join(newly_unlocked)}"

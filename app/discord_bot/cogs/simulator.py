@@ -202,6 +202,14 @@ SHOP_ITEMS = {
         "description": "abc",
         "is_banner": True,
         "filename": "sally.gif"
+    },
+    "banner_zee": {
+        "name": "Banner Zee 🌌",
+        "cost": 50_000_000,
+        "currency": "money",
+        "description": "Hình nền Zee lung linh huyền ảo.",
+        "is_banner": True,
+        "filename": "zee.jpg"
     }
 }
 
