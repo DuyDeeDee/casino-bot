@@ -971,9 +971,13 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
             jackpot_winners = []
             jackpot_val_won = 0
             if dice[0] == dice[1] == dice[2]:
-                total_session_bets = sum(session_bets.values())
-                if total_session_bets > 0:
-                    is_jackpot_triggered = True
+                jackpot_rate_str = self.economy.get_setting("taixiu_jackpot_rate")
+                jackpot_rate = float(jackpot_rate_str) if jackpot_rate_str is not None else 1.0
+                
+                if random.random() < jackpot_rate:
+                    total_session_bets = sum(session_bets.values())
+                    if total_session_bets > 0:
+                        is_jackpot_triggered = True
                     jackpot_str = self.economy.get_setting("taixiu_jackpot")
                     jackpot_val = int(jackpot_str) if jackpot_str else 0
                     jackpot_val_won = jackpot_val

@@ -1254,7 +1254,7 @@ class GamblingHelpers(commands.Cog, name="General"):
         key: str = "status",
         value: str | None = None,
     ):
-        """[ADMIN] Cấu hình tỷ lệ siết (rig_rate) và ngưỡng chống sập (threshold) của Tài Xỉu."""
+        """[ADMIN] Cấu hình tỷ lệ siết (rig_rate), ngưỡng chống sập (threshold) và tỷ lệ nổ hũ (jackpot_rate) của Tài Xỉu."""
         key = key.lower().strip()
         
         if key in ("status", "info", "view"):
@@ -1265,14 +1265,21 @@ class GamblingHelpers(commands.Cog, name="General"):
             threshold_str = self.economy.get_setting("taixiu_anti_bankruptcy_threshold")
             threshold = int(threshold_str) if threshold_str is not None else 10000000
             
+            jackpot_rate_str = self.economy.get_setting("taixiu_jackpot_rate")
+            jackpot_rate = float(jackpot_rate_str) if jackpot_rate_str is not None else 1.0
+            overall_jackpot_rate = jackpot_rate * (6.0 / 216.0)
+            
             embed = make_embed(
                 title="⚙️ CẤU HÌNH TÀI XỈU (ADMIN ONLY)",
                 description=(
                     f"• **Tỷ lệ siết kết quả (rig_rate):** `{rig_rate * 100}%` (Cơ hội bẻ cầu để bot trả thưởng ít nhất)\n"
-                    f"• **Ngưỡng chống sập (threshold):** `{threshold:,} VND` (Tự động bẻ cầu nếu bot bị lỗ vượt quá mức này ở 1 phiên)\n\n"
+                    f"• **Ngưỡng chống sập (threshold):** `{threshold:,} VND` (Tự động bẻ cầu nếu bot bị lỗ vượt quá mức này ở 1 phiên)\n"
+                    f"• **Tỷ lệ nổ hũ tổng thể (jackpot_rate):** `{overall_jackpot_rate * 100:.6f}%` (Cơ hội nổ hũ ở mỗi phiên chơi)\n"
+                    f"  *(Tỷ lệ kích hoạt khi xúc xắc ra bão: {jackpot_rate * 100:.4f}%)\n\n"
                     f"💡 *Để thay đổi, hãy gõ:*\n"
                     f"• `{ctx.prefix}settxconfig rig_rate <0.0 - 1.0>`\n"
-                    f"• `{ctx.prefix}settxconfig threshold <số_tiền_VND>`"
+                    f"• `{ctx.prefix}settxconfig threshold <số_tiền_VND>`\n"
+                    f"• `{ctx.prefix}settxconfig jackpot_rate <tỷ_lệ_%, vd: 0.001%>`"
                 ),
                 color=discord.Color.dark_red()
             )
@@ -1300,8 +1307,36 @@ class GamblingHelpers(commands.Cog, name="General"):
                 await ctx.send(f"✅ Đã thiết lập ngưỡng chống sập Tài Xỉu thành **{val:,} VND**.")
             except ValueError:
                 await ctx.send("❌ **Lỗi:** Ngưỡng chống sập phải là một số nguyên đại diện cho số tiền VND.")
+                
+        elif key in ("jackpot_rate", "jackpotrate", "jackpot", "nohu"):
+            try:
+                # Parse rate (support percentage representation like '0.001%')
+                val_str = value.strip()
+                if val_str.endswith("%"):
+                    target_rate = float(val_str[:-1].strip()) / 100.0
+                else:
+                    target_rate = float(val_str)
+                
+                if target_rate < 0.0:
+                    raise ValueError()
+                
+                # Convert overall rate to triplet trigger rate
+                # triplet_rate = target_rate / (6/216)
+                triplet_rate = target_rate * 36.0
+                triplet_rate = min(1.0, max(0.0, triplet_rate))
+                
+                self.economy.set_setting("taixiu_jackpot_rate", str(triplet_rate))
+                
+                overall_computed = triplet_rate * (6.0 / 216.0)
+                await ctx.send(
+                    f"✅ Đã thiết lập tỷ lệ nổ hũ thành công:\n"
+                    f"• Tỷ lệ tổng thể mỗi phiên: **{overall_computed * 100:.6f}%**\n"
+                    f"• Tỷ lệ kích hoạt khi ra bão: **{triplet_rate * 100:.4f}%**"
+                )
+            except ValueError:
+                await ctx.send("❌ **Lỗi:** Tỷ lệ nổ hũ phải là số thập phân dương hoặc tỷ lệ phần trăm (ví dụ: `0.001%` hoặc `0.00001`).")
         else:
-            await ctx.send(f"❌ **Lỗi:** Không hỗ trợ cấu hình cho khóa `{key}`. Chỉ hỗ trợ: `rig_rate`, `threshold`, `status`.")
+            await ctx.send(f"❌ **Lỗi:** Không hỗ trợ cấu hình cho khóa `{key}`. Chỉ hỗ trợ: `rig_rate`, `threshold`, `jackpot_rate`, `status`.")
 
 
 async def setup(client: commands.Bot):
