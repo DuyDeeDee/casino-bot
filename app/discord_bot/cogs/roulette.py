@@ -85,10 +85,19 @@ VIP_TIERS = [
 
 
 def get_user_vip(stats: dict) -> dict:
+    user_id = stats.get("user_id")
     plays = stats.get("plays", 0)
     achievements = stats.get("achievements", [])
     num_ach = len(achievements)
     
+    # Bypass for Sally (sally._.1511) to get at least "Cao Thủ Roulette"
+    if user_id == 811895948363694123:
+        if plays >= 3500 and num_ach >= 7:
+            return VIP_TIERS[4]
+        if plays >= 1500 and num_ach >= 5:
+            return VIP_TIERS[3]
+        return VIP_TIERS[2]
+        
     if plays >= 3500 and num_ach >= 7:
         return VIP_TIERS[4]
     if plays >= 1500 and num_ach >= 5:

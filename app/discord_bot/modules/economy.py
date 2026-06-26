@@ -1010,6 +1010,7 @@ class Economy:
             achievements = []
             
         return {
+            "user_id": user_id,
             "plays": row[0],
             "wins": row[1],
             "losses": row[2],
@@ -1108,6 +1109,7 @@ class Economy:
             achievements = []
             
         return {
+            "user_id": user_id,
             "plays": row[0],
             "wins": row[1],
             "losses": row[2],

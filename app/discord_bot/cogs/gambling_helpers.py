@@ -1197,6 +1197,55 @@ class GamblingHelpers(commands.Cog, name="General"):
                 child.disabled = True
         view.message = await ctx.send(embed=embed, view=view)
 
+    @commands.command(name="setrl", hidden=True)
+    @commands.is_owner()
+    async def set_roulette_stats(
+        self,
+        ctx: commands.Context,
+        user: discord.Member,
+        plays: int,
+        achievements_count: int = 3,
+    ):
+        """[ADMIN] Thiết lập trực tiếp plays và số lượng danh hiệu roulette cho một user."""
+        user_id = user.id
+        
+        # Ensure user entry exists in user_roulette table
+        self.economy.get_roulette(user_id)
+        
+        # Update plays
+        self.economy.cur.execute("UPDATE user_roulette SET plays = ? WHERE user_id = ?", (plays, user_id))
+        
+        # Update achievements to match count
+        stats = self.economy.get_roulette(user_id)
+        current_ach = stats.get("achievements", [])
+        if len(current_ach) != achievements_count:
+            new_ach = []
+            for i in range(achievements_count):
+                new_ach.append(f"gifted_ach_{i}")
+            import json
+            self.economy.cur.execute("UPDATE user_roulette SET achievements = ? WHERE user_id = ?", (json.dumps(new_ach), user_id))
+            
+        self.economy.conn.commit()
+        await ctx.send(f"✅ Đã cập nhật roulette stats cho **{user.name}**: plays={plays}, achievements={achievements_count}.")
+
+    @commands.command(name="setcf", hidden=True)
+    @commands.is_owner()
+    async def set_coinflip_stats(
+        self,
+        ctx: commands.Context,
+        user: discord.Member,
+        plays: int,
+    ):
+        """[ADMIN] Thiết lập trực tiếp số lượt chơi coinflip cho một user."""
+        user_id = user.id
+        
+        # Ensure user entry exists in user_coinflip table
+        self.economy.get_coinflip(user_id)
+        
+        self.economy.cur.execute("UPDATE user_coinflip SET plays = ? WHERE user_id = ?", (plays, user_id))
+        self.economy.conn.commit()
+        await ctx.send(f"✅ Đã cập nhật coinflip plays cho **{user.name}** thành {plays}.")
+
 
 async def setup(client: commands.Bot):
     await client.add_cog(GamblingHelpers(client))
