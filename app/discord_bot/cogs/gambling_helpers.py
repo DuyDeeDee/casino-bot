@@ -297,7 +297,7 @@ class GamblingHelpers(commands.Cog, name="General"):
         if streak > 0 and streak % 7 == 0:
             bonus_gold = 1
             self.economy.add_credits(user_id, bonus_gold)
-            gold_text = f"\n🌟 **Quà cột mốc 7 ngày:** `+1 thỏi vàng` 🪙"
+            gold_text = f"\n🌟 **Quà cột mốc 7 ngày:** `+1 thỏi vàng` <:32100goldbarsfortnite:1514192020921651251>"
             
         self.economy.set_daily(user_id, now, streak)
         
@@ -321,7 +321,7 @@ class GamblingHelpers(commands.Cog, name="General"):
                 f"💰 **Tiền thưởng nhận:** `+{total_money:,} VND`"
                 f"{gold_text}\n"
                 f"💳 **Số dư VND hiện tại:** `{new_balance:,} VND`\n"
-                f"🪙 **Số dư Vàng hiện tại:** `{new_gold:,} thỏi vàng`"
+                f"<:32100goldbarsfortnite:1514192020921651251> **Số dư Vàng hiện tại:** `{new_gold:,} thỏi vàng`"
             ),
             color=discord.Color.green(),
         )
@@ -1048,7 +1048,7 @@ class GamblingHelpers(commands.Cog, name="General"):
         )
 
         embed = make_embed(
-            title="🟡 CHUYỂN VÀNG THÀNH CÔNG 🟡",
+            title="<:32100goldbarsfortnite:1514192020921651251> CHUYỂN VÀNG THÀNH CÔNG <:32100goldbarsfortnite:1514192020921651251>",
             description=(
                 f"**{ctx.author.mention}** đã chuyển thành công **{amount:,}** thỏi vàng cho **{target.mention}**!\n\n"
                 f"💳 **Số dư mới của bạn:** `{self.economy.get_entry(ctx.author.id)[2]:,}` thỏi vàng"
@@ -1085,7 +1085,7 @@ class GamblingHelpers(commands.Cog, name="General"):
                 name = await get_user_name(self.client, uid)
                 desc_lines.append(
                     f"`{idx:02d}.` **{name}** (ID: `{uid}`)\n"
-                    f"   └ 💸 `{money:,} VND` | 🪙 `{credits:,}` thỏi vàng"
+                    f"   └ 💸 `{money:,} VND` | <:32100goldbarsfortnite:1514192020921651251> `{credits:,}` thỏi vàng"
                 )
 
             embed = make_embed(

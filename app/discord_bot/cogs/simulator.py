@@ -102,7 +102,7 @@ BUSINESSES = {
         "buff": "Sinh ra 1.2M VND/giờ + Tặng giáp sức khỏe tinh thần chống nản."
     },
     "gold_shop": {
-        "name": "Chuỗi Tiệm Vàng 🪙",
+        "name": "Chuỗi Tiệm Vàng <:32100goldbarsfortnite:1514192020921651251>",
         "base_cost": 10, # 10 Gold (credits)
         "base_revenue": 0.1 / 24, # 0.1 Gold per day (approx 0.00416 Gold per hour)
         "currency": "gold"
@@ -481,7 +481,7 @@ class ControlPanelView(discord.ui.View):
                 f"• {display_daga}\n"
                 f"• {display_cf}\n\n"
                 f"💰 **Số tiền:** `{money:,} VND`\n"
-                f"🟡 **Số vàng:** `{gold:,} thỏi`\n"
+                f"<:32100goldbarsfortnite:1514192020921651251> **Số vàng:** `{gold:,} thỏi`\n"
                 f"🏢 **Doanh nghiệp:** `{biz_str}`\n"
                 f"💼 **Nghề nghiệp:** `{job_str}`\n\n"
                 f"▼ Sử dụng Menu thả xuống bên dưới để thao tác"
@@ -1056,7 +1056,7 @@ class Simulator(commands.Cog):
             elapsed_sec=elapsed_sec
         )
 
-        gold_str = f"\n🟡 **Vàng nhận:** `+{int_gold} thỏi vàng`" if int_gold > 0 else ""
+        gold_str = f"\n<:32100goldbarsfortnite:1514192020921651251> **Vàng nhận:** `+{int_gold} thỏi vàng`" if int_gold > 0 else ""
         
         embed = make_embed(
             title="🏢 BÁO CÁO DOANH THU DOANH NGHIỆP 🏢",
@@ -1338,7 +1338,7 @@ class Simulator(commands.Cog):
                     f"• {display_daga}\n"
                     f"• {display_cf}\n\n"
                     f"💵 **Tài khoản:** `{money:,} VND`\n"
-                    f"🟡 **Két sắt:** `{gold} Vàng` *(Tỷ giá Vàng: {gold_price:,} VND)*\n"
+                    f"<:32100goldbarsfortnite:1514192020921651251> **Két sắt:** `{gold} Vàng` *(Tỷ giá Vàng: {gold_price:,} VND)*\n"
                     f"🏢 **Doanh nghiệp:** `{biz_count} Cơ sở`\n"
                     f"🎒 **Túi đồ:** `{inv_count} Vật phẩm`\n"
                     f"🏺 **Cổ vật trưng bày:** {showcase_treasure_text}\n"
@@ -1563,7 +1563,7 @@ class Simulator(commands.Cog):
                     ctx=ctx
                 )
                 currency_name = "thỏi vàng"
-                balance_msg = f"🪙 **Số dư Vàng hiện tại:** `{self.economy.get_entry(user_id)[2]:,} thỏi vàng`"
+                balance_msg = f"<:32100goldbarsfortnite:1514192020921651251> **Số dư Vàng hiện tại:** `{self.economy.get_entry(user_id)[2]:,} thỏi vàng`"
                 
             embed = make_embed(
                 title="💰 BÁN BẰNG CẤP THÀNH CÔNG 💰",

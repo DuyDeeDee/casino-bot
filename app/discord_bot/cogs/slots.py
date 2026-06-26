@@ -318,7 +318,7 @@ class Slots(commands.Cog):
             unit_price=gold_price,
         )
         embed = make_embed(
-            title="🟡 MUA THỎI VÀNG THÀNH CÔNG 🟡",
+            title="<:32100goldbarsfortnite:1514192020921651251> MUA THỎI VÀNG THÀNH CÔNG <:32100goldbarsfortnite:1514192020921651251>",
             description=(
                 f"Bạn đã mua thành công **{normalized_amount:,}** thỏi vàng với giá **{gold_price:,} VND** / thỏi.\n"
                 f"💸 **Tổng chi phí:** `-{cost:,} VND`"
@@ -353,7 +353,7 @@ class Slots(commands.Cog):
             unit_price=gold_price,
         )
         embed = make_embed(
-            title="🟡 BÁN THỎI VÀNG THÀNH CÔNG 🟡",
+            title="<:32100goldbarsfortnite:1514192020921651251> BÁN THỎI VÀNG THÀNH CÔNG <:32100goldbarsfortnite:1514192020921651251>",
             description=(
                 f"Bạn đã bán thành công **{normalized_amount:,}** thỏi vàng với giá **{gold_price:,} VND** / thỏi.\n"
                 f"💰 **Nhận được:** `+{money_delta:,} VND`"
@@ -403,7 +403,7 @@ class Slots(commands.Cog):
             next_update_str = "Cập nhật tiếp theo sau 7 ngày"
 
         embed = make_embed(
-            title=f"🟡 BẢNG GIÁ THỎI VÀNG THẾ GIỚI ({trend}) 🟡",
+            title=f"<:32100goldbarsfortnite:1514192020921651251> BẢNG GIÁ THỎI VÀNG THẾ GIỚI ({trend}) <:32100goldbarsfortnite:1514192020921651251>",
             description=(
                 f"{desc}\n\n"
                 f"💰 **Giá mua/bán hiện tại:** `{current:,} VND` / thỏi\n"
