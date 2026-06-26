@@ -95,12 +95,14 @@ class Handlers(commands.Cog, name="handlers"):
             return
 
         if isinstance(error, CommandNotFound):
-            await ctx.invoke(self.client.get_command("help"))
             return
 
         if isinstance(error, (MissingRequiredArgument, TooManyArguments, BadArgument)):
-            command_name = ctx.command.name if ctx.command else None
-            await ctx.invoke(self.client.get_command("help"), command_name)
+            command_name = ctx.command.name if ctx.command else ""
+            prefix = self.client.command_prefix
+            if isinstance(prefix, list):
+                prefix = prefix[0]
+            await ctx.send(f"❌ **Sử dụng sai cú pháp!** Gõ `{prefix}help {command_name}` để xem hướng dẫn.")
             return
 
         if isinstance(error, (UserNotFound, MemberNotFound)):
