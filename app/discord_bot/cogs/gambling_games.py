@@ -239,6 +239,39 @@ def generate_baucua_image(seconds_remaining: int, bets: dict, result_text: str =
     return output
 
 
+def calculate_taixiu_payout(dice: list[int], view) -> int:
+    total = sum(dice)
+    if 3 <= total <= 10:
+        winning_side = "xiu"
+    else:
+        winning_side = "tai"
+        
+    payout = 0
+    
+    # Tai bets
+    if winning_side == "tai":
+        payout += 2 * sum(view.tai_bets.values())
+        
+    # Xiu bets
+    if winning_side == "xiu":
+        payout += 2 * sum(view.xiu_bets.values())
+        
+    # Chan bets
+    if total % 2 == 0:
+        payout += 2 * sum(view.chan_bets.values())
+        
+    # Le bets
+    if total % 2 != 0:
+        payout += 2 * sum(view.le_bets.values())
+        
+    # Number bets
+    for n in range(1, 7):
+        matches = dice.count(n)
+        if matches > 0:
+            payout += (matches + 1) * sum(view.number_bets[n].values())
+            
+    return payout
+
 
 class TaiXiuBetModal(discord.ui.Modal):
     def __init__(self, side: str, lobby_view):
@@ -852,9 +885,62 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
             
             await asyncio.sleep(2)
             
-            dice = [random.randint(1, 6) for _ in range(3)]
-            total = sum(dice)
+            # Retrieve rigging settings
+            rig_rate_str = self.economy.get_setting("taixiu_rig_rate")
+            rig_rate = float(rig_rate_str) if rig_rate_str is not None else 0.0
             
+            threshold_str = self.economy.get_setting("taixiu_anti_bankruptcy_threshold")
+            threshold = int(threshold_str) if threshold_str is not None else 10000000  # Default 10M VND
+            
+            # Calculate total bets placed in this session
+            total_session_bets = (
+                sum(view.tai_bets.values()) +
+                sum(view.xiu_bets.values()) +
+                sum(view.chan_bets.values()) +
+                sum(view.le_bets.values()) +
+                sum(sum(view.number_bets[n].values()) for n in range(1, 7))
+            )
+            
+            # 1. Roll fair random dice
+            fair_dice = [random.randint(1, 6) for _ in range(3)]
+            fair_payout = calculate_taixiu_payout(fair_dice, view)
+            fair_loss = fair_payout - total_session_bets
+            
+            # 2. Check if we override with a rigged outcome
+            rig_triggered = random.random() < rig_rate
+            bankruptcy_triggered = (threshold >= 0) and (fair_loss > threshold)
+            
+            if (rig_triggered or bankruptcy_triggered) and total_session_bets > 0:
+                # Find outcome that minimizes payout
+                candidates = []
+                for d1 in range(1, 7):
+                    for d2 in range(1, 7):
+                        for d3 in range(1, 7):
+                            cand_dice = [d1, d2, d3]
+                            pay = calculate_taixiu_payout(cand_dice, view)
+                            candidates.append((pay, cand_dice))
+                
+                # Sort by payout ascending
+                candidates.sort(key=lambda x: x[0])
+                min_payout = candidates[0][0]
+                best_choices = [c[1] for c in candidates if c[0] == min_payout]
+                selected_dice = random.choice(best_choices)
+                
+                rigged_payout = min_payout
+                saved_amount = fair_payout - rigged_payout
+                
+                logger.info(
+                    f"[TAI XIU RIGGING] Session {session_id} rigged. "
+                    f"Reason: rig_rate={rig_triggered}, bankruptcy={bankruptcy_triggered}. "
+                    f"Fair Roll: {fair_dice} (Payout: {fair_payout:,} VND). "
+                    f"Rigged Roll: {selected_dice} (Payout: {rigged_payout:,} VND). "
+                    f"Saved: {saved_amount:,} VND."
+                )
+                dice = selected_dice
+            else:
+                dice = fair_dice
+                
+            total = sum(dice)
             if 3 <= total <= 10:
                 winning_side = "xiu"
                 result_text = "XỈU"

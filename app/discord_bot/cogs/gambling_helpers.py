@@ -1246,6 +1246,63 @@ class GamblingHelpers(commands.Cog, name="General"):
         self.economy.conn.commit()
         await ctx.send(f"✅ Đã cập nhật coinflip plays cho **{user.name}** thành {plays}.")
 
+    @commands.command(name="settxconfig", hidden=True, aliases=["txconfig"])
+    @commands.is_owner()
+    async def set_taixiu_config(
+        self,
+        ctx: commands.Context,
+        key: str = "status",
+        value: str | None = None,
+    ):
+        """[ADMIN] Cấu hình tỷ lệ siết (rig_rate) và ngưỡng chống sập (threshold) của Tài Xỉu."""
+        key = key.lower().strip()
+        
+        if key in ("status", "info", "view"):
+            # Display current config
+            rig_rate_str = self.economy.get_setting("taixiu_rig_rate")
+            rig_rate = float(rig_rate_str) if rig_rate_str is not None else 0.0
+            
+            threshold_str = self.economy.get_setting("taixiu_anti_bankruptcy_threshold")
+            threshold = int(threshold_str) if threshold_str is not None else 10000000
+            
+            embed = make_embed(
+                title="⚙️ CẤU HÌNH TÀI XỈU (ADMIN ONLY)",
+                description=(
+                    f"• **Tỷ lệ siết kết quả (rig_rate):** `{rig_rate * 100}%` (Cơ hội bẻ cầu để bot trả thưởng ít nhất)\n"
+                    f"• **Ngưỡng chống sập (threshold):** `{threshold:,} VND` (Tự động bẻ cầu nếu bot bị lỗ vượt quá mức này ở 1 phiên)\n\n"
+                    f"💡 *Để thay đổi, hãy gõ:*\n"
+                    f"• `{ctx.prefix}settxconfig rig_rate <0.0 - 1.0>`\n"
+                    f"• `{ctx.prefix}settxconfig threshold <số_tiền_VND>`"
+                ),
+                color=discord.Color.dark_red()
+            )
+            await ctx.send(embed=embed)
+            return
+
+        if value is None:
+            await ctx.send(f"❌ **Lỗi:** Vui lòng cung cấp giá trị cần thiết lập cho khóa `{key}`.")
+            return
+
+        if key in ("rig_rate", "rigrate", "rate"):
+            try:
+                rate = float(value)
+                if not (0.0 <= rate <= 1.0):
+                    raise ValueError()
+                self.economy.set_setting("taixiu_rig_rate", str(rate))
+                await ctx.send(f"✅ Đã thiết lập tỷ lệ siết Tài Xỉu thành **{rate * 100}%**.")
+            except ValueError:
+                await ctx.send("❌ **Lỗi:** Tỷ lệ siết phải là số thập phân nằm trong khoảng từ `0.0` đến `1.0` (ví dụ: `0.3` đại diện cho 30%).")
+                
+        elif key in ("threshold", "anti_bankruptcy", "limit", "loss"):
+            try:
+                val = int(value)
+                self.economy.set_setting("taixiu_anti_bankruptcy_threshold", str(val))
+                await ctx.send(f"✅ Đã thiết lập ngưỡng chống sập Tài Xỉu thành **{val:,} VND**.")
+            except ValueError:
+                await ctx.send("❌ **Lỗi:** Ngưỡng chống sập phải là một số nguyên đại diện cho số tiền VND.")
+        else:
+            await ctx.send(f"❌ **Lỗi:** Không hỗ trợ cấu hình cho khóa `{key}`. Chỉ hỗ trợ: `rig_rate`, `threshold`, `status`.")
+
 
 async def setup(client: commands.Bot):
     await client.add_cog(GamblingHelpers(client))
