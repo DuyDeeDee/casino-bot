@@ -807,19 +807,25 @@ async def render_money_card(
     # 5. Draw Middle Cards (SỐ DƯ and THỎI VÀNG)
     # Box 1: SỐ DƯ (Left)
     draw.rounded_rectangle([35, 125, 285, 225], radius=10, fill=(35, 36, 40, 255), outline=(184, 134, 11, 100), width=1)
-    draw.text((50, 135), "💰 SỐ DƯ", font=font_section_title, fill=(148, 155, 164, 255))
+    # Draw small gold coin indicator
+    draw.ellipse([50, 138, 60, 148], fill=(218, 165, 32, 255))
+    draw.text((68, 135), "SỐ DƯ", font=font_section_title, fill=(148, 155, 164, 255))
     draw.text((50, 158), f"{money:,}", font=font_section_val, fill=(255, 215, 0, 255)) # Gold color
     draw.text((50, 195), "VND", font=font_section_unit, fill=(148, 155, 164, 255))
     
     # Box 2: THỎI VÀNG (Right)
     draw.rounded_rectangle([315, 125, 565, 225], radius=10, fill=(35, 36, 40, 255), outline=(184, 134, 11, 100), width=1)
-    draw.text((330, 135), "🪙 THỎI VÀNG", font=font_section_title, fill=(148, 155, 164, 255))
+    # Draw small gold coin indicator
+    draw.ellipse([330, 138, 340, 148], fill=(218, 165, 32, 255))
+    draw.text((348, 135), "THỎI VÀNG", font=font_section_title, fill=(148, 155, 164, 255))
     draw.text((330, 158), f"{gold:,}", font=font_section_val, fill=(255, 255, 255, 255)) # White
     draw.text((330, 195), "thỏi vàng", font=font_section_unit, fill=(148, 155, 164, 255))
     
     # 6. Draw Footer Card
     draw.rounded_rectangle([35, 240, 565, 275], radius=8, fill=(30, 31, 34, 255))
-    draw.text((50, 250), "📅 Cập nhật lúc", font=font_section_title, fill=(148, 155, 164, 255))
+    # Draw small blue calendar indicator
+    draw.rounded_rectangle([50, 251, 60, 261], radius=2, fill=(70, 130, 180, 255))
+    draw.text((68, 248), "Cập nhật lúc", font=font_section_title, fill=(148, 155, 164, 255))
     
     # Timestamp: MM/DD/YYYY — HH:MM:SS
     from datetime import datetime
@@ -829,7 +835,7 @@ async def render_money_card(
     except AttributeError:
         ts_w = len(current_time_str) * 7
     ts_x = 550 - int(ts_w)
-    draw.text((ts_x, 250), current_time_str, font=font_section_title, fill=(148, 155, 164, 255))
+    draw.text((ts_x, 248), current_time_str, font=font_section_title, fill=(148, 155, 164, 255))
     
     # Return as BytesIO
     buf = BytesIO()
