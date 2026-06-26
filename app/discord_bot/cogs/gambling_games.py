@@ -1034,7 +1034,8 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
                     if winning_side == "tai":
                         total_payout_before_tax += 2 * amt
                         winning_bet_amt += amt
-                        details.append(f"Tài: +{amt:,} VND")
+                        bet_tax = int(amt * tax_rate)
+                        details.append(f"Tài: +{amt - bet_tax:,} VND")
                     else:
                         details.append(f"Tài: -{amt:,} VND")
                         
@@ -1044,7 +1045,8 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
                     if winning_side == "xiu":
                         total_payout_before_tax += 2 * amt
                         winning_bet_amt += amt
-                        details.append(f"Xỉu: +{amt:,} VND")
+                        bet_tax = int(amt * tax_rate)
+                        details.append(f"Xỉu: +{amt - bet_tax:,} VND")
                     else:
                         details.append(f"Xỉu: -{amt:,} VND")
                         
@@ -1054,7 +1056,8 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
                     if total % 2 == 0:
                         total_payout_before_tax += 2 * amt
                         winning_bet_amt += amt
-                        details.append(f"Chẵn: +{amt:,} VND")
+                        bet_tax = int(amt * tax_rate)
+                        details.append(f"Chẵn: +{amt - bet_tax:,} VND")
                     else:
                         details.append(f"Chẵn: -{amt:,} VND")
                         
@@ -1064,7 +1067,8 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
                     if total % 2 != 0:
                         total_payout_before_tax += 2 * amt
                         winning_bet_amt += amt
-                        details.append(f"Lẻ: +{amt:,} VND")
+                        bet_tax = int(amt * tax_rate)
+                        details.append(f"Lẻ: +{amt - bet_tax:,} VND")
                     else:
                         details.append(f"Lẻ: -{amt:,} VND")
                         
@@ -1077,7 +1081,9 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
                             payout = (matches + 1) * amt
                             total_payout_before_tax += payout
                             winning_bet_amt += amt
-                            details.append(f"Số {n} (x{matches}): +{matches * amt:,} VND")
+                            net_win_bet = matches * amt
+                            bet_tax = int(net_win_bet * tax_rate)
+                            details.append(f"Số {n} (x{matches}): +{net_win_bet - bet_tax:,} VND")
                         else:
                             details.append(f"Số {n}: -{amt:,} VND")
                             
@@ -1089,8 +1095,6 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
                     total_tax_collected += tax
                 
                 total_payout = total_payout_before_tax - tax
-                if tax > 0:
-                    details.append(f"Phế: -{tax:,} VND")
                     
                 net_profit = total_payout - total_bet_for_user
                 if total_payout > 0:
