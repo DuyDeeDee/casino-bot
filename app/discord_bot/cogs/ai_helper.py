@@ -216,6 +216,9 @@ class AIHelper(commands.Cog, name="AI"):
 
         # Check if the bot is tagged/mentioned in the message
         if self.bot.user in message.mentions:
+            if message.reference is not None:
+                return
+
             from app.config import config
             prefix = config.bot.prefix
             if message.content.startswith(prefix):
