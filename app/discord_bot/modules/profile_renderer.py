@@ -753,7 +753,7 @@ async def render_money_card(
 ) -> BytesIO:
     """Renders a beautiful balance (i?money) card image and returns it as a BytesIO buffer."""
     width = 600
-    height = 310
+    height = 245
     
     # 1. Create transparent base image
     img = Image.new("RGBA", (width, height), (0, 0, 0, 0))
@@ -820,22 +820,6 @@ async def render_money_card(
     draw.text((348, 135), "THỎI VÀNG", font=font_section_title, fill=(148, 155, 164, 255))
     draw.text((330, 158), f"{gold:,}", font=font_section_val, fill=(255, 255, 255, 255)) # White
     draw.text((330, 195), "thỏi vàng", font=font_section_unit, fill=(148, 155, 164, 255))
-    
-    # 6. Draw Footer Card
-    draw.rounded_rectangle([35, 240, 565, 275], radius=8, fill=(30, 31, 34, 255))
-    # Draw small blue calendar indicator
-    draw.rounded_rectangle([50, 251, 60, 261], radius=2, fill=(70, 130, 180, 255))
-    draw.text((68, 248), "Cập nhật lúc", font=font_section_title, fill=(148, 155, 164, 255))
-    
-    # Timestamp: MM/DD/YYYY — HH:MM:SS
-    from datetime import datetime
-    current_time_str = datetime.now().strftime("%m/%d/%Y — %H:%M:%S")
-    try:
-        ts_w = font_section_title.getlength(current_time_str)
-    except AttributeError:
-        ts_w = len(current_time_str) * 7
-    ts_x = 550 - int(ts_w)
-    draw.text((ts_x, 248), current_time_str, font=font_section_title, fill=(148, 155, 164, 255))
     
     # Return as BytesIO
     buf = BytesIO()
