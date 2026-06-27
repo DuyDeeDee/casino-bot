@@ -30,12 +30,15 @@ class AIHelper(commands.Cog, name="AI"):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.client_ai = None
+        self.groq_key = os.getenv("GROQ_API_KEY")
         self.deepseek_key = os.getenv("DEEPSEEK_API_KEY")
         self.openrouter_key = os.getenv("OPENROUTER_API_KEY")
         self.gemini_key = os.getenv("GEMINI_API_KEY")
         self.gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
-        if self.deepseek_key:
+        if self.groq_key:
+            logger.info("Groq API configured for AI helper.")
+        elif self.deepseek_key:
             logger.info("DeepSeek/OpenModel API configured for AI helper.")
         elif self.openrouter_key:
             logger.info("OpenRouter API configured for AI helper.")
@@ -62,8 +65,8 @@ class AIHelper(commands.Cog, name="AI"):
         prompt_text: str,
         mentions: list[discord.User | discord.Member] | None = None
     ):
-        if not self.deepseek_key and not self.openrouter_key and not self.client_ai:
-            await context_channel.send("❌ **Lỗi:** Tính năng AI chưa được cấu hình. Vui lòng cung cấp `DEEPSEEK_API_KEY` hoặc `GEMINI_API_KEY`.")
+        if not self.groq_key and not self.deepseek_key and not self.openrouter_key and not self.client_ai:
+            await context_channel.send("❌ **Lỗi:** Tính năng AI chưa được cấu hình. Vui lòng cung cấp `DEEPSEEK_API_KEY`, `GROQ_API_KEY` hoặc `GEMINI_API_KEY`.")
             return
 
         tin_nhan = await context_channel.send("🤔 Đang suy nghĩ...")
@@ -83,13 +86,17 @@ class AIHelper(commands.Cog, name="AI"):
 
             cau_tra_loi = ""
 
-            # Check if using DeepSeek or OpenRouter (OpenAI-compatible)
-            if self.deepseek_key or self.openrouter_key:
+            # Check if using Groq, DeepSeek or OpenRouter (OpenAI-compatible)
+            if self.groq_key or self.deepseek_key or self.openrouter_key:
                 import aiohttp
                 import json
                 
                 is_openmodel = False
-                if self.deepseek_key:
+                if self.groq_key:
+                    api_key = self.groq_key
+                    url = os.getenv("GROQ_API_URL") or "https://api.groq.com/openai/v1/chat/completions"
+                    model = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+                elif self.deepseek_key:
                     # Configurable base URL & Model for custom endpoints like openmodel.ai
                     api_key = self.deepseek_key
                     url = os.getenv("DEEPSEEK_API_URL")
