@@ -112,8 +112,8 @@ class AIHelper(commands.Cog, name="AI"):
                     if not model:
                         model = "deepseek-v4-flash" if is_openmodel else "deepseek-chat"
                 else:
-                    url = "https://openrouter.ai/api/v1/chat/completions"
-                    model = "google/gemini-2.5-flash"
+                    url = os.getenv("OPENROUTER_API_URL") or "https://openrouter.ai/api/v1/chat/completions"
+                    model = os.getenv("OPENROUTER_MODEL", "google/gemini-2.5-flash")
                     api_key = self.openrouter_key
 
                 if is_openmodel:
