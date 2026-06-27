@@ -1145,23 +1145,8 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
                         session_id=session_id,
                     )
 
-            # Calculate total lost bets to add to jackpot
-            total_lost_in_session = 0
-            if winning_side != "tai":
-                total_lost_in_session += sum(view.tai_bets.values())
-            if winning_side != "xiu":
-                total_lost_in_session += sum(view.xiu_bets.values())
-            if total % 2 != 0:
-                total_lost_in_session += sum(view.chan_bets.values())
-            if total % 2 == 0:
-                total_lost_in_session += sum(view.le_bets.values())
-            for n in range(1, 7):
-                for uid, amt in view.number_bets[n].items():
-                    if dice.count(n) == 0:
-                        total_lost_in_session += amt
-
-            # Add lost bets and tax to the jackpot
-            jackpot_addition = total_lost_in_session + total_tax_collected
+            # Add only tax collected from winning bets to the jackpot (Option B)
+            jackpot_addition = total_tax_collected
             if jackpot_addition > 0:
                 jackpot_str = self.economy.get_setting("taixiu_jackpot")
                 jackpot_val = int(jackpot_str) if jackpot_str else 0
