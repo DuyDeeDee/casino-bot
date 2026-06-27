@@ -111,22 +111,6 @@ BUSINESSES = {
 
 # Shop items config
 SHOP_ITEMS = {
-    "banner_hr": {
-        "name": "Banner HR Động ⚡",
-        "cost": 1,
-        "currency": "money",
-        "description": "Hình nền động HR cực chất.",
-        "is_banner": True,
-        "filename": "hr.gif"
-    },
-    "banner_anak": {
-        "name": "Banner Anak Động 🌌",
-        "cost": 1,
-        "currency": "money",
-        "description": "Hình nền động Anak phong cách vũ trụ ảo diệu.",
-        "is_banner": True,
-        "filename": "anak.gif"
-    },
     "bang_cap": {
         "name": "Bằng cấp công nghệ 🎓",
         "cost": 10_000_000,
@@ -194,22 +178,6 @@ SHOP_ITEMS = {
         "description": "Hình nền động Lelouch Geass cực kỳ ngầu.",
         "is_banner": True,
         "filename": "lelouch.gif"
-    },
-    "sally": {
-        "name": "🐤",
-        "cost": 1,
-        "currency": "VND",
-        "description": "abc",
-        "is_banner": True,
-        "filename": "sally.gif"
-    },
-    "banner_zee": {
-        "name": "Banner Zee 🌌",
-        "cost": 1,
-        "currency": "money",
-        "description": "Hình nền Zee lung linh huyền ảo.",
-        "is_banner": True,
-        "filename": "zee.jpg"
     }
 }
 
