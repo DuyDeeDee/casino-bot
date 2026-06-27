@@ -33,7 +33,7 @@ class AIHelper(commands.Cog, name="AI"):
         self.deepseek_key = os.getenv("DEEPSEEK_API_KEY")
         self.openrouter_key = os.getenv("OPENROUTER_API_KEY")
         self.gemini_key = os.getenv("GEMINI_API_KEY")
-        self.gemini_model = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+        self.gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
         if self.deepseek_key:
             logger.info("DeepSeek/OpenModel API configured for AI helper.")
