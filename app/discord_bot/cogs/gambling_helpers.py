@@ -1404,6 +1404,107 @@ class GamblingHelpers(commands.Cog, name="General"):
         else:
             await ctx.send(f"❌ **Lỗi:** Không hỗ trợ cấu hình cho khóa `{key}`. Chỉ hỗ trợ: `rig_rate`, `threshold`, `jackpot_rate`, `jackpot_min_bet`, `tax_rate`, `jackpot_value`, `max_bet`, `status`.")
 
+    @commands.command(
+        name="giveall",
+        brief="[ADMIN] Tặng tiền (VND) hoặc vàng cho tất cả người chơi.",
+        usage="giveall <tiền/vàng> <số_lượng>",
+        aliases=["rewardall", "giveallplayers"],
+        hidden=True,
+    )
+    @commands.is_owner()
+    async def giveall(
+        self,
+        ctx: commands.Context,
+        arg1: str,
+        arg2: str,
+    ):
+        """[ADMIN] Tặng tiền (VND) hoặc vàng cho tất cả người chơi trong cơ sở dữ liệu."""
+        amount = None
+        reward_type = None
+
+        # Check if arg1 is integer
+        try:
+            amount = int(arg1)
+            reward_type = arg2.lower().strip()
+        except ValueError:
+            try:
+                amount = int(arg2)
+                reward_type = arg1.lower().strip()
+            except ValueError:
+                await ctx.send("❌ **Lỗi:** Cú pháp không hợp lệ. Vui lòng nhập số lượng tiền/vàng là số nguyên hợp lệ.\nSử dụng: `!giveall <tiền/vàng> <số_lượng>`")
+                return
+
+        if amount <= 0:
+            await ctx.send("❌ **Lỗi:** Số lượng tặng phải lớn hơn 0.")
+            return
+
+        is_money = False
+        is_gold = False
+
+        if reward_type in ["tien", "tiền", "money", "vnd", "cash", "m"]:
+            is_money = True
+        elif reward_type in ["vang", "vàng", "gold", "credits", "credit", "g", "v"]:
+            is_gold = True
+        else:
+            await ctx.send("❌ **Lỗi:** Loại tài sản không hợp lệ. Chỉ hỗ trợ `tiền` (vnd) hoặc `vàng` (gold).")
+            return
+
+        self.economy.cur.execute("SELECT COUNT(*) FROM economy")
+        total_players = self.economy.cur.fetchone()[0]
+        
+        if total_players == 0:
+            await ctx.send("❌ Không có người chơi nào trong cơ sở dữ liệu để tặng.")
+            return
+
+        if is_money:
+            self.economy.cur.execute("UPDATE economy SET money = money + ?", (amount,))
+            self.economy.conn.commit()
+            
+            # Log
+            log_wallet_change(
+                logger,
+                event="admin_give_all_money",
+                user_id=ctx.author.id,
+                money_delta=amount,
+                ctx=ctx,
+                total_players=total_players,
+            )
+            
+            embed = make_embed(
+                title="🎁 PHÁT QUÀ TOÀN SERVER (TIỀN) 🎁",
+                description=(
+                    f"👑 Admin **{ctx.author.name}** đã tặng **{amount:,} VND** cho tất cả người chơi!\n\n"
+                    f"👥 **Số tài khoản được nhận:** `{total_players}` người chơi\n"
+                    f"💰 Hãy dùng lệnh `!vi` hoặc `!balance` để kiểm tra số dư mới."
+                ),
+                color=discord.Color.gold(),
+            )
+            await ctx.send(embed=embed)
+        elif is_gold:
+            self.economy.cur.execute("UPDATE economy SET credits = credits + ?", (amount,))
+            self.economy.conn.commit()
+            
+            # Log
+            log_wallet_change(
+                logger,
+                event="admin_give_all_gold",
+                user_id=ctx.author.id,
+                credits_delta=amount,
+                ctx=ctx,
+                total_players=total_players,
+            )
+            
+            embed = make_embed(
+                title="🎁 PHÁT QUÀ TOÀN SERVER (VÀNG) 🎁",
+                description=(
+                    f"👑 Admin **{ctx.author.name}** đã tặng **{amount:,} thỏi vàng** cho tất cả người chơi!\n\n"
+                    f"👥 **Số tài khoản được nhận:** `{total_players}` người chơi\n"
+                    f"⭐ Hãy dùng lệnh `!vi` hoặc `!profile` để kiểm tra số dư mới."
+                ),
+                color=discord.Color.gold(),
+            )
+            await ctx.send(embed=embed)
+
     @commands.command(hidden=True)
     @commands.is_owner()
     async def ban(
