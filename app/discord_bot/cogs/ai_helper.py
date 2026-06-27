@@ -33,6 +33,7 @@ class AIHelper(commands.Cog, name="AI"):
         self.deepseek_key = os.getenv("DEEPSEEK_API_KEY")
         self.openrouter_key = os.getenv("OPENROUTER_API_KEY")
         self.gemini_key = os.getenv("GEMINI_API_KEY")
+        self.gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
         if self.deepseek_key:
             logger.info("DeepSeek/OpenModel API configured for AI helper.")
@@ -177,7 +178,7 @@ class AIHelper(commands.Cog, name="AI"):
             elif self.client_ai:
                 import time
                 config = types.GenerateContentConfig(system_instruction=system_inst)
-                model_name = "gemini-3.5-flash" if (self.gemini_key and self.gemini_key.startswith("om-")) else "gemini-3.1-flash-lite"
+                model_name = self.gemini_model
                 response = self.client_ai.models.generate_content_stream(
                     model=model_name,
                     contents=prompt_text,
