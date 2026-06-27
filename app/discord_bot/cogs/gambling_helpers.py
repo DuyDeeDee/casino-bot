@@ -1404,6 +1404,121 @@ class GamblingHelpers(commands.Cog, name="General"):
         else:
             await ctx.send(f"❌ **Lỗi:** Không hỗ trợ cấu hình cho khóa `{key}`. Chỉ hỗ trợ: `rig_rate`, `threshold`, `jackpot_rate`, `jackpot_min_bet`, `tax_rate`, `jackpot_value`, `max_bet`, `status`.")
 
+    @commands.command(hidden=True)
+    @commands.is_owner()
+    async def ban(
+        self,
+        ctx: commands.Context,
+        user: discord.User | int,
+        *,
+        reason: str = "Không có lý do cụ thể",
+    ):
+        """Ban a user from using the bot, keeping their data."""
+        # Resolve user ID and try to get the user object
+        if isinstance(user, int):
+            user_id = user
+            try:
+                user_obj = self.client.get_user(user) or await self.client.fetch_user(user)
+            except Exception:
+                user_obj = None
+        else:
+            user_id = user.id
+            user_obj = user
+
+        # Check self-ban
+        if user_id == self.client.user.id:
+            await ctx.send("❌ Bạn không thể tự ban bot!")
+            return
+
+        # Check admin-ban
+        if user_id in config.bot.owner_ids:
+            await ctx.send("❌ Không thể ban Admin/Owner của bot!")
+            return
+
+        # Check if already banned
+        if self.economy.is_banned(user_id):
+            await ctx.send(f"❌ Người dùng <@{user_id}> (ID: {user_id}) đã bị ban từ trước rồi.")
+            return
+
+        # Attempt to ban in database
+        self.economy.ban_user(user_id)
+        logger.info(f"User {user_id} was banned by owner {ctx.author.id} for reason: {reason}")
+
+        # Send DM to the banned user
+        dm_sent = False
+        if user_obj:
+            try:
+                embed = make_embed(
+                    title="❌ TÀI KHOẢN CỦA BẠN ĐÃ BỊ BAN ❌",
+                    description=(
+                        f"Chào **{user_obj.name}**, bạn đã bị ban khỏi **Casino Bot**.\n\n"
+                        f"📝 **Lý do:** {reason}\n"
+                        f"Dữ liệu ví và tài sản của bạn vẫn được giữ lại nhưng bị phong tỏa.\n"
+                        f"Mọi thắc mắc vui lòng liên hệ Ban Quản Trị."
+                    ),
+                    color=discord.Color.red(),
+                )
+                await user_obj.send(embed=embed)
+                dm_sent = True
+            except Exception as e:
+                logger.warning(f"Failed to send DM to banned user {user_id}: {e}")
+
+        # Respond to admin
+        dm_status = "Đã gửi DM thông báo cho người dùng." if dm_sent else "Không thể gửi DM (người dùng chặn DM hoặc bot không thể inbox)."
+        await ctx.send(
+            f"✅ Đã ban thành công người dùng <@{user_id}> (ID: {user_id}) khỏi bot.\n"
+            f"📝 **Lý do:** {reason}\n"
+            f"📨 **Trạng thái gửi DM:** {dm_status}"
+        )
+
+    @commands.command(hidden=True)
+    @commands.is_owner()
+    async def unban(self, ctx: commands.Context, user: discord.User | int):
+        """Unban a user from using the bot."""
+        # Resolve user ID and try to get the user object
+        if isinstance(user, int):
+            user_id = user
+            try:
+                user_obj = self.client.get_user(user) or await self.client.fetch_user(user)
+            except Exception:
+                user_obj = None
+        else:
+            user_id = user.id
+            user_obj = user
+
+        # Check if banned
+        if not self.economy.is_banned(user_id):
+            await ctx.send(f"❌ Người dùng <@{user_id}> (ID: {user_id}) không nằm trong danh sách ban.")
+            return
+
+        # Attempt to unban in database
+        self.economy.unban_user(user_id)
+        logger.info(f"User {user_id} was unbanned by owner {ctx.author.id}")
+
+        # Send DM to the unbanned user
+        dm_sent = False
+        if user_obj:
+            try:
+                embed = make_embed(
+                    title="🔓 TÀI KHOẢN CỦA BẠN ĐÃ ĐƯỢC MỞ KHÓA 🔓",
+                    description=(
+                        f"Chào **{user_obj.name}**, bạn đã được gỡ lệnh ban khỏi **Casino Bot**.\n\n"
+                        f"🎉 Bạn có thể tiếp tục sử dụng tất cả các lệnh của bot bình thường."
+                    ),
+                    color=discord.Color.green(),
+                )
+                await user_obj.send(embed=embed)
+                dm_sent = True
+            except Exception as e:
+                logger.warning(f"Failed to send DM to unbanned user {user_id}: {e}")
+
+        # Respond to admin
+        dm_status = "Đã gửi DM thông báo cho người dùng." if dm_sent else "Không thể gửi DM (người dùng chặn DM hoặc bot không thể inbox)."
+        await ctx.send(
+            f"✅ Đã unban thành công người dùng <@{user_id}> (ID: {user_id}) khỏi bot.\n"
+            f"📨 **Trạng thái gửi DM:** {dm_status}"
+        )
+
 
 async def setup(client: commands.Bot):
     await client.add_cog(GamblingHelpers(client))

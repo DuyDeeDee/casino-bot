@@ -41,6 +41,25 @@ class Handlers(commands.Cog, name="handlers"):
             return
             
         user_id = ctx.author.id
+
+        # Kiểm tra xem người dùng có bị ban hay không
+        if self.economy.is_banned(user_id):
+            embed = make_embed(
+                title="❌ TÀI KHOẢN BỊ KHÓA ❌",
+                description=(
+                    f"Chào **{ctx.author.name}**, tài khoản của bạn đã bị ban khỏi Casino Bot.\n\n"
+                    f"⚠️ Bạn không thể sử dụng bất kỳ lệnh nào của bot nữa.\n"
+                    f"Dữ liệu ví và tài sản của bạn vẫn được giữ lại nhưng bị phong tỏa.\n"
+                    f"Vui lòng liên hệ Admin/Owner để biết thêm chi tiết."
+                ),
+                color=discord.Color.red(),
+            )
+            embed.set_thumbnail(url=ctx.author.display_avatar.url)
+            try:
+                await ctx.send(embed=embed)
+            except Exception:
+                pass
+            raise commands.CheckFailure("Bị ban")
         
         # Nếu chưa nhận quà khởi nghiệp và lệnh không phải là khoinghiep hoặc help
         if not self.economy.has_claimed_start(user_id):
@@ -87,7 +106,7 @@ class Handlers(commands.Cog, name="handlers"):
         if hasattr(ctx.command, "on_error"):
             return
 
-        if isinstance(error, commands.CheckFailure) and str(error) == "Chưa khởi nghiệp":
+        if isinstance(error, commands.CheckFailure) and str(error) in ["Chưa khởi nghiệp", "Bị ban"]:
             return
 
         if isinstance(error, CommandInvokeError):

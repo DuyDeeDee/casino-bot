@@ -11,7 +11,7 @@ from app.config import config
 Entry = Tuple[int, int, int]
 DATABASE_PATH = Path(config.storage.database_path)
 LEGACY_DATABASE_PATH = Path(__file__).resolve().parents[3] / "economy.db"
-SCHEMA_VERSION = 19
+SCHEMA_VERSION = 20
 
 
 logger = logging.getLogger(__name__)
@@ -371,6 +371,18 @@ def _migration_19_add_pve_tables(cur: sqlite3.Cursor) -> None:
         pass
 
 
+def _migration_20_add_banned_users_table(cur: sqlite3.Cursor) -> None:
+    try:
+        cur.execute(
+            """CREATE TABLE IF NOT EXISTS banned_users (
+            user_id INTEGER PRIMARY KEY,
+            banned_at INTEGER NOT NULL
+        )"""
+        )
+    except sqlite3.OperationalError:
+        pass
+
+
 MIGRATIONS: dict[int, Callable[[sqlite3.Cursor], None]] = {
     1: _migration_1_create_economy,
     2: _migration_2_add_indexes,
@@ -391,6 +403,7 @@ MIGRATIONS: dict[int, Callable[[sqlite3.Cursor], None]] = {
     17: _migration_17_add_bkb_tables,
     18: _migration_18_add_baito_table,
     19: _migration_19_add_pve_tables,
+    20: _migration_20_add_banned_users_table,
 }
 
 
@@ -1510,5 +1523,21 @@ class Economy:
 
     def reset_world_boss_stats(self) -> None:
         self.cur.execute("DELETE FROM user_world_boss_damage")
+        self.conn.commit()
+
+    def is_banned(self, user_id: int) -> bool:
+        self.cur.execute("SELECT 1 FROM banned_users WHERE user_id=?", (user_id,))
+        return self.cur.fetchone() is not None
+
+    def ban_user(self, user_id: int) -> None:
+        import time
+        self.cur.execute(
+            "INSERT OR IGNORE INTO banned_users(user_id, banned_at) VALUES(?, ?)",
+            (user_id, int(time.time())),
+        )
+        self.conn.commit()
+
+    def unban_user(self, user_id: int) -> None:
+        self.cur.execute("DELETE FROM banned_users WHERE user_id=?", (user_id,))
         self.conn.commit()
 
