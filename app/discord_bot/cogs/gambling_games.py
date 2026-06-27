@@ -336,6 +336,28 @@ class TaiXiuBetModal(discord.ui.Modal):
             await interaction.response.send_message(f"❌ Bạn không đủ tiền! Số dư hiện tại của bạn là **{current_money:,} VND**.", ephemeral=True)
             return
 
+        # Get configured max bet
+        max_bet_str = self.lobby_view.cog.economy.get_setting("taixiu_max_bet")
+        max_bet = int(max_bet_str) if max_bet_str is not None else 10000000  # Default 10M VND
+        
+        # Calculate what their new total bet for this door would be
+        current_bet = 0
+        if self.side == "tai":
+            current_bet = self.lobby_view.tai_bets.get(user.id, 0)
+        elif self.side == "xiu":
+            current_bet = self.lobby_view.xiu_bets.get(user.id, 0)
+        elif self.side == "chan":
+            current_bet = self.lobby_view.chan_bets.get(user.id, 0)
+        elif self.side == "le":
+            current_bet = self.lobby_view.le_bets.get(user.id, 0)
+        elif self.side.isdigit():
+            num = int(self.side)
+            current_bet = self.lobby_view.number_bets[num].get(user.id, 0)
+            
+        if current_bet + amount > max_bet:
+            await interaction.response.send_message(f"❌ **Lỗi:** Giới hạn cược tối đa mỗi cửa là **{max_bet:,} VND**. Bạn đã cược `{current_bet:,} VND` ở cửa này trước đó, và muốn cược thêm `{amount:,} VND`.", ephemeral=True)
+            return
+
         # Deduct balance immediately to prevent exploits
         self.lobby_view.cog.economy.add_money(user.id, -amount)
         
