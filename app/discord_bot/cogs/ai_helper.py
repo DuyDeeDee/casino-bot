@@ -51,8 +51,16 @@ class AIHelper(commands.Cog, name="AI"):
                     )
                     logger.info("Gemini API configured for AI helper via OpenModel gateway.")
                 else:
-                    self.client_ai = genai.Client(api_key=self.gemini_key)
-                    logger.info("Gemini API configured for AI helper.")
+                    base_url = os.getenv("GEMINI_BASE_URL")
+                    if base_url:
+                        self.client_ai = genai.Client(
+                            api_key=self.gemini_key,
+                            http_options=types.HttpOptions(base_url=base_url)
+                        )
+                        logger.info(f"Gemini API configured for AI helper with custom base URL: {base_url}")
+                    else:
+                        self.client_ai = genai.Client(api_key=self.gemini_key)
+                        logger.info("Gemini API configured for AI helper.")
             except Exception as e:
                 logger.error("Failed to initialize genai Client: %s", e)
         else:
