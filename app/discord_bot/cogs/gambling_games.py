@@ -453,11 +453,14 @@ class TaiXiuLobbyView(discord.ui.View):
         jackpot_str = self.cog.economy.get_setting("taixiu_jackpot")
         jackpot_val = int(jackpot_str) if jackpot_str else 0
         
+        min_bet_str = self.cog.economy.get_setting("taixiu_jackpot_min_bet")
+        jackpot_min_bet = int(min_bet_str) if min_bet_str is not None else 50000
+        
         embed = make_embed(
             title=f"🎲 PHIÊN TÀI XỈU #{self.session_id} 🎲",
             description=(
                 f"🎰 **HŨ JACKPOT TÀI XỈU:** `{jackpot_val:,} VND` 🎰\n"
-                f"🔥 *Bão (3 xúc xắc giống nhau) nổ Hũ chia tỉ lệ cược của tất cả người chơi!*\n\n"
+                f"🔥 *Nổ Hũ khi ra Bão 1 (1-1-1) hoặc Bão 6 (6-6-6). Chỉ chia cho người thắng cửa Xỉu (nếu ra 1-1-1) hoặc cửa Tài (nếu ra 6-6-6) với mức cược tối thiểu từ {jackpot_min_bet:,} VND!*\n\n"
                 f"⏳ **Thời gian đặt cược còn lại:** `{self.seconds_remaining} giây`\n\n"
                 f"👉 Nhấp vào nút/chọn menu bên dưới để chọn cửa cược."
             ),
@@ -981,35 +984,43 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
                 for uid, amt in view.number_bets[n].items():
                     session_bets[uid] = session_bets.get(uid, 0) + amt
 
-            # Check for jackpot (Bão)
+            # Check for jackpot (Bão 1-1-1 hoặc 6-6-6)
             is_jackpot_triggered = False
             jackpot_winners = []
             jackpot_val_won = 0
-            if dice[0] == dice[1] == dice[2]:
+            if (dice[0] == dice[1] == dice[2]) and (dice[0] in (1, 6)):
                 jackpot_rate_str = self.economy.get_setting("taixiu_jackpot_rate")
                 jackpot_rate = float(jackpot_rate_str) if jackpot_rate_str is not None else 1.0
                 
                 if random.random() < jackpot_rate:
-                    total_session_bets = sum(session_bets.values())
-                    if total_session_bets > 0:
+                    min_bet_str = self.economy.get_setting("taixiu_jackpot_min_bet")
+                    jackpot_min_bet = int(min_bet_str) if min_bet_str is not None else 50000
+                    
+                    jackpot_winning_side = "xiu" if dice[0] == 1 else "tai"
+                    side_bets = view.xiu_bets if jackpot_winning_side == "xiu" else view.tai_bets
+                    
+                    eligible_bets = {uid: amt for uid, amt in side_bets.items() if amt >= jackpot_min_bet}
+                    total_eligible_bets = sum(eligible_bets.values())
+                    
+                    if total_eligible_bets > 0:
                         is_jackpot_triggered = True
-                    jackpot_str = self.economy.get_setting("taixiu_jackpot")
-                    jackpot_val = int(jackpot_str) if jackpot_str else 0
-                    jackpot_val_won = jackpot_val
-                    for uid, amt in session_bets.items():
-                        share = int(jackpot_val * (amt / total_session_bets))
-                        if share > 0:
-                            self.economy.add_money(uid, share)
-                            jackpot_winners.append((uid, share))
-                            log_wallet_change(
-                                logger,
-                                event="taixiu_jackpot_win",
-                                user_id=uid,
-                                money_delta=share,
-                                ctx=ctx,
-                                session_id=session_id,
-                            )
-                    self.economy.set_setting("taixiu_jackpot", "0")
+                        jackpot_str = self.economy.get_setting("taixiu_jackpot")
+                        jackpot_val = int(jackpot_str) if jackpot_str else 0
+                        jackpot_val_won = jackpot_val
+                        for uid, amt in eligible_bets.items():
+                            share = int(jackpot_val * (amt / total_eligible_bets))
+                            if share > 0:
+                                self.economy.add_money(uid, share)
+                                jackpot_winners.append((uid, share))
+                                log_wallet_change(
+                                    logger,
+                                    event="taixiu_jackpot_win",
+                                    user_id=uid,
+                                    money_delta=share,
+                                    ctx=ctx,
+                                    session_id=session_id,
+                                )
+                        self.economy.set_setting("taixiu_jackpot", "0")
 
             # Determine winners, losers and payouts
             winners = []
