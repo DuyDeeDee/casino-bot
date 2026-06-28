@@ -426,12 +426,25 @@ class ControlPanelView(discord.ui.View):
             inventory = self.economy.get_inventory(self.author.id)
             has_degree = any(item == 'bang_cap' and qty > 0 for item, qty in inventory)
             has_mine_card = any(item == 'the_tho_mo' and qty > 0 for item, qty in inventory)
+            has_hunter_card = any(item == 'the_tho_san' and qty > 0 for item, qty in inventory)
+            has_architecture = any(item == 'bang_kien_truc' and qty > 0 for item, qty in inventory)
+            has_astronaut = any(item == 'bang_phi_hanh' and qty > 0 for item, qty in inventory)
+            has_doctor = any(item == 'bang_bac_si' and qty > 0 for item, qty in inventory)
             
             job_titles = []
             if has_degree:
                 job_titles.append("Kỹ sư Công nghệ 💻")
             if has_mine_card:
                 job_titles.append("Thợ mỏ VIP ⛏️")
+            if has_hunter_card:
+                job_titles.append("Thợ săn Kho báu 🗺️")
+            if has_architecture:
+                job_titles.append("Kiến trúc sư 📐")
+            if has_astronaut:
+                job_titles.append("Phi hành gia 🚀")
+            if has_doctor:
+                job_titles.append("Bác sĩ 🩺")
+                
             if not job_titles:
                 job_titles.append("Lao động tự do 💼")
             job_str = " & ".join(job_titles)
