@@ -259,15 +259,10 @@ class HighLowModeSelectionView(discord.ui.View):
             return False
         return True
 
-    @discord.ui.button(label="Classic (Cổ điển)", style=discord.ButtonStyle.primary, emoji="🃏")
+    @discord.ui.button(label="Cổ điển (Classic)", style=discord.ButtonStyle.primary, emoji="🃏")
     async def classic_click(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
         await self.start_game("classic")
-
-    @discord.ui.button(label="Dynamic Pro (Vô cực)", style=discord.ButtonStyle.success, emoji="⚡")
-    async def dynamic_click(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.defer()
-        await self.start_game("dynamic")
 
     @discord.ui.button(label="Thử thách Chuỗi (Streak)", style=discord.ButtonStyle.secondary, emoji="🎯")
     async def streak_click(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -278,17 +273,17 @@ class HighLowModeSelectionView(discord.ui.View):
             title="🎯 CHỌN MỤC TIÊU THỬ THÁCH",
             description=(
                 f"Hãy chọn mục tiêu đoán đúng liên tiếp của bạn:\n\n"
-                f"• **3 Lượt**: Đạt nhận ngay **3.5x**\n"
-                f"• **5 Lượt**: Đạt nhận ngay **8.5x**\n"
-                f"• **7 Lượt**: Đạt nhận ngay **18.0x**\n"
-                f"• **10 Lượt**: Đạt nhận ngay **45.0x**\n\n"
+                f"• **3 Lượt**: Hoàn thành nhân thêm **1.05x**\n"
+                f"• **5 Lượt**: Hoàn thành nhân thêm **1.10x**\n"
+                f"• **7 Lượt**: Hoàn thành nhân thêm **1.15x**\n"
+                f"• **10 Lượt**: Hoàn thành nhân thêm **1.20x**\n\n"
                 f"⚠️ *Nếu dừng trước mục tiêu, chỉ nhận hệ số thường. Nếu đoán sai trước mục tiêu, bạn mất tất cả.*"
             ),
             color=discord.Color.purple()
         )
         await interaction.response.edit_message(embed=embed, view=view)
 
-    @discord.ui.button(label="Hardcore (Sinh tử - x100)", style=discord.ButtonStyle.danger, emoji="🔥")
+    @discord.ui.button(label="Hardcore (Sinh tử)", style=discord.ButtonStyle.danger, emoji="🔥")
     async def hardcore_click(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
         await self.start_game("hardcore")
@@ -362,10 +357,9 @@ class HighLowStreakTargetView(discord.ui.View):
             title="🎮 CHỌN CHẾ ĐỘ CHƠI HIGH & LOW",
             description=(
                 f"Hãy chọn chế độ bạn muốn thử thách:\n\n"
-                f"• 🃏 **Classic**: Hệ số tăng theo bước cố định. Cash out bất kỳ lúc nào.\n"
-                f"• ⚡ **Dynamic Pro**: Hệ số thay đổi linh hoạt theo tỷ lệ thực của lá bài hiện tại.\n"
-                f"• 🎯 **Streak Challenge**: Đặt mục tiêu chuỗi đoán đúng để ăn đậm.\n"
-                f"• 🔥 **Hardcore**: Đoán đúng liên tục 10 lá ăn ngay **x100**, sai mất trắng."
+                f"• 🃏 **Cổ điển (Classic)**: Hệ số thay đổi linh hoạt theo tỷ lệ thực của lá bài hiện tại. Cash out bất kỳ lúc nào.\n"
+                f"• 🎯 **Thử thách Chuỗi**: Đặt mục tiêu chuỗi đoán đúng để ăn thêm bonus.\n"
+                f"• 🔥 **Hardcore**: Đoán đúng liên tục 10 lá để nhận bonus x1.3, không thể cash out giữa chừng."
             ),
             color=discord.Color.purple()
         )
@@ -581,6 +575,9 @@ class HighLowGameView(discord.ui.View):
         elif guess == "spades":
             is_correct = (next_card.suit == "spades")
 
+        # Store old card value to calculate probability for current guess
+        old_card_value = self.current_card.value
+
         self.history.append(next_card)
         self.current_card = next_card
 
@@ -591,44 +588,33 @@ class HighLowGameView(discord.ui.View):
             self.streak += 1
             
             factor = 1.0
-            if self.mode == "classic" or self.mode == "streak_challenge":
-                if guess in ["high", "low"]:
-                    if self.streak < len(CLASSIC_MULTIPLIERS):
-                        self.multiplier = CLASSIC_MULTIPLIERS[self.streak]
-                    else:
-                        self.multiplier = round(self.multiplier * 1.5, 2)
-                elif guess in ["red", "black"]:
-                    self.multiplier = round(self.multiplier * 1.95, 2)
-                elif guess in ["clubs", "diamonds", "hearts", "spades"]:
-                    self.multiplier = round(self.multiplier * 3.8, 2)
+            if guess in ["high", "low"]:
+                factor = calculate_dynamic_multiplier(old_card_value, guess == "high")
+            elif guess in ["red", "black"]:
+                factor = 1.95
+            elif guess in ["clubs", "diamonds", "hearts", "spades"]:
+                factor = 3.8
             
-            elif self.mode == "dynamic":
-                if guess in ["high", "low"]:
-                    factor = calculate_dynamic_multiplier(self.current_card.value, guess == "high")
-                elif guess in ["red", "black"]:
-                    factor = 1.95
-                elif guess in ["clubs", "diamonds", "hearts", "spades"]:
-                    factor = 3.8
-                
-                if is_gold_card:
-                    factor = round(factor * 1.2, 2)
-                
-                self.multiplier = round(self.multiplier * factor, 2)
+            if is_gold_card:
+                factor = round(factor * 1.2, 2)
+            
+            self.multiplier = round(self.multiplier * factor, 2)
 
             if self.mode == "streak_challenge" and self.streak == self.streak_target:
-                boosted_mults = {3: 3.5, 5: 8.5, 7: 18.0, 10: 45.0}
-                self.multiplier = boosted_mults.get(self.streak_target, self.multiplier)
-                await self.conclude_game(win=True, suffix=f"🎉 **Đã đạt mục tiêu chuỗi {self.streak_target} lượt! Tự động Cash Out!**")
+                boost_factors = {3: 1.05, 5: 1.10, 7: 1.15, 10: 1.20}
+                factor = boost_factors.get(self.streak_target, 1.0)
+                self.multiplier = round(self.multiplier * factor, 2)
+                await self.conclude_game(win=True, suffix=f"🎉 **Đã đạt mục tiêu chuỗi {self.streak_target} lượt! Tự động Cash Out với bonus x{factor}!**")
                 return
             
             if self.mode == "hardcore" and self.streak == 10:
-                self.multiplier = 100.0
-                await self.conclude_game(win=True, suffix="🔥 **CHÚC MỪNG! Bạn đã hoàn thành chế độ Hardcore 10 lượt và ăn x100!**")
+                self.multiplier = round(self.multiplier * 1.30, 2)
+                await self.conclude_game(win=True, suffix="🔥 **CHÚC MỪNG! Bạn đã hoàn thành chế độ Hardcore 10 lượt và nhận thêm 30% bonus!**")
                 return
 
             self.update_button_states()
             msg_suffix = "✅ **Đoán chính xác!** "
-            if is_gold_card and self.mode == "dynamic":
+            if is_gold_card:
                 msg_suffix += "✨ *Lá bài Mạ Vàng được kích hoạt (+20% hệ số lượt này)!*"
             await self.render_and_send(msg_suffix=msg_suffix)
 
@@ -770,10 +756,9 @@ class HighLow(commands.Cog, name="HighLow"):
                 f"👤 **Người chơi:** {ctx.author.mention}\n"
                 f"💵 **Tiền cược:** `{bet_amount:,} VNĐ`\n\n"
                 f"Hãy chọn chế độ bạn muốn thử thách:\n\n"
-                f"• 🃏 **Classic**: Hệ số tăng theo bước cố định. Cash out bất kỳ lúc nào.\n"
-                f"• ⚡ **Dynamic Pro**: Hệ số thay đổi linh hoạt theo tỷ lệ thực của lá bài hiện tại.\n"
-                f"• 🎯 **Streak Challenge**: Đặt mục tiêu chuỗi đoán đúng để ăn đậm.\n"
-                f"• 🔥 **Hardcore**: Đoán đúng liên tục 10 lá ăn ngay **x100**, sai mất trắng."
+                f"• 🃏 **Cổ điển (Classic)**: Hệ số thay đổi linh hoạt theo tỷ lệ thực của lá bài hiện tại. Cash out bất kỳ lúc nào.\n"
+                f"• 🎯 **Thử thách Chuỗi**: Đặt mục tiêu chuỗi đoán đúng để ăn thêm bonus.\n"
+                f"• 🔥 **Hardcore**: Đoán đúng liên tục 10 lá để nhận bonus x1.3, không thể cash out giữa chừng."
             ),
             color=discord.Color.purple()
         )
