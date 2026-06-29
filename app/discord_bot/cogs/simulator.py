@@ -354,6 +354,7 @@ class ControlPanelView(discord.ui.View):
         self.client = cog.client
         self.author = author
         self.current_tab = "overview"
+        self.selected_stock = "CASINO"
         self.message = None
         self.setup_components()
 
@@ -363,6 +364,10 @@ class ControlPanelView(discord.ui.View):
         # Add select menu
         self.add_item(AreaSelect())
         
+        # Add stock select menu if on invest tab
+        if self.current_tab == "invest":
+            self.add_item(StockSelect(self.cog, is_panel=True))
+            
         # Add buttons depending on tab
         if self.current_tab == "overview":
             self.add_item(DailyButton())
@@ -400,6 +405,10 @@ class ControlPanelView(discord.ui.View):
                     if img_path.exists():
                         file = discord.File(img_path, filename="character.png")
                         embed.set_image(url="attachment://character.png")
+        elif self.current_tab == "invest":
+            symbol = getattr(self, "selected_stock", "CASINO")
+            file = self.cog.get_stock_chart_file(symbol)
+            embed.set_image(url="attachment://chart.png")
         return embed, file
 
     async def update_interaction(self, interaction: discord.Interaction):
@@ -570,6 +579,67 @@ class ControlPanelView(discord.ui.View):
                 await self.message.edit(view=self)
         except Exception:
             pass
+
+class StockSelect(discord.ui.Select):
+    def __init__(self, cog, is_panel=False):
+        self.cog = cog
+        self.is_panel = is_panel
+        options = [
+            discord.SelectOption(label="CASINO (Cổ phiếu Casino)", value="CASINO", emoji="👑"),
+            discord.SelectOption(label="BTC (Bitcoin)", value="BTC", emoji="🪙"),
+            discord.SelectOption(label="AGV (Antigravity Coin)", value="AGV", emoji="🌌"),
+        ]
+        # Highlight current stock
+        symbol = getattr(cog, "selected_stock", "CASINO") if is_panel else "CASINO"
+        for opt in options:
+            opt.default = (opt.value == symbol)
+            
+        super().__init__(placeholder="Chọn cổ phiếu/crypto để xem biểu đồ...", min_values=1, max_values=1, options=options)
+
+    async def callback(self, interaction: discord.Interaction):
+        view = self.view
+        symbol = self.values[0]
+        
+        # Mark selected option as default
+        for opt in self.options:
+            opt.default = (opt.value == symbol)
+            
+        if self.is_panel:
+            view.selected_stock = symbol
+            await view.update_interaction(interaction)
+        else:
+            view.selected_symbol = symbol
+            embed = view.cog.get_invest_embed(view.author)
+            chart_file = view.cog.get_stock_chart_file(symbol)
+            embed.set_image(url="attachment://chart.png")
+            await interaction.response.edit_message(embed=embed, attachments=[chart_file], view=view)
+
+
+class InvestLobbyView(discord.ui.View):
+    def __init__(self, cog, author: discord.User | discord.Member, timeout: float = 180.0):
+        super().__init__(timeout=timeout)
+        self.cog = cog
+        self.author = author
+        self.selected_symbol = "CASINO"
+        self.message = None
+        self.add_item(StockSelect(cog, is_panel=False))
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.author.id:
+            await interaction.response.send_message("❌ Bảng điều khiển này không phải của bạn!", ephemeral=True)
+            return False
+        return True
+
+    async def on_timeout(self):
+        for child in self.children:
+            if isinstance(child, discord.ui.Select):
+                child.disabled = True
+        try:
+            if self.message:
+                await self.message.edit(view=self)
+        except Exception:
+            pass
+
 
 class AreaSelect(discord.ui.Select):
     def __init__(self):
@@ -2133,8 +2203,12 @@ class Simulator(commands.Cog):
         invoke_without_command=True
     )
     async def invest(self, ctx: commands.Context):
+        view = InvestLobbyView(self, ctx.author)
         embed = self.get_invest_embed(ctx.author)
-        await ctx.send(embed=embed)
+        chart_file = self.get_stock_chart_file("CASINO")
+        embed.set_image(url="attachment://chart.png")
+        msg = await ctx.send(embed=embed, file=chart_file, view=view)
+        view.message = msg
 
     @invest.command(name="buy", aliases=["mua"])
     async def invest_buy(self, ctx: commands.Context, symbol: str, shares: float):
@@ -2370,6 +2444,28 @@ class Simulator(commands.Cog):
         )
         embed.set_thumbnail(url=member.display_avatar.url)
         await ctx.send(embed=embed)
+
+    def get_stock_chart_file(self, symbol: str) -> discord.File:
+        prices = dict((row[0], row[1]) for row in self.economy.get_stock_prices())
+        current_price = prices.get(symbol, 1000)
+        
+        history_rows = self.economy.get_stock_price_history(symbol, limit=10)
+        history = [row[0] for row in history_rows]
+        
+        # Fallback if history is insufficient (generate fake walk backwards)
+        if len(history) < 10:
+            import random
+            prices_list = [current_price]
+            # Generate backwards
+            for _ in range(10 - len(history)):
+                change = random.uniform(-0.05, 0.05)
+                prev_price = int(prices_list[-1] / (1 + change))
+                prices_list.append(prev_price)
+            history = list(reversed(prices_list))
+            
+        from app.discord_bot.modules.chart_renderer import draw_stock_chart
+        buf = draw_stock_chart(symbol, history, current_price)
+        return discord.File(buf, filename="chart.png")
 
 async def setup(client: commands.Bot):
     await client.add_cog(Simulator(client))

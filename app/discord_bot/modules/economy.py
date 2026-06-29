@@ -11,7 +11,7 @@ from app.config import config
 Entry = Tuple[int, int, int]
 DATABASE_PATH = Path(config.storage.database_path)
 LEGACY_DATABASE_PATH = Path(__file__).resolve().parents[3] / "economy.db"
-SCHEMA_VERSION = 23
+SCHEMA_VERSION = 24
 
 
 logger = logging.getLogger(__name__)
@@ -440,6 +440,20 @@ def _migration_23_add_highlow_table(cur: sqlite3.Cursor) -> None:
         pass
 
 
+def _migration_24_add_stock_history_table(cur: sqlite3.Cursor) -> None:
+    try:
+        cur.execute(
+            """CREATE TABLE IF NOT EXISTS stock_price_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            symbol TEXT NOT NULL,
+            price INTEGER NOT NULL,
+            timestamp INTEGER NOT NULL
+        )"""
+        )
+    except sqlite3.OperationalError:
+        pass
+
+
 MIGRATIONS: dict[int, Callable[[sqlite3.Cursor], None]] = {
     1: _migration_1_create_economy,
     2: _migration_2_add_indexes,
@@ -464,6 +478,7 @@ MIGRATIONS: dict[int, Callable[[sqlite3.Cursor], None]] = {
     21: _migration_21_add_mines_table,
     22: _migration_22_add_plinko_table,
     23: _migration_23_add_highlow_table,
+    24: _migration_24_add_stock_history_table,
 }
 
 
@@ -845,7 +860,28 @@ class Economy:
             "INSERT OR REPLACE INTO stock_prices(symbol, price, prev_price, change_percent) VALUES(?, ?, ?, ?)",
             (symbol, price, prev_price, change_percent),
         )
+        # Also record price history
+        import time
+        self.cur.execute(
+            "INSERT INTO stock_price_history(symbol, price, timestamp) VALUES(?, ?, ?)",
+            (symbol, price, int(time.time())),
+        )
+        # Keep only the last 30 entries per symbol to limit database size
+        self.cur.execute(
+            """DELETE FROM stock_price_history WHERE symbol = ? AND id NOT IN (
+                SELECT id FROM stock_price_history WHERE symbol = ? ORDER BY id DESC LIMIT 30
+            )""",
+            (symbol, symbol)
+        )
         self.conn.commit()
+
+    def get_stock_price_history(self, symbol: str, limit: int = 10) -> list[tuple[int, int]]:
+        self.cur.execute(
+            "SELECT price, timestamp FROM stock_price_history WHERE symbol = ? ORDER BY id DESC LIMIT ?",
+            (symbol, limit),
+        )
+        rows = self.cur.fetchall()
+        return [(row[0], row[1]) for row in reversed(rows)]
 
     def get_pity_golden(self, user_id: int) -> int:
         self._ensure_entry(user_id)
