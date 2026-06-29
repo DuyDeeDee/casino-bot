@@ -1620,6 +1620,196 @@ class GamblingHelpers(commands.Cog, name="General"):
             f"📨 **Trạng thái gửi DM:** {dm_status}"
         )
 
+    @commands.command(
+        name="anxin",
+        aliases=["beg"],
+        brief="Cầm bát đi xin tiền NPC hoặc xin tiền người chơi khác.",
+        usage="anxin [@thành_viên] [số_tiền_xin]"
+    )
+    @commands.cooldown(1, 120, commands.BucketType.user)
+    async def anxin(self, ctx: commands.Context, target: discord.Member | None = None, amount: int | None = None):
+        if target is None:
+            # Begging from system NPCs
+            npcs = [
+                {"name": "Tỷ phú Phạm Nhật Vượng 🚗", "success": 0.7, "amount_min": 10000, "amount_max": 100000, "success_msg": "ném cho bạn một tờ tiền polyme mới cứng.", "fail_msg": "đi lướt qua trên chiếc xe VinFast và không thèm nhìn bạn lấy một lần."},
+                {"name": "Elon Musk 🚀", "success": 0.5, "amount_min": 50000, "amount_max": 200000, "success_msg": "cho bạn ít lẻ Dogecoin quy đổi.", "fail_msg": "bảo bạn mua khóa học AI của X rồi đuổi đi."},
+                {"name": "Bà bán nước đầu ngõ 🍵", "success": 0.8, "amount_min": 1000, "amount_max": 15000, "success_msg": "rủ lòng thương cho bạn vài đồng lẻ.", "fail_msg": "cầm điếu cày rượt đuổi bạn vì ngồi cản trở khách."},
+                {"name": "Sếp Hùng trưởng phòng 💼", "success": 0.6, "amount_min": 5000, "amount_max": 50000, "success_msg": "cho bạn ít tiền lẻ ăn sáng.", "fail_msg": "nói: 'Không làm mà đòi có ăn à? Tăng ca ngay!'"},
+                {"name": "Giang hồ hảo hán 🕶️", "success": 0.4, "amount_min": 20000, "amount_max": 120000, "success_msg": "rút ví đưa bạn ít tiền rồi bảo: 'Đi mua cơm ăn đi em'.", "fail_msg": "cốc đầu bạn một cái đau điếng rồi bỏ đi."}
+            ]
+            
+            npc = random.choice(npcs)
+            is_success = random.random() < npc["success"]
+            
+            if is_success:
+                reward = random.randint(npc["amount_min"], npc["amount_max"])
+                self.economy.add_money(ctx.author.id, reward)
+                log_wallet_change(
+                    logger,
+                    event="beg_npc_success",
+                    user_id=ctx.author.id,
+                    money_delta=reward,
+                    ctx=ctx,
+                    npc_name=npc["name"]
+                )
+                embed = make_embed(
+                    title="🥺 ĂN XIN ĐƯỢC THƯƠNG HẠI 🥺",
+                    description=(
+                        f"Bạn gặp **{npc['name']}**.\n"
+                        f"Người này đã rủ lòng thương và **{npc['success_msg']}**\n\n"
+                        f"💰 **Bạn nhận được:** `+{reward:,} VND`\n"
+                        f"💳 **Số dư mới:** `{self.economy.get_entry(ctx.author.id)[1]:,} VND`"
+                    ),
+                    color=discord.Color.green(),
+                )
+            else:
+                embed = make_embed(
+                    title="❌ ĂN XIN THẤT BẠI ❌",
+                    description=(
+                        f"Bạn xin tiền **{npc['name']}**.\n"
+                        f"Tuy nhiên, người đó đã **{npc['fail_msg']}**\n\n"
+                        f"😭 **Bạn nhận được:** `0 VND`"
+                    ),
+                    color=discord.Color.red(),
+                )
+            embed.set_thumbnail(url=ctx.author.display_avatar.url)
+            await ctx.send(embed=embed)
+            return
+
+        # Begging from a specific user
+        if target.bot:
+            await ctx.send("❌ **Lỗi:** Bạn không thể xin tiền bot! Nó làm gì có tiền.")
+            ctx.command.reset_cooldown(ctx)
+            return
+            
+        if target.id == ctx.author.id:
+            await ctx.send("❌ **Lỗi:** Bạn tự xin tiền chính mình à? Kỳ quặc thế.")
+            ctx.command.reset_cooldown(ctx)
+            return
+
+        # Parse / validate amount
+        if amount is None:
+            amount = 50000
+        elif amount <= 0:
+            await ctx.send("❌ **Lỗi:** Số tiền xin phải lớn hơn 0 VND.")
+            ctx.command.reset_cooldown(ctx)
+            return
+
+        # Check target money
+        target_money = self.economy.get_entry(target.id)[1]
+        if target_money < amount:
+            await ctx.send(f"❌ **{target.display_name}** đang nghèo xơ xác (chỉ có **{target_money:,} VND**), không có đủ **{amount:,} VND** cho bạn đâu!")
+            ctx.command.reset_cooldown(ctx)
+            return
+
+        # Send request with buttons
+        view = BegConfirmView(beggar=ctx.author, target=target, amount=amount, economy=self.economy)
+        embed = make_embed(
+            title="🥺 XIN TIỀN BAO DUNG 🥺",
+            description=(
+                f"🙇‍♂️ **{ctx.author.mention}** đang cầm chiếc bát sứt mẻ quỳ gối xin **{target.mention}** **{amount:,} VND**!\n\n"
+                f"Hãy rủ lòng thương xót kẻ nghèo hèn này..."
+            ),
+            color=discord.Color.orange(),
+        )
+        embed.set_thumbnail(url=ctx.author.display_avatar.url)
+        msg = await ctx.send(content=target.mention, embed=embed, view=view)
+        view.message = msg
+
+
+class BegConfirmView(discord.ui.View):
+    def __init__(self, beggar: discord.Member, target: discord.Member, amount: int, economy: Economy, timeout: float = 60.0):
+        super().__init__(timeout=timeout)
+        self.beggar = beggar
+        self.target = target
+        self.amount = amount
+        self.economy = economy
+        self.resolved = False
+        self.message = None
+
+    @discord.ui.button(label="Cho tiền", style=discord.ButtonStyle.success, emoji="💸")
+    async def give_money(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.resolved = True
+        self.stop()
+        
+        target_money = self.economy.get_entry(self.target.id)[1]
+        if target_money < self.amount:
+            await interaction.response.edit_message(
+                content=f"❌ **{self.target.mention}** định làm từ thiện nhưng phát hiện ví mình không đủ `{self.amount:,} VND`! Quê xệ luôn...",
+                view=None
+            )
+            return
+
+        self.economy.add_money(self.target.id, -self.amount)
+        self.economy.add_money(self.beggar.id, self.amount)
+
+        log_wallet_change(
+            logger,
+            event="beg_money_give",
+            user_id=self.target.id,
+            money_delta=-self.amount,
+            ctx=None,
+            beggar_id=self.beggar.id,
+        )
+        log_wallet_change(
+            logger,
+            event="beg_money_receive",
+            user_id=self.beggar.id,
+            money_delta=self.amount,
+            ctx=None,
+            giver_id=self.target.id,
+        )
+
+        embed = make_embed(
+            title="🥺 XIN TIỀN THÀNH CÔNG 🥺",
+            description=(
+                f"🎉 **{self.target.mention}** đã rủ lòng thương và cho **{self.beggar.mention}** **{self.amount:,} VND**!\n\n"
+                f"👤 **{self.beggar.mention}**: +`{self.amount:,} VND` (Số dư mới: `{self.economy.get_entry(self.beggar.id)[1]:,} VND`)\n"
+                f"👤 **{self.target.mention}**: -`{self.amount:,} VND` (Số dư mới: `{self.economy.get_entry(self.target.id)[1]:,} VND`)"
+            ),
+            color=discord.Color.green(),
+        )
+        embed.set_thumbnail(url=self.beggar.display_avatar.url)
+        await interaction.response.edit_message(embed=embed, view=None)
+
+    @discord.ui.button(label="Từ chối & Đá đít", style=discord.ButtonStyle.danger, emoji="💥")
+    async def deny_money(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.resolved = True
+        self.stop()
+        
+        punishments = [
+            "tát một bạt tai rụng răng",
+            "đá đít bay thẳng ra bãi rác",
+            "ném cho cái bánh mì khô khốc vào mặt",
+            "báo công an vì tội gây rối trật tự",
+            "mắng chửi té tát: 'Có tay có chân sao không đi làm ăn đi!'",
+            "nhổ bãi nước bọt rồi đi thẳng"
+        ]
+        chosen = random.choice(punishments)
+        
+        embed = make_embed(
+            title="💢 XIN TIỀN THẤT BẠI 💢",
+            description=f"❌ **{self.target.mention}** đã không cho tiền còn **{chosen}** **{self.beggar.mention}**! Đau đớn và nhục nhã...",
+            color=discord.Color.red(),
+        )
+        embed.set_thumbnail(url=self.beggar.display_avatar.url)
+        await interaction.response.edit_message(embed=embed, view=None)
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.target.id:
+            await interaction.response.send_message("❌ Chỉ người bị xin tiền mới có quyền bấm nút này!", ephemeral=True)
+            return False
+        return True
+
+    async def on_timeout(self):
+        if not self.resolved:
+            for child in self.children:
+                if isinstance(child, discord.ui.Button):
+                    child.disabled = True
+            with suppress(Exception):
+                if self.message:
+                    await self.message.edit(view=self)
+
 
 async def setup(client: commands.Bot):
     await client.add_cog(GamblingHelpers(client))
