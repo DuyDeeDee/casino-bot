@@ -554,7 +554,7 @@ class CoinFlip(commands.Cog, name="CoinFlip"):
         await asyncio.sleep(0.8)
 
         # Outcome based on win rate
-        is_win = random.random() < COINFLIP_WIN_RATE
+        is_win = random.random() < self.get_cf_win_rate()
         if is_win:
             coin_result = user_choice
         else:
@@ -642,7 +642,7 @@ class CoinFlip(commands.Cog, name="CoinFlip"):
         await play_msg.edit(content="🪙🪙 **Cả hai đồng xu đang bay lên...**\n⬆️ ⬆️", embed=None, view=None)
         await asyncio.sleep(1.0)
 
-        is_win = random.random() < DOUBLECOIN_WIN_RATE
+        is_win = random.random() < self.get_doublecoin_win_rate()
         if is_win:
             coin1_res = choice1
             coin2_res = choice2
@@ -756,7 +756,7 @@ class CoinFlip(commands.Cog, name="CoinFlip"):
         await asyncio.sleep(0.8)
 
         # Flip again based on win rate
-        is_win = random.random() < DOUBLE_ROUND_WIN_RATE
+        is_win = random.random() < self.get_double_round_win_rate()
         if is_win:
             coin_result = user_choice
         else:
@@ -830,6 +830,58 @@ class CoinFlip(commands.Cog, name="CoinFlip"):
                 embed.add_field(name="🏆 THÀNH TỰU MỚI!", value=achievement_texts, inline=False)
 
             await play_msg.edit(content=None, embed=embed, view=None)
+
+    def get_cf_win_rate(self) -> float:
+        val = self.economy.get_setting("cf_win_rate")
+        return float(val) if val is not None else COINFLIP_WIN_RATE
+
+    def get_doublecoin_win_rate(self) -> float:
+        val = self.economy.get_setting("doublecoin_win_rate")
+        return float(val) if val is not None else DOUBLECOIN_WIN_RATE
+
+    def get_double_round_win_rate(self) -> float:
+        val = self.economy.get_setting("double_round_win_rate")
+        return float(val) if val is not None else DOUBLE_ROUND_WIN_RATE
+
+    @commands.group(name="cfset", brief="Thiết lập tỷ lệ thắng Coin Flip (Admin).", hidden=True)
+    @commands.is_owner()
+    async def cfset(self, ctx: commands.Context):
+        if ctx.invoked_subcommand is None:
+            rate_single = self.get_cf_win_rate()
+            rate_double = self.get_doublecoin_win_rate()
+            rate_round = self.get_double_round_win_rate()
+            await ctx.send(
+                f"⚙️ **TỶ LỆ THẮNG COIN FLIP HIỆN TẠI:**\n"
+                f"• Chơi đơn: `{rate_single * 100:.1f}%` (Mặc định: `{COINFLIP_WIN_RATE * 100}%`)\n"
+                f"• Tung 2 xu: `{rate_double * 100:.1f}%` (Mặc định: `{DOUBLECOIN_WIN_RATE * 100}%`)\n"
+                f"• Vòng Double: `{rate_round * 100:.1f}%` (Mặc định: `{DOUBLE_ROUND_WIN_RATE * 100}%`)\n\n"
+                f"Cú pháp thay đổi: `{ctx.prefix}cfset <single|double|round> <tỷ lệ từ 0 đến 1>`\n"
+                f"Ví dụ: `{ctx.prefix}cfset single 0.45` (đặt tỷ lệ thắng chơi đơn thành 45%)"
+            )
+
+    @cfset.command(name="single", brief="Thiết lập tỷ lệ thắng chơi đơn.")
+    async def cfset_single(self, ctx: commands.Context, rate: float):
+        if not (0.0 <= rate <= 1.0):
+            await ctx.send("❌ Tỷ lệ phải nằm trong khoảng từ `0.0` đến `1.0` (ví dụ: `0.45` cho 45%).")
+            return
+        self.economy.set_setting("cf_win_rate", str(rate))
+        await ctx.send(f"✅ Đã cập nhật tỷ lệ thắng **chơi đơn** thành `{rate * 100:.1f}%`.")
+
+    @cfset.command(name="double", brief="Thiết lập tỷ lệ thắng tung 2 xu.")
+    async def cfset_double(self, ctx: commands.Context, rate: float):
+        if not (0.0 <= rate <= 1.0):
+            await ctx.send("❌ Tỷ lệ phải nằm trong khoảng từ `0.0` đến `1.0` (ví dụ: `0.20` cho 20%).")
+            return
+        self.economy.set_setting("doublecoin_win_rate", str(rate))
+        await ctx.send(f"✅ Đã cập nhật tỷ lệ thắng **tung 2 xu** thành `{rate * 100:.1f}%`.")
+
+    @cfset.command(name="round", brief="Thiết lập tỷ lệ thắng vòng Double.")
+    async def cfset_round(self, ctx: commands.Context, rate: float):
+        if not (0.0 <= rate <= 1.0):
+            await ctx.send("❌ Tỷ lệ phải nằm trong khoảng từ `0.0` đến `1.0` (ví dụ: `0.45` cho 45%).")
+            return
+        self.economy.set_setting("double_round_win_rate", str(rate))
+        await ctx.send(f"✅ Đã cập nhật tỷ lệ thắng **vòng Double** thành `{rate * 100:.1f}%`.")
 
 
 async def setup(bot: commands.Bot):
