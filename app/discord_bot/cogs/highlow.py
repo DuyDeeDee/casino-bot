@@ -1,4 +1,5 @@
 import asyncio
+from io import BytesIO
 import hashlib
 import json
 import logging
@@ -8,16 +9,64 @@ from typing import Optional
 
 import discord
 from discord.ext import commands
+from PIL import Image, ImageDraw
 
 from app.config import config
 from app.discord_bot.modules.betting import validate_money_bet
 from app.discord_bot.modules.card import Card
-from app.discord_bot.modules.card_table import render_card_table_bytes
 from app.discord_bot.modules.economy import Economy
-from app.discord_bot.modules.helpers import make_embed
+from app.discord_bot.modules.helpers import make_embed, ABS_PATH
 from app.discord_bot.modules.wallet_logging import log_wallet_change
 
 logger = logging.getLogger(__name__)
+
+def render_compact_cards(history: list[Card], show_facedown: bool) -> BytesIO:
+    card_w = 72
+    card_h = 96
+    gap = 24
+    
+    # We display up to the last 5 cards in history
+    display_history = history[-5:] if len(history) > 5 else history
+    
+    num_cards = len(display_history)
+    if show_facedown:
+        num_cards += 1
+        
+    width = num_cards * card_w + (num_cards - 1) * gap
+    height = card_h
+    
+    # Create fully transparent canvas
+    bg = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    
+    x = 0
+    for i, card in enumerate(display_history):
+        with Image.open(ABS_PATH / "modules" / "cards" / card.image) as img:
+            card_img = img.convert("RGBA").resize((card_w, card_h), Image.Resampling.LANCZOS)
+            bg.alpha_composite(card_img, (x, 0))
+            card_img.close()
+            
+        x += card_w
+        if i < num_cards - 1:
+            draw = ImageDraw.Draw(bg)
+            # Draw a sleek right-pointing arrow polygon in the center of the gap
+            draw.polygon([
+                (x + 6, height // 2 - 6),
+                (x + 18, height // 2),
+                (x + 6, height // 2 + 6)
+            ], fill=(200, 200, 200, 255))
+            x += gap
+            
+    if show_facedown:
+        with Image.open(ABS_PATH / "modules" / "cards" / "red_back.png") as img:
+            card_img = img.convert("RGBA").resize((card_w, card_h), Image.Resampling.LANCZOS)
+            bg.alpha_composite(card_img, (x, 0))
+            card_img.close()
+            
+    output = BytesIO()
+    bg.save(output, format="PNG")
+    output.seek(0)
+    bg.close()
+    return output
 
 # Classic Mode Multipliers
 CLASSIC_MULTIPLIERS = [1.0, 1.5, 2.2, 3.3, 5.0, 7.5, 11.0, 16.0, 25.0]
@@ -472,34 +521,62 @@ class HighLowGameView(discord.ui.View):
         self.btn_high.disabled = (self.current_card.value == 14)
         self.btn_low.disabled = (self.current_card.value == 2)
         
+        payout_current = int(self.bet_amount * self.multiplier)
+        
+        # 1. High/Low labels with diffs
+        if not self.btn_high.disabled:
+            factor_high = calculate_dynamic_multiplier(self.current_card.value, True)
+            payout_high = int(self.bet_amount * round(self.multiplier * factor_high, 2))
+            diff_high = payout_high - payout_current
+            self.btn_high.label = f"Cao hơn (+{diff_high:,})"
+        else:
+            self.btn_high.label = "Cao hơn"
+            
+        if not self.btn_low.disabled:
+            factor_low = calculate_dynamic_multiplier(self.current_card.value, False)
+            payout_low = int(self.bet_amount * round(self.multiplier * factor_low, 2))
+            diff_low = payout_low - payout_current
+            self.btn_low.label = f"Thấp hơn (+{diff_low:,})"
+        else:
+            self.btn_low.label = "Thấp hơn"
+            
+        # 2. Red/Black labels with diffs
+        payout_red_black = int(self.bet_amount * round(self.multiplier * 1.95, 2))
+        diff_red_black = payout_red_black - payout_current
+        self.btn_red.label = f"Đỏ (+{diff_red_black:,})"
+        self.btn_black.label = f"Đen (+{diff_red_black:,})"
+        
+        # 3. Suits labels with diffs
+        payout_suit = int(self.bet_amount * round(self.multiplier * 3.8, 2))
+        diff_suit = payout_suit - payout_current
+        self.btn_clubs.label = f"Chuồn (+{diff_suit:,})"
+        self.btn_diamonds.label = f"Rô (+{diff_suit:,})"
+        self.btn_hearts.label = f"Cơ (+{diff_suit:,})"
+        self.btn_spades.label = f"Bích (+{diff_suit:,})"
+        
         if self.mode == "hardcore":
             self.btn_cashout.disabled = True
             self.btn_cashout.label = "Hardcore (Không Cash Out)"
         else:
             self.btn_cashout.disabled = (self.streak == 0)
-            self.btn_cashout.label = f"Cash Out ({int(self.bet_amount * self.multiplier):,} VNĐ)"
+            self.btn_cashout.label = f"Cash Out ({payout_current:,} VNĐ)"
 
     async def initialize_game(self):
         await self.render_and_send()
 
     async def render_and_send(self, is_final: bool = False, msg_suffix: str = ""):
-        display_hand = list(self.history)
-        if not is_final:
-            display_hand.append(Card("clubs", 2, down=True))
-
         loop = asyncio.get_event_loop()
-        table_bytes = await loop.run_in_executor(
+        card_bytes = await loop.run_in_executor(
             None,
-            render_card_table_bytes,
-            None,
-            [display_hand],
+            render_compact_cards,
+            self.history,
+            not is_final,
         )
 
-        file = discord.File(table_bytes, filename="highlow.png")
+        file = discord.File(card_bytes, filename="highlow.png")
         
         mode_names = {
             "classic": "🃏 Cổ điển",
-            "dynamic": "⚡ Dynamic Pro (Hệ số động)",
             "hardcore": "🔥 Hardcore (10 lượt)",
             "streak_challenge": f"🎯 Thử thách Chuỗi ({self.streak_target} lượt)"
         }
@@ -510,32 +587,23 @@ class HighLowGameView(discord.ui.View):
         elif self.mode == "streak_challenge":
             target_info = f"Đoán đúng {self.streak_target} lượt"
 
-        hist_symbols = []
-        for c in self.history:
-            hist_symbols.append(str(c))
-        if not is_final:
-            hist_symbols.append("❓")
-        history_text = " ➔ ".join(f"`{s}`" for s in hist_symbols)
-
         lucky_display = get_lucky_card_display(self.daily_lucky_val)
         lucky_status = " (ĐÃ KÍCH HOẠT! +10% Lợi nhuận)" if self.lucky_card_match else ""
 
         desc = (
-            f"👤 **Người chơi:** {self.ctx.author.mention}\n"
-            f"💵 **Tiền cược:** `{self.bet_amount:,} VNĐ`\n"
-            f"🎮 **Chế độ:** `{mode_names[self.mode]}`\n"
-            f"🎯 **Yêu cầu:** `{target_info}`\n"
-            f"🍀 **Lucky Card hôm nay:** `{lucky_display}`{lucky_status}\n\n"
-            f"⚡ **Hệ số hiện tại:** `{self.multiplier:.2f}x`\n"
-            f"💰 **Nhận về nếu Cash Out:** `{int(self.bet_amount * self.multiplier):,} VNĐ`\n"
+            f"💵 **Tiền cược:** `{self.bet_amount:,} VNĐ` | "
             f"🔥 **Chuỗi đoán đúng:** `{self.streak}`\n"
-            f"🃏 **Lịch sử bài:** {history_text}\n"
+            f"🎯 **Yêu cầu:** `{target_info}` | "
+            f"🍀 **Lucky Card:** `{lucky_display}`{lucky_status}\n"
+            f"⚡ **Hệ số:** `{self.multiplier:.2f}x` | "
+            f"💰 **Cash Out:** `{int(self.bet_amount * self.multiplier):,} VNĐ`\n\n"
+            f"**Lá bài hiện tại:** `{self.current_card}`\n"
         )
         if msg_suffix:
             desc += f"\n{msg_suffix}"
 
         embed = make_embed(
-            title="🃏 TRÒ CHƠI HIGH & LOW",
+            title=f"🃏 {self.ctx.author.name} is playing High & Low",
             description=desc,
             color=discord.Color.purple()
         )
@@ -545,7 +613,7 @@ class HighLowGameView(discord.ui.View):
             embed.set_footer(text="Sylus Meow • Trò chơi kết thúc.")
             await self.message.edit(embed=embed, attachments=[file], view=None)
         else:
-            embed.set_footer(text="Nhấp chọn nút bấm phía dưới để dự đoán lá bài tiếp theo...")
+            embed.set_footer(text="Lá tiếp theo sẽ cao hơn hay thấp hơn?")
             await self.message.edit(embed=embed, attachments=[file], view=self)
 
     async def process_guess(self, interaction: discord.Interaction, guess: str):
