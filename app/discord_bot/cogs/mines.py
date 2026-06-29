@@ -908,7 +908,7 @@ class Mines(commands.Cog, name="Mines"):
     @commands.command(
         brief="Chơi trò chơi Mines 3x3 tương tác bằng nút bấm.",
         usage="mines [tiền cược] [số bom]",
-        aliases=["mine", "m"]
+        aliases=["m"]
     )
     async def mines(self, ctx: commands.Context, bet_amount_str: str = None, bombs_str: str = None):
         user_id = ctx.author.id
