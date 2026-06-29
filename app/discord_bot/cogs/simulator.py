@@ -178,6 +178,42 @@ SHOP_ITEMS = {
         "description": "Hình nền động Lelouch Geass cực kỳ ngầu.",
         "is_banner": True,
         "filename": "lelouch.gif"
+    },
+    "banner_anak": {
+        "name": "Banner Anak Động 🌌",
+        "cost": 100,
+        "currency": "gold",
+        "description": "Hình nền động Anak siêu ngầu.",
+        "is_banner": True,
+        "is_admin_only": True,
+        "filename": "anak.gif"
+    },
+    "banner_hr": {
+        "name": "Banner HR Động 💫",
+        "cost": 100,
+        "currency": "gold",
+        "description": "Hình nền động HR cực đẹp.",
+        "is_banner": True,
+        "is_admin_only": True,
+        "filename": "hr.gif"
+    },
+    "banner_sally": {
+        "name": "Banner Sally Động 🍭",
+        "cost": 100,
+        "currency": "gold",
+        "description": "Hình nền động Sally siêu dễ thương.",
+        "is_banner": True,
+        "is_admin_only": True,
+        "filename": "sally.gif"
+    },
+    "banner_zee": {
+        "name": "Banner Zee Đẹp Trai 😎",
+        "cost": 100,
+        "currency": "gold",
+        "description": "Hình nền Zee tĩnh cực chất.",
+        "is_banner": True,
+        "is_admin_only": True,
+        "filename": "zee.jpg"
     }
 }
 
@@ -677,7 +713,7 @@ class ShopView(discord.ui.View):
                 color=discord.Color.gold()
             )
             for item_id, details in SHOP_ITEMS.items():
-                if not details.get("is_banner"):
+                if not details.get("is_banner") and not details.get("is_admin_only"):
                     cost_str = f"{details['cost']:,} VND" if details['currency'] == "money" else f"{details['cost']} thỏi vàng"
                     embed.add_field(
                         name=f"📦 {details['name']} (ID: `{item_id}`)",
@@ -691,7 +727,7 @@ class ShopView(discord.ui.View):
                 color=discord.Color.purple()
             )
             for item_id, details in SHOP_ITEMS.items():
-                if details.get("is_banner"):
+                if details.get("is_banner") and not details.get("is_admin_only"):
                     cost_str = f"{details['cost']:,} VND" if details['currency'] == "money" else f"{details['cost']} thỏi vàng"
                     embed.add_field(
                         name=f"🖼️ {details['name']} (ID: `{item_id}`)",
@@ -1438,6 +1474,11 @@ class Simulator(commands.Cog):
         user_id = ctx.author.id
         item = SHOP_ITEMS[item_id]
         
+        # Check if item is admin-only and user is not owner
+        if item.get("is_admin_only") and not await ctx.bot.is_owner(ctx.author):
+            await ctx.send("❌ **Lỗi:** Vật phẩm này chỉ dành cho Admin!")
+            return
+            
         # Check if it is a banner and they already own it
         if item.get("is_banner"):
             inventory = self.economy.get_inventory(user_id)
@@ -2247,6 +2288,87 @@ class Simulator(commands.Cog):
             color=discord.Color.gold()
         )
         embed.set_thumbnail(url=ctx.author.display_avatar.url)
+        await ctx.send(embed=embed)
+
+    @commands.command(
+        brief="[ADMIN] Xem cửa hàng banner độc quyền dành cho Admin.",
+        usage="adminshop",
+        hidden=True
+    )
+    @commands.is_owner()
+    async def adminshop(self, ctx: commands.Context):
+        embed = make_embed(
+            title="👑 CỬA HÀNG BANNER ĐỘC QUYỀN (ADMIN ONLY) 👑",
+            description="Danh sách các banner đặc biệt dành riêng cho admin. Dùng lệnh give/set banner cho người khác.",
+            color=discord.Color.red()
+        )
+        for item_id, details in SHOP_ITEMS.items():
+            if details.get("is_banner") and details.get("is_admin_only"):
+                cost_str = f"{details['cost']:,} VND" if details['currency'] == "money" else f"{details['cost']} thỏi vàng"
+                embed.add_field(
+                    name=f"🖼️ {details['name']} (ID: `{item_id}`)",
+                    value=f"💵 **Giá tham khảo:** `{cost_str}`\n📝 **Mô tả:** {details['description']}\n📁 **Tên file:** `{details['filename']}`",
+                    inline=False
+                )
+        embed.set_footer(text="Sử dụng i?givebanner <member> <banner_id> hoặc i?setbannerother <member> <banner_id>")
+        await ctx.send(embed=embed)
+
+    @commands.command(
+        name="givebanner",
+        brief="[ADMIN] Tặng banner cho người chơi khác.",
+        usage="givebanner <member> <banner_id>",
+        hidden=True
+    )
+    @commands.is_owner()
+    async def give_banner(self, ctx: commands.Context, member: discord.Member, banner_id: str):
+        if banner_id not in SHOP_ITEMS or not SHOP_ITEMS[banner_id].get("is_banner"):
+            await ctx.send("❌ **Lỗi:** ID banner không tồn tại hoặc không phải là banner!")
+            return
+
+        # Add to user inventory
+        self.economy.add_inventory_item(member.id, banner_id, 1)
+        
+        embed = make_embed(
+            title="🎁 TẶNG BANNER THÀNH CÔNG 🎁",
+            description=f"Admin đã tặng banner **{SHOP_ITEMS[banner_id]['name']}** cho **{member.mention}**!",
+            color=discord.Color.green()
+        )
+        embed.set_thumbnail(url=member.display_avatar.url)
+        await ctx.send(embed=embed)
+
+    @commands.command(
+        name="setbannerother",
+        aliases=["sbo", "setbannerfor", "sbf"],
+        brief="[ADMIN] Trang bị banner trực tiếp cho người chơi khác.",
+        usage="setbannerother <member> <banner_id / reset>",
+        hidden=True
+    )
+    @commands.is_owner()
+    async def set_banner_other(self, ctx: commands.Context, member: discord.Member, banner_id: str):
+        if banner_id.lower() in ["reset", "default", "none"]:
+            self.economy.set_equipped_banner(member.id, None)
+            await ctx.send(f"✅ Đã đặt lại hình nền mặc định cho profile của **{member.display_name}**.")
+            return
+
+        if banner_id not in SHOP_ITEMS or not SHOP_ITEMS[banner_id].get("is_banner"):
+            await ctx.send("❌ **Lỗi:** ID banner không tồn tại hoặc không phải là banner!")
+            return
+
+        # Add banner to their inventory if they don't already own it
+        inventory = self.economy.get_inventory(member.id)
+        has_banner = any(item == banner_id and qty > 0 for item, qty in inventory)
+        if not has_banner:
+            self.economy.add_inventory_item(member.id, banner_id, 1)
+
+        # Equip
+        self.economy.set_equipped_banner(member.id, banner_id)
+        
+        embed = make_embed(
+            title="🎨 TRANG BỊ BANNER THÀNH CÔNG 🎨",
+            description=f"Đã trang bị banner **{SHOP_ITEMS[banner_id]['name']}** cho profile của **{member.mention}**!",
+            color=discord.Color.green()
+        )
+        embed.set_thumbnail(url=member.display_avatar.url)
         await ctx.send(embed=embed)
 
 async def setup(client: commands.Bot):
