@@ -266,6 +266,7 @@ class HighLowModeSelectionView(discord.ui.View):
 
     @discord.ui.button(label="Thử thách Chuỗi (Streak)", style=discord.ButtonStyle.secondary, emoji="🎯")
     async def streak_click(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.stop()
         view = HighLowStreakTargetView(self.cog, self.ctx, self.bet_amount)
         view.message = self.message
         
@@ -289,6 +290,7 @@ class HighLowModeSelectionView(discord.ui.View):
         await self.start_game("hardcore")
 
     async def start_game(self, mode: str, streak_target: Optional[int] = None):
+        self.stop()
         self.cog.active_users.add(self.user_id)
         
         try:
@@ -350,6 +352,7 @@ class HighLowStreakTargetView(discord.ui.View):
 
     @discord.ui.button(label="⬅️ Quay lại", style=discord.ButtonStyle.secondary)
     async def back_click(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.stop()
         view = HighLowModeSelectionView(self.cog, self.ctx, self.bet_amount)
         view.message = self.message
         
@@ -366,6 +369,7 @@ class HighLowStreakTargetView(discord.ui.View):
         await interaction.response.edit_message(embed=embed, view=view)
 
     async def start_game(self, target: int):
+        self.stop()
         self.cog.active_users.add(self.user_id)
         try:
             self.cog.economy.add_money(self.user_id, -self.bet_amount)
@@ -627,6 +631,7 @@ class HighLowGameView(discord.ui.View):
 
     async def conclude_game(self, win: bool, suffix: str):
         self.cog.active_users.discard(self.user_id)
+        self.stop()
         
         payout = 0
         if win:
