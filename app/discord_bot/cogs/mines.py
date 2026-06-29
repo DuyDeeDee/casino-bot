@@ -54,16 +54,6 @@ def parse_bet_amount(val_str: str, current_money: int) -> int:
     except ValueError:
         return 0
 
-def coordinate_to_index(coord: str) -> Optional[int]:
-    coord = coord.strip().upper()
-    if len(coord) != 2:
-        return None
-    col_char, row_char = coord[0], coord[1]
-    if col_char not in ['A', 'B', 'C'] or row_char not in ['1', '2', '3']:
-        return None
-    col = ord(col_char) - ord('A')
-    row = int(row_char) - 1
-    return row * 3 + col
 
 def index_to_coordinate(index: int) -> str:
     row = index // 3 + 1
@@ -986,34 +976,6 @@ class Mines(commands.Cog, name="Mines"):
         
         view.message = await ctx.send(embed=embed, view=view)
 
-    @commands.command(
-        brief="Chọn ô bằng tọa độ (ví dụ: i?pick B2).",
-        usage="pick <tọa độ>",
-        aliases=["p"]
-    )
-    async def pick(self, ctx: commands.Context, coord: str = None):
-        user_id = ctx.author.id
-        if user_id not in self.active_games:
-            await ctx.send("❌ Bạn không có ván chơi Mines nào đang hoạt động!")
-            return
-            
-        if coord is None:
-            await ctx.send("❌ Vui lòng nhập tọa độ ô muốn mở (A1-C3). Ví dụ: `i?pick B2` hoặc `i?p b2`")
-            return
-
-        game_view = self.active_games[user_id]
-        index = coordinate_to_index(coord)
-        
-        if index is None:
-            await ctx.send("❌ Tọa độ không hợp lệ! Vui lòng chọn từ A1 đến C3 (ví dụ: B2).")
-            return
-            
-        if game_view.states[index] != "unopened":
-            await ctx.send("❌ Ô này đã được mở rồi!")
-            return
-            
-        # Execute cell selection logic
-        await game_view.process_cell_selection(index)
 
 
 async def setup(bot: commands.Bot):
