@@ -1626,7 +1626,7 @@ class GamblingHelpers(commands.Cog, name="General"):
         brief="Cầm bát đi xin tiền NPC hoặc xin tiền người chơi khác.",
         usage="anxin [@thành_viên] [số_tiền_xin]"
     )
-    @commands.cooldown(1, 120, commands.BucketType.user)
+    @commands.cooldown(1, 1800, commands.BucketType.user)
     async def anxin(self, ctx: commands.Context, target: discord.Member | None = None, amount: int | None = None):
         if target is None:
             # Begging from system NPCs
