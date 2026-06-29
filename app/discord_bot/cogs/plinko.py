@@ -24,17 +24,17 @@ PLINKO_ACHIEVEMENTS = {
 RISK_SETTINGS = {
     "low": {
         "multipliers": [1.5, 1.2, 1.0, 0.8],
-        "weights": [0.10, 0.25, 0.45, 0.20],
+        "weights": [0.05, 0.15, 0.45, 0.35],
         "description": "🟢 Risk Low: Thường rơi giữa, ít lời ít lỗ."
     },
     "medium": {
         "multipliers": [5.0, 2.0, 1.0, 0.5, 0.2],
-        "weights": [0.03, 0.15, 0.40, 0.27, 0.15],
+        "weights": [0.025, 0.13, 0.40, 0.285, 0.16],
         "description": "🟡 Risk Medium: Cân bằng, ổn định."
     },
     "high": {
         "multipliers": [100.0, 25.0, 10.0, 5.0, 3.0, 2.0, 1.0, 0.5, 0.2, 0.0],
-        "weights": [0.0005, 0.0030, 0.0100, 0.0400, 0.0800, 0.1500, 0.2500, 0.2200, 0.1500, 0.0965],
+        "weights": [0.0005, 0.0025, 0.008, 0.025, 0.05, 0.10, 0.18, 0.22, 0.20, 0.214],
         "description": "🔴 Risk High: Có thể mất trắng, nhưng Jackpot cực lớn!"
     }
 }
