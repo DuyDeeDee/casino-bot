@@ -11,7 +11,7 @@ from app.config import config
 Entry = Tuple[int, int, int]
 DATABASE_PATH = Path(config.storage.database_path)
 LEGACY_DATABASE_PATH = Path(__file__).resolve().parents[3] / "economy.db"
-SCHEMA_VERSION = 22
+SCHEMA_VERSION = 23
 
 
 logger = logging.getLogger(__name__)
@@ -421,6 +421,25 @@ def _migration_22_add_plinko_table(cur: sqlite3.Cursor) -> None:
         pass
 
 
+def _migration_23_add_highlow_table(cur: sqlite3.Cursor) -> None:
+    try:
+        cur.execute(
+            """CREATE TABLE IF NOT EXISTS user_highlow (
+            user_id INTEGER NOT NULL PRIMARY KEY,
+            plays INTEGER NOT NULL DEFAULT 0,
+            wins INTEGER NOT NULL DEFAULT 0,
+            losses INTEGER NOT NULL DEFAULT 0,
+            profit INTEGER NOT NULL DEFAULT 0,
+            streak INTEGER NOT NULL DEFAULT 0,
+            max_streak INTEGER NOT NULL DEFAULT 0,
+            max_multiplier REAL NOT NULL DEFAULT 0.0,
+            achievements TEXT NOT NULL DEFAULT '[]'
+        )"""
+        )
+    except sqlite3.OperationalError:
+        pass
+
+
 MIGRATIONS: dict[int, Callable[[sqlite3.Cursor], None]] = {
     1: _migration_1_create_economy,
     2: _migration_2_add_indexes,
@@ -444,6 +463,7 @@ MIGRATIONS: dict[int, Callable[[sqlite3.Cursor], None]] = {
     20: _migration_20_add_banned_users_table,
     21: _migration_21_add_mines_table,
     22: _migration_22_add_plinko_table,
+    23: _migration_23_add_highlow_table,
 }
 
 
@@ -1768,6 +1788,102 @@ class Economy:
         if updates:
             params.append(user_id)
             query = f"UPDATE user_plinko SET {', '.join(updates)} WHERE user_id=?"
+            self.cur.execute(query, tuple(params))
+            self.conn.commit()
+
+    def get_highlow_stats(self, user_id: int) -> dict:
+        self._ensure_entry(user_id)
+        self.cur.execute(
+            """SELECT plays, wins, losses, profit, streak, max_streak, max_multiplier, achievements 
+               FROM user_highlow WHERE user_id=?""",
+            (user_id,),
+        )
+        row = self.cur.fetchone()
+        if row is None:
+            self.cur.execute(
+                """INSERT OR IGNORE INTO user_highlow(user_id, plays, wins, losses, profit, streak, max_streak, max_multiplier, achievements) 
+                   VALUES(?, 0, 0, 0, 0, 0, 0, 0.0, '[]')""",
+                (user_id,),
+            )
+            self.conn.commit()
+            return {
+                "plays": 0,
+                "wins": 0,
+                "losses": 0,
+                "profit": 0,
+                "streak": 0,
+                "max_streak": 0,
+                "max_multiplier": 0.0,
+                "achievements": [],
+            }
+        
+        import json
+        try:
+            achievements = json.loads(row[7])
+        except Exception:
+            achievements = []
+            
+        return {
+            "user_id": user_id,
+            "plays": row[0],
+            "wins": row[1],
+            "losses": row[2],
+            "profit": row[3],
+            "streak": row[4],
+            "max_streak": row[5],
+            "max_multiplier": row[6],
+            "achievements": achievements,
+        }
+
+    def update_highlow_stats(
+        self,
+        user_id: int,
+        *,
+        plays: int = 0,
+        wins: int = 0,
+        losses: int = 0,
+        profit: int = 0,
+        streak: int | None = None,
+        max_streak: int | None = None,
+        max_multiplier: float | None = None,
+        achievements: list | None = None,
+    ) -> None:
+        self._ensure_entry(user_id)
+        self.get_highlow_stats(user_id)
+        
+        updates = []
+        params = []
+        
+        if plays != 0:
+            updates.append("plays = plays + ?")
+            params.append(plays)
+        if wins != 0:
+            updates.append("wins = wins + ?")
+            params.append(wins)
+        if losses != 0:
+            updates.append("losses = losses + ?")
+            params.append(losses)
+        if profit != 0:
+            updates.append("profit = profit + ?")
+            params.append(profit)
+        if streak is not None:
+            updates.append("streak = ?")
+            params.append(streak)
+        if max_streak is not None:
+            updates.append("max_streak = ?")
+            params.append(max_streak)
+        if max_multiplier is not None:
+            updates.append("max_multiplier = ?")
+            params.append(max_multiplier)
+            
+        import json
+        if achievements is not None:
+            updates.append("achievements = ?")
+            params.append(json.dumps(achievements))
+            
+        if updates:
+            params.append(user_id)
+            query = f"UPDATE user_highlow SET {', '.join(updates)} WHERE user_id=?"
             self.cur.execute(query, tuple(params))
             self.conn.commit()
 

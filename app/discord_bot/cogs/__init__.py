@@ -19,5 +19,6 @@ from .baito import Baito
 from .lixi import Lixi
 from .mines import Mines
 from .plinko import Plinko
+from .highlow import HighLow
 
 
