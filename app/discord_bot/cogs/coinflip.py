@@ -15,6 +15,11 @@ from app.discord_bot.modules.wallet_logging import log_wallet_change
 
 logger = logging.getLogger(__name__)
 
+# Game Balance Settings
+COINFLIP_WIN_RATE = 0.46        # Tỷ lệ thắng chế độ chơi đơn (46%)
+DOUBLECOIN_WIN_RATE = 0.20      # Tỷ lệ thắng chế độ cược 2 xu (20%)
+DOUBLE_ROUND_WIN_RATE = 0.45    # Tỷ lệ thắng mỗi vòng double-or-nothing (45%)
+
 # VIP Tiers for Coin Flip
 VIP_TIERS = [
     {
@@ -548,8 +553,12 @@ class CoinFlip(commands.Cog, name="CoinFlip"):
         await play_msg.edit(content="🪙 **Đồng xu được tung lên...**\n⬆️\n⬆️\n⬆️")
         await asyncio.sleep(0.8)
 
-        # Outcome
-        coin_result = "heads" if random.random() < 0.5 else "tails"
+        # Outcome based on win rate
+        is_win = random.random() < COINFLIP_WIN_RATE
+        if is_win:
+            coin_result = user_choice
+        else:
+            coin_result = "tails" if user_choice == "heads" else "heads"
         coin_result_vn = "🦅 NGỬA" if coin_result == "heads" else "🌸 SẤP"
 
         if coin_result == user_choice:
@@ -633,13 +642,18 @@ class CoinFlip(commands.Cog, name="CoinFlip"):
         await play_msg.edit(content="🪙🪙 **Cả hai đồng xu đang bay lên...**\n⬆️ ⬆️", embed=None, view=None)
         await asyncio.sleep(1.0)
 
-        coin1_res = "heads" if random.random() < 0.5 else "tails"
-        coin2_res = "heads" if random.random() < 0.5 else "tails"
+        is_win = random.random() < DOUBLECOIN_WIN_RATE
+        if is_win:
+            coin1_res = choice1
+            coin2_res = choice2
+        else:
+            # Pick a losing combination
+            outcomes = [("heads", "heads"), ("heads", "tails"), ("tails", "heads"), ("tails", "tails")]
+            outcomes.remove((choice1, choice2))
+            coin1_res, coin2_res = random.choice(outcomes)
         
         c1_res_vn = "🦅 NGỬA" if coin1_res == "heads" else "🌸 SẤP"
         c2_res_vn = "🦅 NGỬA" if coin2_res == "heads" else "🌸 SẤP"
-
-        is_win = (coin1_res == choice1 and coin2_res == choice2)
 
         if is_win:
             winnings = bet_amount * 4
@@ -741,8 +755,12 @@ class CoinFlip(commands.Cog, name="CoinFlip"):
         await play_msg.edit(content=f"🎲 **Đang Double... Cược tiếp tất cả `{old_pool:,} VNĐ`!**\n🪙 Tung đồng xu...\n⬆️\n⬆️")
         await asyncio.sleep(0.8)
 
-        # Flip again
-        coin_result = "heads" if random.random() < 0.5 else "tails"
+        # Flip again based on win rate
+        is_win = random.random() < DOUBLE_ROUND_WIN_RATE
+        if is_win:
+            coin_result = user_choice
+        else:
+            coin_result = "tails" if user_choice == "heads" else "heads"
         user_choice = previous_view.user_choice
         user_choice_vn = "🦅 NGỬA (Heads)" if user_choice == "heads" else "🌸 SẤP (Tails)"
         coin_result_vn = "🦅 NGỬA" if coin_result == "heads" else "🌸 SẤP"
