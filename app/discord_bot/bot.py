@@ -45,6 +45,7 @@ from app.discord_bot.cogs import (
     Baito,
     Lixi,
     Mines,
+    Plinko,
 )
 
 from app.discord_bot.modules.economy import Economy
@@ -72,6 +73,7 @@ COGS = (
     Baito,
     Lixi,
     Mines,
+    Plinko,
 )
 
 
