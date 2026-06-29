@@ -127,7 +127,7 @@ class MinesGameView(discord.ui.View):
         self.bet_amount = bet_amount
         self.num_bombs = num_bombs
         self.message: Optional[discord.Message] = None
-        self.is_finished = False
+        self.game_finished = False
 
         # Initialize board: 0 = safe, 1 = bomb
         self.board = [0] * 9
@@ -201,7 +201,7 @@ class MinesGameView(discord.ui.View):
                     btn.style = discord.ButtonStyle.success
 
     async def process_cell_selection(self, index: int):
-        if self.is_finished:
+        if self.game_finished:
             return
 
         self.states[index] = "opened"
@@ -240,7 +240,7 @@ class MinesGameView(discord.ui.View):
         await self.update_message_content(state="playing", gem_found=gem_found)
 
     async def process_boom(self, boom_index: int):
-        self.is_finished = True
+        self.game_finished = True
         self.stop()
         self.cog.active_users.discard(self.user_id)
         self.cog.active_games.pop(self.user_id, None)
@@ -286,7 +286,7 @@ class MinesGameView(discord.ui.View):
         await self.message.edit(embed=embed, view=self)
 
     async def process_perfect_win(self):
-        self.is_finished = True
+        self.game_finished = True
         self.stop()
         self.cog.active_users.discard(self.user_id)
         self.cog.active_games.pop(self.user_id, None)
@@ -376,7 +376,7 @@ class MinesGameView(discord.ui.View):
         await self.process_cashout_decision()
 
     async def process_cashout_decision(self):
-        self.is_finished = True
+        self.game_finished = True
         self.cog.active_users.discard(self.user_id)
         self.cog.active_games.pop(self.user_id, None)
 
@@ -724,9 +724,9 @@ class MinesGameView(discord.ui.View):
         await self.message.edit(embed=embed, view=self)
 
     async def on_timeout(self):
-        if self.is_finished:
+        if self.game_finished:
             return
-        self.is_finished = True
+        self.game_finished = True
         self.stop()
         self.cog.active_users.discard(self.user_id)
         self.cog.active_games.pop(self.user_id, None)
