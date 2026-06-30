@@ -567,7 +567,7 @@ class ControlPanelView(discord.ui.View):
         elif self.current_tab == "biz":
             return self.cog.get_business_embed(self.author)
         elif self.current_tab == "invest":
-            return self.cog.get_invest_embed(self.author)
+            return self.cog.get_invest_embed(self.author, getattr(self, "selected_stock", "CASINO"))
         elif self.current_tab == "daga":
             return self.cog.get_daga_embed(self.author)
         elif self.current_tab == "xe":
@@ -655,7 +655,7 @@ class StockSelect(discord.ui.Select):
             await view.update_interaction(interaction)
         else:
             view.selected_symbol = symbol
-            embed = view.cog.get_invest_embed(view.author)
+            embed = view.cog.get_invest_embed(view.author, symbol)
             chart_file = view.cog.get_stock_chart_file(symbol)
             embed.set_image(url="attachment://chart.png")
             await interaction.response.edit_message(embed=embed, attachments=[chart_file], view=view)
@@ -1256,9 +1256,28 @@ class Simulator(commands.Cog):
         embed.set_thumbnail(url=user.display_avatar.url)
         return embed
 
-    def get_invest_embed(self, user: discord.User | discord.Member) -> discord.Embed:
+    def get_invest_embed(self, user: discord.User | discord.Member, symbol: str | None = None) -> discord.Embed:
+        if symbol is None:
+            symbol = "CASINO"
+            
         prices = self.economy.get_stock_prices()
-        
+        target_row = None
+        for row in prices:
+            if row[0] == symbol:
+                target_row = row
+                break
+                
+        if not target_row:
+            symbol = "CASINO"
+            for row in prices:
+                if row[0] == symbol:
+                    target_row = row
+                    break
+                    
+        if not target_row and prices:
+            target_row = prices[0]
+            symbol = target_row[0]
+            
         import json
         active_news = None
         news_data = self.economy.get_setting("active_news")
@@ -1273,20 +1292,21 @@ class Simulator(commands.Cog):
             news_str = f"\n\n🔥 **TIN TỨC THỊ TRƯỜNG:**\n> {active_news['title']}\n> *(Hiệu lực còn {active_news['duration']} phiên)*"
             
         embed = make_embed(
-            title="📈 THỊ TRƯỜNG CHỨNG KHOÁN & CRYPTO 📈",
+            title=f"📈 CHI TIẾT GIAO DỊCH: {symbol} 📈",
             description=f"Tỷ giá biến động tự động mỗi 5 phút một lần. Đầu tư bằng tiền mặt VND.{news_str}",
             color=discord.Color.blue()
         )
         
         user_portfolio = dict(self.economy.get_portfolio(user.id))
         
-        for symbol, price, prev, change in prices:
+        if target_row:
+            sym, price, prev, change = target_row
             trend_str = "📈 TĂNG" if change > 0 else "📉 GIẢM" if change < 0 else "↔️ ỔN ĐỊNH"
-            owned_shares = user_portfolio.get(symbol, 0.0)
+            owned_shares = user_portfolio.get(sym, 0.0)
             value = int(owned_shares * price)
             
             embed.add_field(
-                name=f"{symbol} ({trend_str})",
+                name=f"{sym} ({trend_str})",
                 value=(
                     f"💵 **Giá hiện tại:** `{price:,} VND` / cổ\n"
                     f"📊 **Biến động:** `{change:+.2f}%`\n"
@@ -2730,8 +2750,8 @@ class Simulator(commands.Cog):
     )
     async def invest(self, ctx: commands.Context):
         view = InvestLobbyView(self, ctx.author)
-        embed = self.get_invest_embed(ctx.author)
-        chart_file = self.get_stock_chart_file("CASINO")
+        embed = self.get_invest_embed(ctx.author, view.selected_symbol)
+        chart_file = self.get_stock_chart_file(view.selected_symbol)
         embed.set_image(url="attachment://chart.png")
         msg = await ctx.send(embed=embed, file=chart_file, view=view)
         view.message = msg
