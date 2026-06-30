@@ -569,14 +569,14 @@ class Marry(commands.Cog):
             description=(
                 f"Bạn đang yêu cầu chấm dứt hôn nhân cùng <@{spouse_id}>.\n\n"
                 f"Hãy chọn một trong hai phương án giải quyết dưới đây:\n"
-                f"1️⃣ **Ly hôn Đồng Thuận (Mutual):** Gõ `i?divorce mutual` (Cả hai cùng ký đơn, không mất phí, quỹ chung chia đôi).\n"
-                f"2️⃣ **Ly hôn Đơn Phương (Unilateral):** Gõ `i?divorce force` (Không cần bên kia đồng ý, án phí tòa án rất đắt: **{unilateral_cost:,} VND** (10% ví của bạn), 50% án phí sẽ đền bù cho bạn đời của bạn)."
+                f"1️⃣ **Ly hôn Đồng Thuận (Mutual):** Gõ `i?divorcemutual` (Cả hai cùng ký đơn, không mất phí, quỹ chung chia đôi).\n"
+                f"2️⃣ **Ly hôn Đơn Phương (Unilateral):** Gõ `i?divorceforce` (Không cần bên kia đồng ý, án phí tòa án rất đắt: **{unilateral_cost:,} VND** (10% ví của bạn), 50% án phí sẽ đền bù cho bạn đời của bạn)."
             ),
             color=discord.Color.red()
         )
         await ctx.send(embed=embed)
 
-    @commands.command(hidden=True)
+    @commands.command(name="divorcemutual", aliases=["divorce_mutual", "divmutual"], hidden=True)
     async def divorce_mutual(self, ctx: commands.Context):
         marriage = self.economy.get_marriage(ctx.author.id)
         if not marriage:
@@ -598,7 +598,7 @@ class Marry(commands.Cog):
         msg = await ctx.send(embed=embed, view=view)
         view.message = msg
 
-    @commands.command(hidden=True)
+    @commands.command(name="divorceforce", aliases=["divorce_force", "divforce"], hidden=True)
     async def divorce_force(self, ctx: commands.Context):
         marriage = self.economy.get_marriage(ctx.author.id)
         if not marriage:
