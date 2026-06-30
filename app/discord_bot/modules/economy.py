@@ -570,7 +570,11 @@ class Economy:
                 LEGACY_DATABASE_PATH,
                 DATABASE_PATH,
             )
-        self.conn = sqlite3.connect(str(DATABASE_PATH), timeout=30)
+        self.conn = sqlite3.connect(str(DATABASE_PATH), timeout=30, check_same_thread=False)
+        self.conn.execute("PRAGMA journal_mode=WAL")
+        self.conn.execute("PRAGMA synchronous=NORMAL")
+        self.conn.execute("PRAGMA cache_size=-64000")  # 64MB cache
+        self.conn.execute("PRAGMA busy_timeout=10000")  # 10s busy timeout
         self.cur = self.conn.cursor()
         self._run_migrations()
         self.conn.commit()

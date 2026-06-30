@@ -12,18 +12,32 @@ logger = logging.getLogger(__name__)
 
 
 async def main() -> None:
-    """Start the Discord bot."""
+    """Start the Discord bot with auto-reconnect on failure."""
     setup_logging()
-    
+
     if not config.bot.token:
         raise ValueError(
             "DISCORD_TOKEN is not set. Please set it in your .env file or environment variables."
         )
-    
-    logger.info("Starting Casino Bot (Discord Only Mode)...")
-    async with client:
-        await client.start(config.bot.token)
+
+    while True:
+        try:
+            logger.info("Starting Casino Bot (Discord Only Mode)...")
+            async with client:
+                await client.start(config.bot.token, reconnect=True)
+        except (KeyboardInterrupt, asyncio.CancelledError):
+            logger.info("Bot shutting down (signal received).")
+            break
+        except Exception as e:
+            logger.error("Bot crashed with unexpected error: %s — restarting in 5s...", e, exc_info=True)
+            await asyncio.sleep(5)
+        else:
+            # clean exit from client.start
+            break
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        pass
