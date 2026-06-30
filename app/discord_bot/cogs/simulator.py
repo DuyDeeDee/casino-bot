@@ -809,9 +809,15 @@ class ShopView(discord.ui.View):
                 else:
                     child.style = discord.ButtonStyle.secondary
 
-    @discord.ui.button(label="🎓 Nghề Nghiệp & Công Cụ", style=discord.ButtonStyle.primary, custom_id="shop_career")
+    @discord.ui.button(label="🎓 Nghề Nghiệp", style=discord.ButtonStyle.primary, custom_id="shop_career")
     async def view_career(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.category = "career"
+        self.update_buttons()
+        await interaction.response.edit_message(embed=self.get_embed(), view=self)
+
+    @discord.ui.button(label="🔧 Công Cụ & Hợp Đồng", style=discord.ButtonStyle.secondary, custom_id="shop_tools")
+    async def view_tools(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.category = "tools"
         self.update_buttons()
         await interaction.response.edit_message(embed=self.get_embed(), view=self)
 
@@ -824,18 +830,38 @@ class ShopView(discord.ui.View):
     def get_embed(self) -> discord.Embed:
         if self.category == "career":
             embed = make_embed(
-                title="🎓 CỬA HÀNG NGHỀ NGHIỆP & CÔNG CỤ 🎓",
-                description="Hãy trang bị thêm thẻ hoặc bằng cấp để nâng cấp bản thân và mở khóa các công việc mới!",
+                title="🎓 CỬA HÀNG NGHỀ NGHIỆP 🎓",
+                description="Trang bị các bằng cấp và chứng chỉ để nâng cấp bản thân và mở khóa các công việc mới!",
                 color=discord.Color.gold()
             )
-            for item_id, details in SHOP_ITEMS.items():
-                if not details.get("is_banner") and not details.get("is_admin_only"):
-                    cost_str = f"{details['cost']:,} VND" if details['currency'] == "money" else f"{details['cost']} thỏi vàng"
-                    embed.add_field(
-                        name=f"📦 {details['name']} (ID: `{item_id}`)",
-                        value=f"💵 **Giá:** `{cost_str}`\n📝 **Mô tả:** {details['description']}",
-                        inline=False
-                    )
+            career_keys = ["bang_cap", "bang_kien_truc", "bang_phi_hanh", "bang_bac_si", "the_tho_mo", "the_tho_san"]
+            for item_id in career_keys:
+                if item_id in SHOP_ITEMS:
+                    details = SHOP_ITEMS[item_id]
+                    if not details.get("is_admin_only"):
+                        cost_str = f"{details['cost']:,} VND" if details['currency'] == "money" else f"{details['cost']} thỏi vàng"
+                        embed.add_field(
+                            name=f"📦 {details['name']} (ID: `{item_id}`)",
+                            value=f"💵 **Giá:** `{cost_str}`\n📝 **Mô tả:** {details['description']}",
+                            inline=False
+                        )
+        elif self.category == "tools":
+            embed = make_embed(
+                title="🔧 CỬA HÀNG CÔNG CỤ & HỢP ĐỒNG 🔧",
+                description="Mua các thiết bị bảo vệ và bản đồ thám hiểm để tối ưu hóa tài sản doanh nghiệp của bạn!",
+                color=discord.Color.blue()
+            )
+            tool_keys = ["manager_contract", "insurance_contract", "bodyguard_contract", "security_system", "map_normal", "map_rare", "map_legend"]
+            for item_id in tool_keys:
+                if item_id in SHOP_ITEMS:
+                    details = SHOP_ITEMS[item_id]
+                    if not details.get("is_admin_only"):
+                        cost_str = f"{details['cost']:,} VND" if details['currency'] == "money" else f"{details['cost']} thỏi vàng"
+                        embed.add_field(
+                            name=f"🛠️ {details['name']} (ID: `{item_id}`)",
+                            value=f"💵 **Giá:** `{cost_str}`\n📝 **Mô tả:** {details['description']}",
+                            inline=False
+                        )
         else:
             embed = make_embed(
                 title="🎨 CỬA HÀNG HÌNH NỀN & BANNER 🎨",
