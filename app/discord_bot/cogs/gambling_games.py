@@ -1034,6 +1034,9 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
                             share = int(jackpot_val * (amt / total_eligible_bets))
                             if share > 0:
                                 self.economy.add_money(uid, share)
+                                if share >= 1_000_000:
+                                    from app.discord_bot.modules.betting import reward_spouse_share
+                                    await reward_spouse_share(self.client, uid, share, ctx.channel)
                                 jackpot_winners.append((uid, share))
                                 log_wallet_change(
                                     logger,
@@ -1133,6 +1136,9 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
                 net_profit = total_payout - total_bet_for_user
                 if total_payout > 0:
                     self.economy.add_money(uid, total_payout)
+                    if total_payout >= 1_000_000:
+                        from app.discord_bot.modules.betting import reward_spouse_share
+                        await reward_spouse_share(self.client, uid, total_payout, ctx.channel)
                     new_bal = self.economy.get_entry(uid)[1]
                     details_str = ", ".join(details)
                     if net_profit > 0:
@@ -1321,6 +1327,9 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
                         share = int(jackpot_val * (amt / total_session_bets))
                         if share > 0:
                             self.economy.add_money(uid, share)
+                            if share >= 1_000_000:
+                                from app.discord_bot.modules.betting import reward_spouse_share
+                                await reward_spouse_share(self.client, uid, share, ctx.channel)
                             jackpot_winners.append((uid, share))
                             log_wallet_change(
                                 logger,
@@ -1364,6 +1373,9 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
                 net_profit = total_payout - total_bet_for_user
                 if total_payout > 0:
                     self.economy.add_money(uid, total_payout)
+                    if total_payout >= 1_000_000:
+                        from app.discord_bot.modules.betting import reward_spouse_share
+                        await reward_spouse_share(self.client, uid, total_payout, ctx.channel)
                     new_bal = self.economy.get_entry(uid)[1]
                     details_str = ", ".join(details)
                     if net_profit > 0:

@@ -379,6 +379,24 @@ class GamblingHelpers(commands.Cog, name="General"):
     async def process_work(self, user: discord.User | discord.Member, ctx: commands.Context | None = None) -> discord.Embed:
         user_id = user.id
         
+        # Check active marriage multiplier
+        marriage = self.economy.get_marriage(user_id)
+        marriage_multiplier = 1.0
+        marriage_info = ""
+        if marriage:
+            user_one, user_two, ring_type, love_points, joint_wallet, married_at, _, _ = marriage
+            love_level = love_points // 100
+            if ring_type == "ring_silver":
+                marriage_multiplier = 1.02 + (love_level * 0.005)
+            elif ring_type == "ring_gold":
+                marriage_multiplier = 1.05 + (love_level * 0.01)
+            elif ring_type == "ring_diamond":
+                marriage_multiplier = 1.10 + (love_level * 0.015)
+                
+            if marriage_multiplier > 1.0:
+                bonus_pct = int((marriage_multiplier - 1.0) * 100)
+                marriage_info = f"\n💖 *Đã cộng thêm **{bonus_pct}%** từ Thệ ước Hôn nhân!*"
+
         # Kiểm tra cooldown dựa trên database
         stats = self.economy.get_simulator_stats(user_id)
         last_work = stats[4] if len(stats) > 4 else 0
@@ -426,6 +444,8 @@ class GamblingHelpers(commands.Cog, name="General"):
             ]
             scenario = random.choice(special_scenarios)
             reward = random.randint(1_000_000, 5_000_000)
+            if marriage_multiplier > 1.0:
+                reward = int(reward * marriage_multiplier)
             
             # Cộng tiền vào tài khoản
             self.economy.add_money(user_id, reward)
@@ -445,7 +465,7 @@ class GamblingHelpers(commands.Cog, name="General"):
                 description=(
                     f"**{user.name}** đã trúng sự kiện đặc biệt:\n"
                     f"👉 *\"{scenario}\"*\n\n"
-                    f"💰 **Phần thưởng:** `+{reward:,} VND`\n"
+                    f"💰 **Phần thưởng:** `+{reward:,} VND`{marriage_info}\n"
                     f"💳 **Số dư mới:** `{new_balance:,} VND`"
                 ),
                 color=discord.Color.gold(), # Màu vàng
@@ -499,6 +519,8 @@ class GamblingHelpers(commands.Cog, name="General"):
                         ("Khắc phục sự cố mạng doanh nghiệp trong đêm 🌐", 1_000_000)
                     ]
                     job_desc, reward = random.choice(tech_jobs)
+                    if marriage_multiplier > 1.0:
+                        reward = int(reward * marriage_multiplier)
                     self.economy.add_money(user_id, reward)
                     
                     log_wallet_change(
@@ -514,7 +536,7 @@ class GamblingHelpers(commands.Cog, name="General"):
                         description=(
                             f"**{user.name}** đã hoàn thành dự án:\n"
                             f"👉 *\"{job_desc}\"*\n\n"
-                            f"💰 **Thu nhập:** `+{reward:,} VND`\n"
+                            f"💰 **Thu nhập:** `+{reward:,} VND`{marriage_info}\n"
                             f"💳 **Số dư mới:** `{new_balance:,} VND`"
                         ),
                         color=discord.Color.blue(),
@@ -552,6 +574,8 @@ class GamblingHelpers(commands.Cog, name="General"):
                         ("Thiết kế nội thất căn hộ Penthouse sang trọng 🛋️", 3_000_000)
                     ]
                     job_desc, reward = random.choice(arch_jobs)
+                    if marriage_multiplier > 1.0:
+                        reward = int(reward * marriage_multiplier)
                     self.economy.add_money(user_id, reward)
                     
                     log_wallet_change(
@@ -567,7 +591,7 @@ class GamblingHelpers(commands.Cog, name="General"):
                         description=(
                             f"**{user.name}** đã hoàn thành bản vẽ:\n"
                             f"👉 *\"{job_desc}\"*\n\n"
-                            f"💰 **Thu nhập:** `+{reward:,} VND`\n"
+                            f"💰 **Thu nhập:** `+{reward:,} VND`{marriage_info}\n"
                             f"💳 **Số dư mới:** `{new_balance:,} VND`"
                         ),
                         color=discord.Color.teal(),
@@ -605,6 +629,8 @@ class GamblingHelpers(commands.Cog, name="General"):
                         ("Huấn luyện phi hành đoàn kế cận tại trung tâm vũ trụ 🌌", 8_000_000)
                     ]
                     job_desc, reward = random.choice(astro_jobs)
+                    if marriage_multiplier > 1.0:
+                        reward = int(reward * marriage_multiplier)
                     self.economy.add_money(user_id, reward)
                     
                     log_wallet_change(
@@ -620,7 +646,7 @@ class GamblingHelpers(commands.Cog, name="General"):
                         description=(
                             f"**{user.name}** đã hoàn thành sứ mệnh:\n"
                             f"👉 *\"{job_desc}\"*\n\n"
-                            f"💰 **Thu nhập:** `+{reward:,} VND`\n"
+                            f"💰 **Thu nhập:** `+{reward:,} VND`{marriage_info}\n"
                             f"💳 **Số dư mới:** `{new_balance:,} VND`"
                         ),
                         color=discord.Color.dark_blue(),
@@ -658,6 +684,8 @@ class GamblingHelpers(commands.Cog, name="General"):
                         ("Nghiên cứu lâm sàng vắc-xin thế hệ mới 🧪", 20_000_000)
                     ]
                     job_desc, reward = random.choice(doc_jobs)
+                    if marriage_multiplier > 1.0:
+                        reward = int(reward * marriage_multiplier)
                     self.economy.add_money(user_id, reward)
                     
                     log_wallet_change(
@@ -673,7 +701,7 @@ class GamblingHelpers(commands.Cog, name="General"):
                         description=(
                             f"**{user.name}** đã hoàn thành nhiệm vụ y khoa:\n"
                             f"👉 *\"{job_desc}\"*\n\n"
-                            f"💰 **Thu nhập:** `+{reward:,} VND`\n"
+                            f"💰 **Thu nhập:** `+{reward:,} VND`{marriage_info}\n"
                             f"💳 **Số dư mới:** `{new_balance:,} VND`"
                         ),
                         color=discord.Color.dark_green(),
@@ -786,6 +814,8 @@ class GamblingHelpers(commands.Cog, name="General"):
             ]
             job = random.choice(jobs)
             reward = random.randint(20_000, 50_000)
+            if marriage_multiplier > 1.0:
+                reward = int(reward * marriage_multiplier)
             
             # Cộng tiền vào tài khoản
             self.economy.add_money(user_id, reward)
@@ -804,7 +834,7 @@ class GamblingHelpers(commands.Cog, name="General"):
                 title="💼 Đi làm chăm chỉ 💼",
                 description=(
                     f"**{user.name}** đã đi làm: *{job}*\n\n"
-                    f"💰 **Thu nhập:** `+{reward:,} VND`\n"
+                    f"💰 **Thu nhập:** `+{reward:,} VND`{marriage_info}\n"
                     f"💳 **Số dư mới:** `{new_balance:,} VND`"
                 ),
                 color=discord.Color.green(), # Màu xanh lá

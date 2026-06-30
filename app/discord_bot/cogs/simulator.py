@@ -256,6 +256,30 @@ SHOP_ITEMS = {
         "cost": 50_000_000,
         "currency": "money",
         "description": "Sử dụng bằng `i?explore legend` để mở chuyến thám hiểm cổ vật Huyền thoại/Thần thoại."
+    },
+    "ring_grass": {
+        "name": "Nhẫn Cỏ 🌿",
+        "cost": 100_000,
+        "currency": "money",
+        "description": "Nhẫn cầu hôn đơn sơ, không có buff chỉ số."
+    },
+    "ring_silver": {
+        "name": "Nhẫn Bạc 🪙",
+        "cost": 2_000_000,
+        "currency": "money",
+        "description": "Nhẫn cầu hôn bằng bạc. Buff kinh tế (+2% lương + 0.5%/cấp thân mật)."
+    },
+    "ring_gold": {
+        "name": "Nhẫn Vàng 👑",
+        "cost": 10_000_000,
+        "currency": "money",
+        "description": "Nhẫn cầu hôn bằng vàng. Buff kinh tế (+5% lương + 1%/cấp thân mật)."
+    },
+    "ring_diamond": {
+        "name": "Nhẫn Kim Cương 💎",
+        "cost": 100_000_000,
+        "currency": "money",
+        "description": "Nhẫn cầu hôn kim cương lấp lánh. Buff kinh tế (+10% lương + 1.5%/cấp thân mật)."
     }
 }
 
@@ -851,7 +875,7 @@ class ShopView(discord.ui.View):
                 description="Mua các thiết bị bảo vệ và bản đồ thám hiểm để tối ưu hóa tài sản doanh nghiệp của bạn!",
                 color=discord.Color.blue()
             )
-            tool_keys = ["manager_contract", "insurance_contract", "bodyguard_contract", "security_system", "map_normal", "map_rare", "map_legend"]
+            tool_keys = ["manager_contract", "insurance_contract", "bodyguard_contract", "security_system", "map_normal", "map_rare", "map_legend", "ring_grass", "ring_silver", "ring_gold", "ring_diamond"]
             for item_id in tool_keys:
                 if item_id in SHOP_ITEMS:
                     details = SHOP_ITEMS[item_id]
@@ -1210,6 +1234,26 @@ class Simulator(commands.Cog):
             else:
                 earned_gold_frac += hours * revenue
 
+        # Check active marriage multiplier
+        marriage = self.economy.get_marriage(user_id)
+        marriage_multiplier = 1.0
+        marriage_info = ""
+        if marriage:
+            user_one, user_two, ring_type, love_points, joint_wallet, married_at, _, _ = marriage
+            love_level = love_points // 100
+            if ring_type == "ring_silver":
+                marriage_multiplier = 1.02 + (love_level * 0.005)
+            elif ring_type == "ring_gold":
+                marriage_multiplier = 1.05 + (love_level * 0.01)
+            elif ring_type == "ring_diamond":
+                marriage_multiplier = 1.10 + (love_level * 0.015)
+                
+            if marriage_multiplier > 1.0:
+                earned_money = int(earned_money * marriage_multiplier)
+                earned_gold_frac = earned_gold_frac * marriage_multiplier
+                bonus_pct = int((marriage_multiplier - 1.0) * 100)
+                marriage_info = f"\n💖 *Đã cộng thêm **{bonus_pct}%** từ Thệ ước Hôn nhân!*"
+
         total_gold_frac = stats[3] + earned_gold_frac
         int_gold = int(total_gold_frac)
         new_frac = round(total_gold_frac - int_gold, 4)
@@ -1275,6 +1319,7 @@ class Simulator(commands.Cog):
                 f"💰 **VND nhận:** `+{earned_money:,} VND`"
                 f"{gold_str}\n"
                 f"💳 **Vàng lẻ tích lũy thêm:** `+{earned_gold_frac:.4f} Vàng` (Số dư dư: `{new_frac} Vàng`)"
+                f"{marriage_info}"
                 f"{accident_embed_str}"
             ),
             color=discord.Color.red() if (accident_triggered and not insurance_active) else discord.Color.green()

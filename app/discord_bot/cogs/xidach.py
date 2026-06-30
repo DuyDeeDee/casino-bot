@@ -205,6 +205,10 @@ class GameSession:
 
             if money_delta:
                 self.economy.add_money(player.id, money_delta)
+                if money_delta >= 1_000_000:
+                    from app.discord_bot.modules.betting import reward_spouse_share
+                    bot = self.channel.guild.me._state.client
+                    await reward_spouse_share(bot, player.id, money_delta, self.channel)
             log_wallet_change(
                 logger,
                 event="xidach_pvp_settlement",

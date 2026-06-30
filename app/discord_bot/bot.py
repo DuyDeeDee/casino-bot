@@ -47,6 +47,7 @@ from app.discord_bot.cogs import (
     Mines,
     Plinko,
     HighLow,
+    Marry,
 )
 
 from app.discord_bot.modules.economy import Economy
@@ -76,6 +77,7 @@ COGS = (
     Mines,
     Plinko,
     HighLow,
+    Marry,
 )
 
 

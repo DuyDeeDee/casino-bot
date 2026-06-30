@@ -11,7 +11,7 @@ from app.config import config
 Entry = Tuple[int, int, int]
 DATABASE_PATH = Path(config.storage.database_path)
 LEGACY_DATABASE_PATH = Path(__file__).resolve().parents[3] / "economy.db"
-SCHEMA_VERSION = 27
+SCHEMA_VERSION = 28
 
 
 logger = logging.getLogger(__name__)
@@ -500,6 +500,24 @@ def _migration_27_initialize_all_cryptos(cur: sqlite3.Cursor) -> None:
         pass
 
 
+def _migration_28_add_marry_tables(cur: sqlite3.Cursor) -> None:
+    try:
+        cur.execute("""CREATE TABLE IF NOT EXISTS user_marry (
+            user_one INTEGER NOT NULL,
+            user_two INTEGER NOT NULL,
+            ring_type TEXT NOT NULL,
+            love_points INTEGER DEFAULT 0,
+            joint_wallet INTEGER DEFAULT 0,
+            married_at INTEGER NOT NULL,
+            last_interact_time INTEGER DEFAULT 0,
+            interacts_today INTEGER DEFAULT 0,
+            PRIMARY KEY (user_one, user_two)
+        )""")
+        cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_marry_users ON user_marry(user_one, user_two)")
+    except sqlite3.OperationalError:
+        pass
+
+
 MIGRATIONS: dict[int, Callable[[sqlite3.Cursor], None]] = {
     1: _migration_1_create_economy,
     2: _migration_2_add_indexes,
@@ -528,6 +546,7 @@ MIGRATIONS: dict[int, Callable[[sqlite3.Cursor], None]] = {
     25: _migration_25_add_limit_orders,
     26: _migration_26_add_simulator_upgrades,
     27: _migration_27_initialize_all_cryptos,
+    28: _migration_28_add_marry_tables,
 }
 
 
@@ -2061,4 +2080,81 @@ class Economy:
             (int(time.time()),),
         )
         return self.cur.fetchall()
+
+    def get_marriage(self, user_id: int) -> tuple | None:
+        """Returns marriage details if user is married: (user_one, user_two, ring_type, love_points, joint_wallet, married_at, last_interact_time, interacts_today)"""
+        self.cur.execute(
+            "SELECT user_one, user_two, ring_type, love_points, joint_wallet, married_at, last_interact_time, interacts_today FROM user_marry WHERE user_one = ? OR user_two = ?",
+            (user_id, user_id)
+        )
+        return self.cur.fetchone()
+
+    def create_marriage(self, user_one: int, user_two: int, ring_type: str) -> None:
+        """Registers a new marriage in the database"""
+        import time
+        now = int(time.time())
+        self.cur.execute(
+            "INSERT OR REPLACE INTO user_marry (user_one, user_two, ring_type, love_points, joint_wallet, married_at, last_interact_time, interacts_today) VALUES (?, ?, ?, 0, 0, ?, 0, 0)",
+            (user_one, user_two, ring_type, now)
+        )
+        self.conn.commit()
+
+    def delete_marriage(self, user_one: int, user_two: int) -> None:
+        """Deletes a marriage registration"""
+        self.cur.execute(
+            "DELETE FROM user_marry WHERE user_one = ? AND user_two = ?",
+            (user_one, user_two)
+        )
+        self.conn.commit()
+
+    def add_love_points(self, user_one: int, user_two: int, points: int, current_time: int) -> tuple[int, bool]:
+        """Adds love points. Resets daily counter if calendar date changed. Caps at 20 points/day."""
+        import time
+        self.cur.execute(
+            "SELECT love_points, last_interact_time, interacts_today FROM user_marry WHERE user_one = ? AND user_two = ?",
+            (user_one, user_two)
+        )
+        row = self.cur.fetchone()
+        if not row:
+            return (0, False)
+            
+        love_points, last_interact_time, interacts_today = row
+        
+        # Check calendar day reset
+        now_struct = time.localtime(current_time)
+        last_struct = time.localtime(last_interact_time)
+        if now_struct.tm_yday != last_struct.tm_yday or now_struct.tm_year != last_struct.tm_year:
+            interacts_today = 0
+            
+        if interacts_today >= 20:
+            return (love_points, False)
+            
+        points_to_add = min(points, 20 - interacts_today)
+        new_love_points = love_points + points_to_add
+        new_interacts = interacts_today + points_to_add
+        
+        self.cur.execute(
+            "UPDATE user_marry SET love_points = ?, last_interact_time = ?, interacts_today = ? WHERE user_one = ? AND user_two = ?",
+            (new_love_points, current_time, new_interacts, user_one, user_two)
+        )
+        self.conn.commit()
+        return (new_love_points, True)
+
+    def update_joint_wallet(self, user_one: int, user_two: int, delta: int) -> int:
+        """Updates joint wallet balance and returns new balance"""
+        self.cur.execute(
+            "SELECT joint_wallet FROM user_marry WHERE user_one = ? AND user_two = ?",
+            (user_one, user_two)
+        )
+        row = self.cur.fetchone()
+        if not row:
+            return 0
+            
+        new_balance = max(0, row[0] + delta)
+        self.cur.execute(
+            "UPDATE user_marry SET joint_wallet = ? WHERE user_one = ? AND user_two = ?",
+            (new_balance, user_one, user_two)
+        )
+        self.conn.commit()
+        return new_balance
 

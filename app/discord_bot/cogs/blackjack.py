@@ -293,6 +293,9 @@ class Blackjack(commands.Cog):
 
                 if net_change:
                     self.economy.add_money(ctx.author.id, net_change)
+                    if net_change >= 1_000_000:
+                        from app.discord_bot.modules.betting import reward_spouse_share
+                        await reward_spouse_share(self.bot, ctx.author.id, net_change, ctx.channel)
                 log_wallet_change(
                     logger,
                     event="blackjack_round_settlement",
@@ -334,6 +337,9 @@ class Blackjack(commands.Cog):
                 net_change = blackjack_win + insurance_delta
                 if net_change:
                     self.economy.add_money(ctx.author.id, net_change)
+                    if net_change >= 1_000_000:
+                        from app.discord_bot.modules.betting import reward_spouse_share
+                        await reward_spouse_share(self.bot, ctx.author.id, net_change, ctx.channel)
                 log_wallet_change(
                     logger,
                     event="blackjack_round_settlement",
@@ -573,6 +579,9 @@ class Blackjack(commands.Cog):
 
             if net_change:
                 self.economy.add_money(ctx.author.id, net_change)
+                if net_change >= 1_000_000:
+                    from app.discord_bot.modules.betting import reward_spouse_share
+                    await reward_spouse_share(self.bot, ctx.author.id, net_change, ctx.channel)
             log_wallet_change(
                 logger,
                 event="blackjack_round_settlement",
