@@ -188,6 +188,10 @@ class Handlers(commands.Cog, name="handlers"):
             )
             return
 
+        try:
+            await ctx.send(f"⚠️ **Lỗi thực thi lệnh:** `{error}`")
+        except Exception:
+            pass
         raise error
 
 
