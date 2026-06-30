@@ -11,7 +11,7 @@ from app.config import config
 Entry = Tuple[int, int, int]
 DATABASE_PATH = Path(config.storage.database_path)
 LEGACY_DATABASE_PATH = Path(__file__).resolve().parents[3] / "economy.db"
-SCHEMA_VERSION = 26
+SCHEMA_VERSION = 27
 
 
 logger = logging.getLogger(__name__)
@@ -490,6 +490,16 @@ def _migration_26_add_simulator_upgrades(cur: sqlite3.Cursor) -> None:
         pass
 
 
+def _migration_27_initialize_all_cryptos(cur: sqlite3.Cursor) -> None:
+    try:
+        cur.execute("INSERT OR IGNORE INTO stock_prices(symbol, price, prev_price, change_percent) VALUES('USDT', 25000, 25000, 0.0)")
+        cur.execute("INSERT OR IGNORE INTO stock_prices(symbol, price, prev_price, change_percent) VALUES('ETH', 500000, 500000, 0.0)")
+        cur.execute("INSERT OR IGNORE INTO stock_prices(symbol, price, prev_price, change_percent) VALUES('SOL', 80000, 80000, 0.0)")
+        cur.execute("INSERT OR IGNORE INTO stock_prices(symbol, price, prev_price, change_percent) VALUES('DOGE', 5000, 5000, 0.0)")
+    except sqlite3.OperationalError:
+        pass
+
+
 MIGRATIONS: dict[int, Callable[[sqlite3.Cursor], None]] = {
     1: _migration_1_create_economy,
     2: _migration_2_add_indexes,
@@ -517,6 +527,7 @@ MIGRATIONS: dict[int, Callable[[sqlite3.Cursor], None]] = {
     24: _migration_24_add_stock_history_table,
     25: _migration_25_add_limit_orders,
     26: _migration_26_add_simulator_upgrades,
+    27: _migration_27_initialize_all_cryptos,
 }
 
 

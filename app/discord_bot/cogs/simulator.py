@@ -627,9 +627,13 @@ class StockSelect(discord.ui.Select):
         self.cog = cog
         self.is_panel = is_panel
         options = [
-            discord.SelectOption(label="CASINO (Cổ phiếu Casino)", value="CASINO", emoji="👑"),
-            discord.SelectOption(label="BTC (Bitcoin)", value="BTC", emoji="🪙"),
+            discord.SelectOption(label="USDT (Stablecoin)", value="USDT", emoji="💵"),
             discord.SelectOption(label="AGV (Antigravity Coin)", value="AGV", emoji="🌌"),
+            discord.SelectOption(label="CASINO (Cổ phiếu Casino)", value="CASINO", emoji="👑"),
+            discord.SelectOption(label="ETH (Ethereum)", value="ETH", emoji="🔷"),
+            discord.SelectOption(label="BTC (Bitcoin)", value="BTC", emoji="🪙"),
+            discord.SelectOption(label="SOL (Solana)", value="SOL", emoji="☀️"),
+            discord.SelectOption(label="DOGE (Dogecoin)", value="DOGE", emoji="🐕"),
         ]
         # Highlight current stock
         symbol = getattr(cog, "selected_stock", "CASINO") if is_panel else "CASINO"
@@ -1397,7 +1401,15 @@ class Simulator(commands.Cog):
                         {"title": "📰 TIN TỐT: Tập đoàn CASINO báo cáo lợi nhuận quý kỷ lục, giá cổ tức tăng mạnh!", "symbol": "CASINO", "direction": "up", "duration": 6},
                         {"title": "📰 TIN XẤU: Siết chặt quy định kiểm tra cá cược trực tuyến, cổ phiếu CASINO bị bán tháo!", "symbol": "CASINO", "direction": "down", "duration": 6},
                         {"title": "📰 TIN TỐT: AGV giới thiệu mô hình AI thế hệ mới dẫn đầu thế giới công nghệ!", "symbol": "AGV", "direction": "up", "duration": 6},
-                        {"title": "📰 TIN XẤU: AGV đối mặt với vụ kiện độc quyền dữ liệu lớn tại thị trường châu Âu!", "symbol": "AGV", "direction": "down", "duration": 6}
+                        {"title": "📰 TIN XẤU: AGV đối mặt với vụ kiện độc quyền dữ liệu lớn tại thị trường châu Âu!", "symbol": "AGV", "direction": "down", "duration": 6},
+                        {"title": "📰 TIN TỐT: Đồng USD tăng giá mạnh mẽ kéo theo sự tăng trưởng nhẹ của USDT!", "symbol": "USDT", "direction": "up", "duration": 6},
+                        {"title": "📰 TIN XẤU: Cục dự trữ Liên Bang phát hành stablecoin đối thủ khiến USDT bị rút nhẹ!", "symbol": "USDT", "direction": "down", "duration": 6},
+                        {"title": "📰 TIN TỐT: Bản cập nhật nâng cấp Ethereum 2.5 hoàn tất, phí gas giảm sâu!", "symbol": "ETH", "direction": "up", "duration": 6},
+                        {"title": "📰 TIN XẤU: Phát hiện lỗ hổng smart contract trên mạng lưới Ethereum, giá sụt giảm!", "symbol": "ETH", "direction": "down", "duration": 6},
+                        {"title": "📰 TIN TỐT: Quỹ đầu tư mạo hiểm công bố đầu tư 10 tỷ USD vào hệ sinh thái Solana!", "symbol": "SOL", "direction": "up", "duration": 6},
+                        {"title": "📰 TIN XẤU: Mạng lưới Solana bị nghẽn giao dịch liên tục trong 24 giờ!", "symbol": "SOL", "direction": "down", "duration": 6},
+                        {"title": "📰 TIN TỐT: Tỷ phú công nghệ đăng ảnh chú chó Shiba Inu làm đại diện, DOGE bay cao!", "symbol": "DOGE", "direction": "up", "duration": 6},
+                        {"title": "📰 TIN XẤU: Cộng đồng chốt lời meme coin khiến DOGE sụt giảm nghiêm trọng!", "symbol": "DOGE", "direction": "down", "duration": 6}
                     ]
                     active_news = random.choice(templates)
                     self.economy.set_setting("active_news", json.dumps(active_news))
@@ -1408,35 +1420,33 @@ class Simulator(commands.Cog):
             news_symbol = active_news.get("symbol") if active_news else None
             news_dir = active_news.get("direction") if active_news else None
             
+            # Configs: (min_price, max_price, base_fluctuation_range_tuple, news_up_range_tuple, news_down_range_tuple)
+            stock_configs = {
+                "USDT": (24_500, 25_500, (-0.01, 0.01), (0.005, 0.015), (-0.015, -0.005)),
+                "AGV": (1_000, 100_000, (-0.03, 0.03), (0.04, 0.10), (-0.10, -0.04)),
+                "CASINO": (10_000, 1_000_000, (-0.08, 0.08), (0.08, 0.20), (-0.20, -0.08)),
+                "ETH": (50_000, 5_000_000, (-0.10, 0.10), (0.10, 0.22), (-0.22, -0.10)),
+                "BTC": (100_000, 10_000_000, (-0.15, 0.15), (0.12, 0.28), (-0.28, -0.12)),
+                "SOL": (8_000, 800_000, (-0.18, 0.18), (0.15, 0.35), (-0.35, -0.15)),
+                "DOGE": (100, 50_000, (-0.30, 0.35), (0.30, 0.60), (-0.60, -0.30))
+            }
+            
             for symbol, current_price, _, _ in prices:
-                if symbol == "BTC":
-                    if news_symbol == "BTC" and news_dir == "up":
-                        change = random.uniform(0.12, 0.28)
-                    elif news_symbol == "BTC" and news_dir == "down":
-                        change = random.uniform(-0.28, -0.12)
-                    else:
-                        change = random.uniform(-0.15, 0.15)
-                    new_price = int(current_price * (1 + change))
-                    new_price = max(100_000, min(10_000_000, new_price))
-                elif symbol == "CASINO":
-                    if news_symbol == "CASINO" and news_dir == "up":
-                        change = random.uniform(0.08, 0.20)
-                    elif news_symbol == "CASINO" and news_dir == "down":
-                        change = random.uniform(-0.20, -0.08)
-                    else:
-                        change = random.uniform(-0.08, 0.08)
-                    new_price = int(current_price * (1 + change))
-                    new_price = max(10_000, min(1_000_000, new_price))
-                else:  # AGV
-                    if news_symbol == "AGV" and news_dir == "up":
-                        change = random.uniform(0.04, 0.10)
-                    elif news_symbol == "AGV" and news_dir == "down":
-                        change = random.uniform(-0.10, -0.04)
-                    else:
-                        change = random.uniform(-0.03, 0.03)
-                    new_price = int(current_price * (1 + change))
-                    new_price = max(1_000, min(100_000, new_price))
-
+                if symbol not in stock_configs:
+                    continue
+                    
+                min_p, max_p, base_range, up_range, down_range = stock_configs[symbol]
+                
+                if news_symbol == symbol and news_dir == "up":
+                    change = random.uniform(*up_range)
+                elif news_symbol == symbol and news_dir == "down":
+                    change = random.uniform(*down_range)
+                else:
+                    change = random.uniform(*base_range)
+                    
+                new_price = int(current_price * (1 + change))
+                new_price = max(min_p, min(max_p, new_price))
+                
                 change_percent = ((new_price - current_price) / current_price) * 100
                 self.economy.update_stock_price(symbol, new_price, current_price, change_percent)
             logger.info("Stock/crypto prices updated.")
@@ -2732,7 +2742,7 @@ class Simulator(commands.Cog):
         prices = dict((row[0], row[1]) for row in self.economy.get_stock_prices())
         
         if symbol not in prices:
-            await ctx.send(f"❌ Mã đầu tư `{symbol}` không tồn tại. Các mã hợp lệ: `BTC`, `CASINO`, `AGV`.")
+            await ctx.send(f"❌ Mã đầu tư `{symbol}` không tồn tại. Các mã hợp lệ: `USDT`, `AGV`, `CASINO`, `ETH`, `BTC`, `SOL`, `DOGE`.")
             return
             
         if shares <= 0:
@@ -2785,7 +2795,7 @@ class Simulator(commands.Cog):
         prices = dict((row[0], row[1]) for row in self.economy.get_stock_prices())
         
         if symbol not in prices:
-            await ctx.send(f"❌ Mã đầu tư `{symbol}` không tồn tại. Các mã hợp lệ: `BTC`, `CASINO`, `AGV`.")
+            await ctx.send(f"❌ Mã đầu tư `{symbol}` không tồn tại. Các mã hợp lệ: `USDT`, `AGV`, `CASINO`, `ETH`, `BTC`, `SOL`, `DOGE`.")
             return
             
         if shares <= 0:
@@ -2838,7 +2848,7 @@ class Simulator(commands.Cog):
         prices = dict((row[0], row[1]) for row in self.economy.get_stock_prices())
         
         if symbol not in prices:
-            await ctx.send(f"❌ Mã đầu tư `{symbol}` không tồn tại. Các mã hợp lệ: `BTC`, `CASINO`, `AGV`.")
+            await ctx.send(f"❌ Mã đầu tư `{symbol}` không tồn tại. Các mã hợp lệ: `USDT`, `AGV`, `CASINO`, `ETH`, `BTC`, `SOL`, `DOGE`.")
             return
             
         if shares <= 0 or target_price <= 0:
@@ -2880,7 +2890,7 @@ class Simulator(commands.Cog):
         prices = dict((row[0], row[1]) for row in self.economy.get_stock_prices())
         
         if symbol not in prices:
-            await ctx.send(f"❌ Mã đầu tư `{symbol}` không tồn tại. Các mã hợp lệ: `BTC`, `CASINO`, `AGV`.")
+            await ctx.send(f"❌ Mã đầu tư `{symbol}` không tồn tại. Các mã hợp lệ: `USDT`, `AGV`, `CASINO`, `ETH`, `BTC`, `SOL`, `DOGE`.")
             return
             
         if shares <= 0 or target_price <= 0:
