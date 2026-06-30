@@ -99,7 +99,7 @@ class GameSession:
 
     def render_lobby_table(self) -> discord.File:
         facedown_hands = self.get_facedown_hands()
-        table_buffer = render_multiplayer_table_bytes(self.players, facedown_hands)
+        table_buffer = render_card_table_bytes(None, facedown_hands)
         return discord.File(fp=table_buffer, filename=self.table_filename)
 
     async def send_lobby_table(self):
@@ -225,7 +225,7 @@ class GameSession:
 
         # Render the final face up table for all player hands
         faceup_hands = [self.player_hands[player] for player in self.players]
-        table_buffer = render_multiplayer_table_bytes(self.players, faceup_hands)
+        table_buffer = render_card_table_bytes(None, faceup_hands)
         file = discord.File(fp=table_buffer, filename=self.table_filename)
         embed.set_image(url=f"attachment://{self.table_filename}")
 
@@ -252,7 +252,7 @@ class PlayerHandView(discord.ui.View):
         return True
 
     def render_table(self) -> discord.File:
-        table_buffer = render_multiplayer_table_bytes([self.player], [self.hand])
+        table_buffer = render_card_table_bytes(None, [self.hand])
         return discord.File(fp=table_buffer, filename=self.table_filename)
 
     def create_embed(self, score, status="playing"):
