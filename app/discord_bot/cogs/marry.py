@@ -311,7 +311,7 @@ class Marry(commands.Cog):
     """Cog for community Couple features and rewards."""
     def __init__(self, bot):
         self.bot = bot
-        self.economy = Economy()
+        self.economy = getattr(bot, "economy", Economy())
 
     @commands.command(
         brief="Cầu hôn một người chơi khác trong server.",
