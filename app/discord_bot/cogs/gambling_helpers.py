@@ -727,6 +727,22 @@ class GamblingHelpers(commands.Cog, name="General"):
                     # Add to inventory
                     self.economy.add_inventory_item(user_id, chosen_id, 1)
                     
+                    # 15% chance to find a Treasure Map in addition to the treasure
+                    found_map_msg = ""
+                    if random.random() < 0.15:
+                        map_roll = random.random()
+                        if map_roll < 0.65:
+                            found_map = "map_normal"
+                            map_name = "Bản đồ Thám hiểm Thường 📜"
+                        elif map_roll < 0.92:
+                            found_map = "map_rare"
+                            map_name = "Bản đồ Thám hiểm Hiếm 📘"
+                        else:
+                            found_map = "map_legend"
+                            map_name = "Bản đồ Thám hiểm Huyền thoại 📙"
+                        self.economy.add_inventory_item(user_id, found_map, 1)
+                        found_map_msg = f"\n\n🗺️ **ĐẶC BIỆT:** Bạn tìm thấy thêm một **{map_name}**!"
+                    
                     # Log finding item
                     log_wallet_change(
                         logger,
@@ -744,7 +760,8 @@ class GamblingHelpers(commands.Cog, name="General"):
                             f"**{user.name}** đã thám hiểm hầm mộ cổ và tìm thấy:\n\n"
                             f"🏺 **Kho báu:** {treasure['name']} (ID: `{chosen_id}`)\n"
                             f"✨ **Độ hiếm:** `{treasure['rarity']}`\n"
-                            f"💰 **Giá trị ước tính:** `{treasure['value']:,} VND`\n\n"
+                            f"💰 **Giá trị ước tính:** `{treasure['value']:,} VND`"
+                            f"{found_map_msg}\n\n"
                             f"💡 *Bạn có thể giữ lại để sưu tầm hoặc dùng lệnh `i?sellitem {chosen_id}` để bán cho viện bảo tàng.*"
                         ),
                         color=discord.Color.orange(),
@@ -1506,7 +1523,6 @@ class GamblingHelpers(commands.Cog, name="General"):
             await ctx.send(embed=embed)
 
     @commands.command(hidden=True)
-    @commands.is_owner()
     async def ban(
         self,
         ctx: commands.Context,
@@ -1515,6 +1531,12 @@ class GamblingHelpers(commands.Cog, name="General"):
         reason: str = "Không có lý do cụ thể",
     ):
         """Ban a user from using the bot, keeping their data."""
+        # Check permissions: must be owner or admin
+        is_admin = ctx.author.id in config.bot.admin_ids
+        is_owner = ctx.author.id in config.bot.owner_ids or await ctx.bot.is_owner(ctx.author)
+        if not (is_admin or is_owner):
+            await ctx.send("❌ **Lỗi:** Chỉ có Admin hoặc Owner mới có quyền sử dụng lệnh này!")
+            return
         # Resolve user ID and try to get the user object
         if isinstance(user, int):
             user_id = user
@@ -1532,7 +1554,7 @@ class GamblingHelpers(commands.Cog, name="General"):
             return
 
         # Check admin-ban
-        if user_id in config.bot.owner_ids:
+        if user_id in config.bot.owner_ids or user_id in config.bot.admin_ids:
             await ctx.send("❌ Không thể ban Admin/Owner của bot!")
             return
 
@@ -1573,9 +1595,14 @@ class GamblingHelpers(commands.Cog, name="General"):
         )
 
     @commands.command(hidden=True)
-    @commands.is_owner()
     async def unban(self, ctx: commands.Context, user: discord.User | int):
         """Unban a user from using the bot."""
+        # Check permissions: must be owner or admin
+        is_admin = ctx.author.id in config.bot.admin_ids
+        is_owner = ctx.author.id in config.bot.owner_ids or await ctx.bot.is_owner(ctx.author)
+        if not (is_admin or is_owner):
+            await ctx.send("❌ **Lỗi:** Chỉ có Admin hoặc Owner mới có quyền sử dụng lệnh này!")
+            return
         # Resolve user ID and try to get the user object
         if isinstance(user, int):
             user_id = user

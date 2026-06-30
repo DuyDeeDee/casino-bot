@@ -22,6 +22,7 @@ from app.config import config
 from app.discord_bot.modules.helpers import (
     InsufficientCreditsException,
     InsufficientFundsException,
+    BetLimitViolationException,
     make_embed,
 )
 from app.discord_bot.modules.economy import Economy
@@ -145,6 +146,10 @@ class Handlers(commands.Cog, name="handlers"):
         if isinstance(error, InsufficientFundsException):
             await ctx.send(str(error))
             await ctx.invoke(self.client.get_command("money"))
+            return
+
+        if isinstance(error, BetLimitViolationException):
+            await ctx.send(f"❌ {error}")
             return
 
         if isinstance(error, InsufficientCreditsException):

@@ -18,6 +18,7 @@ class BotConfig(BaseModel):
     token: str = ""
     prefix: str = Field(default="$", min_length=1, max_length=8)
     owner_ids: list[int] = Field(default_factory=list)
+    admin_ids: list[int] = Field(default_factory=list)
     default_bet: int = Field(default=100, ge=1, le=1_000_000)
     bonus_multiplier: int = Field(default=5, ge=1, le=1_000)
     bonus_cooldown: int = Field(default=12, ge=1, le=168)
@@ -38,6 +39,7 @@ env_vars = (
     "DISCORD_TOKEN",
     "DISCORD_PREFIX",
     "DISCORD_OWNER_IDS",
+    "DISCORD_ADMIN_IDS",
     "DISCORD_DEFAULT_BET",
     "DISCORD_BONUS_MULTIPLIER",
     "DISCORD_BONUS_COOLDOWN",
@@ -77,6 +79,7 @@ def load_config() -> Config:
             token=(getenv("DISCORD_TOKEN", "").strip()),
             prefix=getenv("DISCORD_PREFIX", "$").strip(),
             owner_ids=_parse_owner_ids(getenv("DISCORD_OWNER_IDS")),
+            admin_ids=_parse_owner_ids(getenv("DISCORD_ADMIN_IDS")),
             default_bet=_parse_int_env("DISCORD_DEFAULT_BET", 100),
             bonus_multiplier=_parse_int_env("DISCORD_BONUS_MULTIPLIER", 5),
             bonus_cooldown=_parse_int_env("DISCORD_BONUS_COOLDOWN", 12),

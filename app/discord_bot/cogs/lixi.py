@@ -16,7 +16,8 @@ logger = logging.getLogger(__name__)
 def parse_bet_amount(val_str: str, current_money: int) -> int:
     val_str = val_str.strip().lower()
     if val_str in ["all", "allin", "all-in", "tất tay"]:
-        return current_money
+        from app.discord_bot.modules.betting import get_capped_all_in_amount
+        return get_capped_all_in_amount(current_money)
     
     has_suffix = val_str.endswith("k") or val_str.endswith("m")
     

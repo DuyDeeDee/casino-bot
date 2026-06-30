@@ -241,3 +241,101 @@ def render_card_table_bytes(
     )
     output.seek(0)
     return output
+
+
+def render_multiplayer_table_bytes(
+    players: list,
+    player_hands: list[list[Card]],
+) -> BytesIO:
+    """Renders a multiplayer card table with player avatars and custom card positions."""
+    bg = Image.open(ABS_PATH / "modules" / "table_multiplayer.png").convert("RGBA")
+    bg_w, bg_h = bg.size
+    
+    # 6 predefined seats coordinates (center of avatar) forming a semi-circle
+    seats = [
+        (130, 310),
+        (270, 420),
+        (430, 460),
+        (570, 460),
+        (730, 420),
+        (870, 310),
+    ]
+    
+    draw = ImageDraw.Draw(bg)
+    import requests
+    
+    for i, player in enumerate(players):
+        if i >= len(seats):
+            break
+            
+        seat_x, seat_y = seats[i]
+        
+        # Draw Avatar
+        avatar_img = None
+        try:
+            avatar_url = str(player.display_avatar.url)
+            resp = requests.get(avatar_url, timeout=3)
+            if resp.status_code == 200:
+                avatar_img = Image.open(BytesIO(resp.content)).convert("RGBA")
+        except Exception:
+            pass
+            
+        if not avatar_img:
+            # Grey circular fallback placeholder
+            avatar_img = Image.new("RGBA", (100, 100), (80, 80, 80, 255))
+            
+        # Draw circular avatar
+        avatar_img = avatar_img.resize((80, 80), Image.Resampling.LANCZOS)
+        mask = Image.new("L", (80, 80), 0)
+        mask_draw = ImageDraw.Draw(mask)
+        mask_draw.ellipse((0, 0, 80, 80), fill=255)
+        
+        circle_avatar = Image.new("RGBA", (80, 80), (0, 0, 0, 0))
+        circle_avatar.paste(avatar_img, (0, 0), mask=mask)
+        
+        # Paste avatar
+        avatar_pos = (seat_x - 40, seat_y - 40)
+        bg.paste(circle_avatar, avatar_pos, mask=circle_avatar)
+        
+        # Draw gold border circle around the avatar
+        draw.ellipse((seat_x - 41, seat_y - 41, seat_x + 41, seat_y + 41), outline=(255, 215, 0, 255), width=3)
+        
+        # Draw player name (centered under avatar)
+        name_str = player.display_name
+        if len(name_str) > 10:
+            name_str = name_str[:8] + ".."
+            
+        # Draw a translucent dark tag behind text for high readability on any background
+        text_bg_box = (seat_x - 50, seat_y + 45, seat_x + 50, seat_y + 65)
+        draw.rectangle(text_bg_box, fill=(0, 0, 0, 160), outline=(255, 255, 255, 50), width=1)
+        
+        # Render text centered
+        char_w = 6
+        text_w = len(name_str) * char_w
+        draw.text((seat_x - text_w // 2, seat_y + 48), name_str, fill=(255, 255, 255, 255))
+        
+        # Draw cards above avatar
+        hand = player_hands[i]
+        card_w, card_h = 55, 75
+        
+        if hand:
+            total_cards = len(hand)
+            overlap = 16
+            cards_w = card_w + (total_cards - 1) * overlap
+            start_card_x = seat_x - cards_w // 2
+            card_y = seat_y - 125
+            
+            for card_idx, card in enumerate(hand):
+                try:
+                    with Image.open(ABS_PATH / "modules" / "cards" / card.image) as card_file:
+                        card_img = card_file.convert("RGBA")
+                        card_img_resized = card_img.resize((card_w, card_h), Image.Resampling.LANCZOS)
+                        bg.paste(card_img_resized, (start_card_x + card_idx * overlap, card_y), mask=card_img_resized)
+                except Exception:
+                    pass
+                    
+    buf = BytesIO()
+    bg.save(buf, format="PNG")
+    buf.seek(0)
+    bg.close()
+    return buf

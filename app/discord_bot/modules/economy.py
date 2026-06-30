@@ -11,7 +11,7 @@ from app.config import config
 Entry = Tuple[int, int, int]
 DATABASE_PATH = Path(config.storage.database_path)
 LEGACY_DATABASE_PATH = Path(__file__).resolve().parents[3] / "economy.db"
-SCHEMA_VERSION = 24
+SCHEMA_VERSION = 26
 
 
 logger = logging.getLogger(__name__)
@@ -454,6 +454,42 @@ def _migration_24_add_stock_history_table(cur: sqlite3.Cursor) -> None:
         pass
 
 
+def _migration_25_add_limit_orders(cur: sqlite3.Cursor) -> None:
+    try:
+        cur.execute(
+            """CREATE TABLE IF NOT EXISTS limit_orders (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            symbol TEXT NOT NULL,
+            order_type TEXT NOT NULL,
+            target_price INTEGER NOT NULL,
+            shares REAL NOT NULL,
+            created_at INTEGER NOT NULL
+        )"""
+        )
+    except sqlite3.OperationalError:
+        pass
+
+
+def _migration_26_add_simulator_upgrades(cur: sqlite3.Cursor) -> None:
+    try:
+        cur.execute("ALTER TABLE user_simulator_stats ADD COLUMN manager_expiry INTEGER DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        cur.execute("ALTER TABLE user_simulator_stats ADD COLUMN insurance_expiry INTEGER DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        cur.execute("ALTER TABLE user_simulator_stats ADD COLUMN bodyguard_expiry INTEGER DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        cur.execute("ALTER TABLE user_simulator_stats ADD COLUMN pickaxe_level INTEGER DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
+
+
 MIGRATIONS: dict[int, Callable[[sqlite3.Cursor], None]] = {
     1: _migration_1_create_economy,
     2: _migration_2_add_indexes,
@@ -479,6 +515,8 @@ MIGRATIONS: dict[int, Callable[[sqlite3.Cursor], None]] = {
     22: _migration_22_add_plinko_table,
     23: _migration_23_add_highlow_table,
     24: _migration_24_add_stock_history_table,
+    25: _migration_25_add_limit_orders,
+    26: _migration_26_add_simulator_upgrades,
 }
 
 
@@ -1922,4 +1960,94 @@ class Economy:
             query = f"UPDATE user_highlow SET {', '.join(updates)} WHERE user_id=?"
             self.cur.execute(query, tuple(params))
             self.conn.commit()
+
+    # === Limit Orders ===
+    def get_limit_orders(self, user_id: int) -> list[tuple[int, str, str, int, float, int]]:
+        self._ensure_entry(user_id)
+        self.cur.execute(
+            "SELECT id, symbol, order_type, target_price, shares, created_at FROM limit_orders WHERE user_id=? ORDER BY id ASC",
+            (user_id,),
+        )
+        return self.cur.fetchall()
+
+    def add_limit_order(self, user_id: int, symbol: str, order_type: str, target_price: int, shares: float) -> int:
+        self._ensure_entry(user_id)
+        import time
+        self.cur.execute(
+            "INSERT INTO limit_orders(user_id, symbol, order_type, target_price, shares, created_at) VALUES(?, ?, ?, ?, ?, ?)",
+            (user_id, symbol.upper(), order_type.upper(), target_price, shares, int(time.time())),
+        )
+        self.conn.commit()
+        return self.cur.lastrowid
+
+    def remove_limit_order(self, order_id: int) -> None:
+        self.cur.execute("DELETE FROM limit_orders WHERE id=?", (order_id,))
+        self.conn.commit()
+
+    def get_limit_order(self, order_id: int) -> tuple[int, int, str, str, int, float, int] | None:
+        self.cur.execute(
+            "SELECT id, user_id, symbol, order_type, target_price, shares, created_at FROM limit_orders WHERE id=?",
+            (order_id,),
+        )
+        return self.cur.fetchone()
+
+    def get_all_active_limit_orders(self) -> list[tuple[int, int, str, str, int, float, int]]:
+        self.cur.execute(
+            "SELECT id, user_id, symbol, order_type, target_price, shares, created_at FROM limit_orders ORDER BY id ASC"
+        )
+        return self.cur.fetchall()
+
+    # === Simulator Upgrades (Manager, Insurance, Bodyguard, Pickaxe) ===
+    def get_upgrades(self, user_id: int) -> tuple[int, int, int, int]:
+        self._ensure_entry(user_id)
+        self.get_simulator_stats(user_id)
+        self.cur.execute(
+            "SELECT manager_expiry, insurance_expiry, bodyguard_expiry, pickaxe_level FROM user_simulator_stats WHERE user_id=?",
+            (user_id,),
+        )
+        row = self.cur.fetchone()
+        if row is None:
+            return (0, 0, 0, 0)
+        return row
+
+    def set_upgrades(
+        self,
+        user_id: int,
+        manager_expiry: int | None = None,
+        insurance_expiry: int | None = None,
+        bodyguard_expiry: int | None = None,
+        pickaxe_level: int | None = None,
+    ) -> None:
+        self._ensure_entry(user_id)
+        self.get_simulator_stats(user_id)
+        
+        updates = []
+        params = []
+        if manager_expiry is not None:
+            updates.append("manager_expiry=?")
+            params.append(manager_expiry)
+        if insurance_expiry is not None:
+            updates.append("insurance_expiry=?")
+            params.append(insurance_expiry)
+        if bodyguard_expiry is not None:
+            updates.append("bodyguard_expiry=?")
+            params.append(bodyguard_expiry)
+        if pickaxe_level is not None:
+            updates.append("pickaxe_level=?")
+            params.append(pickaxe_level)
+            
+        if updates:
+            params.append(user_id)
+            query = f"UPDATE user_simulator_stats SET {', '.join(updates)} WHERE user_id=?"
+            self.cur.execute(query, tuple(params))
+            self.conn.commit()
+
+    def get_all_active_managers(self) -> list[tuple[int, int, int]]:
+        """Returns list of (user_id, last_collect, manager_expiry) for active managers"""
+        import time
+        self.cur.execute(
+            "SELECT user_id, last_collect, manager_expiry FROM user_simulator_stats WHERE manager_expiry > ?",
+            (int(time.time()),),
+        )
+        return self.cur.fetchall()
 

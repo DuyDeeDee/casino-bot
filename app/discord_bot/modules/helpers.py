@@ -4,6 +4,11 @@ from pathlib import Path
 from discord import Color, Embed
 
 
+class BetLimitViolationException(Exception):
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+
+
 class InsufficientFundsException(Exception):
     def __init__(self, current, bet) -> None:
         self.needs = bet - current
