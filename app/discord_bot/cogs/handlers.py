@@ -192,7 +192,11 @@ class Handlers(commands.Cog, name="handlers"):
             await ctx.send(f"⚠️ **Lỗi thực thi lệnh:** `{error}`")
         except Exception:
             pass
-        raise error
+        logger.error(
+            "Unhandled command error for command=%s",
+            ctx.command.qualified_name if ctx.command else "unknown",
+            exc_info=error,
+        )
 
 
 async def setup(client: commands.Bot):
