@@ -239,24 +239,24 @@ SHOP_ITEMS = {
         "currency": "money",
         "description": "Thiết bị bảo vệ doanh nghiệp vĩnh viễn. 30% cơ hội bắt giữ kẻ cướp, phạt tiền bồi thường cho bạn."
     },
-    "map_normal": {
-        "name": "Bản đồ Thám hiểm Thường 📜",
-        "cost": 5_000_000,
-        "currency": "money",
-        "description": "Sử dụng bằng `i?explore normal` để mở chuyến thám hiểm cổ vật Thường/Hiếm."
-    },
-    "map_rare": {
-        "name": "Bản đồ Thám hiểm Hiếm 📘",
-        "cost": 20_000_000,
-        "currency": "money",
-        "description": "Sử dụng bằng `i?explore rare` để mở chuyến thám hiểm cổ vật Hiếm/Quý hiếm."
-    },
-    "map_legend": {
-        "name": "Bản đồ Thám hiểm Huyền thoại 📙",
-        "cost": 50_000_000,
-        "currency": "money",
-        "description": "Sử dụng bằng `i?explore legend` để mở chuyến thám hiểm cổ vật Huyền thoại/Thần thoại."
-    },
+    # "map_normal": {
+    #     "name": "Bản đồ Thám hiểm Thường 📜",
+    #     "cost": 5_000_000,
+    #     "currency": "money",
+    #     "description": "Sử dụng bằng `i?explore normal` để mở chuyến thám hiểm cổ vật Thường/Hiếm."
+    # },
+    # "map_rare": {
+    #     "name": "Bản đồ Thám hiểm Hiếm 📘",
+    #     "cost": 20_000_000,
+    #     "currency": "money",
+    #     "description": "Sử dụng bằng `i?explore rare` để mở chuyến thám hiểm cổ vật Hiếm/Quý hiếm."
+    # },
+    # "map_legend": {
+    #     "name": "Bản đồ Thám hiểm Huyền thoại 📙",
+    #     "cost": 50_000_000,
+    #     "currency": "money",
+    #     "description": "Sử dụng bằng `i?explore legend` để mở chuyến thám hiểm cổ vật Huyền thoại/Thần thoại."
+    # },
     "ring_grass": {
         "name": "Nhẫn Cỏ 🌿",
         "cost": 100_000,
@@ -875,7 +875,7 @@ class ShopView(discord.ui.View):
                 description="Mua các thiết bị bảo vệ và bản đồ thám hiểm để tối ưu hóa tài sản doanh nghiệp của bạn!",
                 color=discord.Color.blue()
             )
-            tool_keys = ["manager_contract", "insurance_contract", "bodyguard_contract", "security_system", "map_normal", "map_rare", "map_legend", "ring_grass", "ring_silver", "ring_gold", "ring_diamond"]
+            tool_keys = ["manager_contract", "insurance_contract", "bodyguard_contract", "security_system", "ring_grass", "ring_silver", "ring_gold", "ring_diamond"]
             for item_id in tool_keys:
                 if item_id in SHOP_ITEMS:
                     details = SHOP_ITEMS[item_id]
