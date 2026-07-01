@@ -11,7 +11,7 @@ from app.config import config
 Entry = Tuple[int, int, int]
 DATABASE_PATH = Path(config.storage.database_path)
 LEGACY_DATABASE_PATH = Path(__file__).resolve().parents[3] / "economy.db"
-SCHEMA_VERSION = 29
+SCHEMA_VERSION = 30
 
 
 logger = logging.getLogger(__name__)
@@ -533,6 +533,13 @@ def _migration_29_add_marry_custom_columns(cur: sqlite3.Cursor) -> None:
         pass
 
 
+def _migration_30_add_marry_saying_column(cur: sqlite3.Cursor) -> None:
+    try:
+        cur.execute("ALTER TABLE user_marry ADD COLUMN saying TEXT DEFAULT ''")
+    except sqlite3.OperationalError:
+        pass
+
+
 MIGRATIONS: dict[int, Callable[[sqlite3.Cursor], None]] = {
     1: _migration_1_create_economy,
     2: _migration_2_add_indexes,
@@ -563,6 +570,7 @@ MIGRATIONS: dict[int, Callable[[sqlite3.Cursor], None]] = {
     27: _migration_27_initialize_all_cryptos,
     28: _migration_28_add_marry_tables,
     29: _migration_29_add_marry_custom_columns,
+    30: _migration_30_add_marry_saying_column,
 }
 
 
@@ -2278,6 +2286,33 @@ class Economy:
         self.cur.execute(
             "UPDATE user_marry SET status = ? WHERE user_one = ? AND user_two = ?",
             (status_text, user_one, user_two)
+        )
+        self.conn.commit()
+
+    def get_marriage_saying(self, user_id: int) -> str:
+        """Returns the custom saying for the marriage entry"""
+        self.cur.execute(
+            "SELECT saying FROM user_marry WHERE user_one = ? OR user_two = ?",
+            (user_id, user_id)
+        )
+        row = self.cur.fetchone()
+        if row:
+            return row[0] or ""
+        return ""
+
+    def update_marriage_saying(self, user_id: int, saying_text: str) -> None:
+        """Updates the custom saying for the user's marriage entry"""
+        self.cur.execute(
+            "SELECT user_one, user_two FROM user_marry WHERE user_one = ? OR user_two = ?",
+            (user_id, user_id)
+        )
+        row = self.cur.fetchone()
+        if not row:
+            return
+        user_one, user_two = row
+        self.cur.execute(
+            "UPDATE user_marry SET saying = ? WHERE user_one = ? AND user_two = ?",
+            (saying_text, user_one, user_two)
         )
         self.conn.commit()
 

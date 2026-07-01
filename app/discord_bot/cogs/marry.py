@@ -132,7 +132,7 @@ def render_marriage_certificate(proposer, target, ring_id: str) -> BytesIO:
     return buf
 
 
-def render_couple_banner(proposer, target, ring_type: str, love_points: int, joint_wallet: int, married_days: int, proposer_ig: str = "", target_ig: str = "", relationship_status: str = "Vợ Chồng", married_at: int = 0) -> BytesIO:
+def render_couple_banner(proposer, target, ring_type: str, love_points: int, joint_wallet: int, married_days: int, proposer_ig: str = "", target_ig: str = "", relationship_status: str = "Vợ Chồng", married_at: int = 0, saying: str = "") -> BytesIO:
     """Draws a beautiful custom profile banner for married couples using the template."""
     bg_path = ABS_PATH.parent.parent / "pictures" / "Marry" / "banner_marry.png"
     if bg_path.exists():
@@ -254,6 +254,11 @@ def render_couple_banner(proposer, target, ring_type: str, love_points: int, joi
     # Draw Instagram handles in bottom box at Y = 830, using original center positions (645, 1015)
     draw.text((645,  830), left_ig_str,  fill=LIGHT_PINK, anchor="mm", font=font_regular)
     draw.text((1015, 830), right_ig_str, fill=LIGHT_PINK, anchor="mm", font=font_regular)
+    
+    # Draw custom saying centered in the middle of the box
+    if saying:
+        font_saying = _vogue(24)
+        draw.text((830, 830), saying, fill=PASTEL_PINK, anchor="mm", font=font_saying)
     
     # Composite overlay on background
     bg.paste(overlay, (0, 0), mask=overlay)
@@ -511,6 +516,9 @@ class Marry(commands.Cog):
         # Get custom status
         rel_status = self.economy.get_marriage_status(ctx.author.id)
         
+        # Get custom saying
+        saying = self.economy.get_marriage_saying(ctx.author.id)
+        
         buf = await asyncio.to_thread(
             render_couple_banner, 
             ctx.author, 
@@ -522,7 +530,8 @@ class Marry(commands.Cog):
             author_ig,
             spouse_ig,
             rel_status,
-            married_at
+            married_at,
+            saying
         )
         file = discord.File(fp=buf, filename="couple_profile.png")
         
@@ -570,6 +579,27 @@ class Marry(commands.Cog):
             
         self.economy.update_marriage_status(ctx.author.id, clean_status)
         await ctx.send(f"✅ Đã cập nhật trạng thái mối quan hệ thành: `{clean_status}`!")
+
+    @couple_cmd.command(name="setsaying", aliases=["saying", "quote", "setquote", "slogan"])
+    async def couple_setsaying(self, ctx: commands.Context, *, saying_text: str):
+        """Đặt câu nói/slogan cho cặp đôi hiển thị ở khung dưới banner."""
+        marriage = self.economy.get_marriage(ctx.author.id)
+        if not marriage:
+            await ctx.send("❌ Bạn phải kết hôn mới có thể cài đặt câu nói!")
+            return
+            
+        clean_saying = saying_text.strip()
+        if clean_saying.lower() in ("xoa", "clear", "none"):
+            self.economy.update_marriage_saying(ctx.author.id, "")
+            await ctx.send("✅ Đã xóa câu nói của cặp đôi!")
+            return
+            
+        if len(clean_saying) > 50:
+            await ctx.send("❌ Câu nói quá dài (tối đa 50 ký tự)!")
+            return
+            
+        self.economy.update_marriage_saying(ctx.author.id, clean_saying)
+        await ctx.send(f"✅ Đã cập nhật câu nói của cặp đôi thành: `{clean_saying}`!")
 
     @couple_cmd.command(name="deposit", aliases=["gop"])
     async def couple_deposit(self, ctx: commands.Context, amount: str):
