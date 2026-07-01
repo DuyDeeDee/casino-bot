@@ -152,45 +152,49 @@ def render_couple_banner(proposer, target, ring_type: str, love_points: int, joi
     font_medium = load_font("bold", 26)
     font_regular = load_font("bold", 22)
     
-    # 1. Load and process avatars (cropped circles of diameter 356, radius 178)
+    # ── Calibrated coordinates from template scan ──────────────────
+    # Left  avatar slot center: (412, 412), radius ~174
+    # Right avatar slot center: (1243, 412), radius ~177
+    # Avatar diameter = 348 pixels
+    LEFT_CX,  LEFT_CY  = 412,  412
+    RIGHT_CX, RIGHT_CY = 1243, 412
+    AVATAR_DIAM = 348
+
+    # 1. Load and process avatars
     p_avatar = get_avatar_img(proposer)
     t_avatar = get_avatar_img(target)
-    
-    p_circle = crop_circle(p_avatar, 356)
-    t_circle = crop_circle(t_avatar, 356)
-    
-    # Paste avatars centered at (412, 530) and (1244, 530)
-    overlay.paste(p_circle, (412 - 178, 530 - 178), mask=p_circle)
-    overlay.paste(t_circle, (1244 - 178, 530 - 178), mask=t_circle)
-    
-    p_avatar.close()
-    t_avatar.close()
-    p_circle.close()
-    t_circle.close()
-    
-    # 2. Draw display names inside nameplate boxes above avatars
-    # Left name at (412, 310)
-    draw.text((412, 310), proposer.display_name, fill=(255, 255, 255, 255), anchor="mm", font=font_large)
-    # Right name at (1244, 310)
-    draw.text((1244, 310), target.display_name, fill=(255, 255, 255, 255), anchor="mm", font=font_large)
-    
-    # 3. Draw Discord usernames in boxes below avatars
-    # Left username at (412, 740)
-    draw.text((412, 740), proposer.name, fill=(138, 43, 226, 255), anchor="mm", font=font_medium)
-    # Right username at (1244, 740)
-    draw.text((1244, 740), target.name, fill=(138, 43, 226, 255), anchor="mm", font=font_medium)
-    
-    # 4. Draw Custom Relationship Status centered above the heart
-    draw.text((836, 450), relationship_status, fill=(138, 43, 226, 255), anchor="mm", font=font_medium)
-    
-    # 5. Draw stats centered below the heart
+
+    p_circle = crop_circle(p_avatar, AVATAR_DIAM)
+    t_circle = crop_circle(t_avatar, AVATAR_DIAM)
+
+    overlay.paste(p_circle, (LEFT_CX  - AVATAR_DIAM // 2, LEFT_CY  - AVATAR_DIAM // 2), mask=p_circle)
+    overlay.paste(t_circle, (RIGHT_CX - AVATAR_DIAM // 2, RIGHT_CY - AVATAR_DIAM // 2), mask=t_circle)
+
+    p_avatar.close(); t_avatar.close()
+    p_circle.close(); t_circle.close()
+
+    PURPLE = (138, 43, 226, 255)
+    WHITE  = (255, 255, 255, 255)
+
+    # 2. Display names inside white nameplate box above avatar
+    draw.text((LEFT_CX,  205), proposer.display_name, fill=WHITE,  anchor="mm", font=font_large)
+    draw.text((RIGHT_CX, 205), target.display_name,   fill=WHITE,  anchor="mm", font=font_large)
+
+    # 3. Discord usernames below avatar circle
+    draw.text((LEFT_CX,  665), proposer.name, fill=PURPLE, anchor="mm", font=font_medium)
+    draw.text((RIGHT_CX, 665), target.name,   fill=PURPLE, anchor="mm", font=font_medium)
+
+    # 4. Relationship status inside the heart
+    draw.text((836, 475), relationship_status, fill=PURPLE, anchor="mm", font=font_medium)
+
+    # 5. Stats below the heart
     date_str = "Chưa rõ"
     if married_at > 0:
         date_str = datetime.fromtimestamp(married_at).strftime("%d/%m/%Y")
-    
-    draw.text((836, 680), f"Ngày Kết Hôn : {date_str}", fill=(255, 255, 255, 255), anchor="mm", font=font_regular)
-    draw.text((836, 720), f"Đã Kết Hôn : {married_days} ngày", fill=(255, 255, 255, 255), anchor="mm", font=font_regular)
-    draw.text((836, 760), f"Điểm thân mật : {love_points:,}", fill=(255, 255, 255, 255), anchor="mm", font=font_regular)
+
+    draw.text((836, 700), f"Ngày Kết Hôn : {date_str}",      fill=WHITE, anchor="mm", font=font_regular)
+    draw.text((836, 735), f"Đã Kết Hôn : {married_days} ngày", fill=WHITE, anchor="mm", font=font_regular)
+    draw.text((836, 770), f"Điểm thân mật : {love_points:,}",  fill=WHITE, anchor="mm", font=font_regular)
     
     # 6. Load and paste Ring image at bottom left (centered at 306, 799)
     ring_file = RING_IMAGES.get(ring_type)
@@ -227,8 +231,8 @@ def render_couple_banner(proposer, target, ring_type: str, love_points: int, joi
     left_ig_str = f"ins / {proposer_ig}" if proposer_ig else "ins / chưa đặt"
     right_ig_str = f"ins / {target_ig}" if target_ig else "ins / chưa đặt"
     
-    draw.text((645, 820), left_ig_str, fill=(255, 255, 255, 255), anchor="mm", font=font_regular)
-    draw.text((1015, 820), right_ig_str, fill=(255, 255, 255, 255), anchor="mm", font=font_regular)
+    draw.text((645,  840), left_ig_str,  fill=WHITE, anchor="mm", font=font_regular)
+    draw.text((1015, 840), right_ig_str, fill=WHITE, anchor="mm", font=font_regular)
     
     # Composite overlay on background
     bg.paste(overlay, (0, 0), mask=overlay)
