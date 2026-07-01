@@ -18,6 +18,35 @@ from app.discord_bot.cogs.daga import get_cock_image_file, RARITY_DISPLAY
 logger = logging.getLogger(__name__)
 
 
+LIQUIDITY_VOLUME = {
+    "USDT": 1_000_000.0,
+    "AGV": 50_000.0,
+    "CASINO": 10_000.0,
+    "ETH": 2_000.0,
+    "BTC": 500.0,
+    "SOL": 5_000.0,
+    "DOGE": 500_000.0
+}
+
+DEFAULT_PRICES = {
+    "USDT": 25_000,
+    "AGV": 10_000,
+    "CASINO": 100_000,
+    "ETH": 500_000,
+    "BTC": 1_000_000,
+    "SOL": 80_000,
+    "DOGE": 5_000
+}
+
+def get_limit_buy_cost(shares: float, target_price: int, symbol: str) -> int:
+    liquidity = LIQUIDITY_VOLUME.get(symbol.upper(), 10000.0)
+    slippage_pct = (shares / liquidity) * 0.01
+    effective_target = int(target_price * (1 + slippage_pct))
+    base_cost = int(shares * effective_target)
+    fee = int(base_cost * 0.02)
+    return base_cost + fee
+
+
 def remove_vietnamese_accents(s: str) -> str:
     s = s.lower()
     replacements = {
@@ -1608,12 +1637,90 @@ class Simulator(commands.Cog):
                 "DOGE": (100, 50_000, (-0.30, 0.35), (0.30, 0.60), (-0.60, -0.30))
             }
             
+            bankrupted_symbols = []
             for symbol, current_price, _, _ in prices:
                 if symbol not in stock_configs:
                     continue
                     
                 min_p, max_p, base_range, up_range, down_range = stock_configs[symbol]
                 
+                # Check bankruptcy chance (Option D)
+                is_bankruptcy = False
+                if news_symbol == symbol and news_dir == "down":
+                    if random.random() < 0.05: # 5% chance under bad news
+                        is_bankruptcy = True
+                elif random.random() < 0.005: # 0.5% chance normally
+                    is_bankruptcy = True
+                    
+                if is_bankruptcy:
+                    bankrupted_symbols.append(symbol)
+                    bankruptcy_price = int(min_p * 0.1)
+                    
+                    # Update stock price to crashed price in DB
+                    self.economy.update_stock_price(symbol, bankruptcy_price, current_price, -90.0)
+                    logger.warning(f"🚨 CRITICAL: Stock {symbol} went bankrupt! Price crashed to {bankruptcy_price} VND.")
+                    
+                    # Refund active limit orders for this bankrupt stock
+                    try:
+                        all_orders = self.economy.get_all_active_limit_orders()
+                        for order_id, user_id, ord_sym, order_type, target_price, shares, _ in all_orders:
+                            if ord_sym == symbol:
+                                if order_type == "BUY":
+                                    refund_money = get_limit_buy_cost(shares, target_price, symbol)
+                                    self.economy.add_money(user_id, refund_money)
+                                else: # SELL
+                                    # Refund locked shares back to their portfolio
+                                    portfolio = dict(self.economy.get_portfolio(user_id))
+                                    curr_shares = portfolio.get(symbol, 0.0)
+                                    self.economy.set_portfolio_shares(user_id, symbol, curr_shares + shares)
+                                self.economy.remove_limit_order(order_id)
+                    except Exception as err:
+                        logger.error(f"Error handling limit orders for bankrupt stock {symbol}: {err}")
+                        
+                    # Liquidate all outstanding shares for this stock held by users
+                    try:
+                        holders = self.economy.get_stock_holders(symbol)
+                        for user_id, shares in holders:
+                            if shares <= 0:
+                                continue
+                            
+                            liquidation_value = int(shares * bankruptcy_price)
+                            fee = int(liquidation_value * 0.05)
+                            payout = liquidation_value - fee
+                            
+                            # Add payout to user and set shares to 0
+                            self.economy.add_money(user_id, payout)
+                            self.economy.set_portfolio_shares(user_id, symbol, 0.0)
+                            
+                            # Send DM warning
+                            user = self.client.get_user(user_id)
+                            if user is None:
+                                try: user = await self.client.fetch_user(user_id)
+                                except Exception: pass
+                            if user:
+                                embed = make_embed(
+                                    title=f"🚨 CẢNH BÁO PHÁ SẢN & THANH LÝ CƯỠNG CHẾ: {symbol} 🚨",
+                                    description=(
+                                        f"Mã đầu tư `{symbol}` đã gặp sự cố cực kỳ nghiêm trọng và tuyên bố phá sản!\n\n"
+                                        f"📊 **Số lượng sở hữu trước đó:** `{shares:.2f} {symbol}`\n"
+                                        f"💥 **Giá thanh lý tài sản:** `{bankruptcy_price:,} VND` / cổ\n"
+                                        f"💸 **Số tiền nhận lại:** `+{payout:,} VND` (Đã trừ 5% phí thanh lý)\n\n"
+                                        f"💡 Toàn bộ cổ phiếu `{symbol}` của bạn đã bị cưỡng chế tự động bán để thu hồi tài sản."
+                                    ),
+                                    color=discord.Color.red()
+                                )
+                                try: await user.send(embed=embed)
+                                except Exception: pass
+                    except Exception as err:
+                        logger.error(f"Error liquidating portfolio for bankrupt stock {symbol}: {err}")
+                        
+                    # Immediately restructure/reset the stock price to its default starting price
+                    restructured_price = DEFAULT_PRICES.get(symbol, min_p * 2)
+                    self.economy.update_stock_price(symbol, restructured_price, bankruptcy_price, 0.0)
+                    logger.info(f"Restructured {symbol}. Price reset to {restructured_price} VND.")
+                    continue
+                
+                # Normal fluctuation
                 if news_symbol == symbol and news_dir == "up":
                     change = random.uniform(*up_range)
                 elif news_symbol == symbol and news_dir == "down":
@@ -1646,11 +1753,19 @@ class Simulator(commands.Cog):
                         
                     if trigger:
                         if order_type == "BUY":
-                            locked_funds = int(shares * target_price)
-                            actual_cost = int(shares * curr_price)
+                            # Target price cost including target slippage and fee was locked
+                            locked_funds = get_limit_buy_cost(shares, target_price, symbol)
+                            
+                            # Slippage & buy fee
+                            liquidity = LIQUIDITY_VOLUME.get(symbol, 10000.0)
+                            slippage_pct = (shares / liquidity) * 0.01
+                            effective_curr_price = int(curr_price * (1 + slippage_pct))
+                            actual_cost_base = int(shares * effective_curr_price)
+                            buy_fee = int(actual_cost_base * 0.02)
+                            actual_cost = actual_cost_base + buy_fee
+                            
                             refund = locked_funds - actual_cost
-                            if refund > 0:
-                                self.economy.add_money(user_id, refund)
+                            self.economy.add_money(user_id, refund)
                                 
                             portfolio = dict(self.economy.get_portfolio(user_id))
                             curr_shares = portfolio.get(symbol, 0.0)
@@ -1663,15 +1778,16 @@ class Simulator(commands.Cog):
                                 try: user = await self.client.fetch_user(user_id)
                                 except Exception: pass
                             if user:
-                                refund_str = f" và được hoàn trả `+{refund:,} VND` chênh lệch" if refund > 0 else ""
+                                refund_str = f" và được hoàn trả `+{refund:,} VND` chênh lệch" if refund > 0 else f" và khấu trừ thêm `{abs(refund):,} VND` chênh lệch" if refund < 0 else ""
                                 embed = make_embed(
                                     title="🔔 LỆNH MUA TỰ ĐỘNG KHỚP 🔔",
                                     description=(
                                         f"Lệnh mua tự động (Limit Order) của bạn đã khớp thành công!\n\n"
                                         f"📈 **Mã:** `{symbol}`\n"
                                         f"📊 **Số lượng:** `{shares:.2f}`\n"
-                                        f"💵 **Giá mục tiêu:** `{target_price:,} VND`\n"
-                                        f"🔥 **Giá khớp lệnh:** `{curr_price:,} VND`\n"
+                                        f"💵 **Giá thị trường:** `{curr_price:,} VND`\n"
+                                        f"⚡ **Trượt giá:** `+{slippage_pct*100:.3f}%` (Giá khớp: `{effective_curr_price:,} VND`)\n"
+                                        f"🏷️ **Phí mua (2%):** `{buy_fee:,} VND`\n"
                                         f"💰 Đã nhận `+{shares:.2f} {symbol}` vào tài khoản{refund_str}."
                                     ),
                                     color=discord.Color.green()
@@ -1679,9 +1795,17 @@ class Simulator(commands.Cog):
                                 try: await user.send(embed=embed)
                                 except Exception: pass
                         else:  # SELL
-                            payout = int(shares * curr_price)
-                            self.economy.add_money(user_id, payout)
+                            # Slippage & sell fee
+                            liquidity = LIQUIDITY_VOLUME.get(symbol, 10000.0)
+                            slippage_pct = (shares / liquidity) * 0.01
+                            effective_curr_price = int(curr_price * (1 - slippage_pct))
+                            effective_curr_price = max(int(curr_price * 0.1), effective_curr_price)
                             
+                            base_payout = int(shares * effective_curr_price)
+                            sell_fee = int(base_payout * 0.05)
+                            payout = base_payout - sell_fee
+                            
+                            self.economy.add_money(user_id, payout)
                             self.economy.remove_limit_order(order_id)
                             
                             user = self.client.get_user(user_id)
@@ -1695,8 +1819,9 @@ class Simulator(commands.Cog):
                                         f"Lệnh bán tự động (Limit Order) của bạn đã khớp thành công!\n\n"
                                         f"📈 **Mã:** `{symbol}`\n"
                                         f"📊 **Số lượng:** `{shares:.2f}`\n"
-                                        f"💵 **Giá mục tiêu:** `{target_price:,} VND`\n"
-                                        f"🔥 **Giá khớp lệnh:** `{curr_price:,} VND`\n"
+                                        f"💵 **Giá thị trường:** `{curr_price:,} VND`\n"
+                                        f"⚡ **Trượt giá:** `-{slippage_pct*100:.3f}%` (Giá khớp: `{effective_curr_price:,} VND`)\n"
+                                        f"🏷️ **Phí bán (5%):** `{sell_fee:,} VND`\n"
                                         f"💰 Nhận về ví: `+{payout:,} VND`."
                                     ),
                                     color=discord.Color.green()
@@ -2928,14 +3053,27 @@ class Simulator(commands.Cog):
 
         user_id = ctx.author.id
         price = prices[symbol]
-        total_cost = int(shares * price)
+        
+        # Calculate slippage (Option C)
+        liquidity = LIQUIDITY_VOLUME.get(symbol, 10000.0)
+        slippage_pct = (shares / liquidity) * 0.01
+        effective_price = int(price * (1 + slippage_pct))
+        
+        base_cost = int(shares * effective_price)
+        # Calculate buy fee (2%)
+        fee = int(base_cost * 0.02)
+        total_cost = base_cost + fee
         
         # Check wallet money
         profile = self.economy.get_entry(user_id)
         money = profile[1]
         
         if money < total_cost:
-            await ctx.send(f"❌ Bạn không đủ tiền mặt! Mua `{shares:.2f}` {symbol} cần `{total_cost:,} VND` nhưng bạn chỉ có `{money:,} VND`.")
+            await ctx.send(
+                f"❌ Bạn không đủ tiền mặt!\n"
+                f"• Mua `{shares:.2f}` {symbol} cần tổng cộng `{total_cost:,} VND` (gồm {slippage_pct*100:.3f}% trượt giá & 2% phí mua).\n"
+                f"• Số dư ví hiện tại: `{money:,} VND`."
+            )
             return
             
         # Process transaction
@@ -2959,7 +3097,10 @@ class Simulator(commands.Cog):
             title="🟢 ĐẦU TƯ THÀNH CÔNG 🟢",
             description=(
                 f"Bạn đã khớp lệnh mua thành công **{shares:.2f} {symbol}**!\n\n"
-                f"💸 **Tổng chi phí:** `-{total_cost:,} VND`\n"
+                f"💵 **Giá thị trường:** `{price:,} VND`\n"
+                f"📊 **Trượt giá:** `+{slippage_pct*100:.3f}%` (Giá thực nhận: `{effective_price:,} VND`)\n"
+                f"🏷️ **Phí mua (2%):** `{fee:,} VND`\n"
+                f"💸 **Tổng chi phí:** `-{total_cost:,} VND`\n\n"
                 f"🎒 **Số dư cổ phiếu hiện tại:** `{current_shares + shares:.2f} {symbol}`"
             ),
             color=discord.Color.green()
@@ -2989,7 +3130,17 @@ class Simulator(commands.Cog):
             
         # Process transaction
         price = prices[symbol]
-        total_payout = int(shares * price)
+        
+        # Calculate slippage (Option C)
+        liquidity = LIQUIDITY_VOLUME.get(symbol, 10000.0)
+        slippage_pct = (shares / liquidity) * 0.01
+        effective_price = int(price * (1 - slippage_pct))
+        effective_price = max(int(price * 0.1), effective_price) # Không trượt quá 90%
+        
+        base_payout = int(shares * effective_price)
+        # Calculate sell fee (5%)
+        fee = int(base_payout * 0.05)
+        total_payout = base_payout - fee
         
         self.economy.set_portfolio_shares(user_id, symbol, current_shares - shares)
         self.economy.add_money(user_id, total_payout)
@@ -3008,7 +3159,10 @@ class Simulator(commands.Cog):
             title="🔴 BÁN ĐẦU TƯ THÀNH CÔNG 🔴",
             description=(
                 f"Bạn đã bán thành công **{shares:.2f} {symbol}**!\n\n"
-                f"💰 **Nhận về ví:** `+{total_payout:,} VND`\n"
+                f"💵 **Giá thị trường:** `{price:,} VND`\n"
+                f"📊 **Trượt giá:** `-{slippage_pct*100:.3f}%` (Giá thực nhận: `{effective_price:,} VND`)\n"
+                f"🏷️ **Phí bán (5%):** `{fee:,} VND`\n"
+                f"💰 **Thực nhận về ví:** `+{total_payout:,} VND`\n\n"
                 f"🎒 **Số dư cổ phiếu còn lại:** `{current_shares - shares:.2f} {symbol}`"
             ),
             color=discord.Color.green()
@@ -3033,20 +3187,28 @@ class Simulator(commands.Cog):
             return
             
         user_id = ctx.author.id
-        total_cost = int(shares * target_price)
+        total_cost = get_limit_buy_cost(shares, target_price, symbol)
         
         # Check wallet money
         profile = self.economy.get_entry(user_id)
         money = profile[1]
         
         if money < total_cost:
-            await ctx.send(f"❌ Bạn không đủ VND để đặt lệnh mua này! Cần `{total_cost:,} VND` (tạm khóa) nhưng bạn chỉ có `{money:,} VND`.")
+            liquidity = LIQUIDITY_VOLUME.get(symbol, 10000.0)
+            slippage_pct = (shares / liquidity) * 0.01
+            await ctx.send(
+                f"❌ Bạn không đủ VND để đặt lệnh mua này!\n"
+                f"• Cần tạm khóa: `{total_cost:,} VND` (bao gồm 2% phí mua & {slippage_pct*100:.3f}% trượt giá ước tính ở target price).\n"
+                f"• Bạn chỉ có: `{money:,} VND`."
+            )
             return
             
         # Lock VND
         self.economy.add_money(user_id, -total_cost)
         order_id = self.economy.add_limit_order(user_id, symbol, "BUY", target_price, shares)
         
+        liquidity = LIQUIDITY_VOLUME.get(symbol, 10000.0)
+        slippage_pct = (shares / liquidity) * 0.01
         embed = make_embed(
             title="🟢 ĐẶT LỆNH MUA TỰ ĐỘNG THÀNH CÔNG 🟢",
             description=(
@@ -3054,7 +3216,7 @@ class Simulator(commands.Cog):
                 f"📈 **Mã:** `{symbol}`\n"
                 f"📊 **Số lượng:** `{shares:.2f}`\n"
                 f"💵 **Giá mục tiêu:** `<= {target_price:,} VND` / cổ\n"
-                f"🔒 **Tiền mặt bị khóa:** `-{total_cost:,} VND` (Sẽ hoàn trả chênh lệch khi khớp lệnh hoặc trả lại khi hủy lệnh)\n"
+                f"🔒 **Tiền mặt bị khóa:** `-{total_cost:,} VND` (Đã gồm 2% phí & {slippage_pct*100:.3f}% trượt giá. Sẽ hoàn lại chênh lệch khi khớp lệnh hoặc trả lại khi hủy lệnh)\n"
                 f"💡 *Lệnh sẽ tự động khớp khi giá thị trường giảm về dưới hoặc bằng giá mục tiêu.*"
             ),
             color=discord.Color.green()
@@ -3121,7 +3283,7 @@ class Simulator(commands.Cog):
         
         for oid, symbol, otype, target, shares, created in orders:
             type_str = "🟢 MUA" if otype == "BUY" else "🔴 BÁN"
-            lock_asset = f"{int(shares * target):,} VND" if otype == "BUY" else f"{shares:.2f} {symbol}"
+            lock_asset = f"{get_limit_buy_cost(shares, target, symbol):,} VND" if otype == "BUY" else f"{shares:.2f} {symbol}"
             embed.add_field(
                 name=f"Lệnh #{oid} | {type_str} {symbol}",
                 value=(
@@ -3150,7 +3312,7 @@ class Simulator(commands.Cog):
         
         # Refund locked asset
         if order_type == "BUY":
-            refund_money = int(shares * target_price)
+            refund_money = get_limit_buy_cost(shares, target_price, symbol)
             self.economy.add_money(user_id, refund_money)
             refund_msg = f"Đã hoàn lại `+{refund_money:,} VND` vào ví của bạn."
         else: # SELL

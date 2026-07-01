@@ -939,6 +939,11 @@ class Economy:
         )
         self.conn.commit()
 
+    def get_stock_holders(self, symbol: str) -> list[tuple[int, float]]:
+        self.cur.execute("SELECT user_id, shares FROM user_portfolio WHERE symbol=? AND shares > 0.0", (symbol.upper(),))
+        return self.cur.fetchall()
+
+
     def get_stock_prices(self) -> list[tuple[str, int, int, float]]:
         self.cur.execute("SELECT symbol, price, prev_price, change_percent FROM stock_prices")
         return self.cur.fetchall()
