@@ -19,10 +19,33 @@ logger = logging.getLogger(__name__)
 
 # List of wedding rings mapping
 RINGS = {
-    "ring_grass": "Nhẫn Cỏ 🌿",
-    "ring_silver": "Nhẫn Bạc 🪙",
-    "ring_gold": "Nhẫn Vàng 👑",
-    "ring_diamond": "Nhẫn Kim Cương 💎"
+    "ring_quartz": "Nhẫn Thạch Anh Trắng 💍",
+    "ring_aquamarine": "Nhẫn Sương Mai Aquamarine 💧",
+    "ring_emerald": "Nhẫn Thanh Xuân Lục Bảo 🌿",
+    "ring_amethyst": "Nhẫn Trăng Khuyết Amethyst 🌙",
+    "ring_cupid": "Nhẫn Tình Yêu Cupid 💘",
+    "ring_citrine": "Nhẫn Vương Miện Citrine 👑",
+    "ring_ruby": "Nhẫn Hồng Ngọc Bách Hợp 🌹",
+    "ring_sapphire": "Nhẫn Lam Ngọc Tinh Tú ✨",
+    "ring_sunburst": "Nhẫn Nhật Quang Thái Dương ☀️",
+    "ring_gothic": "Nhẫn Hắc Dạ Gothic 🖤",
+    "ring_angel": "Nhẫn Cánh Thần Sapphire 👼",
+    "ring_divine": "Nhẫn Hào Quang Vĩnh Cửu 🌌"
+}
+
+RING_IMAGES = {
+    "ring_quartz": "Nhẫn Thạch Anh Trắng.png",
+    "ring_aquamarine": "Nhẫn Sương Mai Aquamarine.png",
+    "ring_emerald": "Nhẫn Thanh Xuân Lục Bảo.png",
+    "ring_amethyst": "Nhẫn Trăng Khuyết Amethyst.png",
+    "ring_cupid": "Nhẫn Tình Yêu Cupid.png",
+    "ring_citrine": "Nhẫn Vương Miện Citrine.png",
+    "ring_ruby": "Nhẫn Hồng Ngọc Bách Hợp.png",
+    "ring_sapphire": "Nhẫn Lam Ngọc Tinh Tú.png",
+    "ring_sunburst": "Nhẫn Nhật Quang Thái Dương.png",
+    "ring_gothic": "Nhẫn Hắc Dạ.png",
+    "ring_angel": "Nhẫn Cánh Thần Sapphire.png",
+    "ring_divine": "Nhẫn Hào Quang Vĩnh Cửu.png"
 }
 
 def get_avatar_img(user) -> Image.Image:
@@ -109,63 +132,107 @@ def render_marriage_certificate(proposer, target, ring_id: str) -> BytesIO:
     return buf
 
 
-def render_couple_banner(proposer, target, ring_type: str, love_points: int, joint_wallet: int, married_days: int) -> BytesIO:
-    """Draws a premium dark profile banner for married couples."""
-    # 800 x 400
-    bg = Image.new("RGBA", (800, 400), (30, 20, 35, 255)) # Deep Dark violet
-    draw = ImageDraw.Draw(bg)
+def render_couple_banner(proposer, target, ring_type: str, love_points: int, joint_wallet: int, married_days: int, proposer_ig: str = "", target_ig: str = "", relationship_status: str = "Vợ Chồng", married_at: int = 0) -> BytesIO:
+    """Draws a beautiful custom profile banner for married couples using the template."""
+    bg_path = ABS_PATH / "pictures" / "Marry" / "menu marry.jpg"
+    if bg_path.exists():
+        bg = Image.open(bg_path).convert("RGBA")
+    else:
+        # Fallback to plain pink background of same dimensions
+        bg = Image.new("RGBA", (1672, 941), (252, 229, 237, 255))
+        
+    width, height = bg.size
     
-    # Sleek gold-purple double borders
-    draw.rectangle((10, 10, 790, 390), outline=(138, 43, 226, 255), width=3) # BlueViolet
-    draw.rectangle((15, 15, 785, 385), outline=(255, 215, 0, 120), width=1) # Semi-translucent Gold
+    # Create overlay for transparent drawing
+    overlay = Image.new("RGBA", bg.size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
     
-    # Load fonts
-    font_bold = load_font("bold", 24)
-    font_medium = load_font("bold", 18)
-    font_regular = load_font("regular", 16)
+    # Load fonts (Roboto or fallback)
+    font_large = load_font("bold", 36)
+    font_medium = load_font("bold", 26)
+    font_regular = load_font("bold", 22)
     
-    # Header
-    draw.text((400, 50), "💖 THÔNG TIN PHU THÊ 💖", fill=(255, 215, 0, 255), anchor="mm", font=font_bold)
-    
-    # Load avatars
+    # 1. Load and process avatars (cropped circles of diameter 356, radius 178)
     p_avatar = get_avatar_img(proposer)
     t_avatar = get_avatar_img(target)
-    p_circle = crop_circle(p_avatar, 110)
-    t_circle = crop_circle(t_avatar, 110)
     
-    # Paste avatars
-    bg.paste(p_circle, (85, 125), mask=p_circle)
-    bg.paste(t_circle, (605, 125), mask=t_circle)
+    p_circle = crop_circle(p_avatar, 356)
+    t_circle = crop_circle(t_avatar, 356)
     
-    # Outlines
-    draw.ellipse((83, 123, 197, 237), outline=(186, 85, 211, 255), width=3) # MediumOrchid
-    draw.ellipse((603, 123, 717, 237), outline=(186, 85, 211, 255), width=3)
+    # Paste avatars centered at (412, 530) and (1260, 530)
+    overlay.paste(p_circle, (412 - 178, 530 - 178), mask=p_circle)
+    overlay.paste(t_circle, (1260 - 178, 530 - 178), mask=t_circle)
     
-    # Names below
-    draw.text((140, 260), proposer.display_name, fill=(255, 255, 255, 255), anchor="mm", font=font_medium)
-    draw.text((660, 260), target.display_name, fill=(255, 255, 255, 255), anchor="mm", font=font_medium)
+    p_avatar.close()
+    t_avatar.close()
+    p_circle.close()
+    t_circle.close()
     
-    # Center Stats Box
-    # Box Background
-    draw.rectangle((260, 95, 540, 345), fill=(0, 0, 0, 100), outline=(255, 215, 0, 60), width=1)
+    # 2. Draw display names inside nameplate boxes above avatars
+    # Left name at (412, 310)
+    draw.text((412, 310), proposer.display_name, fill=(255, 255, 255, 255), anchor="mm", font=font_large)
+    # Right name at (1260, 310)
+    draw.text((1260, 310), target.display_name, fill=(255, 255, 255, 255), anchor="mm", font=font_large)
     
-    ring_name = RINGS.get(ring_type, "Nhẫn Cỏ 🌿")
-    love_lvl = love_points // 100 + 1
+    # 3. Draw Discord usernames in boxes below avatars
+    # Left username at (412, 740)
+    draw.text((412, 740), proposer.name, fill=(138, 43, 226, 255), anchor="mm", font=font_medium)
+    # Right username at (1260, 740)
+    draw.text((1260, 740), target.name, fill=(138, 43, 226, 255), anchor="mm", font=font_medium)
     
-    # Draw Stats rows
-    stats = [
-        f"💍 Thệ ước: {ring_name}",
-        f" Intimacy: Cấp {love_lvl} ({love_points} pts)",
-        f"📅 Đồng hành: {married_days:,} ngày",
-        f"🏦 Quỹ chung: {joint_wallet:,} VND"
-    ]
+    # 4. Draw Custom Relationship Status centered above the heart
+    draw.text((836, 450), relationship_status, fill=(138, 43, 226, 255), anchor="mm", font=font_medium)
     
-    y_offset = 125
-    for row in stats:
-        # Align left inside box
-        draw.text((280, y_offset), row, fill=(240, 240, 240, 255), font=font_regular)
-        y_offset += 50
-        
+    # 5. Draw stats centered below the heart
+    date_str = "Chưa rõ"
+    if married_at > 0:
+        date_str = datetime.fromtimestamp(married_at).strftime("%d/%m/%Y")
+    
+    draw.text((836, 680), f"Ngày Kết Hôn : {date_str}", fill=(255, 255, 255, 255), anchor="mm", font=font_regular)
+    draw.text((836, 720), f"Đã Kết Hôn : {married_days} ngày", fill=(255, 255, 255, 255), anchor="mm", font=font_regular)
+    draw.text((836, 760), f"Điểm thân mật : {love_points:,}", fill=(255, 255, 255, 255), anchor="mm", font=font_regular)
+    
+    # 6. Load and paste Ring image at bottom left (centered at 306, 799)
+    ring_file = RING_IMAGES.get(ring_type)
+    if ring_file:
+        ring_path = ABS_PATH / "pictures" / "Marry" / ring_file
+        if ring_path.exists():
+            try:
+                ring_img = Image.open(ring_path).convert("RGBA")
+                ring_img = ring_img.resize((120, 120), Image.Resampling.LANCZOS)
+                overlay.paste(ring_img, (306 - 60, 799 - 60), mask=ring_img)
+                ring_img.close()
+            except Exception as e:
+                logger.error(f"Failed to draw wedding ring image: {e}")
+                
+    # 7. Draw social boxes and Instagram handles at bottom middle
+    # Box 1: Left IG
+    draw.rounded_rectangle(
+        [480, 780, 810, 860],
+        radius=15,
+        fill=(255, 255, 255, 120),
+        outline=(255, 255, 255, 255),
+        width=3
+    )
+    # Box 2: Right IG
+    draw.rounded_rectangle(
+        [850, 780, 1180, 860],
+        radius=15,
+        fill=(255, 255, 255, 120),
+        outline=(255, 255, 255, 255),
+        width=3
+    )
+    
+    left_ig_str = f"ins / {proposer_ig}" if proposer_ig else "ins / chưa đặt"
+    right_ig_str = f"ins / {target_ig}" if target_ig else "ins / chưa đặt"
+    
+    draw.text((645, 820), left_ig_str, fill=(138, 43, 226, 255), anchor="mm", font=font_regular)
+    draw.text((1015, 820), right_ig_str, fill=(138, 43, 226, 255), anchor="mm", font=font_regular)
+    
+    # Composite overlay on background
+    bg.paste(overlay, (0, 0), mask=overlay)
+    overlay.close()
+    
     buf = BytesIO()
     bg.save(buf, format="PNG")
     buf.seek(0)
@@ -222,12 +289,12 @@ class MarriageView(discord.ui.View):
         )
         embed.set_image(url="attachment://marriage_certificate.png")
         
-        # Global diamond alert
-        if self.ring_id == "ring_diamond":
+        # Global divine alert
+        if self.ring_id == "ring_divine":
             broadcast = (
                 "🎇🎆✨ **THÔNG BÁO TOÀN SEVER** ✨🎆🎇\n"
                 f"🎉💎 **CHÚC MỪNG HẠN PHÚC GIA ĐÌNH MỚI!** **{self.proposer.mention}** đã kết hôn cùng "
-                f"**{self.target.mention}** bằng **Nhẫn Kim Cương** lấp lánh sang trọng! Trăm năm hạnh phúc! 💖🥂"
+                f"**{self.target.mention}** bằng **Nhẫn Hào Quang Vĩnh Cửu** lấp lánh thần thánh sang trọng nhất! Trăm năm hạnh phúc! 💖🥂"
             )
             await interaction.channel.send(broadcast)
             
@@ -346,8 +413,21 @@ class Marry(commands.Cog):
             await ctx.send("❌ **Bạn không sở hữu nhẫn cưới nào!** Hãy sử dụng `i?shop` để mua một chiếc nhẫn cầu hôn trước.")
             return
             
-        # Prioritize diamond > gold > silver > grass
-        ring_priority = ["ring_diamond", "ring_gold", "ring_silver", "ring_grass"]
+        # Prioritize divine > angel > gothic > sunburst > sapphire > ruby > citrine > cupid > amethyst > emerald > aquamarine > quartz
+        ring_priority = [
+            "ring_divine",
+            "ring_angel",
+            "ring_gothic",
+            "ring_sunburst",
+            "ring_sapphire",
+            "ring_ruby",
+            "ring_citrine",
+            "ring_cupid",
+            "ring_amethyst",
+            "ring_emerald",
+            "ring_aquamarine",
+            "ring_quartz"
+        ]
         ring_id = next(r for r in ring_priority if r in owned_rings)
         ring_name = RINGS[ring_id]
         
@@ -393,7 +473,31 @@ class Marry(commands.Cog):
         married_days = max(1, (int(time.time()) - married_at) // 86400)
         
         await ctx.send("⌛ **Đang kết xuất thông tin gia đình...**")
-        buf = await asyncio.to_thread(render_couple_banner, ctx.author, spouse, ring_type, love_points, joint_wallet, married_days)
+        
+        # Get IG handles
+        ig_handles = self.economy.get_marriage_ig(ctx.author.id)
+        # Determine which IG belongs to author and which to spouse
+        if ctx.author.id == user_one:
+            author_ig, spouse_ig = ig_handles[0], ig_handles[1]
+        else:
+            author_ig, spouse_ig = ig_handles[1], ig_handles[0]
+            
+        # Get custom status
+        rel_status = self.economy.get_marriage_status(ctx.author.id)
+        
+        buf = await asyncio.to_thread(
+            render_couple_banner, 
+            ctx.author, 
+            spouse, 
+            ring_type, 
+            love_points, 
+            joint_wallet, 
+            married_days,
+            author_ig,
+            spouse_ig,
+            rel_status,
+            married_at
+        )
         file = discord.File(fp=buf, filename="couple_profile.png")
         
         embed = make_embed(
@@ -402,6 +506,39 @@ class Marry(commands.Cog):
         )
         embed.set_image(url="attachment://couple_profile.png")
         await ctx.send(embed=embed, file=file)
+
+    @couple_cmd.command(name="setig", aliases=["instagram", "ig"])
+    async def couple_setig(self, ctx: commands.Context, ig_handle: str):
+        """Đặt tài khoản Instagram của bạn để hiển thị trên profile cặp đôi."""
+        marriage = self.economy.get_marriage(ctx.author.id)
+        if not marriage:
+            await ctx.send("❌ Bạn phải kết hôn mới có thể cài đặt tài khoản Instagram!")
+            return
+            
+        # Clean handle (remove @ if present)
+        clean_handle = ig_handle.strip().lstrip('@')
+        if len(clean_handle) > 30:
+            await ctx.send("❌ Tên tài khoản Instagram quá dài (tối đa 30 ký tự)!")
+            return
+            
+        self.economy.update_marriage_ig(ctx.author.id, clean_handle)
+        await ctx.send(f"✅ Đã cập nhật tài khoản Instagram của bạn thành: `ins / {clean_handle}`!")
+
+    @couple_cmd.command(name="status", aliases=["setstatus", "trangthai"])
+    async def couple_status(self, ctx: commands.Context, *, status_text: str):
+        """Đặt trạng thái mối quan hệ của cặp đôi (ví dụ: situation ship, mãi bên nhau...)."""
+        marriage = self.economy.get_marriage(ctx.author.id)
+        if not marriage:
+            await ctx.send("❌ Bạn phải kết hôn mới có thể đặt trạng thái mối quan hệ!")
+            return
+            
+        clean_status = status_text.strip()
+        if len(clean_status) > 20:
+            await ctx.send("❌ Trạng thái mối quan hệ quá dài (tối đa 20 ký tự)!")
+            return
+            
+        self.economy.update_marriage_status(ctx.author.id, clean_status)
+        await ctx.send(f"✅ Đã cập nhật trạng thái mối quan hệ thành: `{clean_status}`!")
 
     @couple_cmd.command(name="deposit", aliases=["gop"])
     async def couple_deposit(self, ctx: commands.Context, amount: str):

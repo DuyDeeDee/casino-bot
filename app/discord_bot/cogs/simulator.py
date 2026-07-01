@@ -113,43 +113,43 @@ BUSINESSES = {
 SHOP_ITEMS = {
     "bang_cap": {
         "name": "Bằng cấp công nghệ 🎓",
-        "cost": 10_000_000,
-        "currency": "money",
+        "cost": 5,
+        "currency": "gold",
         "description": "Mở khóa công việc Công nghệ trong lệnh $work để nhận dự án lớn."
     },
     "bang_kien_truc": {
         "name": "Bằng Kiến Trúc Sư 📐",
-        "cost": 25_000_000,
-        "currency": "money",
+        "cost": 10,
+        "currency": "gold",
         "description": "Mở khóa các dự án thiết kế công trình trong lệnh $work để nhận từ 1,800,000 VND đến 3,000,000 VND mỗi giờ."
     },
     "bang_phi_hanh": {
         "name": "Chứng Chỉ Phi Hành Gia 🚀",
-        "cost": 75_000_000,
-        "currency": "money",
+        "cost": 15,
+        "currency": "gold",
         "description": "Mở khóa nhiệm vụ thám hiểm vũ trụ trong lệnh $work để nhận từ 4,500,000 VND đến 8,000,000 VND mỗi giờ."
     },
     "bang_bac_si": {
         "name": "Bằng Bác Sĩ Chuyên Khoa 🩺",
-        "cost": 150_000_000,
-        "currency": "money",
+        "cost": 35,
+        "currency": "gold",
         "description": "Mở khóa công việc chăm sóc sức khỏe VIP trong lệnh $work để nhận từ 10,000,000 VND đến 20,000,000 VND mỗi giờ."
     },
     "the_tho_mo": {
         "name": "Nghề Khai Thác Vàng ⛏️",
-        "cost": 50_000_000,
-        "currency": "money",
+        "cost": 30,
+        "currency": "gold",
         "description": "Mở khóa lệnh $mine khai thác vàng tự động. Càng sở hữu nhiều vàng, tỷ lệ đào trúng càng khó."
     },
     "the_tho_san": {
         "name": "Chứng Chỉ Thợ Săn Kho Báu 🗺️",
-        "cost": 300,
+        "cost": 500,
         "currency": "gold",
         "description": "Mở khóa thám hiểm hầm mộ cổ đại trong lệnh $work để tìm kiếm các kho báu giá trị (có thể sưu tầm hoặc bán bằng lệnh i?sellitem)."
     },
     "banner_aesthetic": {
         "name": "Banner Aesthetic Động ✨",
-        "cost": 50,
+        "cost": 150,
         "currency": "gold",
         "description": "Hình nền động phong cách lofi hoàng hôn cực chất.",
         "is_banner": True,
@@ -157,23 +157,23 @@ SHOP_ITEMS = {
     },
     "banner_cyberpunk": {
         "name": "Banner Cyberpunk Neon 🌆",
-        "cost": 25_000_000,
-        "currency": "money",
+        "cost": 600,
+        "currency": "gold",
         "description": "Hình nền tĩnh thành phố tương lai neon lung linh.",
         "is_banner": True,
         "filename": "cyberpunk.png"
     },
     "banner_royal": {
         "name": "Banner Casino Hoàng Gia 👑",
-        "cost": 50_000_000,
-        "currency": "money",
+        "cost": 1200,
+        "currency": "gold",
         "description": "Hình nền tĩnh casino hoàng gia sang xịn mịn.",
         "is_banner": True,
         "filename": "royal.png"
     },
     "banner_lelouch": {
         "name": "Banner Lelouch Động 👁️",
-        "cost": 80,
+        "cost": 200,
         "currency": "gold",
         "description": "Hình nền động Lelouch Geass cực kỳ ngầu.",
         "is_banner": True,
@@ -181,7 +181,7 @@ SHOP_ITEMS = {
     },
     "banner_anak": {
         "name": "Banner Anak Động 🌌",
-        "cost": 100,
+        "cost": 250,
         "currency": "gold",
         "description": "Hình nền động Anak siêu ngầu.",
         "is_banner": True,
@@ -190,7 +190,7 @@ SHOP_ITEMS = {
     },
     "banner_hr": {
         "name": "Banner HR Động 💫",
-        "cost": 100,
+        "cost": 250,
         "currency": "gold",
         "description": "Hình nền động HR cực đẹp.",
         "is_banner": True,
@@ -199,7 +199,7 @@ SHOP_ITEMS = {
     },
     "banner_sally": {
         "name": "Banner Sally Động 🍭",
-        "cost": 100,
+        "cost": 250,
         "currency": "gold",
         "description": "Hình nền động Sally siêu dễ thương.",
         "is_banner": True,
@@ -208,7 +208,7 @@ SHOP_ITEMS = {
     },
     "banner_zee": {
         "name": "Banner Zee Đẹp Trai 😎",
-        "cost": 100,
+        "cost": 250,
         "currency": "gold",
         "description": "Hình nền Zee tĩnh cực chất.",
         "is_banner": True,
@@ -217,81 +217,137 @@ SHOP_ITEMS = {
     },
     "manager_contract": {
         "name": "Hợp đồng Quản lý 7 ngày 💼",
-        "cost": 20_000_000,
-        "currency": "money",
+        "cost": 15,
+        "currency": "gold",
         "description": "Sử dụng lệnh `i?use manager_contract` để thuê Quản lý tự thu hoạch doanh nghiệp mỗi 12h."
     },
     "insurance_contract": {
         "name": "Bảo hiểm Doanh nghiệp 7 ngày 🛡️",
-        "cost": 5_000_000,
-        "currency": "money",
+        "cost": 20,
+        "currency": "gold",
         "description": "Sử dụng lệnh `i?use insurance_contract` để phòng ngừa 100% rủi ro/gặp sự cố doanh nghiệp."
     },
     "bodyguard_contract": {
         "name": "Hợp đồng Vệ sĩ 7 ngày 💂",
-        "cost": 15_000_000,
-        "currency": "money",
+        "cost": 20,
+        "currency": "gold",
         "description": "Sử dụng lệnh `i?use bodyguard_contract` để thuê Vệ sĩ bảo vệ tài sản, giảm 80% tỷ lệ bị cướp."
     },
     "security_system": {
         "name": "Hệ thống Camera & Báo động 🚨",
-        "cost": 30_000_000,
-        "currency": "money",
+        "cost": 50,
+        "currency": "gold",
         "description": "Thiết bị bảo vệ doanh nghiệp vĩnh viễn. 30% cơ hội bắt giữ kẻ cướp, phạt tiền bồi thường cho bạn."
     },
-    # "map_normal": {
-    #     "name": "Bản đồ Thám hiểm Thường 📜",
-    #     "cost": 5_000_000,
-    #     "currency": "money",
-    #     "description": "Sử dụng bằng `i?explore normal` để mở chuyến thám hiểm cổ vật Thường/Hiếm."
-    # },
-    # "map_rare": {
-    #     "name": "Bản đồ Thám hiểm Hiếm 📘",
-    #     "cost": 20_000_000,
-    #     "currency": "money",
-    #     "description": "Sử dụng bằng `i?explore rare` để mở chuyến thám hiểm cổ vật Hiếm/Quý hiếm."
-    # },
-    # "map_legend": {
-    #     "name": "Bản đồ Thám hiểm Huyền thoại 📙",
-    #     "cost": 50_000_000,
-    #     "currency": "money",
-    #     "description": "Sử dụng bằng `i?explore legend` để mở chuyến thám hiểm cổ vật Huyền thoại/Thần thoại."
-    # },
-    "ring_grass": {
-        "name": "Nhẫn Cỏ 🌿",
-        "cost": 100_000,
+    "ring_quartz": {
+        "name": "Nhẫn Thạch Anh Trắng 💍",
+        "cost": 500000,
         "currency": "money",
-        "description": "Nhẫn cầu hôn đơn sơ, không có buff chỉ số."
+        "description": "Nhẫn bạc đơn giản đính thạch anh tinh khiết. Buff: +2% điểm thân mật."
     },
-    "ring_silver": {
-        "name": "Nhẫn Bạc 🪙",
-        "cost": 2_000_000,
+    "ring_aquamarine": {
+        "name": "Nhẫn Sương Mai Aquamarine 💧",
+        "cost": 1000000,
         "currency": "money",
-        "description": "Nhẫn cầu hôn bằng bạc. Buff kinh tế (+2% lương + 0.5%/cấp thân mật)."
+        "description": "Dây xoắn mảnh đính Aquamarine lam nhạt. Buff: +3% điểm thân mật."
     },
-    "ring_gold": {
-        "name": "Nhẫn Vàng 👑",
-        "cost": 10_000_000,
+    "ring_emerald": {
+        "name": "Nhẫn Thanh Xuân Lục Bảo 🌿",
+        "cost": 1800000,
         "currency": "money",
-        "description": "Nhẫn cầu hôn bằng vàng. Buff kinh tế (+5% lương + 1%/cấp thân mật)."
+        "description": "Hình lá cây Peridot xanh tươi trẻ. Buff: +4% điểm thân mật, +2% lương làm việc."
     },
-    "ring_diamond": {
-        "name": "Nhẫn Kim Cương 💎",
-        "cost": 100_000_000,
+    "ring_amethyst": {
+        "name": "Nhẫn Trăng Khuyết Amethyst 🌙",
+        "cost": 3000000,
         "currency": "money",
-        "description": "Nhẫn cầu hôn kim cương lấp lánh. Buff kinh tế (+10% lương + 1.5%/cấp thân mật)."
+        "description": "Trăng khuyết ôm lấy thạch anh tím huyền bí. Buff: +5% điểm thân mật, +3% lương làm việc."
+    },
+    "ring_cupid": {
+        "name": "Nhẫn Tình Yêu Cupid 💘",
+        "cost": 7500000,
+        "currency": "money",
+        "description": "Vàng hồng đính thạch anh hồng Cupid ngọt ngào. Buff: +7% điểm thân mật, +5% lương làm việc."
+    },
+    "ring_citrine": {
+        "name": "Nhẫn Vương Miện Citrine 👑",
+        "cost": 15000000,
+        "currency": "money",
+        "description": "Vương miện vàng đính Citrine vàng rực rỡ. Buff: +9% điểm thân mật, +7% lương làm việc."
+    },
+    "ring_ruby": {
+        "name": "Nhẫn Hồng Ngọc Bách Hợp 🌹",
+        "cost": 30000000,
+        "currency": "money",
+        "description": "Ruby đỏ uốn lượn như cánh hoa hồng. Buff: +12% điểm thân mật, +10% lương, giảm 5% phí ly hôn."
+    },
+    "ring_sapphire": {
+        "name": "Nhẫn Lam Ngọc Tinh Tú ✨",
+        "cost": 60000000,
+        "currency": "money",
+        "description": "Lam ngọc xanh đính kim cương nhỏ lấp lánh. Buff: +15% điểm thân mật, +12% lương, giảm 10% phí ly hôn."
+    },
+    "ring_sunburst": {
+        "name": "Nhẫn Nhật Quang Thái Dương ☀️",
+        "cost": 150000000,
+        "currency": "money",
+        "description": "Hào quang mặt trời đính Opal lửa cam rực cháy. Buff: +20% điểm thân mật, +15% lương, +2% đào mỏ."
+    },
+    "ring_gothic": {
+        "name": "Nhẫn Hắc Dạ Gothic 🖤",
+        "cost": 300,
+        "currency": "gold",
+        "description": "Vành kim loại đen đính đá Obsidian ma mị. Buff: +25% điểm thân mật, +20% lương, giảm 20% bị cướp."
+    },
+    "ring_angel": {
+        "name": "Nhẫn Cánh Thần Sapphire 👼",
+        "cost": 600,
+        "currency": "gold",
+        "description": "Cánh thiên thần bạc ôm Sapphire hoàng gia. Buff: +30% điểm thân mật, +25% lương, giảm 40% bị cướp."
+    },
+    "ring_divine": {
+        "name": "Nhẫn Hào Quang Vĩnh Cửu 🌌",
+        "cost": 2000,
+        "currency": "gold",
+        "description": "Cực phẩm cánh thiên thần vàng đính đá ngũ sắc. Buff: +50% thân mật, +40% lương, miễn nhiễm cướp vĩnh viễn, hoàn trả 3% cược Casino, pháo hoa toàn server."
     }
 }
 
 TREASURES = {
+    # ── Rác thải (Trash) ──────────────────────────────────────────────────────────
     "t_lop_xe": {"name": "Lốp xe cũ hỏng 🛞", "value": 50_000, "rarity": "Rác thải"},
     "t_lon_bia": {"name": "Lon bia rỉ sét 🥫", "value": 100_000, "rarity": "Rác thải"},
+    "t_giay_cu": {"name": "Chiếc giày cũ rách mất đế 🥾", "value": 70_000, "rarity": "Rác thải"},
+    "t_mo_blet": {"name": "Mỏ lết rỉ sét gãy cán 🔧", "value": 120_000, "rarity": "Rác thải"},
+    
+    # ── Thường (Common) ────────────────────────────────────────────────────────────
     "t_dong_xu_co": {"name": "Đồng xu cổ thời Đinh 🪙", "value": 2_500_000, "rarity": "Thường"},
     "t_bat_gom": {"name": "Bát gốm Chu Đậu cổ 🏺", "value": 8_000_000, "rarity": "Thường"},
+    "t_tranh_dong_ho": {"name": "Bức tranh Đông Hồ cổ 🖼️", "value": 4_000_000, "rarity": "Thường"},
+    "t_tram_dong": {"name": "Trâm cài tóc bằng đồng thời Lý 🗡️", "value": 6_500_000, "rarity": "Thường"},
+    
+    # ── Hiếm (Rare) ────────────────────────────────────────────────────────────────
     "t_kiem_ri": {"name": "Thanh kiếm rỉ sét của nghĩa quân 🗡️", "value": 20_000_000, "rarity": "Hiếm"},
+    "t_trong_dong": {"name": "Mảnh Trống đồng Đông Sơn 🥁", "value": 30_000_000, "rarity": "Hiếm"},
+    "t_sach_da_thuoc": {"name": "Cuộn sách thư pháp bằng da thuộc 📜", "value": 15_000_000, "rarity": "Hiếm"},
+    "t_hoa_tai_co": {"name": "Đôi hoa tai bạc chạm khắc cổ xưa 💍", "value": 25_000_000, "rarity": "Hiếm"},
+    
+    # ── Quý hiếm (Epic) ────────────────────────────────────────────────────────────
     "t_mat_na_vang": {"name": "Mặt nạ vàng bộ tộc Inca 🎭", "value": 60_000_000, "rarity": "Quý hiếm"},
+    "t_ngoc_ti": {"name": "Ngọc tỷ triều đình phong kiến 玺", "value": 80_000_000, "rarity": "Quý hiếm"},
+    "t_la_chan_sparta": {"name": "Lá chắn đồng của chiến binh Sparta 🛡️", "value": 110_000_000, "rarity": "Quý hiếm"},
+    "t_nanh_ho_phach": {"name": "Nanh hổ phách hóa thạch nghìn năm 🦷", "value": 140_000_000, "rarity": "Quý hiếm"},
+    
+    # ── Huyền thoại (Legendary) ────────────────────────────────────────────────────
     "t_vuong_mien": {"name": "Vương miện đính ngọc Hoàng đế La Mã 👑", "value": 250_000_000, "rarity": "Huyền thoại"},
-    "t_chen_thanh": {"name": "Chén Thánh truyền thuyết 🏆", "value": 1_000_000_000, "rarity": "Thần thoại"}
+    "t_riu_ma_bac": {"name": "Rìu chiến Viking mạ bạc 🪓", "value": 350_000_000, "rarity": "Huyền thoại"},
+    "t_kim_cuong_hope": {"name": "Viên kim cương xanh Hope huyền thoại 💎", "value": 500_000_000, "rarity": "Huyền thoại"},
+    "t_la_thu_einstein": {"name": "Bức thư tay gốc của Einstein 📝", "value": 400_000_000, "rarity": "Huyền thoại"},
+    
+    # ── Thần thoại (Mythical) ──────────────────────────────────────────────────────
+    "t_chen_thanh": {"name": "Chén Thánh truyền thuyết 🏆", "value": 1_000_000_000, "rarity": "Thần thoại"},
+    "t_long_phuong_hoang": {"name": "Lông vũ rực cháy của Phượng Hoàng 🔥", "value": 1_300_000_000, "rarity": "Thần thoại"},
+    "t_hop_pandora": {"name": "Chiếc hộp Pandora bí ẩn 🎁", "value": 1_800_000_000, "rarity": "Thần thoại"}
 }
 
 class ChestSelect(discord.ui.Select):
@@ -839,13 +895,19 @@ class ShopView(discord.ui.View):
         self.update_buttons()
         await interaction.response.edit_message(embed=self.get_embed(), view=self)
 
-    @discord.ui.button(label="🔧 Công Cụ & Hợp Đồng", style=discord.ButtonStyle.secondary, custom_id="shop_tools")
+    @discord.ui.button(label="🔧 Công Cụ", style=discord.ButtonStyle.secondary, custom_id="shop_tools")
     async def view_tools(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.category = "tools"
         self.update_buttons()
         await interaction.response.edit_message(embed=self.get_embed(), view=self)
 
-    @discord.ui.button(label="🎨 Hình Nền & Banner", style=discord.ButtonStyle.secondary, custom_id="shop_banner")
+    @discord.ui.button(label="💍 Nhẫn Cưới", style=discord.ButtonStyle.secondary, custom_id="shop_rings")
+    async def view_rings(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.category = "rings"
+        self.update_buttons()
+        await interaction.response.edit_message(embed=self.get_embed(), view=self)
+
+    @discord.ui.button(label="🎨 Hình Nền", style=discord.ButtonStyle.secondary, custom_id="shop_banner")
     async def view_banner(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.category = "banner"
         self.update_buttons()
@@ -875,7 +937,12 @@ class ShopView(discord.ui.View):
                 description="Mua các thiết bị bảo vệ và bản đồ thám hiểm để tối ưu hóa tài sản doanh nghiệp của bạn!",
                 color=discord.Color.blue()
             )
-            tool_keys = ["manager_contract", "insurance_contract", "bodyguard_contract", "security_system", "ring_grass", "ring_silver", "ring_gold", "ring_diamond"]
+            tool_keys = [
+                "manager_contract",
+                "insurance_contract",
+                "bodyguard_contract",
+                "security_system"
+            ]
             for item_id in tool_keys:
                 if item_id in SHOP_ITEMS:
                     details = SHOP_ITEMS[item_id]
@@ -883,6 +950,36 @@ class ShopView(discord.ui.View):
                         cost_str = f"{details['cost']:,} VND" if details['currency'] == "money" else f"{details['cost']} thỏi vàng"
                         embed.add_field(
                             name=f"🛠️ {details['name']} (ID: `{item_id}`)",
+                            value=f"💵 **Giá:** `{cost_str}`\n📝 **Mô tả:** {details['description']}",
+                            inline=False
+                        )
+        elif self.category == "rings":
+            embed = make_embed(
+                title="💍 CỬA HÀNG NHẪN CƯỚI 💍",
+                description="Mua các loại nhẫn cầu hôn tuyệt đẹp để thề ước và nhận các đặc quyền gia đình!",
+                color=discord.Color.magenta()
+            )
+            ring_keys = [
+                "ring_quartz",
+                "ring_aquamarine",
+                "ring_emerald",
+                "ring_amethyst",
+                "ring_cupid",
+                "ring_citrine",
+                "ring_ruby",
+                "ring_sapphire",
+                "ring_sunburst",
+                "ring_gothic",
+                "ring_angel",
+                "ring_divine"
+            ]
+            for item_id in ring_keys:
+                if item_id in SHOP_ITEMS:
+                    details = SHOP_ITEMS[item_id]
+                    if not details.get("is_admin_only"):
+                        cost_str = f"{details['cost']:,} VND" if details['currency'] == "money" else f"{details['cost']} thỏi vàng"
+                        embed.add_field(
+                            name=f"💍 {details['name']} (ID: `{item_id}`)",
                             value=f"💵 **Giá:** `{cost_str}`\n📝 **Mô tả:** {details['description']}",
                             inline=False
                         )
@@ -1235,24 +1332,13 @@ class Simulator(commands.Cog):
                 earned_gold_frac += hours * revenue
 
         # Check active marriage multiplier
-        marriage = self.economy.get_marriage(user_id)
-        marriage_multiplier = 1.0
+        marriage_multiplier = self.economy.get_marriage_multiplier(user_id)
         marriage_info = ""
-        if marriage:
-            user_one, user_two, ring_type, love_points, joint_wallet, married_at, _, _ = marriage
-            love_level = love_points // 100
-            if ring_type == "ring_silver":
-                marriage_multiplier = 1.02 + (love_level * 0.005)
-            elif ring_type == "ring_gold":
-                marriage_multiplier = 1.05 + (love_level * 0.01)
-            elif ring_type == "ring_diamond":
-                marriage_multiplier = 1.10 + (love_level * 0.015)
-                
-            if marriage_multiplier > 1.0:
-                earned_money = int(earned_money * marriage_multiplier)
-                earned_gold_frac = earned_gold_frac * marriage_multiplier
-                bonus_pct = int((marriage_multiplier - 1.0) * 100)
-                marriage_info = f"\n💖 *Đã cộng thêm **{bonus_pct}%** từ Thệ ước Hôn nhân!*"
+        if marriage_multiplier > 1.0:
+            earned_money = int(earned_money * marriage_multiplier)
+            earned_gold_frac = earned_gold_frac * marriage_multiplier
+            bonus_pct = int((marriage_multiplier - 1.0) * 100)
+            marriage_info = f"\n💖 *Đã cộng thêm **{bonus_pct}%** từ Thệ ước Hôn nhân!*"
 
         total_gold_frac = stats[3] + earned_gold_frac
         int_gold = int(total_gold_frac)
@@ -2560,17 +2646,17 @@ class Simulator(commands.Cog):
         r = random.random()
         if map_type == "normal":
             if r < 0.50: rarity = "Thường"
-            elif r < 0.85: rarity = "Hiếm"
-            elif r < 0.98: rarity = "Quý hiếm"
+            elif r < 0.90: rarity = "Hiếm"
+            elif r < 0.999: rarity = "Quý hiếm"
             else: rarity = "Huyền thoại"
         elif map_type == "rare":
-            if r < 0.40: rarity = "Hiếm"
-            elif r < 0.80: rarity = "Quý hiếm"
-            elif r < 0.98: rarity = "Huyền thoại"
+            if r < 0.45: rarity = "Hiếm"
+            elif r < 0.95: rarity = "Quý hiếm"
+            elif r < 0.999: rarity = "Huyền thoại"
             else: rarity = "Thần thoại"
         else: # legend
-            if r < 0.30: rarity = "Quý hiếm"
-            elif r < 0.80: rarity = "Huyền thoại"
+            if r < 0.85: rarity = "Quý hiếm"
+            elif r < 0.995: rarity = "Huyền thoại"
             else: rarity = "Thần thoại"
             
         # Select treasure

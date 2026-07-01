@@ -380,22 +380,11 @@ class GamblingHelpers(commands.Cog, name="General"):
         user_id = user.id
         
         # Check active marriage multiplier
-        marriage = self.economy.get_marriage(user_id)
-        marriage_multiplier = 1.0
+        marriage_multiplier = self.economy.get_marriage_multiplier(user_id)
         marriage_info = ""
-        if marriage:
-            user_one, user_two, ring_type, love_points, joint_wallet, married_at, _, _ = marriage
-            love_level = love_points // 100
-            if ring_type == "ring_silver":
-                marriage_multiplier = 1.02 + (love_level * 0.005)
-            elif ring_type == "ring_gold":
-                marriage_multiplier = 1.05 + (love_level * 0.01)
-            elif ring_type == "ring_diamond":
-                marriage_multiplier = 1.10 + (love_level * 0.015)
-                
-            if marriage_multiplier > 1.0:
-                bonus_pct = int((marriage_multiplier - 1.0) * 100)
-                marriage_info = f"\n💖 *Đã cộng thêm **{bonus_pct}%** từ Thệ ước Hôn nhân!*"
+        if marriage_multiplier > 1.0:
+            bonus_pct = int((marriage_multiplier - 1.0) * 100)
+            marriage_info = f"\n💖 *Đã cộng thêm **{bonus_pct}%** từ Thệ ước Hôn nhân!*"
 
         # Kiểm tra cooldown dựa trên database
         stats = self.economy.get_simulator_stats(user_id)
@@ -736,15 +725,15 @@ class GamblingHelpers(commands.Cog, name="General"):
                     from app.discord_bot.cogs.simulator import TREASURES
                     
                     r = random.random()
-                    if r < 0.35:
+                    if r < 0.40:
                         rarity_pool = [k for k, v in TREASURES.items() if v["rarity"] == "Rác thải"]
-                    elif r < 0.70:
+                    elif r < 0.75:
                         rarity_pool = [k for k, v in TREASURES.items() if v["rarity"] == "Thường"]
-                    elif r < 0.85:
+                    elif r < 0.93:
                         rarity_pool = [k for k, v in TREASURES.items() if v["rarity"] == "Hiếm"]
-                    elif r < 0.95:
+                    elif r < 0.998:
                         rarity_pool = [k for k, v in TREASURES.items() if v["rarity"] == "Quý hiếm"]
-                    elif r < 0.99:
+                    elif r < 0.9998:
                         rarity_pool = [k for k, v in TREASURES.items() if v["rarity"] == "Huyền thoại"]
                     else:
                         rarity_pool = [k for k, v in TREASURES.items() if v["rarity"] == "Thần thoại"]

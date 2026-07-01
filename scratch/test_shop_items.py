@@ -4,6 +4,8 @@ import asyncio
 from pathlib import Path
 import shutil
 
+sys.stdout.reconfigure(encoding='utf-8')
+
 # Setup path
 sys.path.append(os.getcwd())
 
@@ -62,7 +64,9 @@ async def run_tests():
 
     # 1. Reset user balance
     bot.economy.set_money(user.id, 200_000_000)
-    print(f"Set balance to {bot.economy.get_entry(user.id)[1]:,} VND")
+    bot.economy.set_credits(user.id, 50_000)
+    profile = bot.economy.get_entry(user.id)
+    print(f"Set balance to {profile[1]:,} VND and {profile[2]} gold")
 
     # 2. Buy items 11 to 15
     print("\n--- Testing Buy Items ---")

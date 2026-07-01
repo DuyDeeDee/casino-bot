@@ -664,21 +664,21 @@ GEAR_ID_MAP = {
 }
 
 FOOD_DETAILS = {
-    "1": {"item_id": "food_thoc", "name": "Sách EXP Sơ Cấp", "price": 20000, "exp": 10},
-    "2": {"item_id": "food_ngo", "name": "Sách EXP Trung Cấp", "price": 54000, "exp": 30},
-    "3": {"item_id": "food_con_trung", "name": "Sách EXP Cao Cấp", "price": 128000, "exp": 80},
-    "4": {"item_id": "food_ca_nho", "name": "Sách EXP Cực Phẩm", "price": 280000, "exp": 200},
-    "5": {"item_id": "food_thit_bo", "name": "Tụ Khí Đan", "price": 600000, "exp": 500},
-    "6": {"item_id": "food_hai_san", "name": "Linh Hồn Thạch", "price": 1000000, "exp": 1000},
-    "7": {"item_id": "food_trung_dd", "name": "Thần Thú Huyết", "price": 2250000, "exp": 2500},
-    "8": {"item_id": "food_vitamin", "name": "Tẩy Tủy Đan", "price": 4000000, "exp": 5000},
-    "9": {"item_id": "food_nhan_sam", "name": "Linh Chi Vạn Năm", "price": 7000000, "exp": 10000},
-    "10": {"item_id": "food_linh_duoc", "name": "Hỗn Độn Linh Dịch", "price": 30000000, "exp": 50000},
-    "11": {"item_id": "item_stone_atk", "name": "Đá nâng ATK", "price": 5000000, "exp": 0},
-    "12": {"item_id": "item_stone_def", "name": "Đá nâng DEF", "price": 4000000, "exp": 0},
-    "13": {"item_id": "item_stone_spd", "name": "Đá nâng SPD", "price": 4000000, "exp": 0},
-    "14": {"item_id": "item_stone_breakthrough", "name": "Đá đột phá giới hạn cấp", "price": 50000000, "exp": 0},
-    "15": {"item_id": "item_character_shard", "name": "Mảnh nhân vật", "price": 15000000, "exp": 0}
+    "1": {"item_id": "food_thoc", "name": "Sách EXP Sơ Cấp", "price": 2, "exp": 10},
+    "2": {"item_id": "food_ngo", "name": "Sách EXP Trung Cấp", "price": 5, "exp": 30},
+    "3": {"item_id": "food_con_trung", "name": "Sách EXP Cao Cấp", "price": 10, "exp": 80},
+    "4": {"item_id": "food_ca_nho", "name": "Sách EXP Cực Phẩm", "price": 20, "exp": 200},
+    "5": {"item_id": "food_thit_bo", "name": "Tụ Khí Đan", "price": 50, "exp": 500},
+    "6": {"item_id": "food_hai_san", "name": "Linh Hồn Thạch", "price": 100, "exp": 1000},
+    "7": {"item_id": "food_trung_dd", "name": "Thần Thú Huyết", "price": 200, "exp": 2500},
+    "8": {"item_id": "food_vitamin", "name": "Tẩy Tủy Đan", "price": 350, "exp": 5000},
+    "9": {"item_id": "food_nhan_sam", "name": "Linh Chi Vạn Năm", "price": 600, "exp": 1000},
+    "10": {"item_id": "food_linh_duoc", "name": "Hỗn Độn Linh Dịch", "price": 2500, "exp": 50000},
+    "11": {"item_id": "item_stone_atk", "name": "Đá nâng ATK", "price": 400, "exp": 0},
+    "12": {"item_id": "item_stone_def", "name": "Đá nâng DEF", "price": 350, "exp": 0},
+    "13": {"item_id": "item_stone_spd", "name": "Đá nâng SPD", "price": 350, "exp": 0},
+    "14": {"item_id": "item_stone_breakthrough", "name": "Đá đột phá giới hạn cấp", "price": 4000, "exp": 0},
+    "15": {"item_id": "item_character_shard", "name": "Mảnh nhân vật", "price": 1200, "exp": 0}
 }
 
 CHEST_DETAILS = {
@@ -2051,25 +2051,25 @@ class Daga(commands.Cog, name="Daga"):
         desc = (
             "🔮 **CỬA HÀNG TRIỆU HỒI ANIME (GACHA BANNER)**\n"
             f"🛒 Triệu hồi bằng lệnh: `{prefix}anime buy banner <ID>`\n"
-            "🔹 **[1] Banner Thường:** `1.000.000 VND` (60% C | 30% B | 9% A | 0.8% S | 0.2% SS)\n"
-            "🔹 **[2] Banner Xịn:** `5.000.000 VND` (40% B | 45% A | 12% S | 3% SS | Bảo hiểm 50 lượt cho SS)\n\n"
+            "🔹 **[1] Banner Thường:** `100 thỏi vàng` (60% C | 30% B | 9% A | 0.8% S | 0.2% SS)\n"
+            "🔹 **[2] Banner Xịn:** `450 thỏi vàng` (40% B | 45% A | 12% S | 3% SS | Bảo hiểm 50 lượt cho SS)\n\n"
             "🧪 **CỬA HÀNG VẬT PHẨM NÂNG CẤP (EXP SHOP)**\n"
             f"🛒 Mua vật phẩm nâng cấp bằng lệnh: `{prefix}anime buy food <ID> <số_lượng>`\n"
-            "📕 **[1] Sách EXP Sơ Cấp:** `20.000 VND` (+10 EXP)\n"
-            "📘 **[2] Sách EXP Trung Cấp:** `54.000 VND` (+30 EXP)\n"
-            "📙 **[3] Sách EXP Cao Cấp:** `128.000 VND` (+80 EXP)\n"
-            "📓 **[4] Sách EXP Cực Phẩm:** `280.000 VND` (+200 EXP)\n"
-            "🟢 **[5] Tụ Khí Đan:** `600.000 VND` (+500 EXP)\n"
-            "💎 **[6] Linh Hồn Thạch:** `1.000.000 VND` (+1.000 EXP)\n"
-            "🧪 **[7] Thần Thú Huyết:** `2.250.000 VND` (+2.500 EXP)\n"
-            "💊 **[8] Tẩy Tủy Đan:** `4.000.000 VND` (+5.000 EXP)\n"
-            "🍄 **[9] Linh Chi Vạn Năm:** `7.000.000 VND` (+10.000 EXP)\n"
-            "🍯 **[10] Hỗn Độn Linh Dịch:** `30.000.000 VND` (+50.000 EXP)\n"
-            "⚔️ **[11] Đá nâng ATK:** `5.000.000 VND` (+5 ATK vĩnh viễn)\n"
-            "🛡️ **[12] Đá nâng DEF:** `4.000.000 VND` (+5 DEF vĩnh viễn)\n"
-            "⚡ **[13] Đá nâng SPD:** `4.000.000 VND` (+3 SPD vĩnh viễn)\n"
-            "💎 **[14] Đá đột phá giới hạn cấp:** `50.000.000 VND` (+1 Sao Đột Phá)\n"
-            "🔮 **[15] Mảnh nhân vật:** `15.000.000 VND` (Ghép S/SS tự chọn: `i?anime craft`)\n"
+            "📕 **[1] Sách EXP Sơ Cấp:** `2 thỏi vàng` (+10 EXP)\n"
+            "📘 **[2] Sách EXP Trung Cấp:** `5 thỏi vàng` (+30 EXP)\n"
+            "📙 **[3] Sách EXP Cao Cấp:** `10 thỏi vàng` (+80 EXP)\n"
+            "📓 **[4] Sách EXP Cực Phẩm:** `20 thỏi vàng` (+200 EXP)\n"
+            "🟢 **[5] Tụ Khí Đan:** `50 thỏi vàng` (+500 EXP)\n"
+            "💎 **[6] Linh Hồn Thạch:** `100 thỏi vàng` (+1.000 EXP)\n"
+            "🧪 **[7] Thần Thú Huyết:** `200 thỏi vàng` (+2.500 EXP)\n"
+            "💊 **[8] Tẩy Tủy Đan:** `350 thỏi vàng` (+5.000 EXP)\n"
+            "🍄 **[9] Linh Chi Vạn Năm:** `600 thỏi vàng` (+10.000 EXP)\n"
+            "🍯 **[10] Hỗn Độn Linh Dịch:** `2.500 thỏi vàng` (+50.000 EXP)\n"
+            "⚔️ **[11] Đá nâng ATK:** `400 thỏi vàng` (+5 ATK vĩnh viễn)\n"
+            "🛡️ **[12] Đá nâng DEF:** `350 thỏi vàng` (+5 DEF vĩnh viễn)\n"
+            "⚡ **[13] Đá nâng SPD:** `350 thỏi vàng` (+3 SPD vĩnh viễn)\n"
+            "💎 **[14] Đá đột phá giới hạn cấp:** `4.000 thỏi vàng` (+1 Sao Đột Phá)\n"
+            "🔮 **[15] Mảnh nhân vật:** `1.200 thỏi vàng` (Ghép S/SS tự chọn: `i?anime craft`)\n"
         )
         embed = make_embed(
             title="⚔️ CỬA HÀNG ĐẠI CHIẾN ANIME ⚔️",
@@ -2096,19 +2096,23 @@ class Daga(commands.Cog, name="Daga"):
         if banner_type in banner_id_mapping:
             banner_type = banner_id_mapping[banner_type]
 
-        prices = {"thuong": 1_000_000, "xin": 5_000_000}
+        prices = {"thuong": 100, "xin": 450}
         
         if banner_type not in prices:
             await ctx.send("❌ **Lỗi:** Loại banner không hợp lệ! Hãy chọn ID: `1` (Thường) hoặc `2` (Xịn).")
             return
 
         price = prices[banner_type]
-        # Validate balance
-        try:
-            validate_money_bet(self.economy, ctx.author.id, price)
-        except Exception as exc:
-            await ctx.send(str(exc))
+        # Validate gold balance
+        profile = self.economy.get_entry(ctx.author.id)
+        gold = profile[2]
+        if gold < price:
+            await ctx.send(f"❌ Bạn không đủ Vàng! Cần `{price}` thỏi vàng để triệu hồi nhưng bạn chỉ có `{gold}` thỏi vàng.")
             return
+
+        # Deduct gold
+        self.economy.add_credits(ctx.author.id, -price)
+        log_wallet_change(logger, event="buy_banner_daga", user_id=ctx.author.id, credits_delta=-price, banner_type=banner_type, ctx=ctx)
 
         pity = self.economy.get_pity_golden(ctx.author.id)
 
@@ -2213,7 +2217,7 @@ class Daga(commands.Cog, name="Daga"):
             else:
                 tip_msg = f"*(Nhận thêm `{needed - new_shards}` bản trùng nữa để lên {new_stars + 1} Sao)*"
             desc = (
-                f"Bạn đã triệu hồi từ **{display_banner_name}** với giá **{price:,} VND**...\n"
+                f"Bạn đã triệu hồi từ **{display_banner_name}** với giá **{price} thỏi vàng**...\n"
                 f"🔄 **BẠN NHẬN TRÙNG NHÂN VẬT!** (Tích luỹ mảnh)\n\n"
                 f"⚔️ **Nhân vật:** `{breed}`\n"
                 f"⭐ **Độ hiếm:** {rarity_emojis[rarity]} `{display_rarity}`\n"
@@ -2223,7 +2227,7 @@ class Daga(commands.Cog, name="Daga"):
             )
         else:
             desc = (
-                f"Bạn đã triệu hồi từ **{display_banner_name}** với giá **{price:,} VND**...\n"
+                f"Bạn đã triệu hồi từ **{display_banner_name}** với giá **{price} thỏi vàng**...\n"
                 f"✨ **Triệu hồi thành công!**\n\n"
                 f"⚔️ **Nhân vật:** `{breed}`\n"
                 f"⭐ **Độ hiếm:** {rarity_emojis[rarity]} `{display_rarity}`\n"
@@ -2276,14 +2280,15 @@ class Daga(commands.Cog, name="Daga"):
         food = FOOD_DETAILS[food_id]
         total_price = food["price"] * quantity
         
-        try:
-            validate_money_bet(self.economy, ctx.author.id, total_price)
-        except Exception as exc:
-            await ctx.send(str(exc))
+        # Validate gold balance
+        profile = self.economy.get_entry(ctx.author.id)
+        gold = profile[2]
+        if gold < total_price:
+            await ctx.send(f"❌ Bạn không đủ Vàng! Cần `{total_price}` thỏi vàng nhưng bạn chỉ có `{gold}` thỏi vàng.")
             return
             
-        # Deduct money
-        self.economy.add_money(ctx.author.id, -total_price)
+        # Deduct gold
+        self.economy.add_credits(ctx.author.id, -total_price)
         
         # Add to inventory
         self.economy.add_inventory_item(ctx.author.id, food["item_id"], quantity)
@@ -2292,12 +2297,12 @@ class Daga(commands.Cog, name="Daga"):
             logger,
             event="buy_food_daga",
             user_id=ctx.author.id,
-            money_delta=-total_price,
+            credits_delta=-total_price,
             food_id=food_id,
             quantity=quantity
         )
         
-        await ctx.send(f"✅ Đã mua thành công `{quantity}` **{food['name']}** với tổng giá **{total_price:,} VND**! Vật phẩm đã được cất vào kho đồ.")
+        await ctx.send(f"✅ Đã mua thành công `{quantity}` **{food['name']}** với tổng giá **{total_price} thỏi vàng**! Vật phẩm đã được cất vào kho đồ.")
 
     @daga_group.command(name="list", brief="Xem danh sách nhân vật anime của bạn.")
     async def daga_list(self, ctx: commands.Context):

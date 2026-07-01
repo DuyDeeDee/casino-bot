@@ -11,7 +11,7 @@ from app.config import config
 Entry = Tuple[int, int, int]
 DATABASE_PATH = Path(config.storage.database_path)
 LEGACY_DATABASE_PATH = Path(__file__).resolve().parents[3] / "economy.db"
-SCHEMA_VERSION = 28
+SCHEMA_VERSION = 29
 
 
 logger = logging.getLogger(__name__)
@@ -518,6 +518,21 @@ def _migration_28_add_marry_tables(cur: sqlite3.Cursor) -> None:
         pass
 
 
+def _migration_29_add_marry_custom_columns(cur: sqlite3.Cursor) -> None:
+    try:
+        cur.execute("ALTER TABLE user_marry ADD COLUMN user_one_ig TEXT DEFAULT ''")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        cur.execute("ALTER TABLE user_marry ADD COLUMN user_two_ig TEXT DEFAULT ''")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        cur.execute("ALTER TABLE user_marry ADD COLUMN status TEXT DEFAULT 'Vợ Chồng'")
+    except sqlite3.OperationalError:
+        pass
+
+
 MIGRATIONS: dict[int, Callable[[sqlite3.Cursor], None]] = {
     1: _migration_1_create_economy,
     2: _migration_2_add_indexes,
@@ -547,6 +562,7 @@ MIGRATIONS: dict[int, Callable[[sqlite3.Cursor], None]] = {
     26: _migration_26_add_simulator_upgrades,
     27: _migration_27_initialize_all_cryptos,
     28: _migration_28_add_marry_tables,
+    29: _migration_29_add_marry_custom_columns,
 }
 
 
@@ -2161,4 +2177,102 @@ class Economy:
         )
         self.conn.commit()
         return new_balance
+
+    def get_marriage_multiplier(self, user_id: int) -> float:
+        """Calculates the wage/work multiplier for a user based on their marriage status and ring type."""
+        marriage = self.get_marriage(user_id)
+        if not marriage:
+            return 1.0
+            
+        user_one, user_two, ring_type, love_points, joint_wallet, married_at, _, _ = marriage
+        love_level = love_points // 100
+        
+        ring_buffs = {
+            "ring_quartz": (1.02, 0.005),
+            "ring_aquamarine": (1.03, 0.005),
+            "ring_emerald": (1.04, 0.005),
+            "ring_amethyst": (1.05, 0.007),
+            "ring_cupid": (1.07, 0.008),
+            "ring_citrine": (1.09, 0.010),
+            "ring_ruby": (1.12, 0.012),
+            "ring_sapphire": (1.15, 0.015),
+            "ring_sunburst": (1.20, 0.020),
+            "ring_gothic": (1.25, 0.025),
+            "ring_angel": (1.30, 0.030),
+            "ring_divine": (1.40, 0.040),
+        }
+        
+        if ring_type in ring_buffs:
+            base, step = ring_buffs[ring_type]
+            return base + (love_level * step)
+            
+        # Fallback for old/unknown rings
+        if ring_type == "ring_silver":
+            return 1.02 + (love_level * 0.005)
+        elif ring_type == "ring_gold":
+            return 1.05 + (love_level * 0.01)
+        elif ring_type == "ring_diamond":
+            return 1.10 + (love_level * 0.015)
+            
+        return 1.0
+
+    def get_marriage_ig(self, user_id: int) -> tuple[str, str]:
+        """Returns (user_one_ig, user_two_ig) for the marriage entry"""
+        self.cur.execute(
+            "SELECT user_one_ig, user_two_ig FROM user_marry WHERE user_one = ? OR user_two = ?",
+            (user_id, user_id)
+        )
+        row = self.cur.fetchone()
+        if row:
+            return (row[0] or "", row[1] or "")
+        return ("", "")
+
+    def update_marriage_ig(self, user_id: int, ig_handle: str) -> None:
+        """Updates the Instagram handle for the user's marriage entry"""
+        self.cur.execute(
+            "SELECT user_one, user_two FROM user_marry WHERE user_one = ? OR user_two = ?",
+            (user_id, user_id)
+        )
+        row = self.cur.fetchone()
+        if not row:
+            return
+        user_one, user_two = row
+        if user_id == user_one:
+            self.cur.execute(
+                "UPDATE user_marry SET user_one_ig = ? WHERE user_one = ? AND user_two = ?",
+                (ig_handle, user_one, user_two)
+            )
+        else:
+            self.cur.execute(
+                "UPDATE user_marry SET user_two_ig = ? WHERE user_one = ? AND user_two = ?",
+                (ig_handle, user_one, user_two)
+            )
+        self.conn.commit()
+
+    def get_marriage_status(self, user_id: int) -> str:
+        """Returns the custom relationship status for the marriage entry"""
+        self.cur.execute(
+            "SELECT status FROM user_marry WHERE user_one = ? OR user_two = ?",
+            (user_id, user_id)
+        )
+        row = self.cur.fetchone()
+        if row:
+            return row[0] or "Vợ Chồng"
+        return "Vợ Chồng"
+
+    def update_marriage_status(self, user_id: int, status_text: str) -> None:
+        """Updates the custom relationship status for the user's marriage entry"""
+        self.cur.execute(
+            "SELECT user_one, user_two FROM user_marry WHERE user_one = ? OR user_two = ?",
+            (user_id, user_id)
+        )
+        row = self.cur.fetchone()
+        if not row:
+            return
+        user_one, user_two = row
+        self.cur.execute(
+            "UPDATE user_marry SET status = ? WHERE user_one = ? AND user_two = ?",
+            (status_text, user_one, user_two)
+        )
+        self.conn.commit()
 
