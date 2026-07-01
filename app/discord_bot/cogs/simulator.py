@@ -240,73 +240,73 @@ SHOP_ITEMS = {
         "description": "Thiết bị bảo vệ doanh nghiệp vĩnh viễn. 30% cơ hội bắt giữ kẻ cướp, phạt tiền bồi thường cho bạn."
     },
     "ring_quartz": {
-        "name": "Nhẫn Thạch Anh Trắng 💍",
-        "cost": 500000,
-        "currency": "money",
+        "name": "<:NhanThachAnhTrang:1521733831932121159>Nhẫn Thạch Anh Trắng",
+        "cost": 2,
+        "currency": "gold",
         "description": "Nhẫn bạc đơn giản đính thạch anh tinh khiết. Buff: +2% điểm thân mật."
     },
     "ring_aquamarine": {
-        "name": "Nhẫn Sương Mai Aquamarine 💧",
-        "cost": 1000000,
-        "currency": "money",
+        "name": "<:NhnSngMaiAquamarine:1521739939849441461>Nhẫn Sương Mai Aquamarine",
+        "cost": 10,
+        "currency": "gold",
         "description": "Dây xoắn mảnh đính Aquamarine lam nhạt. Buff: +3% điểm thân mật."
     },
     "ring_emerald": {
-        "name": "Nhẫn Thanh Xuân Lục Bảo 🌿",
-        "cost": 1800000,
-        "currency": "money",
+        "name": "<:NhnThanhXunLcBo:1521739876838543410>Nhẫn Thanh Xuân Lục Bảo",
+        "cost": 15,
+        "currency": "gold",
         "description": "Hình lá cây Peridot xanh tươi trẻ. Buff: +4% điểm thân mật, +2% lương làm việc."
     },
     "ring_amethyst": {
-        "name": "Nhẫn Trăng Khuyết Amethyst 🌙",
-        "cost": 3000000,
-        "currency": "money",
+        "name": "<:NhnTrngKhuytAmethyst:1521739893947105361>Nhẫn Trăng Khuyết Amethyst",
+        "cost": 20,
+        "currency": "gold",
         "description": "Trăng khuyết ôm lấy thạch anh tím huyền bí. Buff: +5% điểm thân mật, +3% lương làm việc."
     },
     "ring_cupid": {
-        "name": "Nhẫn Tình Yêu Cupid 💘",
-        "cost": 7500000,
-        "currency": "money",
+        "name": "<:NhnTnhYuCupid:1521739979691135027>Nhẫn Tình Yêu Cupid",
+        "cost": 50,
+        "currency": "gold",
         "description": "Vàng hồng đính thạch anh hồng Cupid ngọt ngào. Buff: +7% điểm thân mật, +5% lương làm việc."
     },
     "ring_citrine": {
-        "name": "Nhẫn Vương Miện Citrine 👑",
-        "cost": 15000000,
-        "currency": "money",
+        "name": "<:NhnVngMinCitrine:1521740000100876308>Nhẫn Vương Miện Citrine",
+        "cost": 75,
+        "currency": "gold",
         "description": "Vương miện vàng đính Citrine vàng rực rỡ. Buff: +9% điểm thân mật, +7% lương làm việc."
     },
     "ring_ruby": {
-        "name": "Nhẫn Hồng Ngọc Bách Hợp 🌹",
-        "cost": 30000000,
-        "currency": "money",
+        "name": "<:NhnHngNgcBchHp:1521740055293591702>Nhẫn Hồng Ngọc Bách Hợp",
+        "cost": 100,
+        "currency": "gold",
         "description": "Ruby đỏ uốn lượn như cánh hoa hồng. Buff: +12% điểm thân mật, +10% lương, giảm 5% phí ly hôn."
     },
     "ring_sapphire": {
-        "name": "Nhẫn Lam Ngọc Tinh Tú ✨",
-        "cost": 60000000,
-        "currency": "money",
+        "name": "<:NhnLamNgcTinhT:1521740040730968114>Nhẫn Lam Ngọc Tinh Tú",
+        "cost": 150,
+        "currency": "gold",
         "description": "Lam ngọc xanh đính kim cương nhỏ lấp lánh. Buff: +15% điểm thân mật, +12% lương, giảm 10% phí ly hôn."
     },
     "ring_sunburst": {
-        "name": "Nhẫn Nhật Quang Thái Dương ☀️",
-        "cost": 150000000,
-        "currency": "money",
+        "name": "<:NhnNhtQuangThiDng:1521740029473591306>Nhẫn Nhật Quang Thái Dương",
+        "cost": 200,
+        "currency": "gold",
         "description": "Hào quang mặt trời đính Opal lửa cam rực cháy. Buff: +20% điểm thân mật, +15% lương, +2% đào mỏ."
     },
     "ring_gothic": {
-        "name": "Nhẫn Hắc Dạ Gothic 🖤",
+        "name": "<:NhnHcD:1521740067415134258>Nhẫn Hắc Dạ Gothic",
         "cost": 300,
         "currency": "gold",
         "description": "Vành kim loại đen đính đá Obsidian ma mị. Buff: +25% điểm thân mật, +20% lương, giảm 20% bị cướp."
     },
     "ring_angel": {
-        "name": "Nhẫn Cánh Thần Sapphire 👼",
+        "name": "<:NhnCnhThnSapphire:1521740094283841576>Nhẫn Cánh Thần Sapphire",
         "cost": 600,
         "currency": "gold",
         "description": "Cánh thiên thần bạc ôm Sapphire hoàng gia. Buff: +30% điểm thân mật, +25% lương, giảm 40% bị cướp."
     },
     "ring_divine": {
-        "name": "Nhẫn Hào Quang Vĩnh Cửu 🌌",
+        "name": "<:NhnHoQuangVnhCu:1521740081935814797>Nhẫn Hào Quang Vĩnh Cửu",
         "cost": 2000,
         "currency": "gold",
         "description": "Cực phẩm cánh thiên thần vàng đính đá ngũ sắc. Buff: +50% thân mật, +40% lương, miễn nhiễm cướp vĩnh viễn, hoàn trả 3% cược Casino, pháo hoa toàn server."
