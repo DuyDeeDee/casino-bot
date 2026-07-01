@@ -146,7 +146,7 @@ def calculate_dynamic_multiplier(current_card_value: int, guess_high: bool) -> f
             return 0.0
         prob = ranks_lower / 12.0
 
-    factor = 0.90 / prob  # 10% house edge
+    factor = 0.82 / prob  # 18% house edge
     return max(1.05, round(factor, 2))
 
 
@@ -542,13 +542,13 @@ class HighLowGameView(discord.ui.View):
             self.btn_low.label = "Thấp hơn"
             
         # 2. Red/Black labels with diffs
-        payout_red_black = int(self.bet_amount * round(self.multiplier * 1.90, 2))
+        payout_red_black = int(self.bet_amount * round(self.multiplier * 1.80, 2))
         diff_red_black = payout_red_black - payout_current
         self.btn_red.label = f"Đỏ (+{diff_red_black:,})"
         self.btn_black.label = f"Đen (+{diff_red_black:,})"
         
         # 3. Suits labels with diffs
-        payout_suit = int(self.bet_amount * round(self.multiplier * 3.6, 2))
+        payout_suit = int(self.bet_amount * round(self.multiplier * 3.3, 2))
         diff_suit = payout_suit - payout_current
         self.btn_clubs.label = f"Chuồn (+{diff_suit:,})"
         self.btn_diamonds.label = f"Rô (+{diff_suit:,})"
@@ -664,9 +664,9 @@ class HighLowGameView(discord.ui.View):
             if guess in ["high", "low"]:
                 factor = calculate_dynamic_multiplier(old_card_value, guess == "high")
             elif guess in ["red", "black"]:
-                factor = 1.90
+                factor = 1.80
             elif guess in ["clubs", "diamonds", "hearts", "spades"]:
-                factor = 3.6
+                factor = 3.3
             
             if is_gold_card:
                 factor = round(factor * 1.05, 2)
