@@ -498,7 +498,7 @@ class Marry(commands.Cog):
             
         married_days = max(1, (int(time.time()) - married_at) // 86400)
         
-        await ctx.send("⌛ **Đang kết xuất thông tin gia đình...**")
+        loading_msg = await ctx.send("⌛ **Đang kết xuất thông tin gia đình...**")
         
         # Get IG handles
         ig_handles = self.economy.get_marriage_ig(ctx.author.id)
@@ -532,6 +532,11 @@ class Marry(commands.Cog):
         )
         embed.set_image(url="attachment://couple_profile.png")
         await ctx.send(embed=embed, file=file)
+        
+        try:
+            await loading_msg.delete()
+        except Exception:
+            pass
 
     @couple_cmd.command(name="setig", aliases=["instagram", "ig"])
     async def couple_setig(self, ctx: commands.Context, ig_handle: str):
