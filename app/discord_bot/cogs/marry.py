@@ -147,10 +147,23 @@ def render_couple_banner(proposer, target, ring_type: str, love_points: int, joi
     overlay = Image.new("RGBA", bg.size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
     
-    # Load fonts (Roboto or fallback)
-    font_large = load_font("bold", 36)
-    font_medium = load_font("bold", 26)
-    font_regular = load_font("bold", 22)
+    # Load fonts — Selly Calligraphy for display, Roboto for small stat text
+    _font_dir = ABS_PATH.parent.parent / "data" / "fonts"
+    _selly_path = _font_dir / "Selly_Calligraphy.otf"
+
+    def _selly(size: int) -> ImageFont.FreeTypeFont:
+        """Load Selly Calligraphy, fallback to Roboto Bold if missing."""
+        try:
+            return ImageFont.truetype(str(_selly_path), size)
+        except Exception:
+            return load_font("bold", size)
+
+    def _roboto(size: int) -> ImageFont.FreeTypeFont:
+        return load_font("bold", size)
+
+    font_large   = _selly(46)   # display names (big, calligraphy)
+    font_medium  = _selly(34)   # status text & usernames
+    font_regular = _roboto(20)  # stats & IG text (small, keep readable)
     
     # ── Calibrated coordinates from template scan ──────────────────
     # Left  avatar slot center: (412, 412), radius ~174
