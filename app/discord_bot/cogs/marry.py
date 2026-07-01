@@ -134,7 +134,7 @@ def render_marriage_certificate(proposer, target, ring_id: str) -> BytesIO:
 
 def render_couple_banner(proposer, target, ring_type: str, love_points: int, joint_wallet: int, married_days: int, proposer_ig: str = "", target_ig: str = "", relationship_status: str = "Vợ Chồng", married_at: int = 0) -> BytesIO:
     """Draws a beautiful custom profile banner for married couples using the template."""
-    bg_path = ABS_PATH / "pictures" / "Marry" / "banner_marry.png"
+    bg_path = ABS_PATH.parent.parent / "pictures" / "Marry" / "banner_marry.png"
     if bg_path.exists():
         bg = Image.open(bg_path).convert("RGBA")
     else:
@@ -195,7 +195,7 @@ def render_couple_banner(proposer, target, ring_type: str, love_points: int, joi
     # 6. Load and paste Ring image at bottom left (centered at 306, 799)
     ring_file = RING_IMAGES.get(ring_type)
     if ring_file:
-        ring_path = ABS_PATH / "pictures" / "Marry" / ring_file
+        ring_path = ABS_PATH.parent.parent / "pictures" / "Marry" / ring_file
         if ring_path.exists():
             try:
                 ring_img = Image.open(ring_path).convert("RGBA")
