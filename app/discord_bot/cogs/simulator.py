@@ -927,8 +927,8 @@ class ShopView(discord.ui.View):
                     if not details.get("is_admin_only"):
                         cost_str = f"{details['cost']:,} VND" if details['currency'] == "money" else f"{details['cost']} thỏi vàng"
                         embed.add_field(
-                            name=f"📦 {details['name']} (ID: `{item_id}`)",
-                            value=f"💵 **Giá:** `{cost_str}`\n📝 **Mô tả:** {details['description']}",
+                            name=f"{details['name']} (ID: `{item_id}`)",
+                            value=f"**Giá:** `{cost_str}`\n**Mô tả:** {details['description']}",
                             inline=False
                         )
         elif self.category == "tools":
@@ -949,8 +949,8 @@ class ShopView(discord.ui.View):
                     if not details.get("is_admin_only"):
                         cost_str = f"{details['cost']:,} VND" if details['currency'] == "money" else f"{details['cost']} thỏi vàng"
                         embed.add_field(
-                            name=f"🛠️ {details['name']} (ID: `{item_id}`)",
-                            value=f"💵 **Giá:** `{cost_str}`\n📝 **Mô tả:** {details['description']}",
+                            name=f"{details['name']} (ID: `{item_id}`)",
+                            value=f"**Giá:** `{cost_str}`\n**Mô tả:** {details['description']}",
                             inline=False
                         )
         elif self.category == "rings":
@@ -979,8 +979,8 @@ class ShopView(discord.ui.View):
                     if not details.get("is_admin_only"):
                         cost_str = f"{details['cost']:,} VND" if details['currency'] == "money" else f"{details['cost']} thỏi vàng"
                         embed.add_field(
-                            name=f"💍 {details['name']} (ID: `{item_id}`)",
-                            value=f"💵 **Giá:** `{cost_str}`\n📝 **Mô tả:** {details['description']}",
+                            name=f"{details['name']} (ID: `{item_id}`)",
+                            value=f"**Giá:** `{cost_str}`\n**Mô tả:** {details['description']}",
                             inline=False
                         )
         else:
@@ -993,8 +993,8 @@ class ShopView(discord.ui.View):
                 if details.get("is_banner") and not details.get("is_admin_only"):
                     cost_str = f"{details['cost']:,} VND" if details['currency'] == "money" else f"{details['cost']} thỏi vàng"
                     embed.add_field(
-                        name=f"🖼️ {details['name']} (ID: `{item_id}`)",
-                        value=f"💵 **Giá:** `{cost_str}`\n📝 **Mô tả:** {details['description']}",
+                        name=f"{details['name']} (ID: `{item_id}`)",
+                        value=f"**Giá:** `{cost_str}`\n**Mô tả:** {details['description']}",
                         inline=False
                     )
         
