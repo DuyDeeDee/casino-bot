@@ -807,6 +807,72 @@ class Marry(commands.Cog):
         )
         await ctx.send(embed=embed)
 
+    # ── ADMIN COMMANDS ──────────────────────────────────────────────────────────
+
+    @commands.command(
+        name="admindel_marry",
+        aliases=["admin_divorce", "xoahonnhan"],
+        brief="[ADMIN] Xoá hôn nhân của một người dùng bất kỳ.",
+        usage="admindel_marry @user",
+        hidden=True
+    )
+    async def admin_delete_marriage(self, ctx: commands.Context, target: discord.Member):
+        """
+        [ADMIN] Xoá toàn bộ hôn nhân của người dùng được chỉ định mà không mất phí.
+        Lệnh này dành cho Admin của server hoặc Chủ bot. Không có bồi thường và không có thông báo cho đương sự.
+        """
+        is_owner = ctx.author.id in config.bot.owner_ids or await ctx.bot.is_owner(ctx.author)
+        is_admin = ctx.author.guild_permissions.administrator if ctx.guild else False
+        if not (is_owner or is_admin):
+            await ctx.send("❌ **Lỗi:** Lệnh này chỉ dành cho Admin của server hoặc Chủ bot!")
+            return
+
+        marriage = self.economy.get_marriage(target.id)
+        if not marriage:
+            await ctx.send(
+                embed=make_embed(
+                    title="❌ Không tìm thấy hôn nhân",
+                    description=f"**{target.mention}** hiện không có hôn nhân nào trong hệ thống.",
+                    color=discord.Color.red()
+                )
+            )
+            return
+
+        user_one, user_two, ring_type, love_points, joint_wallet, married_at, _, _ = marriage
+
+        # Resolve spouse
+        spouse_id = user_two if target.id == user_one else user_one
+        spouse = self.bot.get_user(spouse_id)
+        spouse_name = spouse.name if spouse else f"ID:{spouse_id}"
+
+        ring_name = RINGS.get(ring_type, ring_type)
+        days = max(1, (int(time.time()) - married_at) // 86400)
+
+        # Delete marriage record
+        self.economy.delete_marriage(user_one, user_two)
+
+        logger.warning(
+            f"[ADMIN] {ctx.author} deleted marriage between "
+            f"user_one={user_one} and user_two={user_two} "
+            f"(ring={ring_type}, days={days}, joint_wallet={joint_wallet})"
+        )
+
+        embed = make_embed(
+            title="🗑️ HÔN NHÂN ĐÃ BỊ XOÁ (ADMIN)",
+            description=(
+                f"Đã xoá thành công hôn nhân của cặp đôi:\n\n"
+                f"👤 **Người 1:** <@{user_one}>\n"
+                f"👤 **Người 2:** <@{user_two}>\n"
+                f"💍 **Nhẫn:** {ring_name}\n"
+                f"📅 **Thời gian kết hôn:** {days:,} ngày\n"
+                f"🏦 **Quỹ chung bị xoá:** {joint_wallet:,} VND *(không hoàn trả)*\n\n"
+                f"⚠️ *Cặp đôi sẽ không nhận được thông báo tự động.*"
+            ),
+            color=discord.Color.dark_red()
+        )
+        embed.set_footer(text=f"Thực hiện bởi Admin: {ctx.author} | {ctx.author.id}")
+        await ctx.send(embed=embed)
+
 
 async def setup(bot):
     await bot.add_cog(Marry(bot))
