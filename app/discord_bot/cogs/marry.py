@@ -816,9 +816,9 @@ class Marry(commands.Cog):
         usage="admindel_marry @user",
         hidden=True
     )
-    async def admin_delete_marriage(self, ctx: commands.Context, target: discord.Member):
+    async def admin_delete_marriage(self, ctx: commands.Context, target: str):
         """
-        [ADMIN] Xoá toàn bộ hôn nhân của người dùng được chỉ định mà không mất phí.
+        [ADMIN] Xoá toàn bộ hôn nhân của người dùng được chỉ định (bằng ID hoặc ping) mà không mất phí.
         Lệnh này dành cho Admin của server hoặc Chủ bot. Không có bồi thường và không có thông báo cho đương sự.
         """
         is_owner = ctx.author.id in config.bot.owner_ids or await ctx.bot.is_owner(ctx.author)
@@ -827,12 +827,20 @@ class Marry(commands.Cog):
             await ctx.send("❌ **Lỗi:** Lệnh này chỉ dành cho Admin của server hoặc Chủ bot!")
             return
 
-        marriage = self.economy.get_marriage(target.id)
+        # Parse ID from ping or get raw ID
+        target_clean = target.strip("<@!>")
+        try:
+            target_id = int(target_clean)
+        except ValueError:
+            await ctx.send("❌ **Lỗi:** Định dạng ID hoặc tag người dùng không hợp lệ!")
+            return
+
+        marriage = self.economy.get_marriage(target_id)
         if not marriage:
             await ctx.send(
                 embed=make_embed(
                     title="❌ Không tìm thấy hôn nhân",
-                    description=f"**{target.mention}** hiện không có hôn nhân nào trong hệ thống.",
+                    description=f"Người dùng có ID **{target_id}** hiện không có hôn nhân nào trong hệ thống.",
                     color=discord.Color.red()
                 )
             )
@@ -841,7 +849,7 @@ class Marry(commands.Cog):
         user_one, user_two, ring_type, love_points, joint_wallet, married_at, _, _ = marriage
 
         # Resolve spouse
-        spouse_id = user_two if target.id == user_one else user_one
+        spouse_id = user_two if target_id == user_one else user_one
         spouse = self.bot.get_user(spouse_id)
         spouse_name = spouse.name if spouse else f"ID:{spouse_id}"
 
@@ -861,8 +869,8 @@ class Marry(commands.Cog):
             title="🗑️ HÔN NHÂN ĐÃ BỊ XOÁ (ADMIN)",
             description=(
                 f"Đã xoá thành công hôn nhân của cặp đôi:\n\n"
-                f"👤 **Người 1:** <@{user_one}>\n"
-                f"👤 **Người 2:** <@{user_two}>\n"
+                f"👤 **Người 1:** <@{user_one}> (ID: `{user_one}`)\n"
+                f"👤 **Người 2:** <@{user_two}> (ID: `{user_two}`)\n"
                 f"💍 **Nhẫn:** {ring_name}\n"
                 f"📅 **Thời gian kết hôn:** {days:,} ngày\n"
                 f"🏦 **Quỹ chung bị xoá:** {joint_wallet:,} VND *(không hoàn trả)*\n\n"
