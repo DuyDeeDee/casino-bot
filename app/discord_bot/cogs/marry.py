@@ -161,11 +161,11 @@ def render_couple_banner(proposer, target, ring_type: str, love_points: int, joi
     def _roboto(size: int) -> ImageFont.FreeTypeFont:
         return load_font("bold", size)
 
-    font_large   = _selly(56)   # display names (increased from 46)
-    font_medium  = _selly(44)   # status text (increased from 34)
-    font_stats   = _selly(36)   # stats inside heart (calligraphy)
-    font_username = _selly(42)  # usernames in bottom box
-    font_regular = _roboto(28)  # stats & IG text (increased from 20)
+    font_large   = _selly(30)   # display names (decreased from 56 to 30)
+    font_medium  = _selly(34)   # status text "Vợ Chồng" (decreased from 44 to 34)
+    font_stats   = _selly(22)   # stats inside heart (decreased from 36 to 22)
+    font_username = _selly(30)  # usernames below avatar (decreased from 42 to 30)
+    font_regular = _roboto(22)  # IG text in bottom box (decreased from 28 to 22)
     
     # ── Calibrated coordinates from template scan ──────────────────
     # Left  avatar slot center: (412, 412), radius ~174
@@ -200,12 +200,12 @@ def render_couple_banner(proposer, target, ring_type: str, love_points: int, joi
     draw.text((LEFT_CX,  205), proposer.display_name, fill=LIGHT_PURPLE, anchor="mm", font=font_large)
     draw.text((RIGHT_CX, 205), target.display_name,   fill=LIGHT_PURPLE, anchor="mm", font=font_large)
 
-    # 3. Discord usernames inside the bottom rectangular box: "Username thì đặt vào khung hình chữ nhật ở dưới avater"
-    draw.text((LEFT_CX,  825), proposer.name, fill=PURPLE, anchor="mm", font=font_username)
-    draw.text((RIGHT_CX, 825), target.name,   fill=PURPLE, anchor="mm", font=font_username)
+    # 3. Discord usernames below avatar: "user name thì nằm ở dưới avatar"
+    draw.text((LEFT_CX,  665), proposer.name, fill=PURPLE, anchor="mm", font=font_username)
+    draw.text((RIGHT_CX, 665), target.name,   fill=PURPLE, anchor="mm", font=font_username)
 
-    # 4. Relationship status above the big heart: "2 chữ vợ chồng thì để ở bên trên trái tim to ở giữa"
-    draw.text((836, 295), relationship_status, fill=PURPLE, anchor="mm", font=font_medium)
+    # 4. Relationship status above the big heart: "Kéo chữ vợ chồng lên cao hơn nữa đi" (moved to Y = 250)
+    draw.text((836, 250), relationship_status, fill=PURPLE, anchor="mm", font=font_medium)
 
     # 5. Stats inside the big heart: "thông tin như ngày kết hôn,... thì cung đổi sang font Selly Calligraphy và đặt ở giữa trái tim"
     date_str = "Chưa rõ"
@@ -213,8 +213,8 @@ def render_couple_banner(proposer, target, ring_type: str, love_points: int, joi
         date_str = datetime.fromtimestamp(married_at).strftime("%d/%m/%Y")
 
     draw.text((836, 420), f"Ngày Kết Hôn : {date_str}",      fill=PURPLE, anchor="mm", font=font_stats)
-    draw.text((836, 470), f"Đã Kết Hôn : {married_days} ngày", fill=PURPLE, anchor="mm", font=font_stats)
-    draw.text((836, 520), f"Điểm thân mật : {love_points:,}",  fill=PURPLE, anchor="mm", font=font_stats)
+    draw.text((836, 465), f"Đã Kết Hôn : {married_days} ngày", fill=PURPLE, anchor="mm", font=font_stats)
+    draw.text((836, 510), f"Điểm thân mật : {love_points:,}",  fill=PURPLE, anchor="mm", font=font_stats)
     
     # 6. Load and paste Ring image centered exactly at the bottom-right heart: "fix lại hình chiếc nhẫn sao cho nó nằm ở giữa cái trái tim ở góc dưới"
     ring_file = RING_IMAGES.get(ring_type)
@@ -229,7 +229,7 @@ def render_couple_banner(proposer, target, ring_type: str, love_points: int, joi
             except Exception as e:
                 logger.error(f"Failed to draw wedding ring image: {e}")
                 
-    # 7. Draw social boxes and Instagram handles below avatar cards at Y = 670 (where usernames used to be)
+    # 7. Instagram handles inside the bottom rectangular box: "tên ins thì nằm ở trong hình chữ nhật ở dưới cơ mà"
     if not bg_path.exists():
         # Box 1: Left IG
         draw.rounded_rectangle(
@@ -251,8 +251,9 @@ def render_couple_banner(proposer, target, ring_type: str, love_points: int, joi
     left_ig_str = f"ins / {proposer_ig}" if proposer_ig else "ins / chưa đặt"
     right_ig_str = f"ins / {target_ig}" if target_ig else "ins / chưa đặt"
     
-    draw.text((LEFT_CX,  670), left_ig_str,  fill=PURPLE, anchor="mm", font=font_regular)
-    draw.text((RIGHT_CX, 670), right_ig_str, fill=PURPLE, anchor="mm", font=font_regular)
+    # Draw Instagram handles in bottom box at Y = 830, using original center positions (645, 1015)
+    draw.text((645,  830), left_ig_str,  fill=LIGHT_PURPLE, anchor="mm", font=font_regular)
+    draw.text((1015, 830), right_ig_str, fill=LIGHT_PURPLE, anchor="mm", font=font_regular)
     
     # Composite overlay on background
     bg.paste(overlay, (0, 0), mask=overlay)
