@@ -134,7 +134,7 @@ def render_marriage_certificate(proposer, target, ring_id: str) -> BytesIO:
 
 def render_couple_banner(proposer, target, ring_type: str, love_points: int, joint_wallet: int, married_days: int, proposer_ig: str = "", target_ig: str = "", relationship_status: str = "Vợ Chồng", married_at: int = 0) -> BytesIO:
     """Draws a beautiful custom profile banner for married couples using the template."""
-    bg_path = ABS_PATH / "pictures" / "Marry" / "menu marry.jpg"
+    bg_path = ABS_PATH / "pictures" / "Marry" / "banner_marry.png"
     if bg_path.exists():
         bg = Image.open(bg_path).convert("RGBA")
     else:
@@ -206,28 +206,29 @@ def render_couple_banner(proposer, target, ring_type: str, love_points: int, joi
                 logger.error(f"Failed to draw wedding ring image: {e}")
                 
     # 7. Draw social boxes and Instagram handles at bottom middle
-    # Box 1: Left IG
-    draw.rounded_rectangle(
-        [480, 780, 810, 860],
-        radius=15,
-        fill=(255, 255, 255, 120),
-        outline=(255, 255, 255, 255),
-        width=3
-    )
-    # Box 2: Right IG
-    draw.rounded_rectangle(
-        [850, 780, 1180, 860],
-        radius=15,
-        fill=(255, 255, 255, 120),
-        outline=(255, 255, 255, 255),
-        width=3
-    )
+    if not bg_path.exists():
+        # Box 1: Left IG
+        draw.rounded_rectangle(
+            [480, 780, 810, 860],
+            radius=15,
+            fill=(255, 255, 255, 120),
+            outline=(255, 255, 255, 255),
+            width=3
+        )
+        # Box 2: Right IG
+        draw.rounded_rectangle(
+            [850, 780, 1180, 860],
+            radius=15,
+            fill=(255, 255, 255, 120),
+            outline=(255, 255, 255, 255),
+            width=3
+        )
     
     left_ig_str = f"ins / {proposer_ig}" if proposer_ig else "ins / chưa đặt"
     right_ig_str = f"ins / {target_ig}" if target_ig else "ins / chưa đặt"
     
-    draw.text((645, 820), left_ig_str, fill=(138, 43, 226, 255), anchor="mm", font=font_regular)
-    draw.text((1015, 820), right_ig_str, fill=(138, 43, 226, 255), anchor="mm", font=font_regular)
+    draw.text((645, 820), left_ig_str, fill=(255, 255, 255, 255), anchor="mm", font=font_regular)
+    draw.text((1015, 820), right_ig_str, fill=(255, 255, 255, 255), anchor="mm", font=font_regular)
     
     # Composite overlay on background
     bg.paste(overlay, (0, 0), mask=overlay)
