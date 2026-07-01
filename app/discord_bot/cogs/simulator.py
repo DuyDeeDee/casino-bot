@@ -1753,6 +1753,47 @@ class Simulator(commands.Cog):
                         
                     if trigger:
                         if order_type == "BUY":
+                            portfolio = dict(self.economy.get_portfolio(user_id))
+                            curr_shares = portfolio.get(symbol, 0.0)
+                            
+                            # Check max holding limit (Option B)
+                            limit_str = self.economy.get_setting(f"max_holding_{symbol}")
+                            limit_exceeded = False
+                            if limit_str:
+                                try:
+                                    limit_val = float(limit_str)
+                                    if curr_shares + shares > limit_val:
+                                        limit_exceeded = True
+                                except ValueError:
+                                    pass
+                                    
+                            if limit_exceeded:
+                                # Refund locked funds and cancel order
+                                locked_funds = get_limit_buy_cost(shares, target_price, symbol)
+                                self.economy.add_money(user_id, locked_funds)
+                                self.economy.remove_limit_order(order_id)
+                                
+                                user = self.client.get_user(user_id)
+                                if user is None:
+                                    try: user = await self.client.fetch_user(user_id)
+                                    except Exception: pass
+                                if user:
+                                    embed = make_embed(
+                                        title="🔔 LỆNH TỰ ĐỘNG BỊ HỦY (VƯỢT GIỚI HẠN) 🔔",
+                                        description=(
+                                            f"Lệnh mua tự động (Limit Buy) của bạn đã bị hủy do số lượng nắm giữ vượt quá giới hạn của server!\n\n"
+                                            f"📈 **Mã:** `{symbol}`\n"
+                                            f"📊 **Số lượng lệnh:** `{shares:.2f}`\n"
+                                            f"🎒 **Số lượng hiện có:** `{curr_shares:.2f}`\n"
+                                            f"🚫 **Giới hạn tối đa:** `{limit_val:,}`\n\n"
+                                            f"💰 Đã hoàn trả `+{locked_funds:,} VND` vào tài khoản."
+                                        ),
+                                        color=discord.Color.orange()
+                                    )
+                                    try: await user.send(embed=embed)
+                                    except Exception: pass
+                                continue
+
                             # Target price cost including target slippage and fee was locked
                             locked_funds = get_limit_buy_cost(shares, target_price, symbol)
                             
@@ -1766,9 +1807,6 @@ class Simulator(commands.Cog):
                             
                             refund = locked_funds - actual_cost
                             self.economy.add_money(user_id, refund)
-                                
-                            portfolio = dict(self.economy.get_portfolio(user_id))
-                            curr_shares = portfolio.get(symbol, 0.0)
                             self.economy.set_portfolio_shares(user_id, symbol, curr_shares + shares)
                             
                             self.economy.remove_limit_order(order_id)
@@ -3076,11 +3114,27 @@ class Simulator(commands.Cog):
             )
             return
             
-        # Process transaction
-        self.economy.add_money(user_id, -total_cost)
-        
         portfolio = dict(self.economy.get_portfolio(user_id))
         current_shares = portfolio.get(symbol, 0.0)
+        
+        # Check max holding limit (Option B)
+        limit_str = self.economy.get_setting(f"max_holding_{symbol}")
+        if limit_str:
+            try:
+                limit_val = float(limit_str)
+                if current_shares + shares > limit_val:
+                    await ctx.send(
+                        f"❌ **Lỗi:** Giao dịch bị từ chối do vượt quá giới hạn sở hữu tối đa của server!\n"
+                        f"• Giới hạn sở hữu `{symbol}`: `{limit_val:,}` cổ\n"
+                        f"• Bạn đang có: `{current_shares:.2f}` cổ\n"
+                        f"• Có thể mua thêm tối đa: `{max(0.0, limit_val - current_shares):.2f}` cổ."
+                    )
+                    return
+            except ValueError:
+                pass
+
+        # Process transaction
+        self.economy.add_money(user_id, -total_cost)
         self.economy.set_portfolio_shares(user_id, symbol, current_shares + shares)
         
         log_wallet_change(
@@ -3203,6 +3257,25 @@ class Simulator(commands.Cog):
             )
             return
             
+        portfolio = dict(self.economy.get_portfolio(user_id))
+        current_shares = portfolio.get(symbol, 0.0)
+        
+        # Check max holding limit (Option B)
+        limit_str = self.economy.get_setting(f"max_holding_{symbol}")
+        if limit_str:
+            try:
+                limit_val = float(limit_str)
+                if current_shares + shares > limit_val:
+                    await ctx.send(
+                        f"❌ **Lỗi:** Lệnh mua tự động bị từ chối do tổng số lượng sở hữu sau khi mua sẽ vượt quá giới hạn của server!\n"
+                        f"• Giới hạn sở hữu `{symbol}`: `{limit_val:,}` cổ\n"
+                        f"• Bạn đang có: `{current_shares:.2f}` cổ\n"
+                        f"• Số lượng mua dự kiến: `{shares:.2f}` cổ."
+                    )
+                    return
+            except ValueError:
+                pass
+
         # Lock VND
         self.economy.add_money(user_id, -total_cost)
         order_id = self.economy.add_limit_order(user_id, symbol, "BUY", target_price, shares)
@@ -3327,6 +3400,67 @@ class Simulator(commands.Cog):
             title="❌ HỦY LỆNH TỰ ĐỘNG THÀNH CÔNG ❌",
             description=f"Đã hủy thành công lệnh giới hạn **#{order_id}**!\n{refund_msg}",
             color=discord.Color.red()
+        )
+        await ctx.send(embed=embed)
+
+    @invest.command(name="max", brief="Xem hoặc cấu hình giới hạn sở hữu tối đa của các mã.")
+    async def invest_max(self, ctx: commands.Context, symbol: str = None, amount: str = None):
+        if not symbol:
+            prices = self.economy.get_stock_prices()
+            desc = ""
+            for sym, _, _, _ in prices:
+                limit_str = self.economy.get_setting(f"max_holding_{sym}")
+                limit_val = f"`{float(limit_str):,}` cổ" if limit_str else "**Vô hạn**"
+                desc += f"• **{sym}**: {limit_val}\n"
+                
+            embed = make_embed(
+                title="⚙️ GIỚI HẠN SỞ HỮU TỐI ĐA CỦA CÁC MÃ ⚙️",
+                description=f"Dưới đây là giới hạn số lượng nắm giữ tối đa hiện tại của từng mã đầu tư:\n\n{desc}\n💡 *Quản trị viên có thể thay đổi bằng lệnh: `i?invest max <ticker> <số lượng>`*",
+                color=discord.Color.blue()
+            )
+            await ctx.send(embed=embed)
+            return
+
+        symbol = symbol.upper()
+        prices = dict((row[0], row[1]) for row in self.economy.get_stock_prices())
+        
+        if symbol not in prices:
+            await ctx.send(f"❌ Mã đầu tư `{symbol}` không tồn tại. Các mã hợp lệ: `USDT`, `AGV`, `CASINO`, `ETH`, `BTC`, `SOL`, `DOGE`.")
+            return
+            
+        # Check permissions: bot owner or guild administrator
+        is_admin = ctx.author.guild_permissions.administrator if ctx.guild else False
+        is_owner = ctx.author.id in config.bot.owner_ids or await ctx.bot.is_owner(ctx.author)
+        if not (is_admin or is_owner):
+            await ctx.send("❌ **Lỗi:** Chỉ có quản trị viên hoặc chủ sở hữu bot mới có quyền cấu hình giới hạn này.")
+            return
+            
+        if amount is None or amount.lower() in ["reset", "none", "unlimited", "vô hạn"]:
+            self.economy.set_setting(f"max_holding_{symbol}", "")
+            await ctx.send(f"✅ Đã đặt lại giới hạn sở hữu mã `{symbol}` thành **Vô hạn**.")
+            return
+            
+        try:
+            val = float(amount)
+            if val <= 0:
+                self.economy.set_setting(f"max_holding_{symbol}", "")
+                await ctx.send(f"✅ Đã đặt lại giới hạn sở hữu mã `{symbol}` thành **Vô hạn**.")
+                return
+        except ValueError:
+            await ctx.send("❌ Số lượng giới hạn không hợp lệ. Vui lòng nhập số dương hoặc `reset`.")
+            return
+            
+        self.economy.set_setting(f"max_holding_{symbol}", str(val))
+        
+        embed = make_embed(
+            title="⚙️ CẤU HÌNH GIỚI HẠN ĐẦU TƯ ⚙️",
+            description=(
+                f"Đã cập nhật giới hạn sở hữu tối đa thành công!\n\n"
+                f"📈 **Mã:** `{symbol}`\n"
+                f"🔒 **Giới hạn tối đa mỗi người:** `{val:,}` cổ phiếu\n\n"
+                f"💡 *Người chơi sẽ không thể mua thêm nếu số lượng nắm giữ hiện tại + số lượng mua vượt quá mức này.*"
+            ),
+            color=discord.Color.blue()
         )
         await ctx.send(embed=embed)
 
