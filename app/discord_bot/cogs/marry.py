@@ -147,12 +147,12 @@ def render_couple_banner(proposer, target, ring_type: str, love_points: int, joi
     overlay = Image.new("RGBA", bg.size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
     
-    # Load fonts — frankfub.ttf for display, Roboto for small stat text
+    # Load fonts — CHERLY.TTF for display, Roboto for small stat text
     _font_dir = ABS_PATH.parent.parent / "data" / "fonts"
-    _font_path = _font_dir / "frankfub.ttf"
+    _font_path = _font_dir / "CHERLY.TTF"
 
-    def _frankfub(size: int) -> ImageFont.FreeTypeFont:
-        """Load frankfub.ttf, fallback to Roboto Bold if missing."""
+    def _cherly(size: int) -> ImageFont.FreeTypeFont:
+        """Load CHERLY.TTF, fallback to Roboto Bold if missing."""
         try:
             return ImageFont.truetype(str(_font_path), size)
         except Exception:
@@ -161,10 +161,10 @@ def render_couple_banner(proposer, target, ring_type: str, love_points: int, joi
     def _roboto(size: int) -> ImageFont.FreeTypeFont:
         return load_font("bold", size)
 
-    font_large   = _frankfub(30)   # display names (decreased from 56 to 30)
-    font_medium  = _frankfub(48)   # status text "Vợ Chồng" (increased to 48 and pulled higher)
-    font_stats   = _frankfub(22)   # stats inside heart (decreased from 36 to 22)
-    font_username = _frankfub(30)  # usernames below avatar (decreased from 42 to 30)
+    font_large   = _cherly(30)   # display names (decreased from 56 to 30)
+    font_medium  = _cherly(48)   # status text "Vợ Chồng" (increased to 48 and pulled higher)
+    font_stats   = _cherly(22)   # stats inside heart (decreased from 36 to 22)
+    font_username = _cherly(30)  # usernames below avatar (decreased from 42 to 30)
     font_regular = _roboto(22)  # IG text in bottom box (decreased from 28 to 22)
     
     # ── Calibrated coordinates from template scan ──────────────────
