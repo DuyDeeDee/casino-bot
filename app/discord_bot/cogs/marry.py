@@ -161,9 +161,11 @@ def render_couple_banner(proposer, target, ring_type: str, love_points: int, joi
     def _roboto(size: int) -> ImageFont.FreeTypeFont:
         return load_font("bold", size)
 
-    font_large   = _selly(46)   # display names (big, calligraphy)
-    font_medium  = _selly(34)   # status text & usernames
-    font_regular = _roboto(20)  # stats & IG text (small, keep readable)
+    font_large   = _selly(56)   # display names (increased from 46)
+    font_medium  = _selly(44)   # status text (increased from 34)
+    font_stats   = _selly(36)   # stats inside heart (calligraphy)
+    font_username = _selly(42)  # usernames in bottom box
+    font_regular = _roboto(28)  # stats & IG text (increased from 20)
     
     # ── Calibrated coordinates from template scan ──────────────────
     # Left  avatar slot center: (412, 412), radius ~174
@@ -188,28 +190,33 @@ def render_couple_banner(proposer, target, ring_type: str, love_points: int, joi
 
     PURPLE       = (138, 43, 226, 255)
     LIGHT_PURPLE = (200, 170, 255, 255)   # light purple replaces all white text
+    PASTEL_PURPLE = (203, 185, 243, 255)  # pastel purple color for avatar borders
+
+    # Draw pastel purple border around avatars: "Avatar được bọc bởi một lớp viền màu tím pátel"
+    draw.ellipse((LEFT_CX - 130, LEFT_CY - 130, LEFT_CX + 130, LEFT_CY + 130), outline=PASTEL_PURPLE, width=6)
+    draw.ellipse((RIGHT_CX - 130, RIGHT_CY - 130, RIGHT_CX + 130, RIGHT_CY + 130), outline=PASTEL_PURPLE, width=6)
 
     # 2. Display names inside white nameplate box above avatar
     draw.text((LEFT_CX,  205), proposer.display_name, fill=LIGHT_PURPLE, anchor="mm", font=font_large)
     draw.text((RIGHT_CX, 205), target.display_name,   fill=LIGHT_PURPLE, anchor="mm", font=font_large)
 
-    # 3. Discord usernames below avatar circle
-    draw.text((LEFT_CX,  665), proposer.name, fill=PURPLE, anchor="mm", font=font_medium)
-    draw.text((RIGHT_CX, 665), target.name,   fill=PURPLE, anchor="mm", font=font_medium)
+    # 3. Discord usernames inside the bottom rectangular box: "Username thì đặt vào khung hình chữ nhật ở dưới avater"
+    draw.text((LEFT_CX,  825), proposer.name, fill=PURPLE, anchor="mm", font=font_username)
+    draw.text((RIGHT_CX, 825), target.name,   fill=PURPLE, anchor="mm", font=font_username)
 
-    # 4. Relationship status inside the heart
-    draw.text((836, 475), relationship_status, fill=PURPLE, anchor="mm", font=font_medium)
+    # 4. Relationship status above the big heart: "2 chữ vợ chồng thì để ở bên trên trái tim to ở giữa"
+    draw.text((836, 295), relationship_status, fill=PURPLE, anchor="mm", font=font_medium)
 
-    # 5. Stats below the heart
+    # 5. Stats inside the big heart: "thông tin như ngày kết hôn,... thì cung đổi sang font Selly Calligraphy và đặt ở giữa trái tim"
     date_str = "Chưa rõ"
     if married_at > 0:
         date_str = datetime.fromtimestamp(married_at).strftime("%d/%m/%Y")
 
-    draw.text((836, 700), f"Ngày Kết Hôn : {date_str}",      fill=LIGHT_PURPLE, anchor="mm", font=font_regular)
-    draw.text((836, 735), f"Đã Kết Hôn : {married_days} ngày", fill=LIGHT_PURPLE, anchor="mm", font=font_regular)
-    draw.text((836, 770), f"Điểm thân mật : {love_points:,}",  fill=LIGHT_PURPLE, anchor="mm", font=font_regular)
+    draw.text((836, 420), f"Ngày Kết Hôn : {date_str}",      fill=PURPLE, anchor="mm", font=font_stats)
+    draw.text((836, 470), f"Đã Kết Hôn : {married_days} ngày", fill=PURPLE, anchor="mm", font=font_stats)
+    draw.text((836, 520), f"Điểm thân mật : {love_points:,}",  fill=PURPLE, anchor="mm", font=font_stats)
     
-    # 6. Load and paste Ring image at bottom-RIGHT corner (white heart decoration area, centered at ~1540, 810)
+    # 6. Load and paste Ring image centered exactly at the bottom-right heart: "fix lại hình chiếc nhẫn sao cho nó nằm ở giữa cái trái tim ở góc dưới"
     ring_file = RING_IMAGES.get(ring_type)
     if ring_file:
         ring_path = ABS_PATH.parent.parent / "pictures" / "Marry" / ring_file
@@ -217,12 +224,12 @@ def render_couple_banner(proposer, target, ring_type: str, love_points: int, joi
             try:
                 ring_img = Image.open(ring_path).convert("RGBA")
                 ring_img = ring_img.resize((130, 130), Image.Resampling.LANCZOS)
-                overlay.paste(ring_img, (1540 - 65, 810 - 65), mask=ring_img)
+                overlay.paste(ring_img, (1475 - 65, 825 - 65), mask=ring_img)
                 ring_img.close()
             except Exception as e:
                 logger.error(f"Failed to draw wedding ring image: {e}")
                 
-    # 7. Draw social boxes and Instagram handles at bottom middle
+    # 7. Draw social boxes and Instagram handles below avatar cards at Y = 670 (where usernames used to be)
     if not bg_path.exists():
         # Box 1: Left IG
         draw.rounded_rectangle(
@@ -244,8 +251,8 @@ def render_couple_banner(proposer, target, ring_type: str, love_points: int, joi
     left_ig_str = f"ins / {proposer_ig}" if proposer_ig else "ins / chưa đặt"
     right_ig_str = f"ins / {target_ig}" if target_ig else "ins / chưa đặt"
     
-    draw.text((645,  840), left_ig_str,  fill=LIGHT_PURPLE, anchor="mm", font=font_regular)
-    draw.text((1015, 840), right_ig_str, fill=LIGHT_PURPLE, anchor="mm", font=font_regular)
+    draw.text((LEFT_CX,  670), left_ig_str,  fill=PURPLE, anchor="mm", font=font_regular)
+    draw.text((RIGHT_CX, 670), right_ig_str, fill=PURPLE, anchor="mm", font=font_regular)
     
     # Composite overlay on background
     bg.paste(overlay, (0, 0), mask=overlay)
