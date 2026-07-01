@@ -159,9 +159,9 @@ def render_couple_banner(proposer, target, ring_type: str, love_points: int, joi
     p_circle = crop_circle(p_avatar, 356)
     t_circle = crop_circle(t_avatar, 356)
     
-    # Paste avatars centered at (412, 530) and (1260, 530)
+    # Paste avatars centered at (412, 530) and (1244, 530)
     overlay.paste(p_circle, (412 - 178, 530 - 178), mask=p_circle)
-    overlay.paste(t_circle, (1260 - 178, 530 - 178), mask=t_circle)
+    overlay.paste(t_circle, (1244 - 178, 530 - 178), mask=t_circle)
     
     p_avatar.close()
     t_avatar.close()
@@ -171,14 +171,14 @@ def render_couple_banner(proposer, target, ring_type: str, love_points: int, joi
     # 2. Draw display names inside nameplate boxes above avatars
     # Left name at (412, 310)
     draw.text((412, 310), proposer.display_name, fill=(255, 255, 255, 255), anchor="mm", font=font_large)
-    # Right name at (1260, 310)
-    draw.text((1260, 310), target.display_name, fill=(255, 255, 255, 255), anchor="mm", font=font_large)
+    # Right name at (1244, 310)
+    draw.text((1244, 310), target.display_name, fill=(255, 255, 255, 255), anchor="mm", font=font_large)
     
     # 3. Draw Discord usernames in boxes below avatars
     # Left username at (412, 740)
     draw.text((412, 740), proposer.name, fill=(138, 43, 226, 255), anchor="mm", font=font_medium)
-    # Right username at (1260, 740)
-    draw.text((1260, 740), target.name, fill=(138, 43, 226, 255), anchor="mm", font=font_medium)
+    # Right username at (1244, 740)
+    draw.text((1244, 740), target.name, fill=(138, 43, 226, 255), anchor="mm", font=font_medium)
     
     # 4. Draw Custom Relationship Status centered above the heart
     draw.text((836, 450), relationship_status, fill=(138, 43, 226, 255), anchor="mm", font=font_medium)
