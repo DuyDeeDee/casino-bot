@@ -162,7 +162,7 @@ def render_couple_banner(proposer, target, ring_type: str, love_points: int, joi
         return load_font("bold", size)
 
     font_large   = _selly(30)   # display names (decreased from 56 to 30)
-    font_medium  = _selly(34)   # status text "Vợ Chồng" (decreased from 44 to 34)
+    font_medium  = _selly(48)   # status text "Vợ Chồng" (increased to 48 and pulled higher)
     font_stats   = _selly(22)   # stats inside heart (decreased from 36 to 22)
     font_username = _selly(30)  # usernames below avatar (decreased from 42 to 30)
     font_regular = _roboto(22)  # IG text in bottom box (decreased from 28 to 22)
@@ -200,12 +200,12 @@ def render_couple_banner(proposer, target, ring_type: str, love_points: int, joi
     draw.text((LEFT_CX,  205), proposer.display_name, fill=LIGHT_PURPLE, anchor="mm", font=font_large)
     draw.text((RIGHT_CX, 205), target.display_name,   fill=LIGHT_PURPLE, anchor="mm", font=font_large)
 
-    # 3. Discord usernames below avatar: "user name thì nằm ở dưới avatar"
-    draw.text((LEFT_CX,  665), proposer.name, fill=PURPLE, anchor="mm", font=font_username)
-    draw.text((RIGHT_CX, 665), target.name,   fill=PURPLE, anchor="mm", font=font_username)
+    # 3. Discord usernames inside the card below the avatar (Y = 600, inside the frame): "kéo username lên trên như ảnh"
+    draw.text((LEFT_CX,  600), proposer.name, fill=PURPLE, anchor="mm", font=font_username)
+    draw.text((RIGHT_CX, 600), target.name,   fill=PURPLE, anchor="mm", font=font_username)
 
-    # 4. Relationship status above the big heart: "Kéo chữ vợ chồng lên cao hơn nữa đi" (moved to Y = 250)
-    draw.text((836, 250), relationship_status, fill=PURPLE, anchor="mm", font=font_medium)
+    # 4. Relationship status high above the big heart: "Kéo chữ vợ chồng lên cao hơn nữa đi" (moved to Y = 180)
+    draw.text((836, 180), relationship_status, fill=PURPLE, anchor="mm", font=font_medium)
 
     # 5. Stats inside the big heart: "thông tin như ngày kết hôn,... thì cung đổi sang font Selly Calligraphy và đặt ở giữa trái tim"
     date_str = "Chưa rõ"
