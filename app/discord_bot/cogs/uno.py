@@ -125,16 +125,19 @@ class HandDropdown(discord.ui.Select):
             val_label = card._value_label()
             label = val_label if card.color == Color.WILD else f"{clr_label} {val_label}"
 
-            # Tách emoji để truyền riêng vào thuộc tính emoji của SelectOption
-            emoji_str = card.display()
+            # Lấy custom emoji từ DYNAMIC_EMOJIS nếu đã nạp thành công từ guild
+            from app.discord_bot.modules.uno_engine import DYNAMIC_EMOJIS
+            key = f"{card.color.value}_{card.value.value}"
             emoji = None
-            if emoji_str.startswith("<:") and emoji_str.endswith(">"):
+            if key in DYNAMIC_EMOJIS:
                 try:
-                    emoji = discord.PartialEmoji.from_str(emoji_str)
+                    emoji = discord.PartialEmoji.from_str(DYNAMIC_EMOJIS[key])
                 except Exception:
                     pass
-            elif emoji_str:
-                emoji = emoji_str.split()[0]
+            
+            # Fallback về vòng tròn màu mặc định (🔴, 🟡, 🟢, 🔵, 🌈) nếu chưa nạp được custom emoji
+            if emoji is None:
+                emoji = COLOR_EMOJI.get(card.color)
 
             options.append(
                 discord.SelectOption(
