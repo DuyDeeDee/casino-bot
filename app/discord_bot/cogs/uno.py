@@ -105,7 +105,7 @@ class ColorPickView(discord.ui.View):
         async def cb(interaction: discord.Interaction):
             self.chosen_color = color
             self.stop()
-            await interaction.response.defer()
+            await interaction.response.defer(ephemeral=True)
         return cb
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
@@ -200,7 +200,7 @@ class HandDropdown(discord.ui.Select):
                 return
             chosen_color = view.chosen_color
         else:
-            await interaction.response.defer()
+            await interaction.response.defer(ephemeral=True)
 
         is_stacking = self.game.pending_draw > 0
         success, msg = self.game.play_card(self.player, card, chosen_color, stacking=is_stacking)
@@ -254,7 +254,7 @@ class HandDrawButton(discord.ui.Button):
         if self.game.current_player.user_id != interaction.user.id:
             await interaction.response.send_message("❌ Chưa đến lượt của bạn!", ephemeral=True)
             return
-        await interaction.response.defer()
+        await interaction.response.defer(ephemeral=True)
         await self.cog._perform_draw_interaction(interaction, self.player)
 
 
@@ -280,7 +280,7 @@ class HandReloadButton(discord.ui.Button):
             await interaction.response.edit_message(content="❌ Bạn không tham gia trò chơi này.", embed=None, view=None)
             return
 
-        await interaction.response.defer()
+        await interaction.response.defer(ephemeral=True)
         content, view = self.cog._get_hand_message_data(player, game)
         await interaction.edit_original_response(content=content, embed=None, view=view)
 
@@ -325,7 +325,7 @@ class DrawPlayView(discord.ui.View):
                 return
             chosen_color = view.chosen_color
         else:
-            await interaction.response.defer()
+            await interaction.response.defer(ephemeral=True)
 
         is_stacking = self.game.pending_draw > 0
         success, msg = self.game.play_card(self.player, self.card, chosen_color, stacking=is_stacking)
@@ -360,7 +360,7 @@ class DrawPlayView(discord.ui.View):
         if self.game.current_player.user_id != interaction.user.id:
             await interaction.response.send_message("❌ Chưa đến lượt của bạn!", ephemeral=True)
             return
-        await interaction.response.defer()
+        await interaction.response.defer(ephemeral=True)
         
         self.game.last_play_info = f"📥 **{self.player.username}** đã rút bài và bỏ lượt chơi."
         self.game.advance_turn()
@@ -397,7 +397,7 @@ class BoardView(discord.ui.View):
         if self.game.current_player.user_id != interaction.user.id:
             await interaction.response.send_message("❌ Chưa đến lượt của bạn!", ephemeral=True)
             return
-        await interaction.response.defer()
+        await interaction.response.defer(ephemeral=True)
         await self.cog._perform_draw_interaction(interaction, player)
 
     @discord.ui.button(label="🔔 Hô UNO!", style=discord.ButtonStyle.success, custom_id="uno_board_uno")
