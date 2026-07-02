@@ -559,8 +559,11 @@ class Uno(commands.Cog, name="UNO"):
             await ctx.send("❌ Bạn không có trong trò chơi này!", delete_after=5)
             return
         
-        content, view = self._get_hand_message_data(player, game)
-        await ctx.send(content=content, view=view, ephemeral=True)
+        await ctx.send(
+            "❌ Lệnh chữ `!uno hand` không hỗ trợ ẩn bài. "
+            "Vui lòng click nút **👁️ Xem Bài Của Bạn** trực tiếp trên bàn chơi để xem bài bảo mật!",
+            delete_after=10
+        )
 
     @uno.command(name="play", aliases=["p"], brief="Đánh bài")
     async def uno_play(self, ctx: commands.Context, card_code: str = ""):
