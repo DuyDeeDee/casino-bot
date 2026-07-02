@@ -15,6 +15,7 @@ from uuid import uuid4
 import discord
 from discord.ext import commands
 
+from app.config import config
 from app.discord_bot.modules.betting import validate_money_bet
 from app.discord_bot.modules.economy import Economy
 from app.discord_bot.modules.helpers import make_embed
