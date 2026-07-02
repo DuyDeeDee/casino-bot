@@ -246,19 +246,19 @@ SHOP_ITEMS = {
     },
     "manager_contract": {
         "name": "Hợp đồng Quản lý 7 ngày 💼",
-        "cost": 15,
+        "cost": 7,
         "currency": "gold",
         "description": "Sử dụng lệnh `i?use manager_contract` để thuê Quản lý tự thu hoạch doanh nghiệp mỗi 12h."
     },
     "insurance_contract": {
         "name": "Bảo hiểm Doanh nghiệp 7 ngày 🛡️",
-        "cost": 20,
+        "cost": 7,
         "currency": "gold",
         "description": "Sử dụng lệnh `i?use insurance_contract` để phòng ngừa 100% rủi ro/gặp sự cố doanh nghiệp."
     },
     "bodyguard_contract": {
         "name": "Hợp đồng Vệ sĩ 7 ngày 💂",
-        "cost": 20,
+        "cost": 10,
         "currency": "gold",
         "description": "Sử dụng lệnh `i?use bodyguard_contract` để thuê Vệ sĩ bảo vệ tài sản, giảm 80% tỷ lệ bị cướp."
     },
@@ -1056,6 +1056,9 @@ class Simulator(commands.Cog):
     def cog_unload(self) -> None:
         self.update_stock_prices_task.cancel()
 
+    async def cog_before_invoke(self, ctx: commands.Context):
+        self.economy.set_setting("last_invest_channel_id", str(ctx.channel.id))
+
     @commands.command(
         brief="Hiển thị bảng điều khiển quản lý tài sản.",
         usage="menu / panel / dashboard",
@@ -1644,13 +1647,78 @@ class Simulator(commands.Cog):
                     
                 min_p, max_p, base_range, up_range, down_range = stock_configs[symbol]
                 
-                # Check bankruptcy chance (Option D)
+                # Check bankruptcy chance or countdown (Option D)
                 is_bankruptcy = False
-                if news_symbol == symbol and news_dir == "down":
-                    if random.random() < 0.05: # 5% chance under bad news
+                countdown_str = self.economy.get_setting(f"scheduled_bankruptcy_{symbol}")
+                if countdown_str:
+                    try:
+                        countdown = int(countdown_str)
+                    except ValueError:
+                        countdown = 0
+                    
+                    if countdown == 2:
+                        # Decrement to 1
+                        self.economy.set_setting(f"scheduled_bankruptcy_{symbol}", "1")
+                        # Send warning to channel without pings (countdown = 1)
+                        try:
+                            channel_id_str = self.economy.get_setting("last_invest_channel_id")
+                            if channel_id_str:
+                                channel_id = int(channel_id_str)
+                                channel = self.client.get_channel(channel_id)
+                                if channel is None:
+                                    channel = await self.client.fetch_channel(channel_id)
+                                if channel:
+                                    embed = make_embed(
+                                        title=f"⚠️ CẢNH BÁO PHÁ SẢN KHẨN CẤP: {symbol} (Còn 1 phiên) ⚠️",
+                                        description=(
+                                            f"Mã đầu tư `{symbol}` đang gặp biến động cực kỳ tiêu cực và có nguy cơ cao sẽ **phá sản** ở phiên tiếp theo!\n\n"
+                                            f"💡 Toàn bộ cổ đông nắm giữ hãy chủ động xử lý tài sản trước khi mã này bị thanh lý cưỡng chế."
+                                        ),
+                                        color=discord.Color.gold()
+                                    )
+                                    await channel.send(embed=embed)
+                        except Exception as warn_err:
+                            logger.error(f"Error sending countdown=1 bankruptcy warning: {warn_err}")
+                    elif countdown == 1:
+                        # Time to crash!
                         is_bankruptcy = True
-                elif random.random() < 0.005: # 0.5% chance normally
-                    is_bankruptcy = True
+                else:
+                    # Roll normal bankruptcy chance
+                    is_bankruptcy_rolled = False
+                    if news_symbol == symbol and news_dir == "down":
+                        if random.random() < 0.05: # 5% chance under bad news
+                            is_bankruptcy_rolled = True
+                    elif random.random() < 0.005: # 0.5% chance normally
+                        is_bankruptcy_rolled = True
+                        
+                    if is_bankruptcy_rolled:
+                        # Schedule bankruptcy: set to 2 sessions
+                        self.economy.set_setting(f"scheduled_bankruptcy_{symbol}", "2")
+                        # Send warning (countdown = 2) with user pings
+                        try:
+                            holders = self.economy.get_stock_holders(symbol)
+                            holder_ids = [user_id for user_id, shares in holders if shares > 0]
+                            if holder_ids:
+                                mentions = " ".join([f"<@{uid}>" for uid in holder_ids])
+                                channel_id_str = self.economy.get_setting("last_invest_channel_id")
+                                if channel_id_str:
+                                    channel_id = int(channel_id_str)
+                                    channel = self.client.get_channel(channel_id)
+                                    if channel is None:
+                                        channel = await self.client.fetch_channel(channel_id)
+                                    if channel:
+                                        embed = make_embed(
+                                            title=f"🚨 CẢNH BÁO PHÁ SẢN: {symbol} (Còn 2 phiên) 🚨",
+                                            description=(
+                                                f"Hội đồng quản trị `{symbol}` báo cáo tình hình tài chính cực kỳ nguy kịch. Mã này dự kiến sẽ **phá sản** sau 2 phiên nữa!\n\n"
+                                                f"🚨 **Các cổ đông nắm giữ:** {mentions}\n"
+                                                f"💡 Vui lòng đưa ra quyết định đầu tư phù hợp."
+                                            ),
+                                            color=discord.Color.orange()
+                                        )
+                                        await channel.send(content=mentions, embed=embed)
+                        except Exception as warn_err:
+                            logger.error(f"Error sending countdown=2 bankruptcy warning: {warn_err}")
                     
                 if is_bankruptcy:
                     bankrupted_symbols.append(symbol)
@@ -1680,6 +1748,7 @@ class Simulator(commands.Cog):
                     # Liquidate all outstanding shares for this stock held by users
                     try:
                         holders = self.economy.get_stock_holders(symbol)
+                        liquidated_users = []
                         for user_id, shares in holders:
                             if shares <= 0:
                                 continue
@@ -1691,26 +1760,36 @@ class Simulator(commands.Cog):
                             # Add payout to user and set shares to 0
                             self.economy.add_money(user_id, payout)
                             self.economy.set_portfolio_shares(user_id, symbol, 0.0)
+                            liquidated_users.append((user_id, shares, payout))
                             
-                            # Send DM warning
-                            user = self.client.get_user(user_id)
-                            if user is None:
-                                try: user = await self.client.fetch_user(user_id)
-                                except Exception: pass
-                            if user:
-                                embed = make_embed(
-                                    title=f"🚨 CẢNH BÁO PHÁ SẢN & THANH LÝ CƯỠNG CHẾ: {symbol} 🚨",
-                                    description=(
-                                        f"Mã đầu tư `{symbol}` đã gặp sự cố cực kỳ nghiêm trọng và tuyên bố phá sản!\n\n"
-                                        f"📊 **Số lượng sở hữu trước đó:** `{shares:.2f} {symbol}`\n"
-                                        f"💥 **Giá thanh lý tài sản:** `{bankruptcy_price:,} VND` / cổ\n"
-                                        f"💸 **Số tiền nhận lại:** `+{payout:,} VND` (Đã trừ 5% phí thanh lý)\n\n"
-                                        f"💡 Toàn bộ cổ phiếu `{symbol}` của bạn đã bị cưỡng chế tự động bán để thu hồi tài sản."
-                                    ),
-                                    color=discord.Color.red()
-                                )
-                                try: await user.send(embed=embed)
-                                except Exception: pass
+                        # Send public/channel announcement instead of DM
+                        channel_id_str = self.economy.get_setting("last_invest_channel_id")
+                        if channel_id_str:
+                            try:
+                                channel_id = int(channel_id_str)
+                                channel = self.client.get_channel(channel_id)
+                                if channel is None:
+                                    channel = await self.client.fetch_channel(channel_id)
+                                if channel:
+                                    desc_lines = [
+                                        f"Mã đầu tư `{symbol}` đã chính thức phá sản sau thời gian cảnh báo!\n\n",
+                                        f"💥 **Giá thanh lý tài sản:** `{bankruptcy_price:,} VND` / cổ\n",
+                                        f"💡 Toàn bộ cổ phiếu `{symbol}` của các cổ đông đã bị cưỡng chế tự động bán để thu hồi tài sản:\n\n"
+                                    ]
+                                    for user_id, shares, payout in liquidated_users:
+                                        desc_lines.append(f"• <@{user_id}>: Nhận lại `+{payout:,} VND` (cho `{shares:.2f} {symbol}`, phí thanh lý 5%)\n")
+                                    
+                                    if not liquidated_users:
+                                        desc_lines.append("• Không có cổ đông nào đang nắm giữ mã này.")
+                                        
+                                    embed = make_embed(
+                                        title=f"🚨 BÁO CÁO PHÁ SẢN & THANH LÝ CƯỠNG CHẾ: {symbol} 🚨",
+                                        description="".join(desc_lines),
+                                        color=discord.Color.red()
+                                    )
+                                    await channel.send(embed=embed)
+                            except Exception as chan_err:
+                                logger.error(f"Error sending bankruptcy announcement: {chan_err}")
                     except Exception as err:
                         logger.error(f"Error liquidating portfolio for bankrupt stock {symbol}: {err}")
                         
@@ -1718,6 +1797,9 @@ class Simulator(commands.Cog):
                     restructured_price = DEFAULT_PRICES.get(symbol, min_p * 2)
                     self.economy.update_stock_price(symbol, restructured_price, bankruptcy_price, 0.0)
                     logger.info(f"Restructured {symbol}. Price reset to {restructured_price} VND.")
+                    
+                    # Clear scheduled bankruptcy setting
+                    self.economy.set_setting(f"scheduled_bankruptcy_{symbol}", "")
                     continue
                 
                 # Normal fluctuation
