@@ -120,11 +120,28 @@ class HandDropdown(discord.ui.Select):
     def __init__(self, player: UnoPlayer, game: UnoGame, cog: "Uno", playable_cards: list[tuple[int, UnoCard]]):
         options = []
         for idx, card in playable_cards[:25]:
+            # Tạo tên hiển thị sạch có dấu (ví dụ: Xanh Lá 3, Đỏ Skip, Wild +4)
+            clr_label = COLOR_LABEL.get(card.color, "")
+            val_label = card._value_label()
+            label = val_label if card.color == Color.WILD else f"{clr_label} {val_label}"
+
+            # Tách emoji để truyền riêng vào thuộc tính emoji của SelectOption
+            emoji_str = card.display()
+            emoji = None
+            if emoji_str.startswith("<:") and emoji_str.endswith(">"):
+                try:
+                    emoji = discord.PartialEmoji.from_str(emoji_str)
+                except Exception:
+                    pass
+            elif emoji_str:
+                emoji = emoji_str.split()[0]
+
             options.append(
                 discord.SelectOption(
-                    label=card.display(),
+                    label=label,
                     value=str(idx),
-                    description="Đánh lá bài này"
+                    emoji=emoji,
+                    description=f"Đánh lá {label}"
                 )
             )
         super().__init__(
