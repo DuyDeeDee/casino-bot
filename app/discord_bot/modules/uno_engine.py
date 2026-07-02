@@ -41,6 +41,73 @@ COLOR_LABEL = {
 
 PLAYABLE_COLORS = [Color.RED, Color.YELLOW, Color.GREEN, Color.BLUE]
 
+# ─── Custom Discord Emojis Mapping ────────────────────────────────────────────
+UNO_EMOJIS = {
+    # Vàng (Yellow)
+    "yellow_skip": "<:yellow_skip_a:1522278509521666068>",
+    "yellow_reverse": "<:yellow_reverse_a:1522278490467205343>",
+    "yellow_draw2": "<:yellow_draw2_a:1522278458225459211>",
+    "yellow_9": "<:yellow_9_a:1522278432652923101>",
+    "yellow_8": "<:yellow_8_a:1522278412679381143>",
+    "yellow_7": "<:yellow_7_a:1522278391875637419>",
+    "yellow_6": "<:yellow_6_b:1522278363933184120>",
+    "yellow_5": "<:yellow_5_a:1522278341632065607>",
+    "yellow_4": "<:yellow_4_b:1522278318735495289>",
+    "yellow_3": "<:yellow_3_a:1522278270694068245>",
+    "yellow_2": "<:yellow_2_a:1522278247156634258>",
+    "yellow_1": "<:yellow_1_a:1522278217631924365>",
+    "yellow_0": "<:yellow_0_a:1522278196547031100>",
+    
+    # Lá Đặc Biệt (Wild)
+    "wild_wild4": "<:wild_draw4_a:1522278175667916872>",
+    "wild_wild": "<:wild_a:1522278156256542940>",
+    
+    # Đỏ (Red)
+    "red_skip": "<:red_skip_a:1522278083829170299>",
+    "red_reverse": "<:red_reverse_a:1522278059829479898>",
+    "red_draw2": "<:red_draw2_a:1522278035578163320>",
+    "red_9": "<:red_9_a:1522278007325200546>",
+    "red_8": "<:red_8_a:1522277984650793071>",
+    "red_7": "<:red_7_a:1522277965021581312>",
+    "red_5": "<:red_5_b:1522277948328247458>",
+    "red_6": "<:red_6_a:1522277925502714019>",
+    "red_4": "<:red_4_a:1522277908540952667>",
+    "red_3": "<:red_3_a:1522277890715025488>",
+    "red_2": "<:red_2_a:1522277866291724469>",
+    "red_1": "<:red_1_a:1522277851292762193>",
+    "red_0": "<:red_0_a:1522277834981380176>",
+    
+    # Xanh Lá (Green)
+    "green_skip": "<:green_skip_a:1522277818162221136>",
+    "green_reverse": "<:green_reverse_a:152227775521865891>",
+    "green_draw2": "<:green_draw2_a:1522277736024899625>",
+    "green_9": "<:green_9_b:1522277711261728768>",
+    "green_8": "<:green_8_b:1522277691053834502>",
+    "green_7": "<:green_7_a:1522277674658173048>",
+    "green_6": "<:green_6_a:152227765255816274>",
+    "green_5": "<:green_5_a:1522277632387973180>",
+    "green_4": "<:green_4_a:1522277609864560651>",
+    "green_3": "<:green_3_a:1522277592168923288>",
+    "green_2": "<:green_2_a:1522277569163038951>",
+    "green_1": "<:green_1_a:1522277535604277348>",
+    "green_0": "<:green_0_a:1522277505459949800>",
+    
+    # Xanh Dương (Blue)
+    "blue_skip": "<:blue_skip_a:1522277485205782649>",
+    "blue_reverse": "<:blue_reverse_a:152227468541550723>",
+    "blue_draw2": "<:blue_draw2_a:1522277442843050054>",
+    "blue_9": "<:blue_9_a:152227741820281129>",
+    "blue_8": "<:blue_8_a:1522277399880929343>",
+    "blue_7": "<:blue_7_a:1522277383615414382>",
+    "blue_6": "<:blue_6_a:1522277368444485926>",
+    "blue_5": "<:blue_5_a:1522277353638854716>",
+    "blue_4": "<:blue_4_a:1522277344092618882>",
+    "blue_3": "<:blue_3_a:152227733158715924>",
+    "blue_2": "<:blue_2_a:1522277319400620126>",
+    "blue_1": "<:blue_1_a:1522277307400585297>",
+    "blue_0": "<:blue_0_a:1522277293786140742>",
+}
+
 
 # ─── Giá trị bài ──────────────────────────────────────────────────────────────
 class Value(str, Enum):
@@ -73,8 +140,13 @@ class UnoCard:
 
     # ------------------------------------------------------------------
     def display(self) -> str:
-        """Hiển thị dạng emoji, ví dụ: 🔴 7, 🟡 Skip, 🌈 Wild+4"""
-        emoji = COLOR_EMOJI[self.color]
+        """Hiển thị dạng emoji, ưu tiên dùng custom Discord Emojis."""
+        key = f"{self.color.value}_{self.value.value}"
+        if key in UNO_EMOJIS:
+            return UNO_EMOJIS[key]
+
+        # Fallback nếu không có custom emoji
+        emoji = COLOR_EMOJI.get(self.color, "")
         label = self._value_label()
         return f"{emoji} {label}"
 
