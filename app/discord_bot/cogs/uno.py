@@ -1,8 +1,8 @@
 # coding: utf-8
 """
-UNO Discord Cog - with Combo/Stacking Rule
-Khi bi danh +2 hoac +4, co the chong la tuong ung de cong don.
-Nguoi khong chong duoc phai rut tong so la da don.
+UNO Discord Cog
+Xử lý các lệnh và UI cho game UNO trên Discord.
+Hỗ trợ đầy đủ tiếng Việt có dấu, hiển thị hình ảnh lá bài, và sử dụng nút bấm tương tác.
 """
 from __future__ import annotations
 
@@ -48,34 +48,34 @@ class LobbyView(discord.ui.View):
         self.game = game
         self.cog = cog
 
-    @discord.ui.button(label="Tham Gia", style=discord.ButtonStyle.success, custom_id="uno_join")
+    @discord.ui.button(label="✅ Tham Gia", style=discord.ButtonStyle.success, custom_id="uno_join")
     async def join_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         user = interaction.user
         balance = self.cog.economy.get_entry(user.id)[1]
         if balance < self.game.bet:
             await interaction.response.send_message(
-                f"Khong du tien! Can {self.game.bet:,} VND.", ephemeral=True
+                f"❌ Bạn không đủ tiền! Cần `{self.game.bet:,} VND`.", ephemeral=True
             )
             return
         added = self.game.add_player(user.id, user.display_name)
         if not added:
             await interaction.response.send_message(
-                "Ban da trong phong hoac phong da day!", ephemeral=True
+                "❌ Bạn đã ở trong phòng hoặc phòng đã đầy!", ephemeral=True
             )
             return
         self.cog.economy.add_money(user.id, -self.game.bet)
         await interaction.response.send_message(
-            f"Da tham gia! Tru {self.game.bet:,} VND coc.", ephemeral=True
+            f"✅ Đã tham gia! Đã trừ cọc `{self.game.bet:,} VND`.", ephemeral=True
         )
         await self.cog._update_lobby_embed(interaction.message)
 
-    @discord.ui.button(label="Bat Dau", style=discord.ButtonStyle.primary, custom_id="uno_start")
+    @discord.ui.button(label="🚀 Bắt Đầu", style=discord.ButtonStyle.primary, custom_id="uno_start")
     async def start_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user.id != self.game.host_id:
-            await interaction.response.send_message("Chi chu phong moi duoc bat dau!", ephemeral=True)
+            await interaction.response.send_message("❌ Chỉ chủ phòng mới được bắt đầu!", ephemeral=True)
             return
         if len(self.game.players) < 2:
-            await interaction.response.send_message("Can it nhat 2 nguoi choi!", ephemeral=True)
+            await interaction.response.send_message("❌ Cần ít nhất 2 người chơi để bắt đầu!", ephemeral=True)
             return
         self.stop()
         await interaction.response.defer()
@@ -88,10 +88,10 @@ class ColorPickView(discord.ui.View):
         self.player_id = player_id
         self.chosen_color: Optional[Color] = None
         specs = [
-            (Color.RED,    "Do",         discord.ButtonStyle.danger),
-            (Color.YELLOW, "Vang",       discord.ButtonStyle.secondary),
-            (Color.GREEN,  "Xanh La",    discord.ButtonStyle.success),
-            (Color.BLUE,   "Xanh Duong", discord.ButtonStyle.primary),
+            (Color.RED,    "🔴 Đỏ",         discord.ButtonStyle.danger),
+            (Color.YELLOW, "🟡 Vàng",       discord.ButtonStyle.secondary),
+            (Color.GREEN,  "🟢 Xanh Lá",     discord.ButtonStyle.success),
+            (Color.BLUE,   "🔵 Xanh Dương",  discord.ButtonStyle.primary),
         ]
         for color, label, style in specs:
             uid = uuid4().hex[:4]
@@ -109,25 +109,85 @@ class ColorPickView(discord.ui.View):
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.player_id:
-            await interaction.response.send_message("Khong phai luot ban!", ephemeral=True)
+            await interaction.response.send_message("❌ Không phải lượt của bạn!", ephemeral=True)
             return False
         return True
 
 
-class UnoCallView(discord.ui.View):
-    def __init__(self, target_id: int, timeout: float = UNO_CALL_TIMEOUT):
-        super().__init__(timeout=timeout)
-        self.target_id = target_id
-        self.accuser_id: Optional[int] = None
+class BoardView(discord.ui.View):
+    """View tương tác trực tiếp trên bàn cờ chính (Không chặn luồng game)."""
+    def __init__(self, game: UnoGame, cog: "Uno"):
+        super().__init__(timeout=None)  # Persistent view
+        self.game = game
+        self.cog = cog
 
-    @discord.ui.button(label="To Cao!", style=discord.ButtonStyle.danger, custom_id="uno_accuse")
-    async def accuse_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.user.id == self.target_id:
-            await interaction.response.send_message("Khong the to cao chinh minh!", ephemeral=True)
+    @discord.ui.button(label="👁️ Xem Bài", style=discord.ButtonStyle.secondary, custom_id="uno_board_hand")
+    async def hand_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        player = self.game.get_player(interaction.user.id)
+        if not player:
+            await interaction.response.send_message("❌ Bạn không tham gia trò chơi này!", ephemeral=True)
             return
-        self.accuser_id = interaction.user.id
-        self.stop()
+        embed = self.cog._make_hand_embed(player, self.game)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @discord.ui.button(label="📥 Rút Bài", style=discord.ButtonStyle.primary, custom_id="uno_board_draw")
+    async def draw_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.game.current_player.user_id != interaction.user.id:
+            await interaction.response.send_message("❌ Chưa đến lượt của bạn!", ephemeral=True)
+            return
         await interaction.response.defer()
+        await self.cog._perform_draw(interaction.channel, interaction.user)
+
+    @discord.ui.button(label="🔔 Hô UNO!", style=discord.ButtonStyle.success, custom_id="uno_board_uno")
+    async def uno_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        player = self.game.get_player(interaction.user.id)
+        if not player:
+            await interaction.response.send_message("❌ Bạn không tham gia trò chơi này!", ephemeral=True)
+            return
+        success, msg = self.game.call_uno(interaction.user.id)
+        if success:
+            await interaction.response.send_message("🔔 Bạn đã hô UNO thành công!", ephemeral=True)
+            await interaction.channel.send(f"📣 **{interaction.user.display_name}**: **\"UNO!\"** 🎉")
+        else:
+            await interaction.response.send_message(f"❌ {msg}", ephemeral=True)
+
+    @discord.ui.button(label="📢 Tố Cáo", style=discord.ButtonStyle.danger, custom_id="uno_board_accuse")
+    async def accuse_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        target_id = self.game.uno_pending_user_id
+        if not target_id:
+            await interaction.response.send_message("❌ Không có ai để tố cáo lúc này!", ephemeral=True)
+            return
+        if interaction.user.id == target_id:
+            await interaction.response.send_message("❌ Bạn không thể tự tố cáo chính mình!", ephemeral=True)
+            return
+        
+        result, count = self.game.accuse_uno(interaction.user.id, target_id)
+        accuser_name = interaction.user.display_name
+        target = self.game.get_player(target_id)
+        target_name = target.username if target else "Ai đó"
+
+        if result == "success":
+            await interaction.response.send_message("📢 Tố cáo thành công!", ephemeral=True)
+            await interaction.channel.send(
+                embed=make_embed(
+                    title="📢 Tố Cáo Thành Công!",
+                    description=f"**{target_name}** đã quên hô UNO!\n😤 **{target_name}** bị phạt rút **2 lá**!",
+                    color=discord.Color.red(),
+                )
+            )
+            await self.cog._update_board(interaction.channel, self.game)
+        elif result == "fail":
+            await interaction.response.send_message("❌ Tố cáo thất bại!", ephemeral=True)
+            await interaction.channel.send(
+                embed=make_embed(
+                    title="❌ Tố Cáo Thất Bại!",
+                    description=f"**{target_name}** đã hô UNO rồi!\n😤 **{accuser_name}** bị phạt rút **1 lá**!",
+                    color=discord.Color.orange(),
+                )
+            )
+            await self.cog._update_board(interaction.channel, self.game)
+        else:
+            await interaction.response.send_message("❌ Không thể tố cáo lúc này!", ephemeral=True)
 
 
 # ==============================================================================
@@ -135,7 +195,7 @@ class UnoCallView(discord.ui.View):
 # ==============================================================================
 
 class Uno(commands.Cog, name="UNO"):
-    """Tro choi UNO nhieu nguoi voi ephemeral messages va luat combo."""
+    """Trò chơi UNO nhiều người với tiếng Việt có dấu, hình ảnh lá bài, và nút bấm tương tác."""
 
     active_games: dict[int, UnoGame] = {}
 
@@ -150,40 +210,40 @@ class Uno(commands.Cog, name="UNO"):
     @commands.group(
         name="uno", aliases=["u"],
         invoke_without_command=True,
-        brief="Choi UNO nhieu nguoi",
+        brief="🃏 Chơi UNO nhiều người",
     )
     async def uno(self, ctx: commands.Context):
         embed = make_embed(
-            title="UNO",
+            title="🃏 UNO - Hướng Dẫn",
             description=(
-                "**Lenh:**\n"
-                "`uno create <cuoc>` - Tao phong\n"
-                "`uno join`          - Tham gia\n"
-                "`uno hand`          - Xem bai (chi ban thay)\n"
-                "`uno play <ma>`     - Danh bai (R7, BD2, WD4...)\n"
-                "`uno draw`          - Rut bai / chiu phat combo\n"
-                "`uno uno`           - Ho UNO!\n"
-                "`uno leave`         - Roi phong\n\n"
-                "**Ma bai:** R=Do, Y=Vang, G=XanhLa, B=XanhDuong\n"
-                "S=Skip, RV=Reverse, D2=+2, W=Wild, WD4=Wild+4\n\n"
-                "**Luat Combo:**\n"
-                "Bi danh +2 -> phai chong +2 hoac rut tong so la\n"
-                "Bi danh +4 -> phai chong +4 hoac rut tong so la"
+                "**Các lệnh chính:**\n"
+                "`uno create <tiền>` - Tạo phòng mới\n"
+                "`uno join`          - Tham gia phòng đang có\n"
+                "`uno hand`          - Xem bài của bạn (tin nhắn ẩn)\n"
+                "`uno play <mã>`     - Đánh bài (ví dụ: `R7`, `GD2`, `WD4`)\n"
+                "`uno draw`          - Rút bài hoặc nhận phạt combo\n"
+                "`uno uno`           - Hô UNO!\n"
+                "`uno leave`         - Rời phòng chờ\n\n"
+                "**Mã màu & Mã bài:**\n"
+                "`R`=🔴 Đỏ, `Y`=🟡 Vàng, `G`=🟢 Xanh Lá, `B`=🔵 Xanh Dương\n"
+                "`S`=Skip, `RV`=Reverse, `D2`=+2, `W`=Wild, `WD4`=Wild+4\n\n"
+                "**Luat Combo / Stacking:**\n"
+                "Khi bị đánh +2 hoặc +4, bạn phải chồng lá tương ứng (+2 chồng +2, +4 chồng +4) để cộng dồn, hoặc bấm nút **📥 Rút Bài** để nhận phạt rút tất cả bài và mất lượt."
             ),
             color=discord.Color.purple(),
         )
         await ctx.send(embed=embed)
 
-    @uno.command(name="create", brief="Tao phong UNO")
+    @uno.command(name="create", brief="Tạo phòng UNO")
     @commands.max_concurrency(1, per=commands.BucketType.channel, wait=False)
     async def uno_create(self, ctx: commands.Context, bet: int = 50_000):
         if ctx.channel.id in self.active_games:
-            await ctx.send("Kenh nay da co phong UNO!", delete_after=5)
+            await ctx.send("❌ Kênh này hiện đã có phòng chơi UNO rồi!", delete_after=5)
             return
         try:
             validate_money_bet(self.economy, ctx.author.id, bet)
         except Exception as e:
-            await ctx.send(str(e), delete_after=8)
+            await ctx.send(f"❌ {e}", delete_after=8)
             return
         self.economy.add_money(ctx.author.id, -bet)
         game = UnoGame(channel_id=ctx.channel.id, host_id=ctx.author.id, bet=bet)
@@ -194,88 +254,88 @@ class Uno(commands.Cog, name="UNO"):
         game.lobby_msg_id = msg.id
         asyncio.create_task(self._lobby_timeout(ctx.channel.id, msg, 90))
 
-    @uno.command(name="join", brief="Tham gia phong UNO")
+    @uno.command(name="join", brief="Tham gia phòng UNO")
     async def uno_join(self, ctx: commands.Context):
         game = self.active_games.get(ctx.channel.id)
         if not game or game.phase != GamePhase.LOBBY:
-            await ctx.send("Khong co phong UNO dang cho!", delete_after=5)
+            await ctx.send("❌ Không có phòng UNO nào đang chờ tham gia ở kênh này!", delete_after=5)
             return
         if self.economy.get_entry(ctx.author.id)[1] < game.bet:
-            await ctx.send(f"Khong du tien! Can {game.bet:,} VND.", delete_after=5)
+            await ctx.send(f"❌ Bạn không đủ tiền! Cần `{game.bet:,} VND`.", delete_after=5)
             return
         if not game.add_player(ctx.author.id, ctx.author.display_name):
-            await ctx.send("Ban da trong phong hoac phong day!", delete_after=5)
+            await ctx.send("❌ Bạn đã ở trong phòng chơi này rồi hoặc phòng đã đầy!", delete_after=5)
             return
         self.economy.add_money(ctx.author.id, -game.bet)
-        await ctx.send(f"{ctx.author.display_name} da tham gia UNO!", delete_after=5)
+        await ctx.send(f"✅ **{ctx.author.display_name}** đã tham gia phòng chơi UNO!", delete_after=5)
 
-    @uno.command(name="hand", aliases=["bai"], brief="Xem bai (ephemeral)")
+    @uno.command(name="hand", aliases=["bai"], brief="Xem bài trên tay (tin nhắn ẩn)")
     async def uno_hand(self, ctx: commands.Context):
         game = self.active_games.get(ctx.channel.id)
         if not game or game.phase != GamePhase.PLAYING:
-            await ctx.send("Khong co game UNO dang chay!", delete_after=5)
+            await ctx.send("❌ Không có game UNO nào đang chạy ở kênh này!", delete_after=5)
             return
         player = game.get_player(ctx.author.id)
         if not player:
-            await ctx.send("Ban khong trong game nay!", delete_after=5)
+            await ctx.send("❌ Bạn không có trong trò chơi này!", delete_after=5)
             return
         await ctx.send(embed=self._make_hand_embed(player, game), ephemeral=True)
 
-    @uno.command(name="play", aliases=["p"], brief="Danh bai")
+    @uno.command(name="play", aliases=["p"], brief="Đánh bài")
     async def uno_play(self, ctx: commands.Context, card_code: str = ""):
         game = self.active_games.get(ctx.channel.id)
         if not game or game.phase != GamePhase.PLAYING:
-            await ctx.send("Khong co game UNO dang chay!", delete_after=5)
+            await ctx.send("❌ Không có game UNO nào đang chạy ở đây!", delete_after=5)
             return
         player = game.get_player(ctx.author.id)
         if not player:
-            await ctx.send("Ban khong trong game nay!", delete_after=5)
+            await ctx.send("❌ Bạn không có trong trò chơi này!", delete_after=5)
             return
         if game.current_player.user_id != ctx.author.id:
-            await ctx.send("Chua den luot ban!", delete_after=5, ephemeral=True)
+            await ctx.send("❌ Chưa đến lượt của bạn!", delete_after=5, ephemeral=True)
             return
 
         card = self._parse_card_code(card_code.upper(), player.hand)
         if card is None:
             await ctx.send(
-                f"Ma bai '{card_code}' khong hop le hoac ban khong co la nay!\n"
-                "Dung `uno hand` de xem bai.",
+                f"❌ Mã bài `{card_code}` không hợp lệ hoặc bạn không có lá này trên tay!\n"
+                "Hãy bấm nút **👁️ Xem Bài** hoặc gõ `uno hand` để xem bài.",
                 ephemeral=True, delete_after=10,
             )
             return
 
-        # Kiem tra luat combo
+        # Kiểm tra luật combo
         is_stacking = False
         if game.pending_draw > 0:
-            type_label = "+2" if game.pending_draw_type == "draw2" else "+4"
+            type_label = "➕2" if game.pending_draw_type == "draw2" else "🌈+4"
             can_stack = (
                 (game.pending_draw_type == "draw2" and card.value == Value.DRAW2) or
                 (game.pending_draw_type == "wild4" and card.value == Value.WILD4)
             )
             if not can_stack:
                 await ctx.send(
-                    f"Dang bi don **{game.pending_draw} la**!\n"
-                    f"Phai danh {type_label} de chong, hoac `uno draw` de rut "
-                    f"**{game.pending_draw} la**.",
+                    f"⚠️ Bạn đang bị dồn bài phạt **{game.pending_draw} lá**!\n"
+                    f"Bạn phải đánh lá {type_label} để chồng combo, hoặc bấm nút **📥 Rút Bài** / gõ `uno draw` để rút phạt.",
                     ephemeral=True, delete_after=12,
                 )
                 return
             is_stacking = True
 
-        # Chon mau Wild
+        # Chọn màu khi đánh Wild / Wild+4
         chosen_color = None
         if card.value in {Value.WILD, Value.WILD4}:
             chosen_color = await self._prompt_color(ctx, player)
             if chosen_color is None:
-                await ctx.send("Het gio chon mau - luot bi bo qua.", delete_after=5)
+                await ctx.send("⏰ Quá thời gian chọn màu - lượt chơi đã bị bỏ qua.", delete_after=5)
                 return
 
         success, msg = game.play_card(player, card, chosen_color, stacking=is_stacking)
         if not success:
-            await ctx.send(msg, ephemeral=True, delete_after=10)
+            await ctx.send(f"❌ {msg}", ephemeral=True, delete_after=10)
             return
 
-        await ctx.message.delete(delay=1)
+        with suppress(discord.HTTPException):
+            await ctx.message.delete(delay=1)
 
         if msg == "WIN":
             await self._handle_win(ctx, game, player)
@@ -284,61 +344,23 @@ class Uno(commands.Cog, name="UNO"):
         effect = game.apply_card_effect(card)
         await self._broadcast_card_played(ctx, game, player, card, effect, chosen_color)
         await self._update_board(ctx.channel, game)
-        if game.uno_pending_user_id:
-            await self._handle_uno_call(ctx.channel, game)
 
-    @uno.command(name="draw", aliases=["rut"], brief="Rut bai / chiu phat combo")
+        if game.uno_pending_user_id:
+            asyncio.create_task(self._start_uno_timer(game, game.uno_pending_user_id, ctx.channel))
+
+    @uno.command(name="draw", aliases=["rut"], brief="Rút bài hoặc chịu phạt combo")
     async def uno_draw(self, ctx: commands.Context):
         game = self.active_games.get(ctx.channel.id)
         if not game or game.phase != GamePhase.PLAYING:
-            await ctx.send("Khong co game UNO dang chay!", delete_after=5)
+            await ctx.send("❌ Không có game UNO nào đang chạy ở đây!", delete_after=5)
             return
         player = game.get_player(ctx.author.id)
         if not player:
-            await ctx.send("Ban khong trong game nay!", delete_after=5)
+            await ctx.send("❌ Bạn không có trong trò chơi này!", delete_after=5)
             return
-        if game.current_player.user_id != ctx.author.id:
-            await ctx.send("Chua den luot ban!", delete_after=5)
-            return
+        await self._perform_draw(ctx.channel, ctx.author)
 
-        # Chiu phat combo: rut tat ca la dang don
-        if game.pending_draw > 0:
-            count = game.pending_draw
-            type_label = "+2" if game.pending_draw_type == "draw2" else "+4"
-            game.resolve_pending_draw(player)
-            game.advance_turn()
-            await ctx.send(embed=make_embed(
-                title=f"{ctx.author.display_name} chiu phat combo!",
-                description=(
-                    f"Khong co la {type_label} de chong!\n"
-                    f"Rut **{count} la** va mat luot."
-                ),
-                color=discord.Color.red(),
-            ))
-            await self._update_board(ctx.channel, game)
-            if game.uno_pending_user_id:
-                await self._handle_uno_call(ctx.channel, game)
-            return
-
-        # Rut 1 la binh thuong
-        drawn = game.draw_cards(player, 1)
-        if not drawn:
-            await ctx.send("Bo bai da het!", delete_after=5)
-            return
-        card = drawn[0]
-        can_play = card.can_play_on(game.top_card, game.current_color)
-        await ctx.send(
-            f"Rut duoc: **{card.display()}**\n" + (
-                f"Co the danh! Dung `uno play {self._card_to_code(card)}`"
-                if can_play else "Khong the danh. Luot ket thuc."
-            ),
-            ephemeral=True,
-        )
-        if not can_play:
-            game.advance_turn()
-            await self._update_board(ctx.channel, game)
-
-    @uno.command(name="uno", brief="Ho UNO!")
+    @uno.command(name="uno", brief="Hô UNO!")
     async def uno_call(self, ctx: commands.Context):
         game = self.active_games.get(ctx.channel.id)
         if not game or game.phase != GamePhase.PLAYING:
@@ -348,11 +370,11 @@ class Uno(commands.Cog, name="UNO"):
             return
         success, msg = game.call_uno(ctx.author.id)
         if success:
-            await ctx.send(f"**{ctx.author.display_name}**: **\"UNO!\"** !!!")
+            await ctx.send(f"📣 **{ctx.author.display_name}**: **\"UNO!\"** 🎉🎉🎉")
         else:
-            await ctx.send(msg, ephemeral=True, delete_after=5)
+            await ctx.send(f"❌ {msg}", ephemeral=True, delete_after=5)
 
-    @uno.command(name="leave", brief="Roi game UNO")
+    @uno.command(name="leave", brief="Rời phòng chờ UNO")
     async def uno_leave(self, ctx: commands.Context):
         game = self.active_games.get(ctx.channel.id)
         if not game:
@@ -364,7 +386,7 @@ class Uno(commands.Cog, name="UNO"):
             self.economy.add_money(ctx.author.id, game.bet)
             game.remove_player(ctx.author.id)
             await ctx.send(
-                f"{ctx.author.display_name} da roi phong. Hoan {game.bet:,} VND.",
+                f"🚪 **{ctx.author.display_name}** đã rời phòng. Hoàn lại `{game.bet:,} VND` cọc.",
                 delete_after=8,
             )
             if ctx.author.id == game.host_id and game.players:
@@ -372,10 +394,71 @@ class Uno(commands.Cog, name="UNO"):
             elif not game.players:
                 self.active_games.pop(ctx.channel.id, None)
         else:
-            await ctx.send("Khong the roi khi game dang chay!", delete_after=8)
+            await ctx.send("❌ Game đang chạy! Không thể rời bàn lúc này.", delete_after=8)
 
     # --------------------------------------------------------------------------
-    #  Helpers
+    #  Logic Thực Hiện Rút Bài (Dùng chung cho Nút bấm & Lệnh chữ)
+    # --------------------------------------------------------------------------
+
+    async def _perform_draw(self, channel, user: discord.User | discord.Member):
+        game = self.active_games.get(channel.id)
+        if not game or game.phase != GamePhase.PLAYING:
+            return
+        player = game.get_player(user.id)
+        if not player:
+            return
+        if game.current_player.user_id != user.id:
+            return
+
+        # Chịu phạt combo
+        if game.pending_draw > 0:
+            count = game.pending_draw
+            type_label = "➕2" if game.pending_draw_type == "draw2" else "🌈+4"
+            game.resolve_pending_draw(player)
+            game.advance_turn()
+            await channel.send(embed=make_embed(
+                title=f"📦 {user.display_name} chịu phạt combo!",
+                description=f"Không có lá {type_label} để chồng!\n📄 Phải rút **{count} lá** và mất lượt.",
+                color=discord.Color.red(),
+            ))
+            await self._update_board(channel, game)
+            return
+
+        # Rút 1 lá bình thường
+        drawn = game.draw_cards(player, 1)
+        if not drawn:
+            await channel.send("❌ Bộ bài đã cạn!", delete_after=5)
+            return
+        card = drawn[0]
+        can_play = card.can_play_on(game.top_card, game.current_color)
+        
+        # Gửi thông báo rút bài ẩn cho người chơi
+        try:
+            await user.send(
+                embed=make_embed(
+                    title="🎴 Rút Bài",
+                    description=(
+                        f"Bạn đã rút được lá: **{card.display()}**\n" + (
+                            f"✅ Lá này có thể đánh được! Hãy gõ: `uno play {self._card_to_code(card)}`"
+                            if can_play else "❌ Lá bài này không thể đánh được. Lượt chơi của bạn kết thúc."
+                        )
+                    ),
+                    color=DISCORD_COLOR.get(game.current_color, discord.Color.purple())
+                )
+            )
+        except Exception:
+            pass
+
+        # Kết thúc lượt nếu không đánh được
+        if not can_play:
+            game.advance_turn()
+            await self._update_board(channel, game)
+        else:
+            # Gửi tin nhắn ẩn phản hồi nếu họ đang ở kênh chung
+            await self._update_board(channel, game)
+
+    # --------------------------------------------------------------------------
+    #  Helper methods
     # --------------------------------------------------------------------------
 
     async def _lobby_timeout(self, channel_id: int, msg: discord.Message, seconds: int):
@@ -387,22 +470,22 @@ class Uno(commands.Cog, name="UNO"):
             self.active_games.pop(channel_id, None)
             with suppress(discord.HTTPException):
                 await msg.edit(embed=make_embed(
-                    title="Phong UNO da dong",
-                    description="Khong du nguoi trong 90 giay. Tien coc da hoan.",
+                    title="⏰ Phòng chơi đã tự đóng",
+                    description="Không đủ người chơi tham gia trong thời gian quy định. Đã hoàn trả tiền cọc.",
                     color=discord.Color.red(),
                 ), view=None)
 
     def _make_lobby_embed(self, game: UnoGame) -> discord.Embed:
         lines = "\n".join(
-            f"[Host] {p.username}" if p.user_id == game.host_id else f"[Player] {p.username}"
+            f"👑 [Chủ Phòng] {p.username}" if p.user_id == game.host_id else f"🎮 [Người Chơi] {p.username}"
             for p in game.players
         )
         return make_embed(
-            title="PHONG UNO MOI",
+            title="🃏 PHÒNG UNO MỚI ĐANG CHỜ!",
             description=(
-                f"Coc: {game.bet:,} VND/nguoi\n"
-                f"Nguoi choi ({len(game.players)}/8):\n{lines}\n\n"
-                "Phong tu dong sau 90 giay"
+                f"💰 **Tiền Cược:** `{game.bet:,} VND / người`\n"
+                f"👥 **Danh sách ({len(game.players)}/8):**\n{lines}\n\n"
+                "⏱️ Phòng chơi sẽ đóng sau 90 giây nếu không bắt đầu."
             ),
             color=discord.Color.purple(),
         )
@@ -422,106 +505,98 @@ class Uno(commands.Cog, name="UNO"):
             await lobby_msg.delete()
         channel = lobby_msg.channel
         desc = (
-            f"{len(game.players)} nguoi choi | Coc: {game.bet:,} VND/nguoi\n"
-            f"La mo dau: **{game.top_card.display()}**\n\n"
-            "Dung `uno hand` de xem bai cua ban!"
+            f"🎮 **Số người chơi:** {len(game.players)} | 💰 **Tiền cọc:** `{game.bet:,} VND`\n"
+            f"🎴 **Lá mở đầu:** **{game.top_card.display()}**\n\n"
+            "🔔 Bấm nút **👁️ Xem Bài** bên dưới bảng để xem những lá bài đang giữ!"
         )
         if game.pending_draw > 0:
-            tl = "+2" if game.pending_draw_type == "draw2" else "+4"
-            desc += (
-                f"\n\nCHU Y: La mo dau gay ra **{game.pending_draw} la combo**! "
-                f"{game.current_player.username} phai chong {tl} hoac rut!"
-            )
+            tl = "➕2" if game.pending_draw_type == "draw2" else "🌈+4"
+            desc += f"\n\n⚠️ **CẢNH BÁO:** Lá bài mở đầu tạo ra **{game.pending_draw} lá combo**! **{game.current_player.username}** phải chồng {tl} hoặc rút bài!"
+        
         await channel.send(embed=make_embed(
-            title="UNO BAT DAU!",
-            description=desc,
-            color=DISCORD_COLOR.get(game.current_color, discord.Color.purple()),
+            title="🎉 TRÒ CHƠI UNO BẮT ĐẦU!", description=desc,
+            color=DISCORD_COLOR.get(game.current_color, discord.Color.purple())
         ))
-        for p in game.players:
-            await self._send_hand_to_player(channel, p, game)
         await self._update_board(channel, game)
-
-    async def _send_hand_to_player(self, channel, player: UnoPlayer, game: UnoGame):
-        embed = self._make_hand_embed(player, game)
-        try:
-            user = await self.client.fetch_user(player.user_id)
-            await user.send(embed=embed)
-        except (discord.Forbidden, discord.HTTPException):
-            with suppress(discord.HTTPException):
-                await channel.send(
-                    f"<@{player.user_id}> DM bi chan! Dung `uno hand` de xem bai.",
-                    delete_after=10,
-                )
 
     def _make_hand_embed(self, player: UnoPlayer, game: UnoGame) -> discord.Embed:
         top = game.top_card
         current_color = game.current_color
         combo_note = ""
 
-        # Neu dang bi don combo, chi hien thi la chong duoc
+        # Nếu đang bị dồn combo, chỉ hiển thị lá có thể chồng
         if game.pending_draw > 0 and game.current_player.user_id == player.user_id:
             sv = Value.DRAW2 if game.pending_draw_type == "draw2" else Value.WILD4
             playable = [c for c in player.hand if c.value == sv]
             not_playable = [c for c in player.hand if c.value != sv]
-            tl = "+2" if game.pending_draw_type == "draw2" else "+4"
+            tl = "➕2" if game.pending_draw_type == "draw2" else "🌈+4"
             combo_note = (
-                f"\n\nCOMBO DON: **{game.pending_draw} la**! "
-                f"Chi co the chong {tl} hoac `uno draw`!"
+                f"\n\n⚠️ **BỊ DỒN BÀI: {game.pending_draw} LÁ!**\n"
+                f"Bạn chỉ được phép đánh lá {tl} để chồng combo, hoặc bấm **📥 Rút Bài** để nhận phạt!"
             )
         else:
             playable = [c for c in player.hand if c.can_play_on(top, current_color)]
             not_playable = [c for c in player.hand if not c.can_play_on(top, current_color)]
 
-        playable_str = "  ".join(c.display() for c in playable) if playable else "_Khong co_"
-        notplay_str = "  ".join(c.display() for c in not_playable) if not_playable else "_Khong co_"
+        playable_str = "  ".join(c.display() for c in playable) if playable else "_Không có_"
+        notplay_str = "  ".join(c.display() for c in not_playable) if not_playable else "_Không có_"
         is_my_turn = game.current_player.user_id == player.user_id
-        turn_note = "DEN LUOT BAN!" if is_my_turn else f"Cho luot {game.current_player.username}"
+        turn_note = "▶️ **ĐẾN LƯỢT BẠN ĐÁNH!**" if is_my_turn else f"⏳ Đang chờ lượt của **{game.current_player.username}**"
 
         embed = make_embed(
-            title=f"Bai Cua {player.username}",
+            title=f"🃏 Bài của bạn ({player.username})",
             description=(
                 f"{turn_note}{combo_note}\n\n"
-                f"La tren ban: {top.display()} - mau {COLOR_EMOJI[current_color]}\n\n"
-                f"Co the danh ({len(playable)} la):\n{playable_str}\n\n"
-                f"Khong the danh ({len(not_playable)} la):\n{notplay_str}\n\n"
-                "Dung `uno play` de danh" + ("\nDung `uno draw` de rut" if not playable else "")
+                f"🎴 **Lá bài trên bàn:** {top.display()} — màu: {COLOR_EMOJI[current_color]}\n\n"
+                f"✅ **Có thể đánh ({len(playable)} lá):**\n{playable_str}\n\n"
+                f"❌ **Không thể đánh ({len(not_playable)} lá):**\n{notplay_str}\n\n"
+                "💡 **Cách đánh bài:** Gõ lệnh `uno play <mã>` hoặc `u p <mã>` ở kênh chat chung để ra bài.\n"
+                "Ví dụ: `uno play R7`, `u p GD2`, `u p WD4`."
             ),
             color=DISCORD_COLOR.get(current_color, discord.Color.purple()),
         )
-        embed.set_footer(text=f"Tong: {len(player.hand)} la  |  Chi ban thay")
+        embed.set_footer(text=f"Tổng số: {len(player.hand)} lá bài | Chỉ mình bạn nhìn thấy tin nhắn này")
         return embed
 
     async def _update_board(self, channel, game: UnoGame):
         summary = game.get_board_summary()
         player_lines = []
         for p in summary["players"]:
-            ind = ">>>" if p["is_current"] else "   "
-            uno = " [UNO!]" if p["uno"] else ""
-            player_lines.append(f"{ind} {p['username']} - {p['card_count']} la{uno}")
+            ind = "▶️" if p["is_current"] else "   "
+            uno = " 🔔 **UNO!**" if p["uno"] else ""
+            player_lines.append(f"{ind} {p['username']} — `{p['card_count']}` lá{uno}")
 
         combo_warn = ""
         if game.pending_draw > 0:
-            tl = "+2" if game.pending_draw_type == "draw2" else "+4"
+            tl = "➕2" if game.pending_draw_type == "draw2" else "🌈+4"
             combo_warn = (
-                f"\n\n*** COMBO DANG DON: {game.pending_draw} LA *** "
-                f"{game.current_player.username} phai danh {tl} hoac rut!"
+                f"\n\n⚠️ **COMBO ĐANG DỒN: {game.pending_draw} LÁ!**\n"
+                f"👉 **{game.current_player.username}** phải đánh lá {tl} hoặc bấm **📥 Rút Bài**!"
             )
 
         embed = make_embed(
-            title=f"UNO - Luot cua {summary['current_player']}",
+            title=f"🃏 Bàn Chơi UNO — Lượt của {summary['current_player']}",
             description=(
-                f"La Tren Ban: {summary['top_card']}\n"
-                f"Mau: {COLOR_EMOJI[summary['current_color']]} "
-                f"{COLOR_LABEL.get(summary['current_color'], '')}\n"
-                f"Chieu: {summary['direction']}\n"
-                f"Bo bai con: {summary['deck_count']} la"
+                f"🎴 **Lá Trên Bàn:** {summary['top_card']}\n"
+                f"🎨 **Màu Hiện Tại:** {COLOR_EMOJI[summary['current_color']]} {COLOR_LABEL.get(summary['current_color'], '')}\n"
+                f"🔄 **Chiều Chơi:** {summary['direction']}\n"
+                f"🗂️ **Bài Trong Bộ:** `{summary['deck_count']}` lá còn lại"
                 f"{combo_warn}\n\n"
-                "Nguoi choi:\n" + "\n".join(player_lines) + "\n\n"
-                f"<@{summary['current_player_id']}> co {TURN_TIMEOUT}s!\n"
-                "Dung `uno play` hoac `uno draw`"
+                "**👥 Người Chơi:**\n" + "\n".join(player_lines) + "\n\n"
+                f"⏳ **{summary['current_player']}** có `{TURN_TIMEOUT}` giây để đi bài!"
             ),
             color=DISCORD_COLOR.get(summary["current_color"], discord.Color.purple()),
         )
+
+        # Đính kèm hình ảnh đã cắt của lá bài trên bàn
+        file = None
+        top_card = game.top_card
+        img_path = top_card.image_path()
+        if img_path and img_path.exists():
+            file = discord.File(img_path, filename="top_card.png")
+            embed.set_thumbnail(url="attachment://top_card.png")
+
+        view = BoardView(game, self)
 
         with suppress(discord.HTTPException):
             if game.board_msg_id:
@@ -530,12 +605,12 @@ class Uno(commands.Cog, name="UNO"):
                     await old.delete()
                 except Exception:
                     pass
-            msg = await channel.send(embed=embed)
+            msg = await channel.send(embed=embed, file=file, view=view)
             game.board_msg_id = msg.id
 
     async def _prompt_color(self, ctx: commands.Context, player: UnoPlayer) -> Optional[Color]:
         view = ColorPickView(player.user_id, timeout=15.0)
-        msg = await ctx.send("Chon mau moi:", view=view, ephemeral=True)
+        msg = await ctx.send("🌈 **Chọn màu mới cho bộ bài:**", view=view, ephemeral=True)
         timed_out = await view.wait()
         with suppress(discord.HTTPException):
             await msg.delete()
@@ -545,73 +620,62 @@ class Uno(commands.Cog, name="UNO"):
         self, ctx: commands.Context, game: UnoGame,
         player: UnoPlayer, card: UnoCard, effect: dict, chosen_color: Optional[Color],
     ):
-        parts = [f"**{player.username}** danh **{card.display()}**"]
+        parts = [f"**{player.username}** đã đánh lá **{card.display()}**"]
         if effect.get("reversed"):
-            parts.append("REVERSE! Dao chieu!")
+            parts.append("🔄 **REVERSE!** Đảo chiều vòng chơi!")
         if effect.get("skipped"):
-            parts.append("SKIP! Bo qua luot!")
+            parts.append("⏩ **SKIP!** Bỏ qua lượt tiếp theo!")
         if effect.get("draw") and card.value == Value.DRAW2:
             total = effect["draw"]
             nxt = game.current_player.username
             if effect.get("stacking"):
-                parts.append(f"+2 COMBO! Tong: **{total} la**! {nxt} phai chong hoac rut!")
+                parts.append(f"➕2 **COMBO!** Tổng đang dồn: **{total} lá**! **{nxt}** phải chồng hoặc rút!")
             else:
-                parts.append(f"+2 **{nxt}** phai rut {total} la hoac chong +2!")
+                parts.append(f"➕2 **{nxt}** phải rút {total} lá hoặc chồng +2!")
         if card.value == Value.WILD4:
             total = effect["draw"]
             nxt = game.current_player.username
             clr = COLOR_EMOJI[game.current_color]
             clr_name = COLOR_LABEL.get(game.current_color, "")
-            parts.append(f"Wild+4 Mau moi: {clr} **{clr_name}**")
+            parts.append(f"🌈+4 Màu mới đổi sang: {clr} **{clr_name}**")
             if effect.get("stacking"):
-                parts.append(f"COMBO! Tong: **{total} la**! {nxt} phai chong hoac rut!")
+                parts.append(f"💥 **COMBO!** Tổng đang dồn: **{total} lá**! **{nxt}** phải chồng hoặc rút!")
             else:
-                parts.append(f"**{nxt}** phai rut {total} la hoac chong +4!")
+                parts.append(f"😱 **{nxt}** phải rút {total} lá hoặc chồng +4!")
         elif card.value == Value.WILD:
             clr = COLOR_EMOJI[game.current_color]
             clr_name = COLOR_LABEL.get(game.current_color, "")
-            parts.append(f"Wild Mau moi: {clr} **{clr_name}**")
-        await ctx.send(embed=make_embed(
-            title="Bai Duoc Danh",
+            parts.append(f"🌈 Màu mới đổi sang: {clr} **{clr_name}**")
+
+        embed = make_embed(
+            title="🎴 Bài Đã Được Đánh",
             description="\n".join(parts),
             color=DISCORD_COLOR.get(game.current_color, discord.Color.purple()),
-        ))
+        )
 
-    async def _handle_uno_call(self, channel, game: UnoGame):
-        target_id = game.uno_pending_user_id
-        if not target_id:
-            return
-        target = game.get_player(target_id)
-        if not target:
-            return
-        view = UnoCallView(target_id=target_id, timeout=UNO_CALL_TIMEOUT)
-        msg = await channel.send(embed=make_embed(
-            title=f"{target.username} con 1 LA!",
-            description=(
-                f"**{target.username}** co {UNO_CALL_TIMEOUT}s de ho `uno uno`!\n"
-                "Nguoi khac co the To Cao neu ho khong ho kip!"
-            ),
-            color=discord.Color.gold(),
-        ), view=view)
-        await view.wait()
-        with suppress(discord.HTTPException):
-            await msg.delete()
-        if view.accuser_id:
-            result, count = game.accuse_uno(view.accuser_id, target_id)
-            accuser = game.get_player(view.accuser_id)
-            aname = accuser.username if accuser else "Ai do"
-            if result == "success":
+        file = None
+        img_path = card.image_path()
+        if img_path and img_path.exists():
+            file = discord.File(img_path, filename="played_card.png")
+            embed.set_thumbnail(url="attachment://played_card.png")
+
+        await ctx.send(embed=embed, file=file)
+
+    async def _start_uno_timer(self, game: UnoGame, target_id: int, channel):
+        """Khởi động bộ đếm 15s không khóa luồng để hô UNO."""
+        await asyncio.sleep(UNO_CALL_TIMEOUT)
+        if game.uno_pending_user_id == target_id and not game.uno_safe:
+            # Hết giờ mà chưa hô UNO -> tự động phạt rút 2 lá
+            game.uno_pending_user_id = None
+            player = game.get_player(target_id)
+            if player:
+                game.draw_cards(player, 2)
                 await channel.send(embed=make_embed(
-                    title="To Cao Thanh Cong!",
-                    description=f"{target.username} quen ho UNO!\n**{target.username}** bi phat rut **2 la**!",
+                    title="⏰ Hết Giờ Hô UNO!",
+                    description=f"**{player.username}** đã không hô UNO kịp thời!\n😤 Bị tự động phạt rút **2 lá**!",
                     color=discord.Color.red(),
                 ))
-            elif result == "fail":
-                await channel.send(embed=make_embed(
-                    title="To Cao That Bai!",
-                    description=f"{target.username} da ho UNO roi!\n**{aname}** bi phat rut **1 la**!",
-                    color=discord.Color.orange(),
-                ))
+                await self._update_board(channel, game)
 
     async def _handle_win(self, ctx: commands.Context, game: UnoGame, winner: UnoPlayer):
         rewards = game.calculate_rewards()
@@ -626,19 +690,19 @@ class Uno(commands.Cog, name="UNO"):
         result_lines = []
         for p in game.players:
             delta = rewards.get(p.user_id, 0)
-            icon = "[WIN]" if p.user_id == winner.user_id else "[LOSE]"
+            icon = "🥇 [THẮNG]" if p.user_id == winner.user_id else "😢 [THUA]"
             sign = f"+{delta:,}" if delta > 0 else f"{delta:,}"
             result_lines.append(f"{icon} **{p.username}**: `{sign} VND`")
         losers = [
-            f"**{p.username}**: {len(p.hand)} la"
+            f"**{p.username}**: {len(p.hand)} lá bài"
             for p in game.players if p.user_id != winner.user_id
         ]
         await ctx.send(embed=make_embed(
-            title=f"UNO! {winner.username} CHIEN THANG!",
+            title=f"🏆 UNO! {winner.username} ĐÃ CHIẾN THẮNG! 🎉",
             description=(
-                "**Ket Qua:**\n" + "\n".join(result_lines) + "\n\n"
-                f"Tong luot: `{game.turn_count}`\n"
-                + ("**Bai con lai:**\n" + "\n".join(losers) if losers else "")
+                "**📊 Kết Quả:**\n" + "\n".join(result_lines) + "\n\n"
+                f"⏱️ Tổng số lượt chơi: `{game.turn_count}`\n"
+                + ("**🃏 Bài còn lại của đối thủ:**\n" + "\n".join(losers) if losers else "")
             ),
             color=discord.Color.gold(),
         ))
@@ -691,9 +755,9 @@ class Uno(commands.Cog, name="UNO"):
     @uno.error
     async def uno_error(self, ctx: commands.Context, error):
         if isinstance(error, commands.MaxConcurrencyReached):
-            await ctx.send("Kenh nay da co phong UNO!", delete_after=8)
+            await ctx.send("❌ Kênh này hiện đã có phòng chơi UNO rồi!", delete_after=8)
         elif isinstance(error, commands.MissingRequiredArgument):
-            await ctx.send("Dung `uno create <tien_cuoc>`.", delete_after=8)
+            await ctx.send("❌ Thiếu tiền cược! Hãy gõ: `uno create <tiền_cược>`.", delete_after=8)
         else:
             logger.error(f"UNO error: {error}", exc_info=True)
 

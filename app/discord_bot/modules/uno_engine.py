@@ -88,23 +88,26 @@ class UnoCard:
         return labels.get(self.value, self.value.value)
 
     # ------------------------------------------------------------------
-    def image_path(self, copy: str = "a") -> Optional[Path]:
-        """Trả về đường dẫn file ảnh lá bài."""
-        if self.value == Value.WILD:
-            name = f"wild_{copy}.png"
-        elif self.value == Value.WILD4:
-            name = f"wild_draw4_{copy}.png"
-        elif self.value == Value.SKIP:
-            name = f"{self.color.value}_skip_{copy}.png"
-        elif self.value == Value.REVERSE:
-            name = f"{self.color.value}_reverse_{copy}.png"
-        elif self.value == Value.DRAW2:
-            name = f"{self.color.value}_draw2_{copy}.png"
-        else:
-            name = f"{self.color.value}_{self.value.value}_{copy}.png"
+    def image_path(self) -> Optional[Path]:
+        """Trả về đường dẫn file ảnh lá bài (tự động thử các bản copy a, b, c, d)."""
+        for copy in ("a", "b", "c", "d"):
+            if self.value == Value.WILD:
+                name = f"wild_{copy}.png"
+            elif self.value == Value.WILD4:
+                name = f"wild_draw4_{copy}.png"
+            elif self.value == Value.SKIP:
+                name = f"{self.color.value}_skip_{copy}.png"
+            elif self.value == Value.REVERSE:
+                name = f"{self.color.value}_reverse_{copy}.png"
+            elif self.value == Value.DRAW2:
+                name = f"{self.color.value}_draw2_{copy}.png"
+            else:
+                name = f"{self.color.value}_{self.value.value}_{copy}.png"
 
-        p = CARDS_DIR / name
-        return p if p.exists() else None
+            p = CARDS_DIR / name
+            if p.exists():
+                return p
+        return None
 
     # ------------------------------------------------------------------
     def can_play_on(self, top: "UnoCard", current_color: Color) -> bool:
