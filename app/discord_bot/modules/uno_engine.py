@@ -44,6 +44,7 @@ PLAYABLE_COLORS = [Color.RED, Color.YELLOW, Color.GREEN, Color.BLUE]
 # ─── Custom Discord Emojis Mapping ────────────────────────────────────────────
 DYNAMIC_EMOJIS = {}
 VERIFIED_EMOJI_IDS = set()
+EMOJI_SCANNED = False
 UNO_EMOJIS = {
     # Vàng (Yellow)
     "yellow_skip": "<:yellow_skip_a:1522278509521666068>",

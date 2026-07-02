@@ -142,9 +142,9 @@ class HandDropdown(discord.ui.Select):
                     pass
             
             # Kiểm tra xem bot có thực sự có quyền truy cập emoji này không (tránh lỗi 400 Bad Request)
-            # Chỉ kiểm tra nếu VERIFIED_EMOJI_IDS đã được nạp (không trống) để tránh lỗi lúc khởi động
-            from app.discord_bot.modules.uno_engine import VERIFIED_EMOJI_IDS
-            if emoji and emoji.is_custom() and VERIFIED_EMOJI_IDS:
+            # Chỉ kiểm tra nếu EMOJI_SCANNED là True (quá trình quét đã hoàn tất)
+            from app.discord_bot.modules.uno_engine import VERIFIED_EMOJI_IDS, EMOJI_SCANNED
+            if EMOJI_SCANNED and emoji and emoji.is_custom():
                 if emoji.id not in VERIFIED_EMOJI_IDS:
                     emoji = None
             
@@ -471,7 +471,8 @@ class Uno(commands.Cog, name="UNO"):
     @commands.Cog.listener()
     async def on_ready(self):
         # Tự động quét và nạp toàn bộ custom emojis trên server theo tên để tránh sai sót ID cứng
-        from app.discord_bot.modules.uno_engine import DYNAMIC_EMOJIS, VERIFIED_EMOJI_IDS
+        from app.discord_bot.modules.uno_engine import DYNAMIC_EMOJIS, VERIFIED_EMOJI_IDS, EMOJI_SCANNED
+        import app.discord_bot.modules.uno_engine as engine
         DYNAMIC_EMOJIS.clear()
         VERIFIED_EMOJI_IDS.clear()
         
@@ -494,27 +495,28 @@ class Uno(commands.Cog, name="UNO"):
                 count += 1
                 
         # 2. Quét Application Emojis (App Emojis từ Developer Portal)
-        if self.client.application:
-            try:
-                app_emojis = await self.client.application.fetch_emojis()
-                for emoji in app_emojis:
-                    VERIFIED_EMOJI_IDS.add(emoji.id)
-                    name = emoji.name.lower()
-                    parts = name.split("_")
-                    if len(parts) >= 2:
-                        color = parts[0]
-                        value = parts[1]
-                        if color == "wild" and value == "draw4":
-                            key = "wild_wild4"
-                        elif color == "wild" and value == "a":
-                            key = "wild_wild"
-                        else:
-                            key = f"{color}_{value}"
-                        DYNAMIC_EMOJIS[key] = str(emoji)
-                        count += 1
-            except Exception as e:
-                logger.warning(f"UNO: Không thể quét Application Emojis: {e}")
-                
+        try:
+            app_emojis = await self.client.fetch_application_emojis()
+            for emoji in app_emojis:
+                VERIFIED_EMOJI_IDS.add(emoji.id)
+                name = emoji.name.lower()
+                parts = name.split("_")
+                if len(parts) >= 2:
+                    color = parts[0]
+                    value = parts[1]
+                    if color == "wild" and value == "draw4":
+                        key = "wild_wild4"
+                    elif color == "wild" and value == "a":
+                        key = "wild_wild"
+                    else:
+                        key = f"{color}_{value}"
+                    DYNAMIC_EMOJIS[key] = str(emoji)
+                    count += 1
+        except Exception as e:
+            logger.warning(f"UNO: Không thể quét Application Emojis: {e}")
+        
+        # Đánh dấu đã hoàn thành quá trình quét
+        engine.EMOJI_SCANNED = True
         logger.info(f"UNO: Đã nạp động {count} custom emojis (gồm cả Guild & App Emojis) từ Discord!")
 
     # --------------------------------------------------------------------------
