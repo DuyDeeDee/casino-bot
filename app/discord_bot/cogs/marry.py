@@ -134,12 +134,16 @@ def render_marriage_certificate(proposer, target, ring_id: str) -> BytesIO:
 
 def render_couple_banner(proposer, target, ring_type: str, love_points: int, joint_wallet: int, married_days: int, proposer_ig: str = "", target_ig: str = "", relationship_status: str = "Vợ Chồng", married_at: int = 0, saying: str = "") -> BytesIO:
     """Draws a beautiful custom profile banner for married couples using the template."""
-    bg_path = ABS_PATH.parent.parent / "pictures" / "Marry" / "banner_marry.png"
+    bg_path = ABS_PATH.parent.parent / "pictures" / "Marry" / "banner_marry2.png"
     if bg_path.exists():
         bg = Image.open(bg_path).convert("RGBA")
     else:
-        # Fallback to plain pink background of same dimensions
-        bg = Image.new("RGBA", (1672, 941), (252, 229, 237, 255))
+        bg_fallback = ABS_PATH.parent.parent / "pictures" / "Marry" / "banner_marry.png"
+        if bg_fallback.exists():
+            bg = Image.open(bg_fallback).convert("RGBA")
+        else:
+            # Fallback to plain pink background of same dimensions
+            bg = Image.new("RGBA", (1672, 941), (252, 229, 237, 255))
         
     width, height = bg.size
     
@@ -534,13 +538,7 @@ class Marry(commands.Cog):
             saying
         )
         file = discord.File(fp=buf, filename="couple_profile.png")
-        
-        embed = make_embed(
-            title="💖 TRANG CÁ NHÂN PHU THÊ 💖",
-            color=discord.Color.magenta()
-        )
-        embed.set_image(url="attachment://couple_profile.png")
-        await ctx.send(embed=embed, file=file)
+        await ctx.send(file=file)
         
         try:
             await loading_msg.delete()
