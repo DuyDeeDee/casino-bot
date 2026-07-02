@@ -301,8 +301,9 @@ class HandView(discord.ui.View):
         self.game = game
         self.cog = cog
         
-        # Chỉ thêm dropdown nếu người chơi còn bài
-        if player.hand:
+        is_my_turn = game.current_player.user_id == player.user_id
+        # Chỉ thêm dropdown chọn bài nếu đang trong lượt của mình và còn bài trên tay
+        if is_my_turn and player.hand:
             self.add_item(HandDropdown(player, game, cog))
         
         self.add_item(HandDrawButton(player, game, cog))
