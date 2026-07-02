@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Optional
+from uuid import uuid4
 
 # ─── Đường dẫn ảnh ────────────────────────────────────────────────────────────
 CARDS_DIR = Path(__file__).resolve().parent / "Uno" / "uno_cards"
@@ -194,6 +195,7 @@ class UnoGame:
     # UNO call tracking
     uno_pending_user_id: Optional[int] = None  # Người đang cần hô UNO
     uno_safe: bool                     = False  # Đã hô kịp chưa
+    turn_token: str                    = field(default_factory=lambda: uuid4().hex)
 
     # ------------------------------------------------------------------
     @property
@@ -399,6 +401,7 @@ class UnoGame:
         """Chuyển sang người tiếp theo theo chiều hiện tại."""
         n = len(self.players)
         self.current_player_index = (self.current_player_index + self.direction) % n
+        self.turn_token = uuid4().hex() if callable(uuid4().hex) else uuid4().hex
 
     def _peek_next_player(self) -> UnoPlayer:
         """Xem người tiếp theo mà không chuyển lượt."""

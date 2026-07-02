@@ -648,6 +648,38 @@ class Uno(commands.Cog, name="UNO"):
         else:
             await ctx.send("❌ Game đang chạy! Không thể rời bàn lúc này.", delete_after=8)
 
+    @uno.command(name="stop", aliases=["cancel", "forceclose"], brief="Dừng ván chơi UNO hiện tại và hoàn cọc")
+    async def uno_stop(self, ctx: commands.Context):
+        game = self.active_games.get(ctx.channel.id)
+        if not game:
+            await ctx.send("❌ Không có ván chơi nào đang diễn ra ở kênh này!", delete_after=5)
+            return
+
+        is_owner = ctx.author.id in config.bot.owner_ids if hasattr(config, "bot") and hasattr(config.bot, "owner_ids") else False
+        is_admin = ctx.author.guild_permissions.administrator if ctx.guild else False
+        is_host = ctx.author.id == game.host_id
+
+        if not (is_host or is_owner or is_admin):
+            await ctx.send("❌ Chỉ chủ phòng, Admin, hoặc Owner mới có quyền dừng ván chơi!", delete_after=5)
+            return
+
+        refunded = []
+        for p in game.players:
+            self.economy.add_money(p.user_id, game.bet)
+            refunded.append(f"**{p.username}**")
+
+        self.active_games.pop(ctx.channel.id, None)
+        await ctx.send(
+            embed=make_embed(
+                title="🛑 VÁN CHƠI ĐÃ BỊ HỦY BỎ!",
+                description=(
+                    f"Ván chơi đã bị dừng bởi <@{ctx.author.id}>.\n"
+                    f"💰 Đã hoàn trả `{game.bet:,} VND` tiền cọc cho: {', '.join(refunded)}"
+                ),
+                color=discord.Color.red(),
+            )
+        )
+
     # --------------------------------------------------------------------------
     #  Logic Thực Hiện Rút Bài từ Nút Ephemeral
     # --------------------------------------------------------------------------
@@ -728,6 +760,56 @@ class Uno(commands.Cog, name="UNO"):
                     color=discord.Color.red(),
                 ), view=None)
 
+    async def _run_game_loop(self, channel_id: int):
+        """Vòng lặp chạy nền để kiểm tra thời gian đi bài (timeout/AFK)."""
+        game = self.active_games.get(channel_id)
+        if not game:
+            return
+
+        while game.phase == GamePhase.PLAYING:
+            current_token = game.turn_token
+            current_player_id = game.current_player.user_id
+
+            await asyncio.sleep(TURN_TIMEOUT)
+
+            # Check if game state has changed or closed
+            game = self.active_games.get(channel_id)
+            if not game or game.phase != GamePhase.PLAYING:
+                break
+
+            if game.turn_token == current_token and game.current_player.user_id == current_player_id:
+                # Timeout
+                player = game.current_player
+                channel = self.client.get_channel(game.channel_id)
+                if not channel:
+                    break
+
+                kicked, drawn = game.handle_afk(player)
+                
+                if kicked:
+                    self.economy.add_money(player.user_id, game.bet)
+                    await channel.send(
+                        f"💤 **{player.username}** đã AFK quá 3 lượt và bị mời ra khỏi phòng! (Đã hoàn cọc `{game.bet:,} VND`)"
+                    )
+                    
+                    if len(game.players) < 2:
+                        if len(game.players) == 1:
+                            winner = game.players[0]
+                            game.winner_id = winner.user_id
+                            game.phase = GamePhase.FINISHED
+                            await self._handle_win_no_ctx(channel, game, winner)
+                        else:
+                            await channel.send("🛑 Trò chơi kết thúc vì không còn đủ người chơi!")
+                            self.active_games.pop(channel_id, None)
+                        break
+                else:
+                    await channel.send(
+                        f"💤 **{player.username}** đã hết thời gian đi bài! Tự động rút 1 lá và bỏ qua lượt."
+                    )
+                    game.advance_turn()
+                
+                await self._update_board(channel, game)
+
     def _make_lobby_embed(self, game: UnoGame) -> discord.Embed:
         lines = "\n".join(
             f"👑 [Chủ Phòng] {p.username}" if p.user_id == game.host_id else f"🎮 [Người Chơi] {p.username}"
@@ -771,6 +853,7 @@ class Uno(commands.Cog, name="UNO"):
             color=DISCORD_COLOR.get(game.current_color, discord.Color.purple())
         ))
         await self._update_board(channel, game)
+        asyncio.create_task(self._run_game_loop(channel.id))
 
     def _make_hand_embed(self, player: UnoPlayer, game: UnoGame) -> discord.Embed:
         top = game.top_card
