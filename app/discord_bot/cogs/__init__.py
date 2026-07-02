@@ -21,6 +21,7 @@ from .mines import Mines
 from .plinko import Plinko
 from .highlow import HighLow
 from .marry import Marry
+from .uno import Uno
 
 
 
