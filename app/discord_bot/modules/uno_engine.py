@@ -196,6 +196,7 @@ class UnoGame:
     uno_pending_user_id: Optional[int] = None  # Người đang cần hô UNO
     uno_safe: bool                     = False  # Đã hô kịp chưa
     turn_token: str                    = field(default_factory=lambda: uuid4().hex)
+    last_play_info: str                = "Trò chơi vừa bắt đầu!"
 
     # ------------------------------------------------------------------
     @property
