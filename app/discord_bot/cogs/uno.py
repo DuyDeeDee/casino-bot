@@ -141,7 +141,13 @@ class HandDropdown(discord.ui.Select):
                 except Exception:
                     pass
             
-            # Fallback về vòng tròn màu mặc định (🔴, 🟡, 🟢, 🔵, 🌈) nếu không tìm thấy custom emoji nào
+            # Kiểm tra xem bot có thực sự có quyền truy cập emoji này không (tránh lỗi 400 Bad Request)
+            if emoji and emoji.is_custom():
+                resolved_emoji = cog.client.get_emoji(emoji.id)
+                if resolved_emoji is None:
+                    emoji = None
+            
+            # Fallback về vòng tròn màu mặc định (🔴, 🟡, 🟢, 🔵, 🌈) nếu không tìm thấy custom emoji hợp lệ/bot thấy được
             if emoji is None:
                 emoji = COLOR_EMOJI.get(card.color)
 
@@ -821,13 +827,17 @@ class Uno(commands.Cog, name="UNO"):
 
     def _get_hand_message_data(self, player: UnoPlayer, game: UnoGame) -> tuple[str, discord.ui.View]:
         is_my_turn = game.current_player.user_id == player.user_id
+        
+        # Danh sách bài hiện tại dạng emoji trên 1 dòng
+        hand_display = " ".join([card.display() for card in player.hand])
+        
         if is_my_turn:
-            content = f"▶️ **Đến lượt bạn đánh!** (Bài của bạn có **{len(player.hand)}** lá)"
+            content = f"▶️ **Đến lượt bạn đánh!**\nBài của bạn: {hand_display}"
             if game.pending_draw > 0:
                 tl = "➕2" if game.pending_draw_type == "draw2" else "🌈+4"
                 content += f"\n⚠️ **BỊ DỒN BÀI: {game.pending_draw} LÁ!** Bạn phải chồng {tl} hoặc chịu phạt."
         else:
-            content = f"⏳ Đang chờ lượt của **{game.current_player.username}** (Bài của bạn có **{len(player.hand)}** lá)"
+            content = f"⏳ Đang chờ lượt của **{game.current_player.username}**\nBài của bạn: {hand_display}"
             
         view = HandView(player, game, self)
         return content, view
