@@ -42,6 +42,7 @@ COLOR_LABEL = {
 PLAYABLE_COLORS = [Color.RED, Color.YELLOW, Color.GREEN, Color.BLUE]
 
 # ─── Custom Discord Emojis Mapping ────────────────────────────────────────────
+DYNAMIC_EMOJIS = {}
 UNO_EMOJIS = {
     # Vàng (Yellow)
     "yellow_skip": "<:yellow_skip_a:1522278509521666068>",
@@ -142,6 +143,8 @@ class UnoCard:
     def display(self) -> str:
         """Hiển thị dạng emoji, ưu tiên dùng custom Discord Emojis."""
         key = f"{self.color.value}_{self.value.value}"
+        if key in DYNAMIC_EMOJIS:
+            return DYNAMIC_EMOJIS[key]
         if key in UNO_EMOJIS:
             return UNO_EMOJIS[key]
 

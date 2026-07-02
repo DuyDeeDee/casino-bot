@@ -380,6 +380,27 @@ class Uno(commands.Cog, name="UNO"):
         self.client = client
         self.economy: Economy = getattr(client, "economy", Economy())
 
+    @commands.Cog.listener()
+    async def on_ready(self):
+        # Tự động quét và nạp toàn bộ custom emojis trên server theo tên để tránh sai sót ID cứng
+        from app.discord_bot.modules.uno_engine import DYNAMIC_EMOJIS
+        count = 0
+        for emoji in self.client.emojis:
+            name = emoji.name.lower()
+            parts = name.split("_")
+            if len(parts) >= 2:
+                color = parts[0]
+                value = parts[1]
+                if color == "wild" and value == "draw4":
+                    key = "wild_wild4"
+                elif color == "wild" and value == "a":
+                    key = "wild_wild"
+                else:
+                    key = f"{color}_{value}"
+                DYNAMIC_EMOJIS[key] = str(emoji)
+                count += 1
+        logger.info(f"UNO: Đã nạp động {count} custom emojis từ Discord Guilds!")
+
     # --------------------------------------------------------------------------
     #  Commands
     # --------------------------------------------------------------------------
