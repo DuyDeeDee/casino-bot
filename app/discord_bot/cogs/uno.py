@@ -208,9 +208,9 @@ class HandDropdown(discord.ui.Select):
             timed_out = await view.wait()
             if timed_out or view.chosen_color is None:
                 # Phục hồi hiển thị bộ bài
-                content, h_view = self.cog._get_hand_message_data(self.player, self.game)
+                content, embed, h_view = self.cog._get_hand_message_data(self.player, self.game)
                 try:
-                    await interaction.followup.send(content=content, view=h_view, ephemeral=True)
+                    await interaction.followup.send(content=content, embed=embed, view=h_view, ephemeral=True)
                 except Exception:
                     pass
                 return
@@ -243,11 +243,9 @@ class HandDropdown(discord.ui.Select):
         await self.cog._update_board(interaction.channel, self.game)
 
         # Cập nhật phản hồi nhanh ngay tại tin nhắn bài hiện tại
-        content = f"✅ Bạn đã đánh lá bài **{label}** {emoji_str if emoji_str.startswith('<:') else ''} thành công!"
-        content += f"\n⏳ Đang chờ lượt của **{self.game.current_player.username}**"
-        
-        view = HandView(self.player, self.game, self.cog)
-        await interaction.edit_original_response(content=content, embed=None, view=view)
+        content, embed, view = self.cog._get_hand_message_data(self.player, self.game)
+        content = f"✅ Bạn đã đánh lá bài **{label}** {emoji_str if emoji_str.startswith('<:') else ''} thành công!\n{content}"
+        await interaction.edit_original_response(content=content, embed=embed, view=view)
 
         if self.game.uno_pending_user_id:
             asyncio.create_task(self.cog._start_uno_timer(self.game, self.game.uno_pending_user_id, interaction.channel))
@@ -297,8 +295,8 @@ class HandReloadButton(discord.ui.Button):
             return
 
         await interaction.response.defer(ephemeral=True)
-        content, view = self.cog._get_hand_message_data(player, game)
-        await interaction.edit_original_response(content=content, embed=None, view=view)
+        content, embed, view = self.cog._get_hand_message_data(player, game)
+        await interaction.edit_original_response(content=content, embed=embed, view=view)
 
 
 class HandView(discord.ui.View):
@@ -364,10 +362,9 @@ class DrawPlayView(discord.ui.View):
         await self.cog._update_board(interaction.channel, self.game)
 
         # Cập nhật tin nhắn ẩn sau khi đánh lá bài vừa rút
-        content = f"✅ Bạn đã đánh lá bài vừa rút **{label}** thành công!"
-        content += f"\n⏳ Đang chờ lượt của **{self.game.current_player.username}**"
-        view = HandView(self.player, self.game, self.cog)
-        await interaction.edit_original_response(content=content, embed=None, view=view)
+        content, embed, view = self.cog._get_hand_message_data(self.player, self.game)
+        content = f"✅ Bạn đã đánh lá bài vừa rút **{label}** thành công!\n{content}"
+        await interaction.edit_original_response(content=content, embed=embed, view=view)
 
         if self.game.uno_pending_user_id:
             asyncio.create_task(self.cog._start_uno_timer(self.game, self.game.uno_pending_user_id, interaction.channel))
@@ -383,10 +380,9 @@ class DrawPlayView(discord.ui.View):
         self.game.advance_turn()
         await self.cog._update_board(interaction.channel, self.game)
 
-        content = "❌ Bạn đã chọn bỏ lượt chơi."
-        content += f"\n⏳ Đang chờ lượt của **{self.game.current_player.username}**"
-        view = HandView(self.player, self.game, self.cog)
-        await interaction.edit_original_response(content=content, embed=None, view=view)
+        content, embed, view = self.cog._get_hand_message_data(self.player, self.game)
+        content = f"❌ Bạn đã chọn bỏ lượt chơi.\n{content}"
+        await interaction.edit_original_response(content=content, embed=embed, view=view)
 
 
 class BoardView(discord.ui.View):
@@ -395,17 +391,17 @@ class BoardView(discord.ui.View):
         self.game = game
         self.cog = cog
 
-    @discord.ui.button(label="👁️ Xem Bài Của Bạn", style=discord.ButtonStyle.secondary, custom_id="uno_board_hand")
+    @discord.ui.button(label="👁️ Xem Bài Của Bạn", style=discord.ButtonStyle.primary, custom_id="uno_board_hand")
     async def hand_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         player = self.game.get_player(interaction.user.id)
         if not player:
             await interaction.response.send_message("❌ Bạn không tham gia trò chơi này!", ephemeral=True)
             return
         
-        content, view = self.cog._get_hand_message_data(player, self.game)
-        await interaction.response.send_message(content=content, view=view, ephemeral=True)
+        content, embed, view = self.cog._get_hand_message_data(player, self.game)
+        await interaction.response.send_message(content=content, embed=embed, view=view, ephemeral=True)
 
-    @discord.ui.button(label="📥 Rút Bài / Chịu Phạt", style=discord.ButtonStyle.primary, custom_id="uno_board_draw")
+    @discord.ui.button(label="📥 Rút Bài / Chịu Phạt", style=discord.ButtonStyle.secondary, custom_id="uno_board_draw")
     async def draw_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         player = self.game.get_player(interaction.user.id)
         if not player:
@@ -807,10 +803,9 @@ class Uno(commands.Cog, name="UNO"):
             game.last_play_info = f"📥 **{player.username}** không thể chồng combo, đã chịu phạt rút **{count} lá** và mất lượt!"
             await self._update_board(interaction.channel, game)
 
-            content = f"📦 Bạn đã nhận phạt combo rút **{count} lá** và mất lượt!"
-            content += f"\n⏳ Đang chờ lượt của **{game.current_player.username}**"
-            view = HandView(player, game, self)
-            await interaction.edit_original_response(content=content, embed=None, view=view)
+            content, embed, view = self._get_hand_message_data(player, game)
+            content = f"📦 Bạn đã nhận phạt combo rút **{count} lá** và mất lượt!\n{content}"
+            await interaction.edit_original_response(content=content, embed=embed, view=view)
             return
 
         # Rút 1 lá bình thường
@@ -847,31 +842,58 @@ class Uno(commands.Cog, name="UNO"):
             val_label = card._value_label()
             label = val_label if card.color == Color.WILD else f"{clr_label} {val_label}"
 
-            content = f"❌ Bạn rút được lá **{label}** (không thể đánh) và kết thúc lượt."
-            content += f"\n⏳ Đang chờ lượt của **{game.current_player.username}**"
-            view = HandView(player, game, self)
-            await interaction.edit_original_response(content=content, embed=None, view=view)
+            content, embed, view = self._get_hand_message_data(player, game)
+            content = f"❌ Bạn rút được lá **{label}** (không thể đánh) và kết thúc lượt.\n{content}"
+            await interaction.edit_original_response(content=content, embed=embed, view=view)
 
     # --------------------------------------------------------------------------
     #  Helpers
     # --------------------------------------------------------------------------
 
-    def _get_hand_message_data(self, player: UnoPlayer, game: UnoGame) -> tuple[str, discord.ui.View]:
+    def _get_hand_message_data(self, player: UnoPlayer, game: UnoGame) -> tuple[str, discord.Embed, discord.ui.View]:
         is_my_turn = game.current_player.user_id == player.user_id
         
-        # Danh sách bài hiện tại dạng emoji trên 1 dòng
-        hand_display = " ".join([card.display() for card in player.hand])
+        # 1. Tạo danh sách viết tắt (Abbreviated format)
+        abbr_list = []
+        for card in player.hand:
+            color_char = {
+                Color.RED: "R",
+                Color.YELLOW: "Y",
+                Color.GREEN: "G",
+                Color.BLUE: "B",
+                Color.WILD: "",
+            }.get(card.color, "")
+            if card.color == Color.WILD:
+                code = "Wild" if card.value == Value.WILD else "WD4"
+            else:
+                code = {Value.SKIP: "Skip", Value.REVERSE: "Reverse", Value.DRAW2: "+2"}.get(card.value, card.value.value)
+            abbr_list.append(f"[{card.display()} {color_char}{code}]")
+            
+        # 2. Tạo danh sách chi tiết (Detailed format)
+        full_list = []
+        for card in player.hand:
+            clr_label = COLOR_LABEL.get(card.color, "")
+            val_label = card._value_label()
+            label = val_label if card.color == Color.WILD else f"{clr_label} {val_label}"
+            full_list.append(f"[{card.display()} {label}]")
+            
+        desc = "  ".join(abbr_list) + "\n\n" + "  ".join(full_list)
+        
+        embed = make_embed(
+            description=desc,
+            color=DISCORD_COLOR.get(game.current_color, discord.Color.purple())
+        )
         
         if is_my_turn:
-            content = f"▶️ **Đến lượt bạn đánh!**\nBài của bạn: {hand_display}"
+            content = "▶️ **Đến lượt bạn đánh!**"
             if game.pending_draw > 0:
                 tl = "➕2" if game.pending_draw_type == "draw2" else "🌈+4"
                 content += f"\n⚠️ **BỊ DỒN BÀI: {game.pending_draw} LÁ!** Bạn phải chồng {tl} hoặc chịu phạt."
         else:
-            content = f"⏳ Đang chờ lượt của **{game.current_player.username}**\nBài của bạn: {hand_display}"
+            content = f"⏳ Đang chờ lượt của **{game.current_player.username}**"
             
         view = HandView(player, game, self)
-        return content, view
+        return content, embed, view
 
     async def _lobby_timeout(self, channel_id: int, msg: discord.Message, seconds: int):
         await asyncio.sleep(seconds)
@@ -979,31 +1001,36 @@ class Uno(commands.Cog, name="UNO"):
     async def _update_board(self, channel, game: UnoGame):
         summary = game.get_board_summary()
         player_lines = []
-        for p in summary["players"]:
-            ind = "▶️" if p["is_current"] else "   "
-            uno = " 🔔 **UNO!**" if p["uno"] else ""
-            player_lines.append(f"{ind} {p['username']} — `{p['card_count']}` lá{uno}")
+        for p in game.players:
+            uno_text = " - **UNO!**" if p.uno_called else ""
+            player_lines.append(f"<@{p.user_id}> ({len(p.hand)} lá{uno_text})")
+
+        last_player_mention = "bắt đầu"
+        if game.last_player_id:
+            last_player_mention = f"<@{game.last_player_id}>"
 
         combo_warn = ""
         if game.pending_draw > 0:
             tl = "➕2" if game.pending_draw_type == "draw2" else "🌈+4"
             combo_warn = (
-                f"\n\n⚠️ **COMBO ĐANG DỒN: {game.pending_draw} LÁ!**\n"
+                f"\n⚠️ **COMBO ĐANG DỒN: {game.pending_draw} LÁ!**\n"
                 f"👉 **{game.current_player.username}** phải chồng lá {tl} hoặc bấm **📥 Rút Bài**!"
             )
 
+        desc = (
+            f"**Ván đấu #{game.room_id} ({len(game.players)}/8 người chơi)**\n\n"
+            f"🕹️ **Thông tin bàn chơi:**\n"
+            f"**Đang đến lượt:** <@{game.current_player.user_id}> {COLOR_EMOJI[summary['current_color']]}\n"
+            f"**Lá bài hiện tại:** {summary['top_card']} (by {last_player_mention})\n\n"
+            + "\n".join(player_lines) + "\n\n"
+            f"⏳ <@{game.current_player.user_id}> có `{TURN_TIMEOUT}` giây để đi bài!"
+        )
+        if combo_warn:
+            desc = desc.replace(f"⏳ <@{game.current_player.user_id}>", f"{combo_warn}\n⏳ <@{game.current_player.user_id}>")
+
         embed = make_embed(
-            title=f"🃏 Bàn Chơi UNO — Lượt của {summary['current_player']}",
-            description=(
-                f"💬 **Diễn biến mới nhất:**\n{game.last_play_info}\n\n"
-                f"🎴 **Lá Trên Bàn:** {summary['top_card']}\n"
-                f"🎨 **Màu Hiện Tại:** {COLOR_EMOJI[summary['current_color']]} {COLOR_LABEL.get(summary['current_color'], '')}\n"
-                f"🔄 **Chiều Chơi:** {summary['direction']}\n"
-                f"🗂️ **Bài Trong Bộ:** `{summary['deck_count']}` lá còn lại"
-                f"{combo_warn}\n\n"
-                "**👥 Người Chơi:**\n" + "\n".join(player_lines) + "\n\n"
-                f"⏳ **{summary['current_player']}** có `{TURN_TIMEOUT}` giây để đi bài!"
-            ),
+            title=f"Bàn Chơi UNO — Lượt của {summary['current_player']}",
+            description=desc,
             color=DISCORD_COLOR.get(summary["current_color"], discord.Color.purple()),
         )
 

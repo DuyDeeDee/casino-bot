@@ -274,6 +274,7 @@ class UnoGame:
     uno_safe: bool                     = False  # Đã hô kịp chưa
     turn_token: str                    = field(default_factory=lambda: uuid4().hex)
     last_play_info: str                = "Trò chơi vừa bắt đầu!"
+    last_player_id: Optional[int]      = None
 
     # ------------------------------------------------------------------
     @property
@@ -393,6 +394,7 @@ class UnoGame:
         player.hand.remove(card)
         self.discard_pile.append(card)
         self.turn_count += 1
+        self.last_player_id = player.user_id
 
         # Cập nhật màu
         if card.value in WILD_VALUES:
