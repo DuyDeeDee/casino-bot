@@ -48,6 +48,31 @@ RING_IMAGES = {
     "ring_divine": "Nhẫn Hào Quang Vĩnh Cửu.png"
 }
 
+# Sweet sayings for interactions
+INTERACT_SAYINGS = {
+    "Kiss": [
+        "Chụt! Một nụ hôn nồng cháy gửi đến người thương ❤️",
+        "Hôn nhẹ lên má cậu một cái nè, yêu ghê cơ 🥰",
+        "Thương nhiều lắm mới trao nụ hôn ngọt ngào này đó 😘",
+        "Nụ hôn ngọt ngào nhất thế gian này dành riêng cho cậu 💋",
+        "Chụt! Mong rằng nụ hôn này làm cậu mỉm cười cả ngày hôm nay ✨"
+    ],
+    "Hug": [
+        "Ôm một cái thật chặt để tiếp thêm năng lượng cho cậu nhé 🤗",
+        "Ấm áp ghê, muốn ôm cậu mãi như thế này thôi 💖",
+        "Nhận lấy chiếc ôm siêu to khổng lồ từ tớ nè! 🧸",
+        "Bất cứ khi nào mệt mỏi, hãy nhớ luôn có một chiếc ôm đợi cậu 🌸",
+        "Gửi trọn tình cảm vào cái ôm ấm áp này nhắn gửi tới cậu 💕"
+    ],
+    "Pat": [
+        "Xoa đầu ngoan ngoan nè, thương thương lắm luôn á 👋",
+        "Cậu đã làm tốt lắm rồi, xoa đầu khen thưởng cái nè 🥰",
+        "Xoa xoa đầu, mong mọi muộn phiền của cậu đều tan biến nhé 💫",
+        "Ngoan nào ngoan nào, có tớ ở đây rồi 🥺",
+        "Nhìn cưng xỉu thế này chỉ muốn xoa đầu mãi thôi 😸"
+    ]
+}
+
 def get_avatar_img(user) -> Image.Image:
     """Downloads user avatar or returns a fallback grey placeholder."""
     try:
@@ -697,7 +722,7 @@ class Marry(commands.Cog):
         await ctx.send(embed=embed)
 
     # Love points daily interaction commands
-    async def process_interact(self, ctx: commands.Context, target: discord.Member, action: str, emoji: str):
+    async def process_interact(self, ctx: commands.Context, target: discord.Member, action: str, emoji: str, action_type: str):
         marriage = self.economy.get_marriage(ctx.author.id)
         if not marriage:
             await ctx.send(f"❌ Lệnh tương tác cặp đôi chỉ dành cho người đã kết hôn!")
@@ -719,21 +744,42 @@ class Marry(commands.Cog):
         else:
             pts_msg = " (Hôm nay hai bạn đã đạt giới hạn tối đa 20 Điểm thân mật)."
             
-        await ctx.send(
-            f"{emoji} **{ctx.author.name}** đã trao một {action} nồng thắm cho bạn đời của mình **{target.name}**!{pts_msg}"
+        embed_desc = f"{emoji} **{ctx.author.name}** đã trao một {action} nồng thắm cho bạn đời của mình **{target.name}**!{pts_msg}"
+        sayings = INTERACT_SAYINGS.get(action_type, [])
+        if sayings:
+            saying = random.choice(sayings)
+            embed_desc += f"\n\n*\" {saying} \"*"
+            
+        embed = make_embed(
+            description=embed_desc,
+            color=discord.Color.magenta()
         )
+        
+        gif_dir = ABS_PATH.parent.parent / "pictures" / "Marry" / action_type
+        file = None
+        if gif_dir.exists() and gif_dir.is_dir():
+            gifs = list(gif_dir.glob("*.gif"))
+            if gifs:
+                chosen_gif = random.choice(gifs)
+                file = discord.File(str(chosen_gif), filename="interact.gif")
+                embed.set_image(url="attachment://interact.gif")
+                
+        if file:
+            await ctx.send(embed=embed, file=file)
+        else:
+            await ctx.send(embed=embed)
 
     @commands.command(brief="Ôm bạn đời của mình.")
     async def hug(self, ctx: commands.Context, target: discord.Member):
-        await self.process_interact(ctx, target, "cái ôm ấm áp", "🤗")
+        await self.process_interact(ctx, target, "cái ôm ấm áp", "🤗", "Hug")
 
     @commands.command(brief="Hôn bạn đời của mình.")
     async def kiss(self, ctx: commands.Context, target: discord.Member):
-        await self.process_interact(ctx, target, "nụ hôn nồng cháy", "💋")
+        await self.process_interact(ctx, target, "nụ hôn nồng cháy", "💋", "Kiss")
 
     @commands.command(brief="Xoa đầu bạn đời của mình.")
     async def pat(self, ctx: commands.Context, target: discord.Member):
-        await self.process_interact(ctx, target, "cái xoa đầu ngọt ngào", "👋")
+        await self.process_interact(ctx, target, "cái xoa đầu ngọt ngào", "👋", "Pat")
 
     @commands.command(
         brief="Hủy bỏ cuộc hôn nhân hiện tại (Ly hôn).",
