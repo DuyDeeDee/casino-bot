@@ -2173,6 +2173,24 @@ class Economy:
         self.conn.commit()
         return (new_love_points, True)
 
+    def deduct_love_points(self, user_one: int, user_two: int, points: int) -> int:
+        """Deducts love points, floor at 0. Returns new love points."""
+        self.cur.execute(
+            "SELECT love_points FROM user_marry WHERE user_one = ? AND user_two = ?",
+            (user_one, user_two)
+        )
+        row = self.cur.fetchone()
+        if not row:
+            return 0
+        love_points = row[0]
+        new_love_points = max(0, love_points - points)
+        self.cur.execute(
+            "UPDATE user_marry SET love_points = ? WHERE user_one = ? AND user_two = ?",
+            (new_love_points, user_one, user_two)
+        )
+        self.conn.commit()
+        return new_love_points
+
     def update_joint_wallet(self, user_one: int, user_two: int, delta: int) -> int:
         """Updates joint wallet balance and returns new balance"""
         self.cur.execute(

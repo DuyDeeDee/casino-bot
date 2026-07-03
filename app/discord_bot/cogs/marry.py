@@ -732,7 +732,20 @@ class Marry(commands.Cog):
         spouse_id = user_two if ctx.author.id == user_one else user_one
         
         if target.id != spouse_id:
-            await ctx.send(f"❌ Bạn chỉ có thể tương tác thân mật cùng vợ/chồng của mình (<@{spouse_id}>)!")
+            deduct_pts = 10
+            new_pts = self.economy.deduct_love_points(user_one, user_two, deduct_pts)
+            embed = make_embed(
+                title="💔 PHÁT HIỆN NGOẠI TÌNH 💔",
+                description=(
+                    f"⚠️ **{ctx.author.mention}** đã tương tác thân mật ({action}) với **{target.mention}** "
+                    f"trong khi đã kết hôn cùng <@{spouse_id}>!\n\n"
+                    f"💔 **Hành vi ngoại tình bị phát hiện!**\n"
+                    f"📉 Gia đình bạn bị phạt trừ `-{deduct_pts}` Điểm thân mật.\n"
+                    f"💞 **Điểm thân mật còn lại:** `{new_pts}` điểm."
+                ),
+                color=discord.Color.red()
+            )
+            await ctx.send(embed=embed)
             return
             
         # Try to add love points
