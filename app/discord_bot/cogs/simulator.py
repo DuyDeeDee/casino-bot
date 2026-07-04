@@ -270,9 +270,9 @@ SHOP_ITEMS = {
     },
     "ring_grass": {
         "name": "Nhẫn Cỏ 🌾",
-        "cost": 1,
-        "currency": "gold",
-        "description": "Chiếc nhẫn tết từ cành cỏ nhỏ ngoài thảo nguyên. Không có buff."
+        "cost": 100000,
+        "currency": "money",
+        "description": "Nghèo thì mua cái này thôi."
     },
     "ring_quartz": {
         "name": "<:NhanThachAnhTrang:1521733831932121159>Nhẫn Thạch Anh Trắng",
