@@ -37,6 +37,127 @@ WHEEL_LAYOUT = [
   'blue', 'green', 'blue', 'red', 'blue', 'yellow', 'green', 'blue', 'green', 'red'
 ]
 
+import math
+from io import BytesIO
+from PIL import Image, ImageDraw
+from app.discord_bot.modules.profile_renderer import load_font
+
+def render_wheel_gif(win_idx: int) -> BytesIO:
+    width = 300
+    height = 300
+    cx, cy = 150, 150
+    radius = 120
+    total_frames = 30
+    
+    # Target index math
+    target_offset = (360 - (win_idx * 12 + 6) % 360) % 360
+    total_angle = 720 + target_offset
+    
+    font = load_font("bold", 11)
+    
+    frames = []
+    
+    for f in range(total_frames):
+        # Easing out cubic: progress goes 0 to 1
+        progress = f / (total_frames - 1)
+        eased_progress = 1 - math.pow(1 - progress, 3)
+        current_rotation = total_angle * eased_progress
+        
+        # Create base image with bg color #1e1e2e
+        img = Image.new("RGBA", (width, height), (30, 30, 46, 255))
+        draw = ImageDraw.Draw(img)
+        
+        # Draw the slices
+        for i in range(30):
+            color_name = WHEEL_LAYOUT[i]
+            
+            rgb_colors = {
+                'blue': {
+                    'dark': (26, 58, 138, 255),
+                    'light': (30, 61, 153, 255),
+                    'label': 'x2',
+                    'label_color': (91, 140, 255, 255) # #5B8CFF
+                },
+                'green': {
+                    'dark': (13, 77, 32, 255),
+                    'light': (15, 92, 38, 255),
+                    'label': 'x3',
+                    'label_color': (34, 197, 94, 255) # #22c55e
+                },
+                'yellow': {
+                    'dark': (90, 63, 0, 255),
+                    'light': (107, 76, 0, 255),
+                    'label': 'x5',
+                    'label_color': (234, 179, 8, 255) # #eab308
+                },
+                'red': {
+                    'dark': (122, 16, 16, 255),
+                    'light': (138, 21, 21, 255),
+                    'label': 'x10',
+                    'label_color': (239, 68, 68, 255) # #ef4444
+                }
+            }
+            
+            cfg = rgb_colors[color_name]
+            fill_color = cfg['dark'] if i % 2 == 0 else cfg['light']
+            
+            # Start/End angles in degrees
+            start_deg = -90 + i * 12 + current_rotation
+            end_deg = -90 + (i + 1) * 12 + current_rotation
+            
+            # Draw pieslice
+            bbox = [cx - radius, cy - radius, cx + radius, cy + radius]
+            draw.pieslice(bbox, start_deg, end_deg, fill=fill_color, outline=(30, 30, 46, 255), width=2)
+            
+            # Draw label text on a separate transparent canvas and rotate/overlay
+            center_deg = start_deg + 6
+            
+            text_canvas = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+            text_draw = ImageDraw.Draw(text_canvas)
+            
+            text_x = cx + radius * 0.7
+            text_y = cy
+            
+            text_draw.text((text_x, text_y), cfg['label'], font=font, fill=cfg['label_color'], anchor="mm")
+            
+            # Rotate text_canvas clockwise around center (cx, cy)
+            rotated_text = text_canvas.rotate(-center_deg, center=(cx, cy), resample=Image.Resampling.BICUBIC)
+            
+            img = Image.alpha_composite(img, rotated_text)
+            draw = ImageDraw.Draw(img)
+            
+        # Draw outer border
+        draw.ellipse([cx - radius, cy - radius, cx + radius, cy + radius], outline=(42, 42, 69, 255), width=3)
+        
+        # Draw central hub
+        draw.ellipse([cx - 25, cy - 25, cx + 25, cy + 25], fill=(20, 20, 34, 255), outline=(42, 42, 69, 255), width=3)
+        
+        # Draw central dot
+        draw.ellipse([cx - 4, cy - 4, cx + 4, cy + 4], fill=(200, 168, 75, 255))
+        
+        # Draw top indicator triangle
+        draw.polygon([(cx, 32), (cx - 8, 18), (cx + 8, 18)], fill=(200, 168, 75, 255))
+        
+        frames.append(img)
+        
+    out = BytesIO()
+    durations = [50] * total_frames
+    frames[0].save(
+        out,
+        format="GIF",
+        save_all=True,
+        append_images=frames[1:],
+        duration=durations,
+        loop=0
+    )
+    out.seek(0)
+    
+    for frame in frames:
+        frame.close()
+        
+    return out
+
+
 class CasinoEmbed(discord.Embed):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -290,40 +411,20 @@ class Quay(commands.Cog, name="Quay"):
         win_idx = random.randint(0, 29)
         result_color = WHEEL_LAYOUT[win_idx]
         
-        # Generate spin GIF (using absolute paths to prevent CWD mismatches)
-        gif_filename = f"wheel_spin_{user_id}_{int(time.time())}.gif"
-        gif_path = os.path.abspath(os.path.join(config.storage.data_dir, gif_filename))
-        
+        # Generate spin GIF in memory using Pillow (similar to Plinko cog)
         try:
-            node_path = "node"
-            cog_dir = os.path.dirname(os.path.abspath(__file__))
-            script_path = os.path.abspath(os.path.join(cog_dir, "..", "modules", "wheel_spinner.js"))
-            
-            proc = await asyncio.create_subprocess_exec(
-                node_path, script_path, str(win_idx), gif_path,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-            stdout, stderr = await proc.communicate()
-            
-            if proc.returncode != 0:
-                logger.error(f"Node GIF generation failed: {stderr.decode()}")
-                # Refund
-                self.economy.add_money(user_id, bet_amount)
-                log_wallet_change(logger, event="color_wheel_error_refund", user_id=user_id, money_delta=bet_amount, ctx=ctx)
-                self.active_players.discard(user_id)
-                await message.edit(content="❌ Đã xảy ra lỗi khi tạo hiệu ứng vòng quay.", embed=None, view=None)
-                return
+            gif_buffer = render_wheel_gif(win_idx)
+            file = discord.File(gif_buffer, filename="wheel_spin.gif")
         except Exception as e:
-            logger.error(f"Error calling Node script: {e}")
+            logger.error(f"Pillow GIF generation failed: {e}", exc_info=True)
+            # Refund
             self.economy.add_money(user_id, bet_amount)
             log_wallet_change(logger, event="color_wheel_error_refund", user_id=user_id, money_delta=bet_amount, ctx=ctx)
             self.active_players.discard(user_id)
-            await message.edit(content="❌ Không thể kết nối với dịch vụ tạo hiệu ứng.", embed=None, view=None)
+            await message.edit(content="❌ Đã xảy ra lỗi khi tạo hiệu ứng vòng quay.", embed=None, view=None)
             return
 
         # Send embedding GIF "Vòng quay đang chạy..."
-        file = discord.File(gif_path, filename="wheel_spin.gif")
         spinning_embed = CasinoEmbed(
             title="🎡 VÒNG QUAY MAY MẮN",
             description="⏳ **Vòng quay đang chạy... Chúc bạn may mắn!**"
@@ -432,12 +533,8 @@ class Quay(commands.Cog, name="Quay"):
             await message.delete()
             await ctx.send(embed=final_embed)
             
-        # Clean up temporary GIF file
-        try:
-            if os.path.exists(gif_path):
-                os.remove(gif_path)
-        except Exception as e:
-            logger.warning(f"Failed to delete temp gif: {e}")
+        # No temporary file on disk to clean up (drawn entirely in memory)
+        pass
             
         # Unlock player
         self.active_players.discard(user_id)
