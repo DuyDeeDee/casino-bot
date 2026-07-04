@@ -1,0 +1,9 @@
+{
+  "name": "casino-bot-wheel",
+  "version": "1.0.0",
+  "dependencies": {
+    "canvas": "^3.0.0-rc3",
+    "gif-encoder-2": "^1.0.5",
+    "skia-canvas": "^3.0.8"
+  }
+}

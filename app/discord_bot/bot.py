@@ -49,6 +49,7 @@ from app.discord_bot.cogs import (
     HighLow,
     Marry,
     Uno,
+    Quay,
 )
 
 from app.discord_bot.modules.economy import Economy
@@ -80,6 +81,7 @@ COGS = (
     HighLow,
     Marry,
     Uno,
+    Quay,
 )
 
 
