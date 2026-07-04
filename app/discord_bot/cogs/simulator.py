@@ -272,7 +272,7 @@ SHOP_ITEMS = {
         "name": "Nhẫn Cỏ 🌾",
         "cost": 1,
         "currency": "gold",
-        "description": "Chiếc nhẫn tết từ cành cỏ nhỏ ngoài thảo nguyên. Buff: +1% điểm thân mật."
+        "description": "Chiếc nhẫn tết từ cành cỏ nhỏ ngoài thảo nguyên. Không có buff."
     },
     "ring_quartz": {
         "name": "<:NhanThachAnhTrang:1521733831932121159>Nhẫn Thạch Anh Trắng",
