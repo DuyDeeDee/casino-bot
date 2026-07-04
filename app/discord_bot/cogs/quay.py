@@ -371,10 +371,10 @@ class Quay(commands.Cog, name="Quay"):
 
     def format_confirm_embed(self, user_mention: str, bet_amount: int, chosen_color: str) -> CasinoEmbed:
         opts = {
-            "blue": "🔵 Xanh dương · x2 · 40%",
-            "green": "🟢 Xanh lá · x3 · 33%",
-            "yellow": "🟡 Vàng · x5 · 20%",
-            "red": "🔴 Đỏ · x10 · 7%"
+            "blue": "🔵 Xanh dương · x2",
+            "green": "🟢 Xanh lá · x3",
+            "yellow": "🟡 Vàng · x5",
+            "red": "🔴 Đỏ · x10"
         }
         
         desc_lines = []
@@ -500,8 +500,7 @@ class Quay(commands.Cog, name="Quay"):
         
         result_desc_lines.append("[ĐÃ CHỌN]")
         cfg_chosen = WHEEL_CONFIG[chosen_color]
-        pct_chosen = "40%" if chosen_color == 'blue' else "33%" if chosen_color == 'green' else "20%" if chosen_color == 'yellow' else "7%"
-        result_desc_lines.append(f"{cfg_chosen['emoji']} {cfg_chosen['label']} · x{cfg_chosen['multiplier']} · {pct_chosen}\n")
+        result_desc_lines.append(f"{cfg_chosen['emoji']} {cfg_chosen['label']} · x{cfg_chosen['multiplier']}\n")
         
         result_desc_lines.append("KẾT QUẢ VÒNG QUAY")
         color_label_upper = cfg_res['label'].upper()
