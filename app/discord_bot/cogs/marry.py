@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 # List of wedding rings mapping
 RINGS = {
+    "ring_grass": "Nhẫn Cỏ 🌾",
     "ring_quartz": "Nhẫn Thạch Anh Trắng 💍",
     "ring_aquamarine": "Nhẫn Sương Mai Aquamarine 💧",
     "ring_emerald": "Nhẫn Thanh Xuân Lục Bảo 🌿",
@@ -34,6 +35,7 @@ RINGS = {
 }
 
 RING_IMAGES = {
+    "ring_grass": "Nhẫn Cỏ.png",
     "ring_quartz": "Nhẫn Thạch Anh Trắng.png",
     "ring_aquamarine": "Nhẫn Sương Mai Aquamarine.png",
     "ring_emerald": "Nhẫn Thanh Xuân Lục Bảo.png",
@@ -473,7 +475,7 @@ class Marry(commands.Cog):
             await ctx.send("❌ **Bạn không sở hữu nhẫn cưới nào!** Hãy sử dụng `i?shop` để mua một chiếc nhẫn cầu hôn trước.")
             return
             
-        # Prioritize divine > angel > gothic > sunburst > sapphire > ruby > citrine > cupid > amethyst > emerald > aquamarine > quartz
+        # Prioritize divine > angel > gothic > sunburst > sapphire > ruby > citrine > cupid > amethyst > emerald > aquamarine > quartz > grass
         ring_priority = [
             "ring_divine",
             "ring_angel",
@@ -486,7 +488,8 @@ class Marry(commands.Cog):
             "ring_amethyst",
             "ring_emerald",
             "ring_aquamarine",
-            "ring_quartz"
+            "ring_quartz",
+            "ring_grass"
         ]
         ring_id = next(r for r in ring_priority if r in owned_rings)
         ring_name = RINGS[ring_id]

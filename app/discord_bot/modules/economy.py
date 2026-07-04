@@ -2219,6 +2219,7 @@ class Economy:
         love_level = love_points // 100
         
         ring_buffs = {
+            "ring_grass": (1.01, 0.002),
             "ring_quartz": (1.02, 0.005),
             "ring_aquamarine": (1.03, 0.005),
             "ring_emerald": (1.04, 0.005),

@@ -268,6 +268,12 @@ SHOP_ITEMS = {
         "currency": "gold",
         "description": "Thiết bị bảo vệ doanh nghiệp vĩnh viễn. 30% cơ hội bắt giữ kẻ cướp, phạt tiền bồi thường cho bạn."
     },
+    "ring_grass": {
+        "name": "Nhẫn Cỏ 🌾",
+        "cost": 1,
+        "currency": "gold",
+        "description": "Chiếc nhẫn tết từ cành cỏ nhỏ ngoài thảo nguyên. Buff: +1% điểm thân mật."
+    },
     "ring_quartz": {
         "name": "<:NhanThachAnhTrang:1521733831932121159>Nhẫn Thạch Anh Trắng",
         "cost": 2,
@@ -989,6 +995,7 @@ class ShopView(discord.ui.View):
                 color=discord.Color.magenta()
             )
             ring_keys = [
+                "ring_grass",
                 "ring_quartz",
                 "ring_aquamarine",
                 "ring_emerald",
