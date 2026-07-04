@@ -269,7 +269,7 @@ SHOP_ITEMS = {
         "description": "Thiết bị bảo vệ doanh nghiệp vĩnh viễn. 30% cơ hội bắt giữ kẻ cướp, phạt tiền bồi thường cho bạn."
     },
     "ring_grass": {
-        "name": "Nhẫn Cỏ 🌾",
+        "name": "<:NhnC:1522871683495624764>Nhẫn Cỏ",
         "cost": 100000,
         "currency": "money",
         "description": "Nghèo thì mua cái này thôi."
