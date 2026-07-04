@@ -142,9 +142,8 @@ class HandDropdown(discord.ui.Select):
                     pass
             
             # Kiểm tra xem bot có thực sự có quyền truy cập emoji này không (tránh lỗi 400 Bad Request)
-            # Chỉ kiểm tra nếu EMOJI_SCANNED là True (quá trình quét đã hoàn tất)
-            from app.discord_bot.modules.uno_engine import VERIFIED_EMOJI_IDS, EMOJI_SCANNED
-            if EMOJI_SCANNED and emoji and emoji.is_custom():
+            from app.discord_bot.modules.uno_engine import VERIFIED_EMOJI_IDS
+            if emoji and emoji.is_custom():
                 if emoji.id not in VERIFIED_EMOJI_IDS:
                     emoji = None
             
@@ -399,64 +398,80 @@ class BoardView(discord.ui.View):
 
     @discord.ui.button(label="👁️ Xem Bài Của Bạn", style=discord.ButtonStyle.primary, custom_id="uno_board_hand")
     async def hand_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        player = self.game.get_player(interaction.user.id)
-        if not player:
-            await interaction.response.send_message("❌ Bạn không tham gia trò chơi này!", ephemeral=True)
-            return
-        
-        content, embed, view = self.cog._get_hand_message_data(player, self.game)
-        await interaction.response.send_message(content=content, embed=embed, view=view, ephemeral=True)
+        try:
+            player = self.game.get_player(interaction.user.id)
+            if not player:
+                await interaction.response.send_message("❌ Bạn không tham gia trò chơi này!", ephemeral=True)
+                return
+            
+            content, embed, view = self.cog._get_hand_message_data(player, self.game)
+            await interaction.response.send_message(content=content, embed=embed, view=view, ephemeral=True)
+        except Exception as e:
+            logger.error(f"Error in hand_btn: {e}", exc_info=True)
+            await interaction.response.send_message(f"❌ Đã xảy ra lỗi khi hiển thị bài: {e}", ephemeral=True)
 
     @discord.ui.button(label="📥 Rút Bài / Chịu Phạt", style=discord.ButtonStyle.secondary, custom_id="uno_board_draw")
     async def draw_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        player = self.game.get_player(interaction.user.id)
-        if not player:
-            await interaction.response.send_message("❌ Bạn không tham gia trò chơi này!", ephemeral=True)
-            return
-        if self.game.current_player.user_id != interaction.user.id:
-            await interaction.response.send_message("❌ Chưa đến lượt của bạn!", ephemeral=True)
-            return
-        await interaction.response.defer(ephemeral=True)
-        await self.cog._perform_draw_interaction(interaction, player)
+        try:
+            player = self.game.get_player(interaction.user.id)
+            if not player:
+                await interaction.response.send_message("❌ Bạn không tham gia trò chơi này!", ephemeral=True)
+                return
+            if self.game.current_player.user_id != interaction.user.id:
+                await interaction.response.send_message("❌ Chưa đến lượt của bạn!", ephemeral=True)
+                return
+            await interaction.response.defer(ephemeral=True)
+            await self.cog._perform_draw_interaction(interaction, player)
+        except Exception as e:
+            logger.error(f"Error in draw_btn: {e}", exc_info=True)
+            await interaction.followup.send(f"❌ Đã xảy ra lỗi khi rút bài: {e}", ephemeral=True)
 
     @discord.ui.button(label="🔔 Hô UNO!", style=discord.ButtonStyle.success, custom_id="uno_board_uno")
     async def uno_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        player = self.game.get_player(interaction.user.id)
-        if not player:
-            await interaction.response.send_message("❌ Bạn không tham gia trò chơi này!", ephemeral=True)
-            return
-        success, msg = self.game.call_uno(interaction.user.id)
-        if success:
-            await interaction.response.send_message("🔔 Bạn đã hô UNO thành công!", ephemeral=True)
-            await interaction.channel.send(f"📣 **{interaction.user.display_name}**: **\"UNO!\"** 🎉")
-        else:
-            await interaction.response.send_message(f"❌ {msg}", ephemeral=True)
+        try:
+            player = self.game.get_player(interaction.user.id)
+            if not player:
+                await interaction.response.send_message("❌ Bạn không tham gia trò chơi này!", ephemeral=True)
+                return
+            success, msg = self.game.call_uno(interaction.user.id)
+            if success:
+                await interaction.response.send_message("🔔 Bạn đã hô UNO thành công!", ephemeral=True)
+                await interaction.channel.send(f"📣 **{interaction.user.display_name}**: **\"UNO!\"** 🎉")
+            else:
+                await interaction.response.send_message(f"❌ {msg}", ephemeral=True)
+        except Exception as e:
+            logger.error(f"Error in uno_btn: {e}", exc_info=True)
+            await interaction.response.send_message(f"❌ Đã xảy ra lỗi khi hô UNO: {e}", ephemeral=True)
 
     @discord.ui.button(label="📢 Tố Cáo", style=discord.ButtonStyle.danger, custom_id="uno_board_accuse")
     async def accuse_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        target_id = self.game.uno_pending_user_id
-        if not target_id:
-            await interaction.response.send_message("❌ Không có ai để tố cáo lúc này!", ephemeral=True)
-            return
-        if interaction.user.id == target_id:
-            await interaction.response.send_message("❌ Bạn không thể tự tố cáo chính mình!", ephemeral=True)
-            return
-        
-        result, count = self.game.accuse_uno(interaction.user.id, target_id)
-        accuser_name = interaction.user.display_name
-        target = self.game.get_player(target_id)
-        target_name = target.username if target else "Ai đó"
+        try:
+            target_id = self.game.uno_pending_user_id
+            if not target_id:
+                await interaction.response.send_message("❌ Không có ai để tố cáo lúc này!", ephemeral=True)
+                return
+            if interaction.user.id == target_id:
+                await interaction.response.send_message("❌ Bạn không thể tự tố cáo chính mình!", ephemeral=True)
+                return
+            
+            result, count = self.game.accuse_uno(interaction.user.id, target_id)
+            accuser_name = interaction.user.display_name
+            target = self.game.get_player(target_id)
+            target_name = target.username if target else "Ai đó"
 
-        if result == "success":
-            await interaction.response.send_message("📢 Tố cáo thành công!", ephemeral=True)
-            self.game.last_play_info = f"📢 **{accuser_name}** tố cáo thành công! **{target_name}** quên hô UNO và bị phạt rút **2 lá**!"
-            await self.cog._update_board(interaction.channel, self.game)
-        elif result == "fail":
-            await interaction.response.send_message("❌ Tố cáo thất bại!", ephemeral=True)
-            self.game.last_play_info = f"❌ **{accuser_name}** tố cáo thất bại! **{target_name}** đã hô UNO. **{accuser_name}** bị phạt rút **1 lá**!"
-            await self.cog._update_board(interaction.channel, self.game)
-        else:
-            await interaction.response.send_message("❌ Không thể tố cáo lúc này!", ephemeral=True)
+            if result == "success":
+                await interaction.response.send_message("📢 Tố cáo thành công!", ephemeral=True)
+                self.game.last_play_info = f"📢 **{accuser_name}** tố cáo thành công! **{target_name}** quên hô UNO và bị phạt rút **2 lá**!"
+                await self.cog._update_board(interaction.channel, self.game)
+            elif result == "fail":
+                await interaction.response.send_message("❌ Tố cáo thất bại!", ephemeral=True)
+                self.game.last_play_info = f"❌ **{accuser_name}** tố cáo thất bại! **{target_name}** đã hô UNO. **{accuser_name}** bị phạt rút **1 lá**!"
+                await self.cog._update_board(interaction.channel, self.game)
+            else:
+                await interaction.response.send_message("❌ Không thể tố cáo lúc này!", ephemeral=True)
+        except Exception as e:
+            logger.error(f"Error in accuse_btn: {e}", exc_info=True)
+            await interaction.response.send_message(f"❌ Đã xảy ra lỗi khi tố cáo: {e}", ephemeral=True)
 
 
 # ==============================================================================
