@@ -248,14 +248,25 @@ class ColorWheelSelectionView(discord.ui.View):
 
     @discord.ui.button(label="Quay ngay!", style=discord.ButtonStyle.success, emoji="🎡", row=1)
     async def spin_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.defer()
+        # Disable all buttons immediately for instant feedback and to prevent double-clicks
+        for child in self.children:
+            child.disabled = True
         self.clicked = True
         self.stop()
+        
+        embed = CasinoEmbed(
+            title="🎡 VÒNG QUAY MAY MẮN",
+            description="⏳ **Đang thiết lập vòng quay...**"
+        )
+        # Edit message immediately (very fast, no file upload yet)
+        await interaction.response.edit_message(embed=embed, view=self)
+        
         await self.cog.run_spin(self.ctx, self.bet_amount, self.chosen_color, self.message)
 
     @discord.ui.button(label="Hủy", style=discord.ButtonStyle.danger, emoji="❌", row=1)
     async def cancel_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.defer()
+        for child in self.children:
+            child.disabled = True
         self.clicked = True
         self.stop()
         self.cog.active_players.discard(self.ctx.author.id)
@@ -264,7 +275,7 @@ class ColorWheelSelectionView(discord.ui.View):
             title="🎡 VÒNG QUAY MAY MẮN",
             description=f"❌ **{self.ctx.author.mention} đã hủy lượt quay.**",
         )
-        await self.message.edit(embed=embed, view=None)
+        await interaction.response.edit_message(embed=embed, view=None)
 
     async def on_timeout(self):
         if not self.clicked:
@@ -396,9 +407,9 @@ class Quay(commands.Cog, name="Quay"):
         win_idx = random.randint(0, 29)
         result_color = WHEEL_LAYOUT[win_idx]
         
-        # Generate spin GIF and static result PNG in memory using Pillow (similar to Plinko cog)
+        # Generate spin GIF and static result PNG in memory using Pillow on a background thread
         try:
-            gif_buffer, png_buffer = render_wheel_gif(win_idx)
+            gif_buffer, png_buffer = await asyncio.to_thread(render_wheel_gif, win_idx)
             gif_file = discord.File(gif_buffer, filename="wheel_spin.gif")
             png_file = discord.File(png_buffer, filename="wheel_result.png")
         except Exception as e:
