@@ -143,7 +143,7 @@ class HandDropdown(discord.ui.Select):
             
             # Kiểm tra xem bot có thực sự có quyền truy cập emoji này không (tránh lỗi 400 Bad Request)
             from app.discord_bot.modules.uno_engine import VERIFIED_EMOJI_IDS
-            if emoji and emoji.is_custom():
+            if emoji and emoji.id is not None:
                 if emoji.id not in VERIFIED_EMOJI_IDS:
                     emoji = None
             
