@@ -257,10 +257,11 @@ class Quay(commands.Cog, name="Quay"):
             else:
                 desc_lines.append(f"{text}")
                 
+        options_text = "\n".join(desc_lines)
         desc = (
             f"👤 **Người chơi:** {user_mention}\n"
             f"💰 **Tiền cược:** `{bet_amount:,} VNĐ`\n\n"
-            "\n".join(desc_lines)
+            f"{options_text}"
         )
         
         embed = CasinoEmbed(
@@ -289,13 +290,14 @@ class Quay(commands.Cog, name="Quay"):
         win_idx = random.randint(0, 29)
         result_color = WHEEL_LAYOUT[win_idx]
         
-        # Generate spin GIF
+        # Generate spin GIF (using absolute paths to prevent CWD mismatches)
         gif_filename = f"wheel_spin_{user_id}_{int(time.time())}.gif"
-        gif_path = os.path.join(config.storage.data_dir, gif_filename)
+        gif_path = os.path.abspath(os.path.join(config.storage.data_dir, gif_filename))
         
         try:
             node_path = "node"
-            script_path = os.path.join("app", "discord_bot", "modules", "wheel_spinner.js")
+            cog_dir = os.path.dirname(os.path.abspath(__file__))
+            script_path = os.path.abspath(os.path.join(cog_dir, "..", "modules", "wheel_spinner.js"))
             
             proc = await asyncio.create_subprocess_exec(
                 node_path, script_path, str(win_idx), gif_path,
