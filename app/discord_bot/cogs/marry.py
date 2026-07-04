@@ -280,14 +280,14 @@ def render_couple_banner(proposer, target, ring_type: str, love_points: int, joi
     left_ig_str = f"ins / {proposer_ig}" if proposer_ig else "ins / chưa đặt"
     right_ig_str = f"ins / {target_ig}" if target_ig else "ins / chưa đặt"
     
-    # Draw Instagram handles in bottom box at Y = 830, using original center positions (645, 1015)
-    draw.text((645,  830), left_ig_str,  fill=LIGHT_PINK, anchor="mm", font=font_regular)
-    draw.text((1015, 830), right_ig_str, fill=LIGHT_PINK, anchor="mm", font=font_regular)
+    # Draw Instagram handles in bottom box at Y = 825, using original center positions (645, 1015)
+    draw.text((645,  825), left_ig_str,  fill=LIGHT_PINK, anchor="mm", font=font_regular)
+    draw.text((1015, 825), right_ig_str, fill=LIGHT_PINK, anchor="mm", font=font_regular)
     
-    # Draw custom saying centered in the middle of the box
+    # Draw custom saying centered below the Instagram handles at Y = 885
     if saying:
         font_saying = _vogue(24)
-        draw.text((830, 830), saying, fill=PASTEL_PINK, anchor="mm", font=font_saying)
+        draw.text((836, 885), saying, fill=PASTEL_PINK, anchor="mm", font=font_saying)
     
     # Composite overlay on background
     bg.paste(overlay, (0, 0), mask=overlay)
@@ -617,8 +617,8 @@ class Marry(commands.Cog):
             await ctx.send("✅ Đã xóa câu nói của cặp đôi!")
             return
             
-        if len(clean_saying) > 50:
-            await ctx.send("❌ Câu nói quá dài (tối đa 50 ký tự)!")
+        if len(clean_saying) > 100:
+            await ctx.send("❌ Câu nói quá dài (tối đa 100 ký tự)!")
             return
             
         self.economy.update_marriage_saying(ctx.author.id, clean_saying)

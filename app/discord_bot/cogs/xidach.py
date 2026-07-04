@@ -77,7 +77,8 @@ class Deck:
 
 # --- MODULE 4: HỆ THỐNG ĐỒNG BỘ PVP (KHÔNG NHÀ CÁI) ---
 class GameSession:
-    def __init__(self, channel, players, bet, deck, economy: Economy):
+    def __init__(self, bot, channel, players, bet, deck, economy: Economy):
+        self.bot = bot
         self.channel = channel
         self.players = players
         self.bet = bet
@@ -207,8 +208,7 @@ class GameSession:
                 self.economy.add_money(player.id, money_delta)
                 if money_delta >= 1_000_000:
                     from app.discord_bot.modules.betting import reward_spouse_share
-                    bot = self.channel.guild.me._state.client
-                    await reward_spouse_share(bot, player.id, money_delta, self.channel)
+                    await reward_spouse_share(self.bot, player.id, money_delta, self.channel)
             log_wallet_change(
                 logger,
                 event="xidach_pvp_settlement",
@@ -337,8 +337,9 @@ class PlayerHandView(discord.ui.View):
 
 # --- MODULE 3: SẢNH CHỜ GIAO DỊCH ---
 class LobbyView(discord.ui.View):
-    def __init__(self, bet_amount, host, economy: Economy):
+    def __init__(self, bot, bet_amount, host, economy: Economy):
         super().__init__(timeout=120)
+        self.bot = bot
         self.bet_amount = bet_amount
         self.host = host
         self.economy = economy
@@ -406,6 +407,7 @@ class LobbyView(discord.ui.View):
         game_deck = Deck()
         
         session = GameSession(
+            self.bot,
             interaction.channel,
             self.players,
             self.bet_amount,
@@ -439,6 +441,7 @@ class LobbyView(discord.ui.View):
                 await player.send(embed=embed, view=view, file=file)
             except discord.Forbidden:
                 await interaction.channel.send(f"⚠️ Ê {player.mention}, mở Inbox lên bot mới chia bài được!")
+                session.players.remove(player)
                 session.pending -= 1
                 if session.pending == 0:
                     await session.end_game()
@@ -462,7 +465,7 @@ class MultiBlackjack(commands.Cog):
             await ctx.send(str(exc))
             return
 
-        view = LobbyView(bet, ctx.author, self.economy)
+        view = LobbyView(self.bot, bet, ctx.author, self.economy)
         embed = discord.Embed(
             title="🎰 SẢNH XÌ DÁCH PVP (Tối đa 6 người)",
             description=(
