@@ -160,8 +160,10 @@ class HandDropdown(discord.ui.Select):
                     description=f"Đánh lá {label}"
                 )
             )
+        is_my_turn = game.current_player.user_id == player.user_id
+        placeholder = "👉 Chọn một lá bài để đánh..." if is_my_turn else "👀 Xem danh sách bài trên tay..."
         super().__init__(
-            placeholder="👉 Chọn một lá bài để đánh...",
+            placeholder=placeholder,
             min_values=1,
             max_values=1,
             options=options,
@@ -173,7 +175,12 @@ class HandDropdown(discord.ui.Select):
 
     async def callback(self, interaction: discord.Interaction):
         if self.game.current_player.user_id != interaction.user.id:
-            await interaction.response.send_message("❌ Chưa đến lượt của bạn!", ephemeral=True)
+            content, embed, view = self.cog._get_hand_message_data(self.player, self.game)
+            try:
+                await interaction.response.edit_message(content=content, embed=embed, view=view)
+                await interaction.followup.send("❌ Chưa đến lượt của bạn!", ephemeral=True)
+            except Exception:
+                await interaction.response.send_message("❌ Chưa đến lượt của bạn!", ephemeral=True)
             return
 
         idx = int(self.values[0])
@@ -306,9 +313,8 @@ class HandView(discord.ui.View):
         self.game = game
         self.cog = cog
         
-        is_my_turn = game.current_player.user_id == player.user_id
-        # Chỉ thêm dropdown chọn bài nếu đang trong lượt của mình và còn bài trên tay
-        if is_my_turn and player.hand:
+        # Luôn thêm dropdown chọn bài nếu còn bài trên tay để người chơi dễ dàng xem bài và chọn
+        if player.hand:
             self.add_item(HandDropdown(player, game, cog))
         
         self.add_item(HandDrawButton(player, game, cog))
@@ -853,31 +859,17 @@ class Uno(commands.Cog, name="UNO"):
     def _get_hand_message_data(self, player: UnoPlayer, game: UnoGame) -> tuple[str, discord.Embed, discord.ui.View]:
         is_my_turn = game.current_player.user_id == player.user_id
         
-        # 1. Tạo danh sách viết tắt (Abbreviated format)
-        abbr_list = []
-        for card in player.hand:
-            color_char = {
-                Color.RED: "R",
-                Color.YELLOW: "Y",
-                Color.GREEN: "G",
-                Color.BLUE: "B",
-                Color.WILD: "",
-            }.get(card.color, "")
-            if card.color == Color.WILD:
-                code = "Wild" if card.value == Value.WILD else "WD4"
-            else:
-                code = {Value.SKIP: "Skip", Value.REVERSE: "Reverse", Value.DRAW2: "+2"}.get(card.value, card.value.value)
-            abbr_list.append(f"[{card.display()} {color_char}{code}]")
-            
-        # 2. Tạo danh sách chi tiết (Detailed format)
-        full_list = []
+        # Tạo danh sách bài sạch với emoji và nhãn chi tiết
+        card_labels = []
         for card in player.hand:
             clr_label = COLOR_LABEL.get(card.color, "")
             val_label = card._value_label()
             label = val_label if card.color == Color.WILD else f"{clr_label} {val_label}"
-            full_list.append(f"[{card.display()} {label}]")
+            card_labels.append(f"[{card.display()} {label}]")
             
-        desc = "  ".join(abbr_list) + "\n\n" + "  ".join(full_list)
+        desc = "  ".join(card_labels)
+        if not desc:
+            desc = "*Bạn không còn lá bài nào trên tay!*"
         
         embed = make_embed(
             description=desc,
