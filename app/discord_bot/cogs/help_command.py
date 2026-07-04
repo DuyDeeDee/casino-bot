@@ -55,7 +55,6 @@ class Help(commands.Cog, name="help"):
                 "Mines": "🎲 Cờ Bạc",
                 "Plinko": "🎲 Cờ Bạc",
                 "HighLow": "🎲 Cờ Bạc",
-                "Quay": "🎲 Cờ Bạc",
                 "General": "💼 General",
                 "Simulator": "💼 General",
                 "Slots": "🎰 Slots",

@@ -22,7 +22,6 @@ from .plinko import Plinko
 from .highlow import HighLow
 from .marry import Marry
 from .uno import Uno
-from .quay import Quay
 
 
 
