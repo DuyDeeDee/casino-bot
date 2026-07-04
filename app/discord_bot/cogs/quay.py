@@ -84,15 +84,22 @@ def parse_bet_amount(val_str: str, current_money: int) -> int:
     except ValueError:
         return 0
 
-class ColorWheelConfirmView(discord.ui.View):
-    def __init__(self, cog: "Quay", ctx: commands.Context, bet_amount: int, chosen_color: str):
+class ColorWheelSelectionView(discord.ui.View):
+    def __init__(self, cog: "Quay", ctx: commands.Context, bet_amount: int):
         super().__init__(timeout=60.0)
         self.cog = cog
         self.ctx = ctx
         self.bet_amount = bet_amount
-        self.chosen_color = chosen_color
+        self.chosen_color = "blue"  # Default chosen color
         self.message = None
         self.clicked = False
+        self.update_button_styles()
+
+    def update_button_styles(self):
+        self.btn_blue.style = discord.ButtonStyle.primary if self.chosen_color == "blue" else discord.ButtonStyle.secondary
+        self.btn_green.style = discord.ButtonStyle.primary if self.chosen_color == "green" else discord.ButtonStyle.secondary
+        self.btn_yellow.style = discord.ButtonStyle.primary if self.chosen_color == "yellow" else discord.ButtonStyle.secondary
+        self.btn_red.style = discord.ButtonStyle.primary if self.chosen_color == "red" else discord.ButtonStyle.secondary
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.ctx.author.id:
@@ -100,14 +107,42 @@ class ColorWheelConfirmView(discord.ui.View):
             return False
         return True
 
-    @discord.ui.button(label="Quay ngay!", style=discord.ButtonStyle.success, emoji="🎡")
+    @discord.ui.button(label="🔵 Xanh dương (x2)", style=discord.ButtonStyle.secondary, row=0)
+    async def btn_blue(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.chosen_color = "blue"
+        self.update_button_styles()
+        embed = self.cog.format_confirm_embed(self.ctx.author.mention, self.bet_amount, self.chosen_color)
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    @discord.ui.button(label="🟢 Xanh lá (x3)", style=discord.ButtonStyle.secondary, row=0)
+    async def btn_green(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.chosen_color = "green"
+        self.update_button_styles()
+        embed = self.cog.format_confirm_embed(self.ctx.author.mention, self.bet_amount, self.chosen_color)
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    @discord.ui.button(label="🟡 Vàng (x5)", style=discord.ButtonStyle.secondary, row=0)
+    async def btn_yellow(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.chosen_color = "yellow"
+        self.update_button_styles()
+        embed = self.cog.format_confirm_embed(self.ctx.author.mention, self.bet_amount, self.chosen_color)
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    @discord.ui.button(label="🔴 Đỏ (x10)", style=discord.ButtonStyle.secondary, row=0)
+    async def btn_red(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.chosen_color = "red"
+        self.update_button_styles()
+        embed = self.cog.format_confirm_embed(self.ctx.author.mention, self.bet_amount, self.chosen_color)
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    @discord.ui.button(label="Quay ngay!", style=discord.ButtonStyle.success, emoji="🎡", row=1)
     async def spin_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
         self.clicked = True
         self.stop()
         await self.cog.run_spin(self.ctx, self.bet_amount, self.chosen_color, self.message)
 
-    @discord.ui.button(label="Hủy", style=discord.ButtonStyle.danger, emoji="❌")
+    @discord.ui.button(label="Hủy", style=discord.ButtonStyle.danger, emoji="❌", row=1)
     async def cancel_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
         self.clicked = True
@@ -161,22 +196,15 @@ class Quay(commands.Cog, name="Quay"):
 
     @commands.hybrid_command(
         name="quay",
-        brief="Chơi game casino Vòng Quay May Mắn. Ví dụ: `i?quay 50k xanh`\nCác màu hợp lệ: `xanh` (x2), `xanhla` (x3), `vang` (x5), `do` (x10)",
-        usage="quay [tiền_cược] [màu]",
-        description="Đoán màu và cược tiền vào Color Wheel"
+        brief="Chơi game casino Vòng Quay May Mắn. Ví dụ: `i?quay 50k` và chọn màu trên nút bấm.",
+        usage="quay [tiền_cược]",
+        description="Quay vòng quay may mắn để thắng lớn"
     )
     @commands.cooldown(1, 5, commands.BucketType.user)
     @discord.app_commands.describe(
-        bet_amount_str="Số tiền đặt cược (Tối thiểu 1,000, Tối đa 10,000,000, VD: 50k, 50000, all)",
-        mau="Màu cược: xanh (x2), xanhla (x3), vang (x5), do (x10)"
+        bet_amount_str="Số tiền đặt cược (Tối thiểu 1,000, Tối đa 10,000,000, VD: 50k, 50000, all)"
     )
-    @discord.app_commands.choices(mau=[
-        discord.app_commands.Choice(name="🔵 Xanh dương (x2)", value="xanh"),
-        discord.app_commands.Choice(name="🟢 Xanh lá (x3)", value="xanhla"),
-        discord.app_commands.Choice(name="🟡 Vàng (x5)", value="vang"),
-        discord.app_commands.Choice(name="🔴 Đỏ (x10)", value="do")
-    ])
-    async def quay(self, ctx: commands.Context, bet_amount_str: str, mau: str):
+    async def quay(self, ctx: commands.Context, bet_amount_str: str):
         user_id = ctx.author.id
         
         # Concurrency check
@@ -185,14 +213,6 @@ class Quay(commands.Cog, name="Quay"):
             return
 
         # Cooldown is handled by decorator and cog_command_error
-
-        # Parse and validate chosen color
-        mau = mau.lower().strip()
-        if mau not in COLOR_MAP:
-            await ctx.send("❌ Màu cược không hợp lệ. Vui lòng chọn một trong: xanh, xanhla, vang, do.", ephemeral=True)
-            return
-            
-        chosen_color = COLOR_MAP[mau]
         
         # Get wallet balance
         current_money = self.economy.get_entry(user_id)[1]
@@ -213,10 +233,13 @@ class Quay(commands.Cog, name="Quay"):
         # Lock player in this cog
         self.active_players.add(user_id)
         
+        # Default chosen color is blue
+        chosen_color = "blue"
+        
         # Build selection embed
         embed = self.format_confirm_embed(ctx.author.mention, bet_amount, chosen_color)
         
-        view = ColorWheelConfirmView(self, ctx, bet_amount, chosen_color)
+        view = ColorWheelSelectionView(self, ctx, bet_amount)
         view.message = await ctx.send(embed=embed, view=view)
 
     def format_confirm_embed(self, user_mention: str, bet_amount: int, chosen_color: str) -> CasinoEmbed:
@@ -244,7 +267,7 @@ class Quay(commands.Cog, name="Quay"):
             title="🎡 VÒNG QUAY MAY MẮN",
             description=desc
         )
-        embed.set_footer(text="Nhấn nút dưới đây để bắt đầu quay!")
+        embed.set_footer(text="Chọn màu sắc cược ở dưới rồi nhấn 'Quay ngay!'")
         return embed
 
     async def run_spin(self, ctx: commands.Context, bet_amount: int, chosen_color: str, message: discord.Message):
@@ -429,7 +452,7 @@ class Quay(commands.Cog, name="Quay"):
             return True
             
         if isinstance(error, commands.BadArgument):
-            await ctx.send("❌ **Sử dụng sai cú pháp!** Cú pháp: `/quay [tiền_cược] [màu]`", ephemeral=True)
+            await ctx.send("❌ **Sử dụng sai cú pháp!** Cú pháp: `/quay [tiền_cược]`", ephemeral=True)
             return True
             
         # Propagate other errors
