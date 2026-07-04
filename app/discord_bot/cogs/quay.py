@@ -161,7 +161,8 @@ class Quay(commands.Cog, name="Quay"):
 
     @commands.hybrid_command(
         name="quay",
-        brief="Chơi game casino Vòng Quay May Mắn",
+        brief="Chơi game casino Vòng Quay May Mắn. Ví dụ: `i?quay 50k xanh`\nCác màu hợp lệ: `xanh` (x2), `xanhla` (x3), `vang` (x5), `do` (x10)",
+        usage="quay [tiền_cược] [màu]",
         description="Đoán màu và cược tiền vào Color Wheel"
     )
     @commands.cooldown(1, 5, commands.BucketType.user)
