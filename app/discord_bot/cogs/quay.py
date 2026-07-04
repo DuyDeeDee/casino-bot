@@ -22,17 +22,18 @@ logger = logging.getLogger(__name__)
 
 # Colors configuration matching spec
 WHEEL_CONFIG = {
-    'blue':   { 'slots': 12, 'multiplier': 2,  'emoji': '🔵', 'label': 'Xanh dương' },
-    'green':  { 'slots': 10, 'multiplier': 3,  'emoji': '🟢', 'label': 'Xanh lá' },
-    'yellow': { 'slots': 6,  'multiplier': 5,  'emoji': '🟡', 'label': 'Vàng' },
+    'blue':   { 'slots': 10, 'multiplier': 2,  'emoji': '🔵', 'label': 'Xanh dương' },
+    'green':  { 'slots': 9,  'multiplier': 3,  'emoji': '🟢', 'label': 'Xanh lá' },
+    'yellow': { 'slots': 5,  'multiplier': 5,  'emoji': '🟡', 'label': 'Vàng' },
     'red':    { 'slots': 2,  'multiplier': 10, 'emoji': '🔴', 'label': 'Đỏ' },
+    'grey':   { 'slots': 4,  'multiplier': 0,  'emoji': '⚫', 'label': 'Mất lượt' },
 }
 
 # The exact 30-slot layout
 WHEEL_LAYOUT = [
-  'blue', 'green', 'blue', 'green', 'yellow', 'green', 'yellow', 'blue', 'yellow', 'blue',
-  'yellow', 'blue', 'green', 'blue', 'green', 'yellow', 'blue', 'green', 'blue', 'green',
-  'blue', 'green', 'blue', 'red', 'blue', 'yellow', 'green', 'blue', 'green', 'red'
+  'blue', 'green', 'blue', 'green', 'grey', 'green', 'yellow', 'blue', 'yellow', 'blue',
+  'yellow', 'grey', 'green', 'blue', 'green', 'yellow', 'blue', 'green', 'grey', 'green',
+  'blue', 'green', 'blue', 'red', 'blue', 'grey', 'yellow', 'blue', 'green', 'red'
 ]
 
 # Native Pillow Wheel Drawing
@@ -66,6 +67,12 @@ def render_wheel_gif(win_idx: int) -> tuple[BytesIO, BytesIO]:
             color_name = WHEEL_LAYOUT[i]
             
             rgb_colors = {
+                'grey': {
+                    'dark': (55, 60, 75, 255),
+                    'light': (65, 70, 85, 255),
+                    'label': 'x0',
+                    'label_color': (140, 150, 160, 255)
+                },
                 'blue': {
                     'dark': (26, 58, 138, 255),
                     'light': (30, 61, 153, 255),
