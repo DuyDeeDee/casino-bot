@@ -42,12 +42,12 @@ from io import BytesIO
 from PIL import Image, ImageDraw
 from app.discord_bot.modules.profile_renderer import load_font
 
-def render_wheel_gif(win_idx: int) -> BytesIO:
+def render_wheel_gif(win_idx: int) -> tuple[BytesIO, BytesIO]:
     width = 300
     height = 300
     cx, cy = 150, 150
     radius = 120
-    total_frames = 30
+    total_frames = 40  # Increased to 40 frames for a longer, slower spin
     
     # Target index math
     target_offset = (360 - (win_idx * 12 + 6) % 360) % 360
@@ -140,22 +140,28 @@ def render_wheel_gif(win_idx: int) -> BytesIO:
         
         frames.append(img)
         
-    out = BytesIO()
-    durations = [50] * total_frames
+    # Save final frame as static PNG image
+    png_out = BytesIO()
+    frames[-1].save(png_out, format="PNG")
+    png_out.seek(0)
+    
+    # Save animated GIF (80ms per frame = slower spin)
+    gif_out = BytesIO()
+    durations = [80] * total_frames
     frames[0].save(
-        out,
+        gif_out,
         format="GIF",
         save_all=True,
         append_images=frames[1:],
         duration=durations,
         loop=0
     )
-    out.seek(0)
+    gif_out.seek(0)
     
     for frame in frames:
         frame.close()
         
-    return out
+    return gif_out, png_out
 
 
 class CasinoEmbed(discord.Embed):
@@ -411,10 +417,11 @@ class Quay(commands.Cog, name="Quay"):
         win_idx = random.randint(0, 29)
         result_color = WHEEL_LAYOUT[win_idx]
         
-        # Generate spin GIF in memory using Pillow (similar to Plinko cog)
+        # Generate spin GIF and static result PNG in memory using Pillow (similar to Plinko cog)
         try:
-            gif_buffer = render_wheel_gif(win_idx)
-            file = discord.File(gif_buffer, filename="wheel_spin.gif")
+            gif_buffer, png_buffer = render_wheel_gif(win_idx)
+            gif_file = discord.File(gif_buffer, filename="wheel_spin.gif")
+            png_file = discord.File(png_buffer, filename="wheel_result.png")
         except Exception as e:
             logger.error(f"Pillow GIF generation failed: {e}", exc_info=True)
             # Refund
@@ -432,10 +439,10 @@ class Quay(commands.Cog, name="Quay"):
         spinning_embed.set_image(url="attachment://wheel_spin.gif")
         
         # Edit the message
-        await message.edit(content=None, embed=spinning_embed, attachments=[file], view=None)
+        await message.edit(content=None, embed=spinning_embed, attachments=[gif_file], view=None)
         
-        # Wait 1.5 seconds for spin
-        await asyncio.sleep(1.5)
+        # Wait 3.0 seconds for slower spin animation
+        await asyncio.sleep(3.0)
         
         # Calculate result
         is_win = (result_color == chosen_color)
@@ -523,15 +530,16 @@ class Quay(commands.Cog, name="Quay"):
         final_embed = CasinoEmbed(
             description="\n".join(result_desc_lines)
         )
+        final_embed.set_image(url="attachment://wheel_result.png")
         final_embed.set_footer(text=footer_text)
         
-        # Edit the message to show final result and remove attachments
+        # Edit the message to show final result and attach the static PNG result image
         try:
-            await message.edit(embed=final_embed, attachments=[])
+            await message.edit(embed=final_embed, attachments=[png_file])
         except Exception:
-            # Fallback if attachments cannot be cleared easily
+            # Fallback if attachments cannot be edited easily
             await message.delete()
-            await ctx.send(embed=final_embed)
+            await ctx.send(file=png_file, embed=final_embed)
             
         # No temporary file on disk to clean up (drawn entirely in memory)
         pass
