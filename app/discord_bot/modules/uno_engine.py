@@ -252,6 +252,7 @@ class UnoGame:
     channel_id: int
     host_id: int
     bet: int
+    room_id: int                      = field(default_factory=lambda: random.randint(1000, 9999))
 
     players: list[UnoPlayer]          = field(default_factory=list)
     deck: list[UnoCard]               = field(default_factory=list)
