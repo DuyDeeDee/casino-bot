@@ -115,7 +115,7 @@ class CasinoBot(commands.Bot):
         self.add_check(self.global_cooldown_check)
 
     async def setup_hook(self) -> None:
-        self.add_command(self.setcooldown)
+        self.add_command(setcooldown)
         await register_cogs(self)
 
     async def close(self) -> None:
@@ -153,28 +153,31 @@ class CasinoBot(commands.Bot):
         self.cooldown_tracker[user_id] = now
         return True
 
-    @commands.command(
-        brief="Cấu hình thời gian chờ (cooldown) toàn cục cho bot.",
-        usage="setcooldown [số giây]",
-        aliases=["setcd"],
-        hidden=True
-    )
-    @commands.is_owner()
-    async def setcooldown(self, ctx: commands.Context, seconds_str: str):
-        try:
-            seconds = float(seconds_str)
-            if seconds < 0:
-                await ctx.send("❌ Số giây cooldown không được âm.")
-                return
-        except ValueError:
-            await ctx.send("❌ Vui lòng nhập số giây hợp lệ (số thực hoặc số nguyên).")
-            return
 
-        self.economy.set_setting("global_cooldown", str(seconds))
-        if seconds > 0:
-            await ctx.send(f"✅ Đã thiết lập thời gian chờ (cooldown) toàn cục là `{seconds} giây`.")
-        else:
-            await ctx.send("✅ Đã tắt thời gian chờ (cooldown) toàn cục.")
+@commands.command(
+    brief="Cấu hình thời gian chờ (cooldown) toàn cục cho bot.",
+    usage="setcooldown [số giây]",
+    aliases=["setcd"],
+    hidden=True
+)
+@commands.is_owner()
+async def setcooldown(ctx: commands.Context, seconds_str: str):
+    bot = ctx.bot
+    try:
+        seconds = float(seconds_str)
+        if seconds < 0:
+            await ctx.send("❌ Số giây cooldown không được âm.")
+            return
+    except ValueError:
+        await ctx.send("❌ Vui lòng nhập số giây hợp lệ (số thực hoặc số nguyên).")
+        return
+
+    bot.economy.set_setting("global_cooldown", str(seconds))
+    if seconds > 0:
+        await ctx.send(f"✅ Đã thiết lập thời gian chờ (cooldown) toàn cục là `{seconds} giây`.")
+    else:
+        await ctx.send("✅ Đã tắt thời gian chờ (cooldown) toàn cục.")
+
 
 
 
