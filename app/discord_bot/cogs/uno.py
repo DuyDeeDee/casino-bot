@@ -262,7 +262,8 @@ class HandDropdown(discord.ui.Select):
             await interaction.edit_original_response(
                 content=f"🏆 Bạn đã đánh lá bài cuối cùng **{label}** và CHIẾN THẮNG! 🎉", 
                 embed=None, 
-                view=None
+                view=None,
+                attachments=[]
             )
             await self.cog._handle_win_no_ctx(interaction.channel, game, player)
             return
@@ -274,7 +275,7 @@ class HandDropdown(discord.ui.Select):
         # Cập nhật phản hồi nhanh ngay tại tin nhắn bài hiện tại
         content, embed, view = self.cog._get_hand_message_data(player, game)
         content = f"✅ Bạn đã đánh lá bài **{label}** {emoji_str if emoji_str.startswith('<:') else ''} thành công!\n{content}"
-        await interaction.edit_original_response(content=content, embed=embed, view=view)
+        await interaction.edit_original_response(content=content, embed=embed, view=view, attachments=[])
 
         if game.uno_pending_user_id:
             asyncio.create_task(self.cog._start_uno_timer(game, game.uno_pending_user_id, interaction.channel))
@@ -342,7 +343,7 @@ class HandReloadButton(discord.ui.Button):
 
         await interaction.response.defer(ephemeral=True)
         content, embed, view = self.cog._get_hand_message_data(player, game)
-        await interaction.edit_original_response(content=content, embed=embed, view=view)
+        await interaction.edit_original_response(content=content, embed=embed, view=view, attachments=[])
 
 
 class HandView(discord.ui.View):
@@ -418,7 +419,12 @@ class DrawPlayView(discord.ui.View):
         label = val_label if self.card.color == Color.WILD else f"{clr_label} {val_label}"
 
         if msg == "WIN":
-            await interaction.edit_original_response(content=f"🏆 Bạn đã đánh lá bài cuối cùng **{label}** và CHIẾN THẮNG! 🎉", embed=None, view=None)
+            await interaction.edit_original_response(
+                content=f"🏆 Bạn đã đánh lá bài cuối cùng **{label}** và CHIẾN THẮNG! 🎉", 
+                embed=None, 
+                view=None,
+                attachments=[]
+            )
             await self.cog._handle_win_no_ctx(interaction.channel, game, player)
             return
 
@@ -429,7 +435,7 @@ class DrawPlayView(discord.ui.View):
         # Cập nhật tin nhắn ẩn sau khi đánh lá bài vừa rút
         content, embed, view = self.cog._get_hand_message_data(player, game)
         content = f"✅ Bạn đã đánh lá bài vừa rút **{label}** thành công!\n{content}"
-        await interaction.edit_original_response(content=content, embed=embed, view=view)
+        await interaction.edit_original_response(content=content, embed=embed, view=view, attachments=[])
 
         if game.uno_pending_user_id:
             asyncio.create_task(self.cog._start_uno_timer(game, game.uno_pending_user_id, interaction.channel))
@@ -462,7 +468,7 @@ class DrawPlayView(discord.ui.View):
 
         content, embed, view = self.cog._get_hand_message_data(player, game)
         content = f"❌ Bạn đã chọn bỏ lượt chơi.\n{content}"
-        await interaction.edit_original_response(content=content, embed=embed, view=view)
+        await interaction.edit_original_response(content=content, embed=embed, view=view, attachments=[])
 
 
 class BoardView(discord.ui.View):
@@ -932,7 +938,7 @@ class Uno(commands.Cog, name="UNO"):
 
             content, embed, view = self._get_hand_message_data(current_player, game)
             content = f"📦 Bạn đã nhận phạt combo rút **{count} lá** và mất lượt!\n{content}"
-            await interaction.edit_original_response(content=content, embed=embed, view=view)
+            await interaction.edit_original_response(content=content, embed=embed, view=view, attachments=[])
             return
 
         # Rút 1 lá bình thường
@@ -959,7 +965,7 @@ class Uno(commands.Cog, name="UNO"):
                 color=DISCORD_COLOR.get(game.current_color, discord.Color.purple())
             )
             view = DrawPlayView(current_player, game, self, card)
-            await interaction.edit_original_response(embed=embed, view=view)
+            await interaction.edit_original_response(embed=embed, view=view, attachments=[])
         else:
             game.last_play_info = f"📥 **{current_player.username}** đã rút 1 lá bài."
             game.advance_turn()
@@ -971,7 +977,7 @@ class Uno(commands.Cog, name="UNO"):
 
             content, embed, view = self._get_hand_message_data(current_player, game)
             content = f"❌ Bạn rút được lá **{label}** (không thể đánh) và kết thúc lượt.\n{content}"
-            await interaction.edit_original_response(content=content, embed=embed, view=view)
+            await interaction.edit_original_response(content=content, embed=embed, view=view, attachments=[])
 
     # --------------------------------------------------------------------------
     #  Helpers
