@@ -158,7 +158,11 @@ class Handlers(commands.Cog, name="handlers"):
             return
 
         if isinstance(error, CommandOnCooldown):
-            seconds = int(error.retry_after)
+            retry_after = error.retry_after
+            if retry_after < 60:
+                await ctx.send(f"⏱️ **Vui lòng chờ `{retry_after:.1f} giây` trước khi tiếp tục!**")
+                return
+            seconds = int(retry_after)
             seconds = seconds % (24 * 3600)
             hours = seconds // 3600
             seconds %= 3600
@@ -166,6 +170,7 @@ class Handlers(commands.Cog, name="handlers"):
             seconds %= 60
             await ctx.send(f"Thời gian chờ còn lại: {hours} giờ {minutes} phút {seconds} giây.")
             return
+
 
         if isinstance(error, MaxConcurrencyReached):
             await ctx.send("Lệnh này đang được thực hiện cho bạn rồi.")
