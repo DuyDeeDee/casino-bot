@@ -57,7 +57,8 @@ class Help(commands.Cog, name="help"):
                 "HighLow": "🎲 Cờ Bạc",
                 "General": "💼 General",
                 "Simulator": "💼 General",
-                "Slots": "🎰 Slots",
+                "Slots": "📈 Giao dịch",
+                "Tower": "🎲 Cờ Bạc",
                 "AI": "🤖 AI",
                 "Xe": "🏎️ Đua Xe",
             }
@@ -72,7 +73,8 @@ class Help(commands.Cog, name="help"):
                     groups[group_name] = []
                 groups[group_name].extend(cog_commands)
 
-            group_order = ["💼 General", "🎲 Cờ Bạc", "🎰 Slots", "🏎️ Đua Xe", "🤖 AI"]
+            group_order = ["💼 General", "🎲 Cờ Bạc", "📈 Giao dịch", "🏎️ Đua Xe", "🤖 AI"]
+
             
             # Show groups in a designated order
             for group_name in group_order:
