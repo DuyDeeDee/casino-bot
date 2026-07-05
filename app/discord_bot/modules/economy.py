@@ -2232,6 +2232,15 @@ class Economy:
         )
         return self.cur.fetchone()
 
+    def get_marriages(self, user_id: int) -> list[tuple]:
+        """Returns list of all marriages for a user"""
+        self.cur.execute(
+            "SELECT user_one, user_two, ring_type, love_points, joint_wallet, married_at, last_interact_time, interacts_today FROM user_marry WHERE user_one = ? OR user_two = ?",
+            (user_id, user_id)
+        )
+        return self.cur.fetchall()
+
+
     def create_marriage(self, user_one: int, user_two: int, ring_type: str) -> None:
         """Registers a new marriage in the database"""
         import time
@@ -2321,13 +2330,10 @@ class Economy:
 
     def get_marriage_multiplier(self, user_id: int) -> float:
         """Calculates the wage/work multiplier for a user based on their marriage status and ring type."""
-        marriage = self.get_marriage(user_id)
-        if not marriage:
+        marriages = self.get_marriages(user_id)
+        if not marriages:
             return 1.0
             
-        user_one, user_two, ring_type, love_points, joint_wallet, married_at, _, _ = marriage
-        love_level = love_points // 100
-        
         ring_buffs = {
             "ring_grass": (1.0, 0.0),
             "ring_quartz": (1.02, 0.005),
@@ -2344,42 +2350,41 @@ class Economy:
             "ring_divine": (1.40, 0.040),
         }
         
-        if ring_type in ring_buffs:
-            base, step = ring_buffs[ring_type]
-            return base + (love_level * step)
+        max_mult = 1.0
+        for marriage in marriages:
+            user_one, user_two, ring_type, love_points, joint_wallet, married_at, _, _ = marriage
+            love_level = love_points // 100
             
-        # Fallback for old/unknown rings
-        if ring_type == "ring_silver":
-            return 1.02 + (love_level * 0.005)
-        elif ring_type == "ring_gold":
-            return 1.05 + (love_level * 0.01)
-        elif ring_type == "ring_diamond":
-            return 1.10 + (love_level * 0.015)
-            
-        return 1.0
+            if ring_type in ring_buffs:
+                base, step = ring_buffs[ring_type]
+                mult = base + (love_level * step)
+            elif ring_type == "ring_silver":
+                mult = 1.02 + (love_level * 0.005)
+            elif ring_type == "ring_gold":
+                mult = 1.05 + (love_level * 0.01)
+            else:
+                mult = 1.0
+                
+            if mult > max_mult:
+                max_mult = mult
+                
+        return max_mult
 
-    def get_marriage_ig(self, user_id: int) -> tuple[str, str]:
-        """Returns (user_one_ig, user_two_ig) for the marriage entry"""
+
+    def get_marriage_ig(self, user_one: int, user_two: int) -> tuple[str, str]:
+        """Returns (user_one_ig, user_two_ig) for a specific marriage entry"""
         self.cur.execute(
-            "SELECT user_one_ig, user_two_ig FROM user_marry WHERE user_one = ? OR user_two = ?",
-            (user_id, user_id)
+            "SELECT user_one_ig, user_two_ig FROM user_marry WHERE user_one = ? AND user_two = ?",
+            (user_one, user_two)
         )
         row = self.cur.fetchone()
         if row:
             return (row[0] or "", row[1] or "")
         return ("", "")
 
-    def update_marriage_ig(self, user_id: int, ig_handle: str) -> None:
-        """Updates the Instagram handle for the user's marriage entry"""
-        self.cur.execute(
-            "SELECT user_one, user_two FROM user_marry WHERE user_one = ? OR user_two = ?",
-            (user_id, user_id)
-        )
-        row = self.cur.fetchone()
-        if not row:
-            return
-        user_one, user_two = row
-        if user_id == user_one:
+    def update_marriage_ig(self, user_one: int, user_two: int, target_user_id: int, ig_handle: str) -> None:
+        """Updates the Instagram handle for the target_user_id in marriage entry (user_one, user_two)"""
+        if target_user_id == user_one:
             self.cur.execute(
                 "UPDATE user_marry SET user_one_ig = ? WHERE user_one = ? AND user_two = ?",
                 (ig_handle, user_one, user_two)
@@ -2391,57 +2396,42 @@ class Economy:
             )
         self.conn.commit()
 
-    def get_marriage_status(self, user_id: int) -> str:
-        """Returns the custom relationship status for the marriage entry"""
+    def get_marriage_status(self, user_one: int, user_two: int) -> str:
+        """Returns the custom relationship status for a specific marriage entry"""
         self.cur.execute(
-            "SELECT status FROM user_marry WHERE user_one = ? OR user_two = ?",
-            (user_id, user_id)
+            "SELECT status FROM user_marry WHERE user_one = ? AND user_two = ?",
+            (user_one, user_two)
         )
         row = self.cur.fetchone()
         if row:
             return row[0] or "Vợ Chồng"
         return "Vợ Chồng"
 
-    def update_marriage_status(self, user_id: int, status_text: str) -> None:
-        """Updates the custom relationship status for the user's marriage entry"""
-        self.cur.execute(
-            "SELECT user_one, user_two FROM user_marry WHERE user_one = ? OR user_two = ?",
-            (user_id, user_id)
-        )
-        row = self.cur.fetchone()
-        if not row:
-            return
-        user_one, user_two = row
+    def update_marriage_status(self, user_one: int, user_two: int, status_text: str) -> None:
+        """Updates the custom relationship status for a specific marriage entry"""
         self.cur.execute(
             "UPDATE user_marry SET status = ? WHERE user_one = ? AND user_two = ?",
             (status_text, user_one, user_two)
         )
         self.conn.commit()
 
-    def get_marriage_saying(self, user_id: int) -> str:
-        """Returns the custom saying for the marriage entry"""
+    def get_marriage_saying(self, user_one: int, user_two: int) -> str:
+        """Returns the custom saying for a specific marriage entry"""
         self.cur.execute(
-            "SELECT saying FROM user_marry WHERE user_one = ? OR user_two = ?",
-            (user_id, user_id)
+            "SELECT saying FROM user_marry WHERE user_one = ? AND user_two = ?",
+            (user_one, user_two)
         )
         row = self.cur.fetchone()
         if row:
             return row[0] or ""
         return ""
 
-    def update_marriage_saying(self, user_id: int, saying_text: str) -> None:
-        """Updates the custom saying for the user's marriage entry"""
-        self.cur.execute(
-            "SELECT user_one, user_two FROM user_marry WHERE user_one = ? OR user_two = ?",
-            (user_id, user_id)
-        )
-        row = self.cur.fetchone()
-        if not row:
-            return
-        user_one, user_two = row
+    def update_marriage_saying(self, user_one: int, user_two: int, saying_text: str) -> None:
+        """Updates the custom saying for a specific marriage entry"""
         self.cur.execute(
             "UPDATE user_marry SET saying = ? WHERE user_one = ? AND user_two = ?",
             (saying_text, user_one, user_two)
         )
         self.conn.commit()
+
 

@@ -120,19 +120,20 @@ async def reward_spouse_share(bot, user_id: int, win_amount: int, channel) -> No
         
     try:
         eco = Economy()
-        marriage = eco.get_marriage(user_id)
-        if not marriage:
+        marriages = eco.get_marriages(user_id)
+        if not marriages:
             return
             
-        user_one, user_two, ring_type, love_points, joint_wallet, married_at, _, _ = marriage
-        spouse_id = user_two if user_id == user_one else user_one
-        
-        # Calculate 2% bonus
         bonus = int(win_amount * 0.02)
         if bonus <= 0:
             return
             
-        eco.add_money(spouse_id, bonus)
+        for marriage in marriages:
+            user_one, user_two, ring_type, love_points, joint_wallet, married_at, _, _ = marriage
+            spouse_id = user_two if user_id == user_one else user_one
+            eco.add_money(spouse_id, bonus)
+            # Send notification message if needed, wait, the original doesn't send message here, it just adds money
+
         
         # Send celebratory message
         embed = discord.Embed(

@@ -442,6 +442,26 @@ class Marry(commands.Cog):
         self.bot = bot
         self.economy = getattr(bot, "economy", Economy())
 
+    async def is_admin_user(self, user) -> bool:
+        if user.id in self.bot.owner_ids:
+            return True
+        try:
+            return await self.bot.is_owner(user)
+        except Exception:
+            return False
+
+    def _resolve_marriage_and_args(self, user_id: int, args: list[str]) -> tuple[tuple | None, list[str]]:
+        marriages = self.economy.get_marriages(user_id)
+        if not marriages:
+            return None, args
+            
+        if args and args[0].isdigit():
+            idx = int(args[0])
+            if 1 <= idx <= len(marriages):
+                return marriages[idx - 1], args[1:]
+                
+        return marriages[0], args
+
     @commands.command(
         brief="Cầu hôn một người chơi khác trong server.",
         usage="marry @user"
@@ -455,16 +475,25 @@ class Marry(commands.Cog):
             await ctx.send("❌ Bạn không thể kết hôn với chính bản thân mình!")
             return
             
-        # Check active marriages
-        marriage_author = self.economy.get_marriage(ctx.author.id)
-        if marriage_author:
-            await ctx.send("❌ Bạn đang trong một cuộc hôn nhân! Hãy ly hôn (i?divorce) trước khi đi tìm bến đỗ mới.")
+        # Check active marriages limit
+        author_marriages = self.economy.get_marriages(ctx.author.id)
+        author_limit = 5 if await self.is_admin_user(ctx.author) else 1
+        if len(author_marriages) >= author_limit:
+            if author_limit == 1:
+                await ctx.send("❌ Bạn đang trong một cuộc hôn nhân! Hãy ly hôn (i?divorce) trước khi đi tìm bến đỗ mới.")
+            else:
+                await ctx.send(f"❌ Bạn đã đạt giới hạn kết hôn tối đa là {author_limit} người cùng lúc!")
             return
             
-        marriage_target = self.economy.get_marriage(target.id)
-        if marriage_target:
-            await ctx.send(f"❌ **{target.name}** đã kết hôn rồi! Đập chậu cướp hoa là hành vi trái đạo đức.")
+        target_marriages = self.economy.get_marriages(target.id)
+        target_limit = 5 if await self.is_admin_user(target) else 1
+        if len(target_marriages) >= target_limit:
+            if target_limit == 1:
+                await ctx.send(f"❌ **{target.name}** đã kết hôn rồi! Đập chậu cướp hoa là hành vi trái đạo đức.")
+            else:
+                await ctx.send(f"❌ **{target.name}** đã đạt giới hạn kết hôn tối đa là {target_limit} người cùng lúc!")
             return
+
             
         # Check owned rings in inventory
         inventory = dict(self.economy.get_inventory(ctx.author.id))
@@ -507,17 +536,51 @@ class Marry(commands.Cog):
         view.message = msg
 
     @commands.group(name="couple", brief="Quản lý thông tin gia đình cặp đôi.", invoke_without_command=True)
-    async def couple_cmd(self, ctx: commands.Context):
+    async def couple_cmd(self, ctx: commands.Context, index_or_user: str = None, index: int = None):
         # Displays the couple profile banner
-        marriage = self.economy.get_marriage(ctx.author.id)
-        if not marriage:
-            await ctx.send(f"❌ Bạn chưa kết hôn! Hãy sắm nhẫn cưới rồi cầu hôn ai đó bằng: `{config.bot.prefix}marry @user`")
+        # Parse arguments
+        target_user = ctx.author
+        target_index = 1
+        
+        if index_or_user is not None:
+            # Check if index_or_user is a number
+            try:
+                target_index = int(index_or_user)
+            except ValueError:
+                # Try parsing as user/member
+                try:
+                    target_user = await commands.MemberConverter().convert(ctx, index_or_user)
+                except commands.BadArgument:
+                    await ctx.send("❌ Người dùng không hợp lệ!")
+                    return
+                # If index is also provided
+                if index is not None:
+                    target_index = index
+                    
+        if target_index < 1:
+            await ctx.send("❌ Chỉ số cặp đôi phải lớn hơn hoặc bằng 1!")
             return
             
+        marriages = self.economy.get_marriages(target_user.id)
+        if not marriages:
+            if target_user.id == ctx.author.id:
+                await ctx.send(f"❌ Bạn chưa kết hôn! Hãy sắm nhẫn cưới rồi cầu hôn ai đó bằng: `{config.bot.prefix}marry @user`")
+            else:
+                await ctx.send(f"❌ **{target_user.name}** chưa kết hôn!")
+            return
+            
+        if target_index > len(marriages):
+            if len(marriages) == 1:
+                await ctx.send(f"❌ **{target_user.display_name}** chỉ có 1 cuộc hôn nhân!")
+            else:
+                await ctx.send(f"❌ **{target_user.display_name}** chỉ có {len(marriages)} cuộc hôn nhân! (Hãy nhập chỉ số từ 1 đến {len(marriages)})")
+            return
+            
+        marriage = marriages[target_index - 1]
         user_one, user_two, ring_type, love_points, joint_wallet, married_at, _, _ = marriage
         
-        # Get users objects
-        spouse_id = user_two if ctx.author.id == user_one else user_one
+        # Get spouse object
+        spouse_id = user_two if target_user.id == user_one else user_one
         spouse = self.bot.get_user(spouse_id)
         if not spouse:
             try: spouse = await self.bot.fetch_user(spouse_id)
@@ -538,22 +601,22 @@ class Marry(commands.Cog):
         loading_msg = await ctx.send("⌛ **Đang kết xuất thông tin gia đình...**")
         
         # Get IG handles
-        ig_handles = self.economy.get_marriage_ig(ctx.author.id)
-        # Determine which IG belongs to author and which to spouse
-        if ctx.author.id == user_one:
+        ig_handles = self.economy.get_marriage_ig(user_one, user_two)
+        # Determine which IG belongs to target_user and which to spouse
+        if target_user.id == user_one:
             author_ig, spouse_ig = ig_handles[0], ig_handles[1]
         else:
             author_ig, spouse_ig = ig_handles[1], ig_handles[0]
             
         # Get custom status
-        rel_status = self.economy.get_marriage_status(ctx.author.id)
+        rel_status = self.economy.get_marriage_status(user_one, user_two)
         
         # Get custom saying
-        saying = self.economy.get_marriage_saying(ctx.author.id)
+        saying = self.economy.get_marriage_saying(user_one, user_two)
         
         buf = await asyncio.to_thread(
             render_couple_banner, 
-            ctx.author, 
+            target_user, 
             spouse, 
             ring_type, 
             love_points, 
@@ -574,71 +637,93 @@ class Marry(commands.Cog):
             pass
 
     @couple_cmd.command(name="setig", aliases=["instagram", "ig"])
-    async def couple_setig(self, ctx: commands.Context, ig_handle: str):
+    async def couple_setig(self, ctx: commands.Context, *, args_str: str = ""):
         """Đặt tài khoản Instagram của bạn để hiển thị trên profile cặp đôi."""
-        marriage = self.economy.get_marriage(ctx.author.id)
+        args = args_str.split()
+        marriage, remaining_args = self._resolve_marriage_and_args(ctx.author.id, args)
         if not marriage:
-            await ctx.send("❌ Bạn phải kết hôn mới có thể cài đặt tài khoản Instagram!")
+            await ctx.send("❌ Bạn chưa kết hôn!")
+            return
+        if not remaining_args:
+            await ctx.send("❌ Vui lòng cung cấp tài khoản Instagram!")
             return
             
+        ig_handle = remaining_args[0]
         # Clean handle (remove @ if present)
         clean_handle = ig_handle.strip().lstrip('@')
         if len(clean_handle) > 30:
             await ctx.send("❌ Tên tài khoản Instagram quá dài (tối đa 30 ký tự)!")
             return
             
-        self.economy.update_marriage_ig(ctx.author.id, clean_handle)
-        await ctx.send(f"✅ Đã cập nhật tài khoản Instagram của bạn thành: `ins / {clean_handle}`!")
+        user_one, user_two = marriage[0], marriage[1]
+        self.economy.update_marriage_ig(user_one, user_two, ctx.author.id, clean_handle)
+        await ctx.send(f"✅ Đã cập nhật tài khoản Instagram của bạn thành: `ins / {clean_handle}` cho cuộc hôn nhân này!")
 
     @couple_cmd.command(name="status", aliases=["setstatus", "trangthai"])
-    async def couple_status(self, ctx: commands.Context, *, status_text: str):
+    async def couple_status(self, ctx: commands.Context, *, args_str: str = ""):
         """Đặt trạng thái mối quan hệ của cặp đôi (ví dụ: situation ship, mãi bên nhau...)."""
-        marriage = self.economy.get_marriage(ctx.author.id)
+        args = args_str.split()
+        marriage, remaining_args = self._resolve_marriage_and_args(ctx.author.id, args)
         if not marriage:
-            await ctx.send("❌ Bạn phải kết hôn mới có thể đặt trạng thái mối quan hệ!")
+            await ctx.send("❌ Bạn chưa kết hôn!")
+            return
+        if not remaining_args:
+            await ctx.send("❌ Vui lòng cung cấp trạng thái quan hệ!")
             return
             
+        status_text = " ".join(remaining_args)
         clean_status = status_text.strip()
         if len(clean_status) > 20:
             await ctx.send("❌ Trạng thái mối quan hệ quá dài (tối đa 20 ký tự)!")
             return
             
-        self.economy.update_marriage_status(ctx.author.id, clean_status)
-        await ctx.send(f"✅ Đã cập nhật trạng thái mối quan hệ thành: `{clean_status}`!")
+        user_one, user_two = marriage[0], marriage[1]
+        self.economy.update_marriage_status(user_one, user_two, clean_status)
+        await ctx.send(f"✅ Đã cập nhật trạng thái mối quan hệ thành: `{clean_status}` cho cuộc hôn nhân này!")
 
     @couple_cmd.command(name="setsaying", aliases=["saying", "quote", "setquote", "slogan"])
-    async def couple_setsaying(self, ctx: commands.Context, *, saying_text: str):
+    async def couple_setsaying(self, ctx: commands.Context, *, args_str: str = ""):
         """Đặt câu nói/slogan cho cặp đôi hiển thị ở khung dưới banner."""
-        marriage = self.economy.get_marriage(ctx.author.id)
+        args = args_str.split()
+        marriage, remaining_args = self._resolve_marriage_and_args(ctx.author.id, args)
         if not marriage:
-            await ctx.send("❌ Bạn phải kết hôn mới có thể cài đặt câu nói!")
+            await ctx.send("❌ Bạn chưa kết hôn!")
+            return
+        if not remaining_args:
+            await ctx.send("❌ Vui lòng cung cấp câu nói!")
             return
             
+        saying_text = " ".join(remaining_args)
         clean_saying = saying_text.strip()
+        user_one, user_two = marriage[0], marriage[1]
         if clean_saying.lower() in ("xoa", "clear", "none"):
-            self.economy.update_marriage_saying(ctx.author.id, "")
-            await ctx.send("✅ Đã xóa câu nói của cặp đôi!")
+            self.economy.update_marriage_saying(user_one, user_two, "")
+            await ctx.send("✅ Đã xóa câu nói của cặp đôi cho cuộc hôn nhân này!")
             return
             
         if len(clean_saying) > 100:
             await ctx.send("❌ Câu nói quá dài (tối đa 100 ký tự)!")
             return
             
-        self.economy.update_marriage_saying(ctx.author.id, clean_saying)
-        await ctx.send(f"✅ Đã cập nhật câu nói của cặp đôi thành: `{clean_saying}`!")
+        self.economy.update_marriage_saying(user_one, user_two, clean_saying)
+        await ctx.send(f"✅ Đã cập nhật câu nói thành: `{clean_saying}` cho cuộc hôn nhân này!")
 
     @couple_cmd.command(name="deposit", aliases=["gop"])
-    async def couple_deposit(self, ctx: commands.Context, amount: str):
+    async def couple_deposit(self, ctx: commands.Context, *, args_str: str = ""):
         # Deposit to joint wallet
-        marriage = self.economy.get_marriage(ctx.author.id)
+        args = args_str.split()
+        marriage, remaining_args = self._resolve_marriage_and_args(ctx.author.id, args)
         if not marriage:
             await ctx.send("❌ Bạn phải kết hôn mới có thể mở khóa và góp tiền vào quỹ chung!")
             return
             
         user_one, user_two, ring_type, love_points, joint_wallet, married_at, _, _ = marriage
-        
+        if not remaining_args:
+            await ctx.send("❌ Vui lòng nhập số tiền muốn góp!")
+            return
+            
+        amount = remaining_args[0]
         # Parse amount
-        # Handle 'all' capping at max
         from app.discord_bot.modules.betting import validate_money_bet
         try:
             money_val, _ = validate_money_bet(self.economy, ctx.author.id, amount)
@@ -671,15 +756,20 @@ class Marry(commands.Cog):
         await ctx.send(embed=embed)
 
     @couple_cmd.command(name="withdraw", aliases=["rut"])
-    async def couple_withdraw(self, ctx: commands.Context, amount: str):
+    async def couple_withdraw(self, ctx: commands.Context, *, args_str: str = ""):
         # Withdraw from joint wallet
-        marriage = self.economy.get_marriage(ctx.author.id)
+        args = args_str.split()
+        marriage, remaining_args = self._resolve_marriage_and_args(ctx.author.id, args)
         if not marriage:
             await ctx.send("❌ Bạn phải kết hôn mới có thể rút tiền từ quỹ chung!")
             return
             
         user_one, user_two, ring_type, love_points, joint_wallet, married_at, _, _ = marriage
-        
+        if not remaining_args:
+            await ctx.send("❌ Vui lòng nhập số tiền muốn rút!")
+            return
+            
+        amount = remaining_args[0]
         # Parse withdraw amount
         if amount.lower() == "all" or amount.lower() == "tất tay":
             money_val = joint_wallet
@@ -724,32 +814,55 @@ class Marry(commands.Cog):
         )
         await ctx.send(embed=embed)
 
-    # Love points daily interaction commands
+
     async def process_interact(self, ctx: commands.Context, target: discord.Member, action: str, emoji: str, action_type: str):
-        marriage = self.economy.get_marriage(ctx.author.id)
-        if not marriage:
+        marriages = self.economy.get_marriages(ctx.author.id)
+        if not marriages:
             await ctx.send(f"❌ Lệnh tương tác cặp đôi chỉ dành cho người đã kết hôn!")
             return
             
-        user_one, user_two, ring_type, love_points, joint_wallet, married_at, last_interact_time, interacts_today = marriage
-        spouse_id = user_two if ctx.author.id == user_one else user_one
-        
-        if target.id != spouse_id:
+        # Find active marriage matching this target spouse
+        active_marriage = None
+        for m in marriages:
+            m_user_one, m_user_two, *_ = m
+            m_spouse_id = m_user_two if ctx.author.id == m_user_one else m_user_one
+            if target.id == m_spouse_id:
+                active_marriage = m
+                break
+                
+        if not active_marriage:
+            # Adultery (target is not one of active spouses)
             deduct_pts = 10
-            new_pts = self.economy.deduct_love_points(user_one, user_two, deduct_pts)
+            
+            # Deduct points from all marriages
+            last_new_pts = 0
+            for m in marriages:
+                m_user_one, m_user_two, *_ = m
+                last_new_pts = self.economy.deduct_love_points(m_user_one, m_user_two, deduct_pts)
+                
+            spouse_mentions = []
+            for m in marriages:
+                m_user_one, m_user_two, *_ = m
+                m_spouse_id = m_user_two if ctx.author.id == m_user_one else m_user_one
+                spouse_mentions.append(f"<@{m_spouse_id}>")
+            spouse_list_str = " hoặc ".join(spouse_mentions)
+            
             embed = make_embed(
                 title="💔 PHÁT HIỆN NGOẠI TÌNH 💔",
                 description=(
                     f"⚠️ **{ctx.author.mention}** đã tương tác thân mật ({action}) với **{target.mention}** "
-                    f"trong khi đã kết hôn cùng <@{spouse_id}>!\n\n"
+                    f"trong khi đã kết hôn cùng {spouse_list_str}!\n\n"
                     f"💔 **Hành vi ngoại tình bị phát hiện!**\n"
-                    f"📉 Gia đình bạn bị phạt trừ `-{deduct_pts}` Điểm thân mật.\n"
-                    f"💞 **Điểm thân mật còn lại:** `{new_pts}` điểm."
+                    f"📉 Toàn bộ gia đình của bạn bị phạt trừ `-{deduct_pts}` Điểm thân mật.\n"
+                    f"💞 **Điểm thân mật hiện tại (couple gần nhất):** `{last_new_pts}` điểm."
                 ),
                 color=discord.Color.red()
             )
             await ctx.send(embed=embed)
             return
+            
+        user_one, user_two, ring_type, love_points, joint_wallet, married_at, last_interact_time, interacts_today = active_marriage
+
             
         # Try to add love points
         now = int(time.time())
@@ -799,10 +912,11 @@ class Marry(commands.Cog):
 
     @commands.command(
         brief="Hủy bỏ cuộc hôn nhân hiện tại (Ly hôn).",
-        usage="divorce"
+        usage="divorce [chỉ_số]"
     )
-    async def divorce(self, ctx: commands.Context):
-        marriage = self.economy.get_marriage(ctx.author.id)
+    async def divorce(self, ctx: commands.Context, *, args_str: str = ""):
+        args = args_str.split()
+        marriage, remaining_args = self._resolve_marriage_and_args(ctx.author.id, args)
         if not marriage:
             await ctx.send("❌ Bạn chưa kết hôn thì ly hôn cái gì?")
             return
@@ -815,6 +929,10 @@ class Marry(commands.Cog):
             try: spouse = await self.bot.fetch_user(spouse_id)
             except Exception: pass
             
+        # Find index of this marriage
+        marriages = self.economy.get_marriages(ctx.author.id)
+        idx = marriages.index(marriage) + 1
+        
         # Give two options
         # We check author cash for Unilateral divorce
         author_profile = self.economy.get_entry(ctx.author.id)
@@ -827,16 +945,17 @@ class Marry(commands.Cog):
             description=(
                 f"Bạn đang yêu cầu chấm dứt hôn nhân cùng <@{spouse_id}>.\n\n"
                 f"Hãy chọn một trong hai phương án giải quyết dưới đây:\n"
-                f"1️⃣ **Ly hôn Đồng Thuận (Mutual):** Gõ `i?divorcemutual` (Cả hai cùng ký đơn, không mất phí, quỹ chung chia đôi).\n"
-                f"2️⃣ **Ly hôn Đơn Phương (Unilateral):** Gõ `i?divorceforce` (Không cần bên kia đồng ý, án phí tòa án rất đắt: **{unilateral_cost:,} VND** (10% ví của bạn), 50% án phí sẽ đền bù cho bạn đời của bạn)."
+                f"1️⃣ **Ly hôn Đồng Thuận (Mutual):** Gõ `i?divorcemutual {idx}` (Cả hai cùng ký đơn, không mất phí, quỹ chung chia đôi).\n"
+                f"2️⃣ **Ly hôn Đơn Phương (Unilateral):** Gõ `i?divorceforce {idx}` (Không cần bên kia đồng ý, án phí tòa án rất đắt: **{unilateral_cost:,} VND** (10% ví của bạn), 50% án phí sẽ đền bù cho bạn đời của bạn)."
             ),
             color=discord.Color.red()
         )
         await ctx.send(embed=embed)
 
     @commands.command(name="divorcemutual", aliases=["divorce_mutual", "divmutual"], hidden=True)
-    async def divorce_mutual(self, ctx: commands.Context):
-        marriage = self.economy.get_marriage(ctx.author.id)
+    async def divorce_mutual(self, ctx: commands.Context, *, args_str: str = ""):
+        args = args_str.split()
+        marriage, remaining_args = self._resolve_marriage_and_args(ctx.author.id, args)
         if not marriage:
             return
         user_one, user_two, ring_type, love_points, joint_wallet, married_at, _, _ = marriage
@@ -857,8 +976,9 @@ class Marry(commands.Cog):
         view.message = msg
 
     @commands.command(name="divorceforce", aliases=["divorce_force", "divforce"], hidden=True)
-    async def divorce_force(self, ctx: commands.Context):
-        marriage = self.economy.get_marriage(ctx.author.id)
+    async def divorce_force(self, ctx: commands.Context, *, args_str: str = ""):
+        args = args_str.split()
+        marriage, remaining_args = self._resolve_marriage_and_args(ctx.author.id, args)
         if not marriage:
             return
         user_one, user_two, ring_type, love_points, joint_wallet, married_at, _, _ = marriage
@@ -901,7 +1021,7 @@ class Marry(commands.Cog):
         embed = make_embed(
             title="💔 LY HÔN ĐƠN PHƯƠNG THÀNH CÔNG 💔",
             description=(
-                f"**{ctx.author.name}** đã đơn phương ly hôn cùng bạn đời.\n\n"
+                f"**{ctx.author.mention}** đã đơn phương ly hôn cùng bạn đời.\n\n"
                 f"💸 **Án phí khấu trừ:** `-{unilateral_cost:,} VND` từ ví của bạn.\n"
                 f"🎁 **Bồi thường tổn thất phu thê:** chuyển `+{compensation:,} VND` cho <@{spouse_id}>.\n"
                 f"🏦 **Quỹ chung chia đôi:** Mỗi người nhận lại `+{split:,} VND`."
@@ -909,6 +1029,7 @@ class Marry(commands.Cog):
             color=discord.Color.red()
         )
         await ctx.send(embed=embed)
+
 
     # ── ADMIN COMMANDS ──────────────────────────────────────────────────────────
 
