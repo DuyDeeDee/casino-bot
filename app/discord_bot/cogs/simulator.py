@@ -2044,6 +2044,38 @@ class Simulator(commands.Cog):
                 cf_title = cf_vip["title"]
 
                 # Render banner
+                equipped = self.economy.get_equipped_banner(user_id)
+                banner_path = None
+                if equipped and equipped in SHOP_ITEMS:
+                    filename = SHOP_ITEMS[equipped].get("filename")
+                    if filename:
+                        banner_path = Path("pictures/banners") / filename
+                
+                avatar_url = target.display_avatar.with_format("png").url
+                img_buffer = await render_profile_banner(
+                    username=target.name,
+                    avatar_url=avatar_url,
+                    money=money,
+                    gold=gold,
+                    gold_price=gold_price,
+                    loan_amount=loan_amount,
+                    biz_count=biz_count,
+                    inv_count=inv_count,
+                    banner_path=banner_path,
+                    rl_title=rl_title,
+                    daga_title=daga_title,
+                    cf_title=cf_title
+                )
+                
+                is_gif = getattr(img_buffer, "is_gif", False)
+                ext = "gif" if is_gif else "png"
+                filename = f"profile-{user_id}-{uuid4().hex[:6]}.{ext}"
+                file = discord.File(fp=img_buffer, filename=filename)
+                
+                # Render couple banner if married
+                couple_buffer = None
+                couple_file = None
+                couple_embed = None
                 marriages = self.economy.get_marriages(user_id)
                 if marriages:
                     from app.discord_bot.cogs.marry import render_couple_banner
@@ -2076,7 +2108,7 @@ class Simulator(commands.Cog):
                     rel_status = self.economy.get_marriage_status(user_one, user_two)
                     saying = self.economy.get_marriage_saying(user_one, user_two)
                     
-                    img_buffer = await asyncio.to_thread(
+                    couple_buffer = await asyncio.to_thread(
                         render_couple_banner,
                         target,
                         spouse,
@@ -2090,34 +2122,14 @@ class Simulator(commands.Cog):
                         married_at,
                         saying
                     )
-                else:
-                    equipped = self.economy.get_equipped_banner(user_id)
-                    banner_path = None
-                    if equipped and equipped in SHOP_ITEMS:
-                        filename = SHOP_ITEMS[equipped].get("filename")
-                        if filename:
-                            banner_path = Path("pictures/banners") / filename
-                    
-                    avatar_url = target.display_avatar.with_format("png").url
-                    img_buffer = await render_profile_banner(
-                        username=target.name,
-                        avatar_url=avatar_url,
-                        money=money,
-                        gold=gold,
-                        gold_price=gold_price,
-                        loan_amount=loan_amount,
-                        biz_count=biz_count,
-                        inv_count=inv_count,
-                        banner_path=banner_path,
-                        rl_title=rl_title,
-                        daga_title=daga_title,
-                        cf_title=cf_title
-                    )
-                
-                is_gif = getattr(img_buffer, "is_gif", False)
-                ext = "gif" if is_gif else "png"
-                filename = f"profile-{user_id}-{uuid4().hex[:6]}.{ext}"
-                file = discord.File(fp=img_buffer, filename=filename)
+                    if couple_buffer:
+                        couple_filename = f"couple-{user_id}-{uuid4().hex[:6]}.png"
+                        couple_file = discord.File(fp=couple_buffer, filename=couple_filename)
+                        couple_embed = make_embed(
+                            title="💞 THÀNH VIÊN GIA ĐÌNH 💞",
+                            color=discord.Color.magenta()
+                        )
+                        couple_embed.set_image(url=f"attachment://{couple_filename}")
                 
                 # Render Showcase side-by-side companion image if exists
                 active_cock = self.economy.get_active_cock(user_id)
@@ -2195,6 +2207,9 @@ class Simulator(commands.Cog):
                 
                 files = [file]
                 embeds = [embed]
+                if couple_file and couple_embed:
+                    files.append(couple_file)
+                    embeds.append(couple_embed)
                 if showcase_file and showcase_embed:
                     files.append(showcase_file)
                     embeds.append(showcase_embed)
@@ -2202,6 +2217,8 @@ class Simulator(commands.Cog):
                 await ctx.send(files=files, embeds=embeds)
                 
                 img_buffer.close()
+                if couple_buffer:
+                    couple_buffer.close()
                 if showcase_buffer:
                     showcase_buffer.close()
             except Exception as e:
