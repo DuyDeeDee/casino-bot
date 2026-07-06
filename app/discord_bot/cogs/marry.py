@@ -529,6 +529,8 @@ class Marry(commands.Cog):
         self.economy = getattr(bot, "economy", Economy())
 
     async def is_admin_user(self, user) -> bool:
+        if user.id in config.bot.owner_ids or user.id in config.bot.admin_ids:
+            return True
         if user.id in self.bot.owner_ids:
             return True
         try:
