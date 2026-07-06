@@ -290,7 +290,7 @@ def render_couple_banner(proposer, target, ring_type: str, love_points: int, joi
     
     # Draw Instagram handles in bottom box corners (X = 350, 1320, Y = 810)
     draw.text((350,  810), left_ig_str,  fill=LIGHT_PINK, anchor="lm", font=font_regular)
-    draw.text((1320, 810), right_ig_str, fill=LIGHT_PINK, anchor="rm", font=font_regular)
+    draw.text((1200, 810), right_ig_str, fill=LIGHT_PINK, anchor="rm", font=font_regular)
     
     # Draw custom saying centered in the middle of the bottom box at Y = 845
     if saying:
