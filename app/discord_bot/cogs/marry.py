@@ -436,6 +436,86 @@ class DivorceView(discord.ui.View):
         await interaction.channel.send(f"❌ **{self.spouse.mention}** đã từ chối ký đơn ly hôn đồng thuận. Hãy dùng tùy chọn ly hôn đơn phương!")
 
 
+class CoupleWithdrawView(discord.ui.View):
+    """View with Accept/Decline buttons for couple joint wallet withdraw flows."""
+    def __init__(self, proposer: discord.User | discord.Member, spouse: discord.User | discord.Member, amount: int, economy: Economy, ctx: commands.Context):
+        super().__init__(timeout=60.0)
+        self.proposer = proposer
+        self.spouse = spouse
+        self.amount = amount
+        self.economy = economy
+        self.ctx = ctx
+        self.confirmed = None
+        self.message = None
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.spouse.id:
+            await interaction.response.send_message("❌ Chỉ người bạn đời mới có thể xác nhận rút tiền!", ephemeral=True)
+            return False
+        return True
+
+    @discord.ui.button(label="Đồng ý ✅", style=discord.ButtonStyle.success, custom_id="withdraw_accept")
+    async def accept(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.confirmed = True
+        self.stop()
+        
+        for child in self.children:
+            child.disabled = True
+        await interaction.response.edit_message(view=self)
+        
+        # Double check marriage and wallet balance
+        marriages = self.economy.get_marriages(self.proposer.id)
+        marriage = None
+        for m in marriages:
+            m_user_one, m_user_two, *_ = m
+            if self.spouse.id in (m_user_one, m_user_two):
+                marriage = m
+                break
+                
+        if not marriage:
+            await interaction.channel.send("❌ Thất bại: Hôn nhân này không còn tồn tại!")
+            return
+            
+        user_one, user_two, ring_type, love_points, joint_wallet, married_at, _, _ = marriage
+        if joint_wallet < self.amount:
+            await interaction.channel.send(f"❌ Thất bại: Quỹ chung hiện tại không đủ để rút (Chỉ còn `{joint_wallet:,} VND`!)")
+            return
+            
+        # Perform withdrawal
+        self.economy.update_joint_wallet(user_one, user_two, -self.amount)
+        self.economy.add_money(self.proposer.id, self.amount)
+        
+        log_wallet_change(
+            logger,
+            event="couple_joint_withdraw",
+            user_id=self.proposer.id,
+            money_delta=self.amount,
+            joint_balance=joint_wallet - self.amount,
+            ctx=self.ctx
+        )
+        
+        embed = make_embed(
+            title="🏦 RÚT TIỀN QUỸ CHUNG THÀNH CÔNG 🏦",
+            description=(
+                f"**{self.spouse.name}** đã đồng ý cho **{self.proposer.name}** rút tiền từ quỹ phu thê:\n\n"
+                f"💰 **Nhận lại ví:** `+{self.amount:,} VND`\n"
+                f"🏦 **Số dư quỹ chung còn lại:** `{joint_wallet - self.amount:,} VND`"
+            ),
+            color=discord.Color.green()
+        )
+        await interaction.channel.send(embed=embed)
+
+    @discord.ui.button(label="Từ chối ❌", style=discord.ButtonStyle.danger, custom_id="withdraw_decline")
+    async def decline(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.confirmed = False
+        self.stop()
+        
+        for child in self.children:
+            child.disabled = True
+        await interaction.response.edit_message(view=self)
+        await interaction.channel.send(f"❌ **{self.spouse.mention}** đã từ chối yêu cầu rút tiền phu thê của **{self.proposer.mention}**.")
+
+
 class Marry(commands.Cog):
     """Cog for community Couple features and rewards."""
     def __init__(self, bot):
@@ -723,12 +803,28 @@ class Marry(commands.Cog):
             return
             
         amount = remaining_args[0]
-        # Parse amount
-        from app.discord_bot.modules.betting import validate_money_bet
-        try:
-            money_val, _ = validate_money_bet(self.economy, ctx.author.id, amount)
-        except Exception as e:
-            await ctx.send(f"❌ **Lỗi tiền cược:** {e}")
+        # Get user cash balance
+        profile_entry = self.economy.get_entry(ctx.author.id)
+        user_cash = profile_entry[1]
+
+        # Parse deposit amount
+        if amount.lower() in ["all", "tất tay"]:
+            money_val = user_cash
+        else:
+            try:
+                # Custom parse multiplier like 100k, 1m
+                val_str = amount.lower().replace("k", "000").replace("m", "000000").replace(",", "").replace(".", "")
+                money_val = int(val_str)
+            except Exception:
+                await ctx.send("❌ Số tiền nhập vào không hợp lệ!")
+                return
+                
+        if money_val <= 0:
+            await ctx.send("❌ Số tiền góp phải lớn hơn 0.")
+            return
+            
+        if user_cash < money_val:
+            await ctx.send(f"❌ Bạn không đủ tiền! Bạn chỉ có `{user_cash:,} VND`.")
             return
             
         # Deduct cash
@@ -790,29 +886,30 @@ class Marry(commands.Cog):
             await ctx.send(f"❌ Quỹ chung không đủ tiền! Quỹ chỉ có `{joint_wallet:,} VND`.")
             return
             
-        # Perform withdrawal
-        self.economy.update_joint_wallet(user_one, user_two, -money_val)
-        self.economy.add_money(ctx.author.id, money_val)
-        
-        log_wallet_change(
-            logger,
-            event="couple_joint_withdraw",
-            user_id=ctx.author.id,
-            money_delta=money_val,
-            joint_balance=joint_wallet - money_val,
-            ctx=ctx
-        )
-        
+        # Get spouse object
+        spouse_id = user_two if ctx.author.id == user_one else user_one
+        spouse = self.bot.get_user(spouse_id)
+        if not spouse:
+            try:
+                spouse = await self.bot.fetch_user(spouse_id)
+            except Exception:
+                pass
+            
+        if not spouse:
+            await ctx.send("❌ Không thể tìm thấy thông tin bạn đời để yêu cầu đồng ý!")
+            return
+            
+        view = CoupleWithdrawView(ctx.author, spouse, money_val, self.economy, ctx)
         embed = make_embed(
-            title="🏦 RÚT TIỀN QUỸ CHUNG THÀNH CÔNG 🏦",
+            title="🏦 YÊU CẦU RÚT TIỀN QUỸ PHU THÊ 🏦",
             description=(
-                f"**{ctx.author.name}** đã rút thành công tiền từ quỹ phu thê:\n\n"
-                f"💰 **Nhận lại ví:** `+{money_val:,} VND`\n"
-                f"🏦 **Số dư quỹ chung còn lại:** `{joint_wallet - money_val:,} VND`"
+                f"💍 **{ctx.author.mention}** muốn rút **`{money_val:,} VND`** từ quỹ chung.\n\n"
+                f"🔔 Bạn đời **{spouse.mention}** vui lòng xác nhận đồng ý hoặc từ chối yêu cầu này!"
             ),
-            color=discord.Color.green()
+            color=discord.Color.magenta()
         )
-        await ctx.send(embed=embed)
+        msg = await ctx.send(embed=embed, view=view)
+        view.message = msg
 
 
     async def process_interact(self, ctx: commands.Context, target: discord.Member, action: str, emoji: str, action_type: str):
