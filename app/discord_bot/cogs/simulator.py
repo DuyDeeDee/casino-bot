@@ -226,6 +226,15 @@ SHOP_ITEMS = {
         "is_admin_only": True,
         "filename": "hr.gif"
     },
+    "banner_hr2": {
+        "name": "Banner HR 2 Động 💫",
+        "cost": 250,
+        "currency": "gold",
+        "description": "Hình nền động HR 2 cực đẹp.",
+        "is_banner": True,
+        "is_admin_only": True,
+        "filename": "hr2.gif"
+    },
     "banner_sally": {
         "name": "Banner Sally Động 🍭",
         "cost": 250,
