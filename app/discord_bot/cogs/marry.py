@@ -72,6 +72,12 @@ INTERACT_SAYINGS = {
         "Xoa xoa đầu, mong mọi muộn phiền của cậu đều tan biến nhé 💫",
         "Ngoan nào ngoan nào, có tớ ở đây rồi 🥺",
         "Nhìn cưng xỉu thế này chỉ muốn xoa đầu mãi thôi 😸"
+    ],
+    "Fuck": [
+        "Một đêm nồng cháy và đầy yêu thương bên bạn đời của mình... 💕",
+        "Ân ái mặn nồng, tình cảm đôi ta càng thêm thắt chặt gắn kết cấu 🥰",
+        "Yêu thương đong đầy, những giây phút thăng hoa ngọt ngào bên nhau 💖",
+        "Quấn quýt không rời, tình yêu phu thê nồng cháy thăng hoa đầy cảm xúc ✨"
     ]
 }
 
@@ -963,10 +969,13 @@ class Marry(commands.Cog):
             
         # Try to add love points
         now = int(time.time())
-        new_points, success = self.economy.add_love_points(user_one, user_two, 5, now)
+        points_to_add = 10 if action_type == "Fuck" else 5
+        old_love_points = love_points
+        new_points, success = self.economy.add_love_points(user_one, user_two, points_to_add, now)
+        added_points = new_points - old_love_points
         
-        if success:
-            pts_msg = " Bạn nhận được `+5 Điểm thân mật` (Giới hạn tối đa 20 điểm/ngày)."
+        if success and added_points > 0:
+            pts_msg = f" Bạn nhận được `+{added_points} Điểm thân mật` (Giới hạn tối đa 20 điểm/ngày)."
         else:
             pts_msg = " (Hôm nay hai bạn đã đạt giới hạn tối đa 20 Điểm thân mật)."
             
@@ -1006,6 +1015,10 @@ class Marry(commands.Cog):
     @commands.command(brief="Xoa đầu bạn đời của mình.")
     async def pat(self, ctx: commands.Context, target: discord.Member):
         await self.process_interact(ctx, target, "cái xoa đầu ngọt ngào", "👋", "Pat")
+
+    @commands.command(brief="Ân ái nồng cháy với bạn đời của mình.")
+    async def fuck(self, ctx: commands.Context, target: discord.Member):
+        await self.process_interact(ctx, target, "cuộc ân ái nồng cháy", "🔞", "Fuck")
 
     @commands.command(
         brief="Hủy bỏ cuộc hôn nhân hiện tại (Ly hôn).",
