@@ -290,12 +290,12 @@ def render_couple_banner(proposer, target, ring_type: str, love_points: int, joi
     
     # Draw Instagram handles in bottom box corners (X = 350, 1320, Y = 810)
     draw.text((300,  810), left_ig_str,  fill=LIGHT_PINK, anchor="lm", font=font_regular)
-    draw.text((1200, 810), right_ig_str, fill=LIGHT_PINK, anchor="rm", font=font_regular)
+    draw.text((1250, 810), right_ig_str, fill=LIGHT_PINK, anchor="rm", font=font_regular)
     
     # Draw custom saying centered in the middle of the bottom box at Y = 845
     if saying:
         font_saying = _vogue(24)
-        draw.text((836, 815), saying, fill=PASTEL_PINK, anchor="mm", font=font_saying)
+        draw.text((836, 820), saying, fill=PASTEL_PINK, anchor="mm", font=font_saying)
         
     # Draw joint wallet balance centered near the bottom of the box at Y = 880
     joint_wallet_str = f"Quỹ chung: {joint_wallet:,} VND"
