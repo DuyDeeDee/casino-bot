@@ -288,14 +288,18 @@ def render_couple_banner(proposer, target, ring_type: str, love_points: int, joi
     left_ig_str = f"ins / {proposer_ig}" if proposer_ig else "ins / chưa đặt"
     right_ig_str = f"ins / {target_ig}" if target_ig else "ins / chưa đặt"
     
-    # Draw Instagram handles in bottom box at Y = 825, using original center positions (645, 1015)
-    draw.text((645,  825), left_ig_str,  fill=LIGHT_PINK, anchor="mm", font=font_regular)
-    draw.text((1015, 825), right_ig_str, fill=LIGHT_PINK, anchor="mm", font=font_regular)
+    # Draw Instagram handles in bottom box corners (X = 350, 1320, Y = 810)
+    draw.text((350,  810), left_ig_str,  fill=LIGHT_PINK, anchor="lm", font=font_regular)
+    draw.text((1320, 810), right_ig_str, fill=LIGHT_PINK, anchor="rm", font=font_regular)
     
-    # Draw custom saying centered below the Instagram handles at Y = 885
+    # Draw custom saying centered in the middle of the bottom box at Y = 845
     if saying:
         font_saying = _vogue(24)
-        draw.text((836, 885), saying, fill=PASTEL_PINK, anchor="mm", font=font_saying)
+        draw.text((836, 845), saying, fill=PASTEL_PINK, anchor="mm", font=font_saying)
+        
+    # Draw joint wallet balance centered near the bottom of the box at Y = 880
+    joint_wallet_str = f"Quỹ chung: {joint_wallet:,} VND"
+    draw.text((836, 880), joint_wallet_str, fill=PASTEL_PINK, anchor="mm", font=font_regular)
     
     # Composite overlay on background
     bg.paste(overlay, (0, 0), mask=overlay)
