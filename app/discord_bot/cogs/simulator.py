@@ -2051,10 +2051,10 @@ class Simulator(commands.Cog):
                     user_one, user_two, ring_type, love_points, joint_wallet, married_at, _, _ = marriage
                     
                     spouse_id = user_two if user_id == user_one else user_one
-                    spouse = self.bot.get_user(spouse_id)
+                    spouse = self.client.get_user(spouse_id)
                     if not spouse:
                         try:
-                            spouse = await self.bot.fetch_user(spouse_id)
+                            spouse = await self.client.fetch_user(spouse_id)
                         except Exception:
                             pass
                     if not spouse:
