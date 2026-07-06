@@ -2035,28 +2035,75 @@ class Simulator(commands.Cog):
                 cf_title = cf_vip["title"]
 
                 # Render banner
-                equipped = self.economy.get_equipped_banner(user_id)
-                banner_path = None
-                if equipped and equipped in SHOP_ITEMS:
-                    filename = SHOP_ITEMS[equipped].get("filename")
-                    if filename:
-                        banner_path = Path("pictures/banners") / filename
-                
-                avatar_url = target.display_avatar.with_format("png").url
-                img_buffer = await render_profile_banner(
-                    username=target.name,
-                    avatar_url=avatar_url,
-                    money=money,
-                    gold=gold,
-                    gold_price=gold_price,
-                    loan_amount=loan_amount,
-                    biz_count=biz_count,
-                    inv_count=inv_count,
-                    banner_path=banner_path,
-                    rl_title=rl_title,
-                    daga_title=daga_title,
-                    cf_title=cf_title
-                )
+                marriages = self.economy.get_marriages(user_id)
+                if marriages:
+                    from app.discord_bot.cogs.marry import render_couple_banner
+                    marriage = marriages[0]
+                    user_one, user_two, ring_type, love_points, joint_wallet, married_at, _, _ = marriage
+                    
+                    spouse_id = user_two if user_id == user_one else user_one
+                    spouse = self.bot.get_user(spouse_id)
+                    if not spouse:
+                        try:
+                            spouse = await self.bot.fetch_user(spouse_id)
+                        except Exception:
+                            pass
+                    if not spouse:
+                        class FallbackUser:
+                            def __init__(self, uid):
+                                self.id = uid
+                                self.display_name = f"User_ID:{uid}"
+                                self.display_avatar = self
+                                self.url = "https://example.com/avatar.png"
+                        spouse = FallbackUser(spouse_id)
+                        
+                    married_days = max(1, (int(time.time()) - married_at) // 86400)
+                    ig_handles = self.economy.get_marriage_ig(user_one, user_two)
+                    if user_id == user_one:
+                        author_ig, spouse_ig = ig_handles[0], ig_handles[1]
+                    else:
+                        author_ig, spouse_ig = ig_handles[1], ig_handles[0]
+                        
+                    rel_status = self.economy.get_marriage_status(user_one, user_two)
+                    saying = self.economy.get_marriage_saying(user_one, user_two)
+                    
+                    img_buffer = await asyncio.to_thread(
+                        render_couple_banner,
+                        target,
+                        spouse,
+                        ring_type,
+                        love_points,
+                        joint_wallet,
+                        married_days,
+                        author_ig,
+                        spouse_ig,
+                        rel_status,
+                        married_at,
+                        saying
+                    )
+                else:
+                    equipped = self.economy.get_equipped_banner(user_id)
+                    banner_path = None
+                    if equipped and equipped in SHOP_ITEMS:
+                        filename = SHOP_ITEMS[equipped].get("filename")
+                        if filename:
+                            banner_path = Path("pictures/banners") / filename
+                    
+                    avatar_url = target.display_avatar.with_format("png").url
+                    img_buffer = await render_profile_banner(
+                        username=target.name,
+                        avatar_url=avatar_url,
+                        money=money,
+                        gold=gold,
+                        gold_price=gold_price,
+                        loan_amount=loan_amount,
+                        biz_count=biz_count,
+                        inv_count=inv_count,
+                        banner_path=banner_path,
+                        rl_title=rl_title,
+                        daga_title=daga_title,
+                        cf_title=cf_title
+                    )
                 
                 is_gif = getattr(img_buffer, "is_gif", False)
                 ext = "gif" if is_gif else "png"
