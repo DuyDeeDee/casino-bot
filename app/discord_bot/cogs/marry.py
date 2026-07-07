@@ -295,7 +295,7 @@ def render_couple_banner(proposer, target, ring_type: str, love_points: int, joi
     # Draw custom saying centered in the middle of the bottom box at Y = 845
     if saying:
         font_saying = _vogue(24)
-        draw.text((836, 820), saying, fill=PASTEL_PINK, anchor="mm", font=font_saying)
+        draw.text((836, 835), saying, fill=PASTEL_PINK, anchor="mm", font=font_saying)
         
     # Draw joint wallet balance centered near the bottom of the box at Y = 880
     joint_wallet_str = f"Quỹ chung: {joint_wallet:,} VND"
