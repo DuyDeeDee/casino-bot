@@ -1,4 +1,3 @@
-import os
 
 import discord
 from discord.ext import commands
@@ -204,11 +203,7 @@ class Help(commands.Cog, name="help"):
         embed  = _home_embed(groups, prefix)
         view   = HelpView(groups, prefix)
 
-        fp = os.path.join(ABS_PATH, "modules/cards/aces.png")
-        file = discord.File(fp, filename="aces.png")
-        embed.set_thumbnail(url="attachment://aces.png")
-
-        await ctx.send(file=file, embed=embed, view=view)
+        await ctx.send(embed=embed, view=view)
 
     @commands.command(hidden=True)
     @commands.is_owner()
