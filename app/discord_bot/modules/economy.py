@@ -2434,4 +2434,12 @@ class Economy:
         )
         self.conn.commit()
 
+    def update_marriage_ring(self, user_one: int, user_two: int, ring_type: str) -> None:
+        """Updates the marriage ring type for a specific marriage entry"""
+        self.cur.execute(
+            "UPDATE user_marry SET ring_type = ? WHERE user_one = ? AND user_two = ?",
+            (ring_type, user_one, user_two)
+        )
+        self.conn.commit()
+
 

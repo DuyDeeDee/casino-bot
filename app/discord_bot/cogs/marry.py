@@ -800,6 +800,92 @@ class Marry(commands.Cog):
         self.economy.update_marriage_saying(user_one, user_two, clean_saying)
         await ctx.send(f"✅ Đã cập nhật câu nói thành: `{clean_saying}` cho cuộc hôn nhân này!")
 
+    @couple_cmd.command(name="changering", aliases=["doinhan", "doi_nhan", "swapring"])
+    async def couple_changering(self, ctx: commands.Context, *, args_str: str = ""):
+        """Thay thế nhẫn cưới hiện tại bằng một chiếc nhẫn mới trong túi đồ của bạn (hoàn lại nhẫn cũ)."""
+        args = args_str.split()
+        marriage, remaining_args = self._resolve_marriage_and_args(ctx.author.id, args)
+        if not marriage:
+            await ctx.send("❌ Bạn chưa kết hôn!")
+            return
+
+        user_one, user_two, old_ring_type, love_points, joint_wallet, married_at, _, _ = marriage
+
+        # Check owned rings in inventory
+        inventory = dict(self.economy.get_inventory(ctx.author.id))
+        owned_rings = [k for k in RINGS.keys() if inventory.get(k, 0) > 0]
+
+        if not owned_rings:
+            await ctx.send("❌ **Bạn không sở hữu nhẫn cưới nào trong túi đồ!** Vui lòng mua nhẫn mới từ sảnh `i?shop`.")
+            return
+
+        selected_ring_id = None
+        if remaining_args:
+            input_ring = " ".join(remaining_args).lower().strip()
+            # Try to match key or name
+            for k, v in RINGS.items():
+                if input_ring in k.lower() or input_ring in v.lower():
+                    selected_ring_id = k
+                    break
+
+            if not selected_ring_id or selected_ring_id not in owned_rings:
+                await ctx.send(f"❌ Bạn không sở hữu nhẫn cưới nào khớp với '{input_ring}' trong túi đồ!")
+                return
+        else:
+            # Prioritize best ring
+            ring_priority = [
+                "ring_divine",
+                "ring_angel",
+                "ring_gothic",
+                "ring_sunburst",
+                "ring_sapphire",
+                "ring_ruby",
+                "ring_citrine",
+                "ring_cupid",
+                "ring_amethyst",
+                "ring_emerald",
+                "ring_aquamarine",
+                "ring_quartz",
+                "ring_grass"
+            ]
+            selected_ring_id = next((r for r in ring_priority if r in owned_rings), None)
+
+        if not selected_ring_id:
+            await ctx.send("❌ Không thể xác định nhẫn cưới để đổi!")
+            return
+
+        if selected_ring_id == old_ring_type:
+            await ctx.send(f"❌ Cuộc hôn nhân này hiện tại đã sử dụng **{RINGS[old_ring_type]}** rồi, không cần đổi cùng loại nhẫn!")
+            return
+
+        # Perform the ring swap
+        # 1. Deduct new ring
+        self.economy.add_inventory_item(ctx.author.id, selected_ring_id, -1)
+        # 2. Return old ring
+        self.economy.add_inventory_item(ctx.author.id, old_ring_type, 1)
+        # 3. Update database
+        self.economy.update_marriage_ring(user_one, user_two, selected_ring_id)
+
+        log_wallet_change(
+            logger,
+            event="couple_change_ring",
+            user_id=ctx.author.id,
+            old_ring=old_ring_type,
+            new_ring=selected_ring_id,
+            ctx=ctx
+        )
+
+        embed = make_embed(
+            title="💖 THAY THẾ NHẪN CƯỚI THÀNH CÔNG 💖",
+            description=(
+                f"Đã đổi tín vật kết duyên thành công cho cuộc hôn nhân này!\n\n"
+                f"📦 **Nhẫn cũ hoàn trả vào túi đồ:** {RINGS.get(old_ring_type, old_ring_type)}\n"
+                f"✨ **Tín vật mới của gia đình:** {RINGS[selected_ring_id]}"
+            ),
+            color=discord.Color.magenta()
+        )
+        await ctx.send(embed=embed)
+
     @couple_cmd.command(name="deposit", aliases=["gop"])
     async def couple_deposit(self, ctx: commands.Context, *, args_str: str = ""):
         # Deposit to joint wallet
