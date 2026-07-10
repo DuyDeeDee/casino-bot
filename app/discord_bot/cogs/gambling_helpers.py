@@ -104,6 +104,51 @@ class PaginatorView(discord.ui.View):
             await self.message.edit(view=self)
         except Exception:
             pass
+class FeedbackReplyModal(discord.ui.Modal, title="Trả lời phản hồi"):
+    def __init__(self, client: commands.Bot, target_user: discord.User | discord.Member):
+        super().__init__()
+        self.client = client
+        self.target_user = target_user
+
+        self.reply_input = discord.ui.TextInput(
+            label=f"Gửi phản hồi tới {target_user.name}",
+            placeholder="Nhập nội dung trả lời tại đây...",
+            style=discord.TextStyle.long,
+            required=True,
+            max_length=1000
+        )
+        self.add_item(self.reply_input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        reply_content = self.reply_input.value
+
+        embed = make_embed(
+            title="💬 PHẢN HỒI TỪ ADMIN BOT",
+            description=reply_content,
+            color=discord.Color.green()
+        )
+        embed.set_thumbnail(url=interaction.user.display_avatar.url)
+        embed.set_footer(text="Cảm ơn bạn đã đóng góp ý kiến giúp cải thiện bot!")
+
+        try:
+            await self.target_user.send(embed=embed)
+            await interaction.response.send_message(f"✅ Đã gửi phản hồi thành công tới **{self.target_user.name}**.", ephemeral=True)
+        except discord.Forbidden:
+            await interaction.response.send_message(f"❌ Không thể gửi DM tới **{self.target_user.name}** (họ đã khóa DM).", ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Có lỗi xảy ra khi gửi tin nhắn: {e}", ephemeral=True)
+
+
+class OwnerFeedbackView(discord.ui.View):
+    def __init__(self, client: commands.Bot, target_user: discord.User | discord.Member, timeout: float = 86400.0):
+        super().__init__(timeout=timeout)
+        self.client = client
+        self.target_user = target_user
+
+    @discord.ui.button(label="Trả lời nhanh", style=discord.ButtonStyle.primary, emoji="✍️")
+    async def reply_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        modal = FeedbackReplyModal(self.client, self.target_user)
+        await interaction.response.send_modal(modal)
 
 
 class GamblingHelpers(commands.Cog, name="General"):
@@ -1859,51 +1904,6 @@ class GamblingHelpers(commands.Cog, name="General"):
         msg = await ctx.send(content=target.mention, embed=embed, view=view)
         view.message = msg
 
-class FeedbackReplyModal(discord.ui.Modal, title="Trả lời phản hồi"):
-    def __init__(self, client: commands.Bot, target_user: discord.User | discord.Member):
-        super().__init__()
-        self.client = client
-        self.target_user = target_user
-
-        self.reply_input = discord.ui.TextInput(
-            label=f"Gửi phản hồi tới {target_user.name}",
-            placeholder="Nhập nội dung trả lời tại đây...",
-            style=discord.TextStyle.long,
-            required=True,
-            max_length=1000
-        )
-        self.add_item(self.reply_input)
-
-    async def on_submit(self, interaction: discord.Interaction):
-        reply_content = self.reply_input.value
-
-        embed = make_embed(
-            title="💬 PHẢN HỒI TỪ ADMIN BOT",
-            description=reply_content,
-            color=discord.Color.green()
-        )
-        embed.set_thumbnail(url=interaction.user.display_avatar.url)
-        embed.set_footer(text="Cảm ơn bạn đã đóng góp ý kiến giúp cải thiện bot!")
-
-        try:
-            await self.target_user.send(embed=embed)
-            await interaction.response.send_message(f"✅ Đã gửi phản hồi thành công tới **{self.target_user.name}**.", ephemeral=True)
-        except discord.Forbidden:
-            await interaction.response.send_message(f"❌ Không thể gửi DM tới **{self.target_user.name}** (họ đã khóa DM).", ephemeral=True)
-        except Exception as e:
-            await interaction.response.send_message(f"❌ Có lỗi xảy ra khi gửi tin nhắn: {e}", ephemeral=True)
-
-
-class OwnerFeedbackView(discord.ui.View):
-    def __init__(self, client: commands.Bot, target_user: discord.User | discord.Member, timeout: float = 86400.0):
-        super().__init__(timeout=timeout)
-        self.client = client
-        self.target_user = target_user
-
-    @discord.ui.button(label="Trả lời nhanh", style=discord.ButtonStyle.primary, emoji="✍️")
-    async def reply_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        modal = FeedbackReplyModal(self.client, self.target_user)
-        await interaction.response.send_modal(modal)
 
 
     @commands.command(
