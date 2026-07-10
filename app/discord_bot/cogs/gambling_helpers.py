@@ -1872,15 +1872,15 @@ class GamblingHelpers(commands.Cog, name="General"):
             ctx.command.reset_cooldown(ctx)
             return
 
-        owner_ids = getattr(config.bot, "owner_ids", [])
-        if not owner_ids:
-            if self.client.owner_id:
-                owner_ids = [self.client.owner_id]
-            elif self.client.owner_ids:
-                owner_ids = list(self.client.owner_ids)
+        # Get primary owner ID
+        owner_id = self.client.owner_id
+        if not owner_id and self.client.owner_ids:
+            owner_id = list(self.client.owner_ids)[0]
+        if not owner_id and getattr(config.bot, "owner_ids", []):
+            owner_id = config.bot.owner_ids[0]
 
-        if not owner_ids:
-            await ctx.send("❌ Hiện tại bot chưa được cấu hình ID Admin nhận phản hồi!")
+        if not owner_id:
+            await ctx.send("❌ Hiện tại bot chưa được cấu hình ID Owner nhận phản hồi!")
             return
 
         embed = make_embed(
@@ -1893,32 +1893,28 @@ class GamblingHelpers(commands.Cog, name="General"):
         embed.set_thumbnail(url=ctx.author.display_avatar.url)
         embed.set_footer(text=f"Thời gian: {time.strftime('%Y-%m-%d %H:%M:%S')}")
 
-        sent_count = 0
-        for owner_id in owner_ids:
-            owner = self.client.get_user(owner_id)
-            if not owner:
-                try:
-                    owner = await self.client.fetch_user(owner_id)
-                except Exception:
-                    continue
+        owner = self.client.get_user(owner_id)
+        if not owner:
             try:
-                # Recreate attachments for each DM
-                dm_files = []
-                for attachment in ctx.message.attachments:
-                    try:
-                        fp = await attachment.to_file()
-                        dm_files.append(fp)
-                    except Exception:
-                        pass
-                await owner.send(embed=embed, files=dm_files)
-                sent_count += 1
-            except Exception as e:
-                logger.error(f"Failed to send feedback to owner ID {owner_id}: {e}")
+                owner = await self.client.fetch_user(owner_id)
+            except Exception:
+                await ctx.send("❌ Không thể tìm thấy thông tin tài khoản của Owner để gửi phản hồi!")
+                return
 
-        if sent_count > 0:
-            await ctx.send("✅ Cảm ơn bạn! Ý kiến đóng góp đã được gửi trực tiếp tới Admin bot thành công.")
-        else:
-            await ctx.send("❌ Không thể gửi phản hồi tới Admin lúc này. Vui lòng thử lại sau!")
+        try:
+            # Send attachments if any
+            dm_files = []
+            for attachment in ctx.message.attachments:
+                try:
+                    fp = await attachment.to_file()
+                    dm_files.append(fp)
+                except Exception:
+                    pass
+            await owner.send(embed=embed, files=dm_files)
+            await ctx.send("✅ Cảm ơn bạn! Ý kiến đóng góp đã được gửi trực tiếp tới Owner bot thành công.")
+        except Exception as e:
+            logger.error(f"Failed to send feedback to owner ID {owner_id}: {e}")
+            await ctx.send("❌ Không thể gửi phản hồi tới Owner lúc này. Vui lòng thử lại sau!")
 
 
 class BegConfirmView(discord.ui.View):
