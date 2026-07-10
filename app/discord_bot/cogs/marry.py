@@ -728,7 +728,102 @@ class Marry(commands.Cog):
         except Exception:
             pass
 
+    @couple_cmd.command(
+        name="top",
+        aliases=["leaderboard", "bxh"],
+        brief="Xem bảng xếp hạng các cặp đôi trong server.",
+        usage="couple top [love/wallet/days]"
+    )
+    async def couple_top(self, ctx: commands.Context, sort_type: str = "love"):
+        """Xem bảng xếp hạng các cặp đôi trong server theo nhiều tiêu chí khác nhau."""
+        # Normalize sort type
+        sort_type = sort_type.lower().strip()
+        
+        # Map sort type to database query parameter
+        if sort_type in ["love", "tim", "point", "points", "than_mat", "thanmat"]:
+            db_sort = "love_points"
+            title_sort = "Điểm Thân Mật 💞"
+        elif sort_type in ["wallet", "quy", "money", "tien", "quychung", "quy_chung"]:
+            db_sort = "joint_wallet"
+            title_sort = "Số Dư Quỹ Chung 🏦"
+        elif sort_type in ["days", "day", "time", "ngay", "hanh_phuc", "hanhphuc"]:
+            db_sort = "married_at"
+            title_sort = "Thời Gian Kết Hôn (Số Ngày) 📅"
+        else:
+            await ctx.send("❌ Loại bảng xếp hạng không hợp lệ! Hãy sử dụng: `love` (Điểm thân mật), `wallet` (Quỹ chung), hoặc `days` (Số ngày kết hôn).")
+            return
+            
+        loading_msg = await ctx.send("⌛ **Đang tải bảng xếp hạng cặp đôi...**")
+        
+        top_marriages = self.economy.get_top_marriages(db_sort, limit=10)
+        
+        if not top_marriages:
+            await ctx.send("❌ Chưa có cặp đôi nào kết hôn trên hệ thống!")
+            try:
+                await loading_msg.delete()
+            except Exception:
+                pass
+            return
+            
+        embed = make_embed(
+            title=f"🏆 BẢNG XẾP HẠNG CẶP ĐÔI - {title_sort.upper()} 🏆",
+            description="Dưới đây là danh sách 10 cặp đôi nổi bật nhất server:\n\n",
+            color=discord.Color.magenta()
+        )
+        
+        lines = []
+        for idx, m in enumerate(top_marriages):
+            user_one, user_two, ring_type, love_points, joint_wallet, married_at = m
+            
+            # Get spouse names or mentions
+            u1 = self.bot.get_user(user_one)
+            if not u1:
+                try: u1 = await self.bot.fetch_user(user_one)
+                except Exception: u1 = None
+                
+            u2 = self.bot.get_user(user_two)
+            if not u2:
+                try: u2 = await self.bot.fetch_user(user_two)
+                except Exception: u2 = None
+                
+            name1 = u1.mention if u1 else f"ID: {user_one}"
+            name2 = u2.mention if u2 else f"ID: {user_two}"
+            
+            ring_emoji = RINGS.get(ring_type, ring_type)
+            
+            # Formatting rank prefix
+            if idx == 0:
+                rank_str = "👑 **Top 1**"
+            elif idx == 1:
+                rank_str = "🥈 **Top 2**"
+            elif idx == 2:
+                rank_str = "🥉 **Top 3**"
+            else:
+                rank_str = f"#️⃣ **Top {idx + 1}**"
+                
+            # Formatting value representation
+            if db_sort == "love_points":
+                val_str = f"`{love_points:,} 💞`"
+            elif db_sort == "joint_wallet":
+                val_str = f"`{joint_wallet:,} VND` 🏦"
+            else:
+                # married_at
+                days = max(1, (int(time.time()) - married_at) // 86400)
+                val_str = f"`{days:,} ngày` 📅"
+                
+            lines.append(f"{rank_str}: {name1} ❤️ {name2}\n└ 💍 Tín vật: {ring_emoji} | Đạt: {val_str}")
+            
+        embed.description += "\n\n".join(lines)
+        embed.set_footer(text=f"Sử dụng: '{config.bot.prefix}couple top [love/wallet/days]' để đổi bảng xếp hạng.")
+        
+        await ctx.send(embed=embed)
+        try:
+            await loading_msg.delete()
+        except Exception:
+            pass
+
     @couple_cmd.command(name="setig", aliases=["instagram", "ig"], brief="Đặt tài khoản Instagram hiển thị trên banner.", usage="couple setig [chỉ_số] <tên_ig>")
+
     async def couple_setig(self, ctx: commands.Context, *, args_str: str = ""):
         """Đặt tài khoản Instagram của bạn để hiển thị trên profile cặp đôi."""
         args = args_str.split()

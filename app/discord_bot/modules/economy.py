@@ -2442,4 +2442,19 @@ class Economy:
         )
         self.conn.commit()
 
+    def get_top_marriages(self, sort_by: str, limit: int = 10) -> list[tuple]:
+        """Returns list of top marriages ordered by the given criteria: love_points, joint_wallet, or married_at (ascending/longest)."""
+        if sort_by == "love_points":
+            query = "SELECT user_one, user_two, ring_type, love_points, joint_wallet, married_at FROM user_marry ORDER BY love_points DESC LIMIT ?"
+        elif sort_by == "joint_wallet":
+            query = "SELECT user_one, user_two, ring_type, love_points, joint_wallet, married_at FROM user_marry ORDER BY joint_wallet DESC LIMIT ?"
+        elif sort_by == "married_at":
+            query = "SELECT user_one, user_two, ring_type, love_points, joint_wallet, married_at FROM user_marry ORDER BY married_at ASC LIMIT ?"
+        else:
+            query = "SELECT user_one, user_two, ring_type, love_points, joint_wallet, married_at FROM user_marry ORDER BY love_points DESC LIMIT ?"
+
+        self.cur.execute(query, (limit,))
+        return self.cur.fetchall()
+
+
 
