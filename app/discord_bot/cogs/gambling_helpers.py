@@ -1440,6 +1440,103 @@ class GamblingHelpers(commands.Cog, name="General"):
         else:
             await ctx.send(f"❌ **Lỗi:** Không hỗ trợ cấu hình cho khóa `{key}`. Chỉ hỗ trợ: `rig_rate`, `threshold`, `jackpot_rate`, `jackpot_min_bet`, `tax_rate`, `jackpot_value`, `max_bet`, `status`.")
 
+    @commands.command(name="setbcconfig", hidden=True, aliases=["bcconfig"])
+    @commands.is_owner()
+    async def set_baucua_config(
+        self,
+        ctx: commands.Context,
+        key: str = "status",
+        value: str | None = None,
+    ):
+        """[ADMIN] Cấu hình tỷ lệ thuế (tax_rate), giá trị hũ (jackpot_value) và tỷ lệ nổ hũ (jackpot_rate) của Bầu Cua."""
+        key = key.lower().strip()
+
+        if key in ("status", "info", "view"):
+            tax_rate_str = self.economy.get_setting("baucua_tax_rate")
+            tax_rate = float(tax_rate_str) if tax_rate_str is not None else 0.0
+
+            jackpot_val_str = self.economy.get_setting("baucua_jackpot")
+            jackpot_val = int(jackpot_val_str) if jackpot_val_str is not None else 0
+
+            jackpot_rate_str = self.economy.get_setting("baucua_jackpot_rate")
+            jackpot_rate = float(jackpot_rate_str) if jackpot_rate_str is not None else 1.0
+            overall_jackpot_rate = jackpot_rate * (6.0 / 216.0)
+
+            embed = make_embed(
+                title="⚙️ CẤU HÌNH BẦU CUA (ADMIN ONLY)",
+                description=(
+                    f"• **Tỷ lệ thuế cược thắng (tax_rate):** `{tax_rate * 100}%` (Số tiền thắng ròng được trích đưa vào hũ jackpot)\n"
+                    f"• **Giá trị hũ hiện tại (jackpot_value):** `{jackpot_val:,} VND` (Số tiền đang tích lũy trong hũ)\n"
+                    f"• **Tỷ lệ nổ hũ tổng thể (jackpot_rate):** `{overall_jackpot_rate * 100:.6f}%` (Cơ hội nổ hũ ở mỗi phiên chơi)\n"
+                    f"  *(Tỷ lệ kích hoạt khi xúc xắc ra bão: {jackpot_rate * 100:.4f}%)\n\n"
+                    f"💡 *Để thay đổi, hãy gõ:*\n"
+                    f"• `{ctx.prefix}setbcconfig tax_rate <tỷ_lệ_%, vd: 5%>`\n"
+                    f"• `{ctx.prefix}setbcconfig jackpot_value <số_tiền_VND>`\n"
+                    f"• `{ctx.prefix}setbcconfig jackpot_rate <tỷ_lệ_%, vd: 0.1%>`"
+                ),
+                color=discord.Color.dark_red()
+            )
+            await ctx.send(embed=embed)
+            return
+
+        if value is None:
+            await ctx.send(f"❌ **Lỗi:** Vui lòng cung cấp giá trị cần thiết lập cho khóa `{key}`.")
+            return
+
+        if key in ("tax_rate", "taxrate", "tax", "thue", "thuế"):
+            try:
+                val_str = value.strip()
+                if val_str.endswith("%"):
+                    rate = float(val_str[:-1].strip()) / 100.0
+                else:
+                    rate = float(val_str)
+
+                if not (0.0 <= rate <= 1.0):
+                    raise ValueError()
+
+                self.economy.set_setting("baucua_tax_rate", str(rate))
+                await ctx.send(f"✅ Đã thiết lập tỷ lệ thuế cược thắng Bầu Cua thành **{rate * 100}%**.")
+            except ValueError:
+                await ctx.send("❌ **Lỗi:** Tỷ lệ thuế phải là số thập phân nằm trong khoảng từ `0.0` đến `1.0` hoặc dạng phần trăm (ví dụ: `5%` hoặc `0.05`).")
+
+        elif key in ("jackpot_rate", "jackpotrate", "jackpot", "nohu"):
+            try:
+                val_str = value.strip()
+                if val_str.endswith("%"):
+                    target_rate = float(val_str[:-1].strip()) / 100.0
+                else:
+                    target_rate = float(val_str)
+
+                if target_rate < 0.0:
+                    raise ValueError()
+
+                triplet_rate = target_rate * 36.0
+                triplet_rate = min(1.0, max(0.0, triplet_rate))
+
+                self.economy.set_setting("baucua_jackpot_rate", str(triplet_rate))
+
+                overall_computed = triplet_rate * (6.0 / 216.0)
+                await ctx.send(
+                    f"✅ Đã thiết lập tỷ lệ nổ hũ Bầu Cua thành công:\n"
+                    f"• Tỷ lệ tổng thể mỗi phiên: **{overall_computed * 100:.6f}%**\n"
+                    f"• Tỷ lệ kích hoạt khi ra bão (3 linh vật trùng nhau): **{triplet_rate * 100:.4f}%**"
+                )
+            except ValueError:
+                await ctx.send("❌ **Lỗi:** Tỷ lệ nổ hũ phải là số thập phân dương hoặc tỷ lệ phần trăm (ví dụ: `0.1%` hoặc `0.001`).")
+
+        elif key in ("jackpot_value", "jackpotval", "pool", "value", "hũ", "hu"):
+            try:
+                val = int(value)
+                if val < 0:
+                    raise ValueError()
+                self.economy.set_setting("baucua_jackpot", str(val))
+                await ctx.send(f"✅ Đã thiết lập giá trị hũ Bầu Cua thành **{val:,} VND**.")
+            except ValueError:
+                await ctx.send("❌ **Lỗi:** Giá trị hũ phải là một số nguyên dương hoặc bằng 0.")
+
+        else:
+            await ctx.send(f"❌ **Lỗi:** Không hỗ trợ cấu hình cho khóa `{key}`. Chỉ hỗ trợ: `tax_rate`, `jackpot_value`, `jackpot_rate`, `status`.")
+
     @commands.command(
         name="giveall",
         brief="[ADMIN] Tặng tiền (VND) hoặc vàng cho tất cả người chơi.",

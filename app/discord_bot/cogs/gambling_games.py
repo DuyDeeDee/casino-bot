@@ -1594,14 +1594,18 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
             jackpot_winners = []
             jackpot_val_won = 0
             if dice[0] == dice[1] == dice[2]:
-                total_session_bets = sum(session_bets.values())
-                if total_session_bets > 0:
-                    is_jackpot_triggered = True
-                    jackpot_str = self.economy.get_setting("baucua_jackpot")
-                    jackpot_val = int(jackpot_str) if jackpot_str else 0
-                    jackpot_val_won = jackpot_val
-                    for uid, amt in session_bets.items():
-                        share = int(jackpot_val * (amt / total_session_bets))
+                jackpot_rate_str = self.economy.get_setting("baucua_jackpot_rate")
+                jackpot_rate = float(jackpot_rate_str) if jackpot_rate_str is not None else 1.0
+                
+                if random.random() < jackpot_rate:
+                    total_session_bets = sum(session_bets.values())
+                    if total_session_bets > 0:
+                        is_jackpot_triggered = True
+                        jackpot_str = self.economy.get_setting("baucua_jackpot")
+                        jackpot_val = int(jackpot_str) if jackpot_str else 0
+                        jackpot_val_won = jackpot_val
+                        for uid, amt in session_bets.items():
+                            share = int(jackpot_val * (amt / total_session_bets))
                         if share > 0:
                             self.economy.add_money(uid, share)
                             if share >= 1_000_000:
@@ -1621,6 +1625,7 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
             winners = []
             winner_mentions = []
             losers = []
+            total_tax_collected = 0
             
             user_ids = set()
             for mascot in view.bets:
@@ -1628,11 +1633,16 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
                     user_ids.add(uid)
                     
             mascot_names_viet = {"nai": "Nai", "bau": "Bầu", "ga": "Gà", "ca": "Cá", "cua": "Cua", "tom": "Tôm"}
+
+            # Read tax rate setting (same pattern as taixiu)
+            tax_rate_str = self.economy.get_setting("baucua_tax_rate")
+            tax_rate = float(tax_rate_str) if tax_rate_str is not None else 0.0
             
             for uid in user_ids:
                 name = view.user_names.get(uid, f"User {uid}")
-                total_payout = 0
+                total_payout_before_tax = 0
                 total_bet_for_user = 0
+                winning_bet_amt = 0
                 details = []
                 
                 for mascot in view.bets:
@@ -1642,11 +1652,22 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
                         count = dice.count(mascot)
                         if count > 0:
                             payout = (count + 1) * amt
-                            total_payout += payout
-                            details.append(f"{mascot_names_viet[mascot]} (x{count}): +{count*amt:,} VND")
+                            total_payout_before_tax += payout
+                            winning_bet_amt += amt
+                            net_win_bet = count * amt
+                            bet_tax = int(net_win_bet * tax_rate)
+                            details.append(f"{mascot_names_viet[mascot]} (x{count}): +{net_win_bet - bet_tax:,} VND")
                         else:
                             details.append(f"{mascot_names_viet[mascot]}: -{amt:,} VND")
-                
+
+                # Calculate tax on net winning amount
+                net_win = total_payout_before_tax - winning_bet_amt
+                tax = 0
+                if net_win > 0:
+                    tax = int(net_win * tax_rate)
+                    total_tax_collected += tax
+
+                total_payout = total_payout_before_tax - tax
                 net_profit = total_payout - total_bet_for_user
                 if total_payout > 0:
                     self.economy.add_money(uid, total_payout)
@@ -1688,17 +1709,12 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
                         session_id=session_id,
                     )
 
-            # Calculate total lost bets to add to jackpot
-            total_lost_in_session = 0
-            for mascot in view.bets:
-                if dice.count(mascot) == 0:
-                    total_lost_in_session += sum(view.bets[mascot].values())
-
-            # Add lost bets to the jackpot
-            if total_lost_in_session > 0:
+            # Add tax collected from winning bets to jackpot (same as taixiu)
+            jackpot_addition = total_tax_collected
+            if jackpot_addition > 0:
                 jackpot_str = self.economy.get_setting("baucua_jackpot")
                 jackpot_val = int(jackpot_str) if jackpot_str else 0
-                new_jackpot = jackpot_val + total_lost_in_session
+                new_jackpot = jackpot_val + jackpot_addition
                 self.economy.set_setting("baucua_jackpot", str(new_jackpot))
                     
             mascot_emojis = {"ca": "🐟", "cua": "🦀", "tom": "🦐", "nai": "🦌", "bau": "🍐", "ga": "🐓"}
