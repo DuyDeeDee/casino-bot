@@ -627,7 +627,7 @@ class Marry(commands.Cog):
         msg = await ctx.send(embed=embed, view=view)
         view.message = msg
 
-    @commands.group(name="couple", brief="Quản lý thông tin gia đình cặp đôi.", invoke_without_command=True)
+    @commands.group(name="couple", brief="Quản lý thông tin gia đình cặp đôi.", invoke_without_command=True, usage="couple [chỉ_số/người_dùng] [chỉ_số]")
     async def couple_cmd(self, ctx: commands.Context, index_or_user: str = None, index: int = None):
         # Displays the couple profile banner
         # Parse arguments
@@ -728,7 +728,7 @@ class Marry(commands.Cog):
         except Exception:
             pass
 
-    @couple_cmd.command(name="setig", aliases=["instagram", "ig"])
+    @couple_cmd.command(name="setig", aliases=["instagram", "ig"], brief="Đặt tài khoản Instagram hiển thị trên banner.", usage="couple setig [chỉ_số] <tên_ig>")
     async def couple_setig(self, ctx: commands.Context, *, args_str: str = ""):
         """Đặt tài khoản Instagram của bạn để hiển thị trên profile cặp đôi."""
         args = args_str.split()
@@ -751,7 +751,7 @@ class Marry(commands.Cog):
         self.economy.update_marriage_ig(user_one, user_two, ctx.author.id, clean_handle)
         await ctx.send(f"✅ Đã cập nhật tài khoản Instagram của bạn thành: `ins / {clean_handle}` cho cuộc hôn nhân này!")
 
-    @couple_cmd.command(name="status", aliases=["setstatus", "trangthai"])
+    @couple_cmd.command(name="status", aliases=["setstatus", "trangthai"], brief="Đặt trạng thái mối quan hệ cặp đôi.", usage="couple status [chỉ_số] <trạng_thái>")
     async def couple_status(self, ctx: commands.Context, *, args_str: str = ""):
         """Đặt trạng thái mối quan hệ của cặp đôi (ví dụ: situation ship, mãi bên nhau...)."""
         args = args_str.split()
@@ -773,7 +773,7 @@ class Marry(commands.Cog):
         self.economy.update_marriage_status(user_one, user_two, clean_status)
         await ctx.send(f"✅ Đã cập nhật trạng thái mối quan hệ thành: `{clean_status}` cho cuộc hôn nhân này!")
 
-    @couple_cmd.command(name="setsaying", aliases=["saying", "quote", "setquote", "slogan"])
+    @couple_cmd.command(name="setsaying", aliases=["saying", "quote", "setquote", "slogan"], brief="Đặt câu nói/slogan cho cặp đôi dưới banner.", usage="couple setsaying [chỉ_số] <câu_nói>")
     async def couple_setsaying(self, ctx: commands.Context, *, args_str: str = ""):
         """Đặt câu nói/slogan cho cặp đôi hiển thị ở khung dưới banner."""
         args = args_str.split()
@@ -800,7 +800,7 @@ class Marry(commands.Cog):
         self.economy.update_marriage_saying(user_one, user_two, clean_saying)
         await ctx.send(f"✅ Đã cập nhật câu nói thành: `{clean_saying}` cho cuộc hôn nhân này!")
 
-    @couple_cmd.command(name="changering", aliases=["doinhan", "doi_nhan", "swapring"])
+    @couple_cmd.command(name="changering", aliases=["doinhan", "doi_nhan", "swapring"], brief="Thay nhẫn cưới hiện tại bằng nhẫn mới (hoàn nhẫn cũ).", usage="couple changering [chỉ_số] [tên_nhẫn]")
     async def couple_changering(self, ctx: commands.Context, *, args_str: str = ""):
         """Thay thế nhẫn cưới hiện tại bằng một chiếc nhẫn mới trong túi đồ của bạn (hoàn lại nhẫn cũ)."""
         args = args_str.split()
@@ -886,7 +886,7 @@ class Marry(commands.Cog):
         )
         await ctx.send(embed=embed)
 
-    @couple_cmd.command(name="deposit", aliases=["gop"])
+    @couple_cmd.command(name="deposit", aliases=["gop"], brief="Góp tiền vào quỹ chung phu thê.", usage="couple deposit [chỉ_số] <số_tiền/all>")
     async def couple_deposit(self, ctx: commands.Context, *, args_str: str = ""):
         # Deposit to joint wallet
         args = args_str.split()
@@ -949,7 +949,7 @@ class Marry(commands.Cog):
         )
         await ctx.send(embed=embed)
 
-    @couple_cmd.command(name="withdraw", aliases=["rut"])
+    @couple_cmd.command(name="withdraw", aliases=["rut"], brief="Rút tiền từ quỹ chung phu thê (cần bạn đời đồng ý).", usage="couple withdraw [chỉ_số] <số_tiền/all>")
     async def couple_withdraw(self, ctx: commands.Context, *, args_str: str = ""):
         # Withdraw from joint wallet
         args = args_str.split()
