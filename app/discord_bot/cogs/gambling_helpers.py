@@ -1859,6 +1859,67 @@ class GamblingHelpers(commands.Cog, name="General"):
         msg = await ctx.send(content=target.mention, embed=embed, view=view)
         view.message = msg
 
+    @commands.command(
+        brief="Gửi phản hồi, góp ý hoặc báo cáo lỗi cho Admin bot.",
+        usage="feedback <nội dung phản hồi>",
+        aliases=["gop_y", "gopy", "report"]
+    )
+    @commands.cooldown(1, 60, commands.BucketType.user)
+    async def feedback(self, ctx: commands.Context, *, content: str = ""):
+        """Gửi phản hồi, góp ý hoặc báo cáo lỗi trực tiếp vào DMs của Admin bot."""
+        if not content:
+            await ctx.send("❌ Vui lòng nhập nội dung góp ý! Ví dụ: `i?feedback Lỗi nút bấm trong tài xỉu`")
+            ctx.command.reset_cooldown(ctx)
+            return
+
+        owner_ids = getattr(config.bot, "owner_ids", [])
+        if not owner_ids:
+            if self.client.owner_id:
+                owner_ids = [self.client.owner_id]
+            elif self.client.owner_ids:
+                owner_ids = list(self.client.owner_ids)
+
+        if not owner_ids:
+            await ctx.send("❌ Hiện tại bot chưa được cấu hình ID Admin nhận phản hồi!")
+            return
+
+        embed = make_embed(
+            title="📩 PHẢN HỒI MỚI TỪ NGƯỜI DÙNG",
+            description=content,
+            color=discord.Color.gold()
+        )
+        embed.add_field(name="👤 Người gửi", value=f"{ctx.author.mention} (`{ctx.author.name}` / ID: `{ctx.author.id}`)", inline=True)
+        embed.add_field(name="🌐 Server", value=f"{ctx.guild.name if ctx.guild else 'DMs'} (ID: `{ctx.guild.id if ctx.guild else 'None'}`)", inline=True)
+        embed.set_thumbnail(url=ctx.author.display_avatar.url)
+        embed.set_footer(text=f"Thời gian: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+
+        sent_count = 0
+        for owner_id in owner_ids:
+            owner = self.client.get_user(owner_id)
+            if not owner:
+                try:
+                    owner = await self.client.fetch_user(owner_id)
+                except Exception:
+                    continue
+            try:
+                # Recreate attachments for each DM
+                dm_files = []
+                for attachment in ctx.message.attachments:
+                    try:
+                        fp = await attachment.to_file()
+                        dm_files.append(fp)
+                    except Exception:
+                        pass
+                await owner.send(embed=embed, files=dm_files)
+                sent_count += 1
+            except Exception as e:
+                logger.error(f"Failed to send feedback to owner ID {owner_id}: {e}")
+
+        if sent_count > 0:
+            await ctx.send("✅ Cảm ơn bạn! Ý kiến đóng góp đã được gửi trực tiếp tới Admin bot thành công.")
+        else:
+            await ctx.send("❌ Không thể gửi phản hồi tới Admin lúc này. Vui lòng thử lại sau!")
+
 
 class BegConfirmView(discord.ui.View):
     def __init__(self, beggar: discord.Member, target: discord.Member, amount: int, economy: Economy, timeout: float = 60.0):
