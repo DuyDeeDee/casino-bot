@@ -756,14 +756,15 @@ class CoinFlip(commands.Cog, name="CoinFlip"):
         await play_msg.edit(content=f"🎲 **Đang Double... Cược tiếp tất cả `{old_pool:,} VNĐ`!**\n🪙 Tung đồng xu...\n⬆️\n⬆️")
         await asyncio.sleep(0.8)
 
+        user_choice = previous_view.user_choice
+        user_choice_vn = "🦅 NGỬA (Heads)" if user_choice == "heads" else "🌸 SẤP (Tails)"
+
         # Flip again based on win rate
         is_win = random.random() < self.get_double_round_win_rate()
         if is_win:
             coin_result = user_choice
         else:
             coin_result = "tails" if user_choice == "heads" else "heads"
-        user_choice = previous_view.user_choice
-        user_choice_vn = "🦅 NGỬA (Heads)" if user_choice == "heads" else "🌸 SẤP (Tails)"
         coin_result_vn = "🦅 NGỬA" if coin_result == "heads" else "🌸 SẤP"
 
         if coin_result == user_choice:
