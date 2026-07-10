@@ -50,19 +50,16 @@ class Handlers(commands.Cog, name="handlers"):
                 else:
                     allowed_str = "kênh được chỉ định"
                 
-                embed = make_embed(
-                    title="⚠️ KÊNH BỊ HẠN CHẾ ⚠️",
-                    description=(
-                        f"Chào **{ctx.author.name}**, các lệnh của Casino Bot không được phép sử dụng tại kênh này ({ctx.channel.mention}).\n\n"
-                        f"👉 Vui lòng di chuyển sang {allowed_str} để chơi nhé!"
-                    ),
-                    color=discord.Color.red()
+                msg = (
+                    f"⚠️ Chào **{ctx.author.name}**, các lệnh của Casino Bot không được phép sử dụng tại kênh này ({ctx.channel.mention}).\n"
+                    f"👉 Vui lòng di chuyển sang {allowed_str} để chơi nhé!"
                 )
                 try:
-                    await ctx.send(embed=embed, delete_after=15.0)
+                    await ctx.send(msg, delete_after=15.0)
                 except Exception:
                     pass
                 raise commands.CheckFailure("Kênh bị cấm")
+
 
         user_id = ctx.author.id
 
@@ -131,7 +128,7 @@ class Handlers(commands.Cog, name="handlers"):
         if hasattr(ctx.command, "on_error"):
             return
 
-        if isinstance(error, commands.CheckFailure) and str(error) in ["Chưa khởi nghiệp", "Bị ban"]:
+        if isinstance(error, commands.CheckFailure) and str(error) in ["Chưa khởi nghiệp", "Bị ban", "Kênh bị cấm"]:
             return
 
         if isinstance(error, CommandInvokeError):
