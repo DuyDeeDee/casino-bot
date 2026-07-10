@@ -1859,6 +1859,53 @@ class GamblingHelpers(commands.Cog, name="General"):
         msg = await ctx.send(content=target.mention, embed=embed, view=view)
         view.message = msg
 
+class FeedbackReplyModal(discord.ui.Modal, title="Trả lời phản hồi"):
+    def __init__(self, client: commands.Bot, target_user: discord.User | discord.Member):
+        super().__init__()
+        self.client = client
+        self.target_user = target_user
+
+        self.reply_input = discord.ui.TextInput(
+            label=f"Gửi phản hồi tới {target_user.name}",
+            placeholder="Nhập nội dung trả lời tại đây...",
+            style=discord.TextStyle.long,
+            required=True,
+            max_length=1000
+        )
+        self.add_item(self.reply_input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        reply_content = self.reply_input.value
+
+        embed = make_embed(
+            title="💬 PHẢN HỒI TỪ ADMIN BOT",
+            description=reply_content,
+            color=discord.Color.green()
+        )
+        embed.set_thumbnail(url=interaction.user.display_avatar.url)
+        embed.set_footer(text="Cảm ơn bạn đã đóng góp ý kiến giúp cải thiện bot!")
+
+        try:
+            await self.target_user.send(embed=embed)
+            await interaction.response.send_message(f"✅ Đã gửi phản hồi thành công tới **{self.target_user.name}**.", ephemeral=True)
+        except discord.Forbidden:
+            await interaction.response.send_message(f"❌ Không thể gửi DM tới **{self.target_user.name}** (họ đã khóa DM).", ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Có lỗi xảy ra khi gửi tin nhắn: {e}", ephemeral=True)
+
+
+class OwnerFeedbackView(discord.ui.View):
+    def __init__(self, client: commands.Bot, target_user: discord.User | discord.Member, timeout: float = 86400.0):
+        super().__init__(timeout=timeout)
+        self.client = client
+        self.target_user = target_user
+
+    @discord.ui.button(label="Trả lời nhanh", style=discord.ButtonStyle.primary, emoji="✍️")
+    async def reply_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        modal = FeedbackReplyModal(self.client, self.target_user)
+        await interaction.response.send_modal(modal)
+
+
     @commands.command(
         brief="Gửi phản hồi, góp ý hoặc báo cáo lỗi cho Admin bot.",
         usage="feedback <nội dung phản hồi>",
@@ -1890,6 +1937,7 @@ class GamblingHelpers(commands.Cog, name="General"):
         )
         embed.add_field(name="👤 Người gửi", value=f"{ctx.author.mention} (`{ctx.author.name}` / ID: `{ctx.author.id}`)", inline=True)
         embed.add_field(name="🌐 Server", value=f"{ctx.guild.name if ctx.guild else 'DMs'} (ID: `{ctx.guild.id if ctx.guild else 'None'}`)", inline=True)
+        embed.add_field(name="💡 Hướng dẫn trả lời", value=f"• Bấm nút **Trả lời nhanh** ở dưới\n• Hoặc gõ: `i?reply {ctx.author.id} <nội dung>`", inline=False)
         embed.set_thumbnail(url=ctx.author.display_avatar.url)
         embed.set_footer(text=f"Thời gian: {time.strftime('%Y-%m-%d %H:%M:%S')}")
 
@@ -1910,11 +1958,58 @@ class GamblingHelpers(commands.Cog, name="General"):
                     dm_files.append(fp)
                 except Exception:
                     pass
-            await owner.send(embed=embed, files=dm_files)
+            view = OwnerFeedbackView(self.client, ctx.author)
+            await owner.send(embed=embed, files=dm_files, view=view)
             await ctx.send("✅ Cảm ơn bạn! Ý kiến đóng góp đã được gửi trực tiếp tới Owner bot thành công.")
         except Exception as e:
             logger.error(f"Failed to send feedback to owner ID {owner_id}: {e}")
             await ctx.send("❌ Không thể gửi phản hồi tới Owner lúc này. Vui lòng thử lại sau!")
+
+    @commands.command(
+        name="reply",
+        brief="[ADMIN] Trả lời góp ý của người chơi qua DM.",
+        usage="reply <user_id> <nội dung trả lời>",
+        aliases=["traloi", "rep"],
+        hidden=True
+    )
+    @commands.is_owner()
+    async def reply_feedback(self, ctx: commands.Context, target_id: int, *, reply_content: str = ""):
+        """Trả lời góp ý của người chơi. Phản hồi sẽ được gửi thẳng vào DMs của người dùng có ID được cung cấp."""
+        if not reply_content:
+            await ctx.send("❌ Vui lòng nhập nội dung trả lời! Ví dụ: `i?reply 1234567890 Cảm ơn bạn đã báo cáo lỗi.`")
+            return
+
+        target_user = self.client.get_user(target_id)
+        if not target_user:
+            try:
+                target_user = await self.client.fetch_user(target_id)
+            except Exception:
+                await ctx.send(f"❌ Không tìm thấy người dùng có ID `{target_id}`!")
+                return
+
+        embed = make_embed(
+            title="💬 PHẢN HỒI TỪ ADMIN BOT",
+            description=reply_content,
+            color=discord.Color.green()
+        )
+        embed.set_thumbnail(url=ctx.author.display_avatar.url)
+        embed.set_footer(text="Cảm ơn bạn đã đóng góp ý kiến giúp cải thiện bot!")
+
+        dm_files = []
+        for attachment in ctx.message.attachments:
+            try:
+                fp = await attachment.to_file()
+                dm_files.append(fp)
+            except Exception:
+                pass
+
+        try:
+            await target_user.send(embed=embed, files=dm_files)
+            await ctx.send(f"✅ Đã gửi phản hồi thành công tới **{target_user.name}**.")
+        except discord.Forbidden:
+            await ctx.send(f"❌ Không thể gửi DM tới **{target_user.name}** (họ đã khóa DM).")
+        except Exception as e:
+            await ctx.send(f"❌ Có lỗi xảy ra khi gửi tin nhắn: {e}")
 
 
 class BegConfirmView(discord.ui.View):
