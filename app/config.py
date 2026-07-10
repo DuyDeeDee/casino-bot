@@ -22,6 +22,9 @@ class BotConfig(BaseModel):
     default_bet: int = Field(default=100, ge=1, le=1_000_000)
     bonus_multiplier: int = Field(default=5, ge=1, le=1_000)
     bonus_cooldown: int = Field(default=12, ge=1, le=168)
+    blocked_channels: list[int] = Field(default_factory=list)
+    allowed_channels: list[int] = Field(default_factory=list)
+
 
 
 class StorageConfig(BaseModel):
@@ -43,7 +46,10 @@ env_vars = (
     "DISCORD_DEFAULT_BET",
     "DISCORD_BONUS_MULTIPLIER",
     "DISCORD_BONUS_COOLDOWN",
+    "DISCORD_BLOCKED_CHANNELS",
+    "DISCORD_ALLOWED_CHANNELS",
     "CASINO_DATA_DIR",
+
     "CASINO_DATABASE_PATH",
     "CASINO_LOG_PATH",
 )
@@ -83,6 +89,8 @@ def load_config() -> Config:
             default_bet=_parse_int_env("DISCORD_DEFAULT_BET", 100),
             bonus_multiplier=_parse_int_env("DISCORD_BONUS_MULTIPLIER", 5),
             bonus_cooldown=_parse_int_env("DISCORD_BONUS_COOLDOWN", 12),
+            blocked_channels=_parse_owner_ids(getenv("DISCORD_BLOCKED_CHANNELS")),
+            allowed_channels=_parse_owner_ids(getenv("DISCORD_ALLOWED_CHANNELS")),
         )
         data_dir = _parse_path_env("CASINO_DATA_DIR", DEFAULT_DATA_DIR)
         database_path = _parse_path_env(

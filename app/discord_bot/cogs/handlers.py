@@ -41,7 +41,31 @@ class Handlers(commands.Cog, name="handlers"):
         if not self.economy or (ctx.author and ctx.author.bot):
             return
             
+        # Kiểm tra giới hạn kênh sử dụng bot (Không ai được phép bypass, kể cả admin/owner)
+        if ctx.guild and config.bot.blocked_channels:
+            if ctx.channel.id in config.bot.blocked_channels:
+                allowed_channels = config.bot.allowed_channels
+                if allowed_channels:
+                    allowed_str = " hoặc ".join(f"<#{cid}>" for cid in allowed_channels)
+                else:
+                    allowed_str = "kênh được chỉ định"
+                
+                embed = make_embed(
+                    title="⚠️ KÊNH BỊ HẠN CHẾ ⚠️",
+                    description=(
+                        f"Chào **{ctx.author.name}**, các lệnh của Casino Bot không được phép sử dụng tại kênh này ({ctx.channel.mention}).\n\n"
+                        f"👉 Vui lòng di chuyển sang {allowed_str} để chơi nhé!"
+                    ),
+                    color=discord.Color.red()
+                )
+                try:
+                    await ctx.send(embed=embed, delete_after=15.0)
+                except Exception:
+                    pass
+                raise commands.CheckFailure("Kênh bị cấm")
+
         user_id = ctx.author.id
+
 
         # Kiểm tra xem người dùng có bị ban hay không
         if self.economy.is_banned(user_id):
