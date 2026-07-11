@@ -3128,12 +3128,22 @@ class Simulator(commands.Cog):
             await ctx.send(f"❌ **Mục tiêu quá nghèo:** {target.name} chỉ có `{target_money:,} VND` trong ví. Hãy để họ yên!")
             return
 
+        # Check target immunity ring (ring_divine)
+        target_inventory = self.economy.get_inventory(target.id)
+        target_marriages = self.economy.get_marriages(target.id)
+        
+        has_divine_ring = any(item == 'ring_divine' and qty > 0 for item, qty in target_inventory) or \
+                          any(marriage[2] == 'ring_divine' for marriage in target_marriages)
+                          
+        if has_divine_ring:
+            await ctx.send(f"🛡️ **Mục tiêu miễn nhiễm cướp:** **{target.name}** được bảo vệ bởi sức mạnh của **Nhẫn Hào Quang Vĩnh Cửu 🌌**, không thể bị cướp!")
+            return
+
         # 40% success rate
         robber_profile = self.economy.get_entry(user_id)
         robber_money = robber_profile[1]
         
         # Check security alarm system (30% trigger chance)
-        target_inventory = self.economy.get_inventory(target.id)
         has_security = any(item == 'security_system' and qty > 0 for item, qty in target_inventory)
         
         if has_security and random.random() < 0.30:
@@ -3166,6 +3176,17 @@ class Simulator(commands.Cog):
         target_upgrades = self.economy.get_upgrades(target.id)
         bodyguard_active = target_upgrades[2] > now
         success_rate = 0.08 if bodyguard_active else 0.40
+
+        # Check ring protection modifiers (ring_angel reduces by 40%, ring_gothic reduces by 20%)
+        has_angel_ring = any(item == 'ring_angel' and qty > 0 for item, qty in target_inventory) or \
+                         any(marriage[2] == 'ring_angel' for marriage in target_marriages)
+        has_gothic_ring = any(item == 'ring_gothic' and qty > 0 for item, qty in target_inventory) or \
+                          any(marriage[2] == 'ring_gothic' for marriage in target_marriages)
+                          
+        if has_angel_ring:
+            success_rate *= 0.60
+        elif has_gothic_ring:
+            success_rate *= 0.80
 
         if random.random() < success_rate:
             # Success: steal a random 1% to 5% of target's money
@@ -3213,6 +3234,10 @@ class Simulator(commands.Cog):
             fail_msg = f"Bạn đã bị cảnh sát tóm gọn hoặc bị **{target.name}** phản kháng dữ dội!"
             if bodyguard_active:
                 fail_msg = f"**Vệ sĩ chuyên nghiệp 🛡️** bảo vệ **{target.name}** đã lập tức ngăn cản và đá bay bạn đi chỗ khác!"
+            elif has_angel_ring:
+                fail_msg = f"Sức mạnh từ **Nhẫn Cánh Thần Sapphire 👼** bảo vệ **{target.name}** đã làm bạn lóa mắt và thất bại!"
+            elif has_gothic_ring:
+                fail_msg = f"Hào quang hắc ám từ **Nhẫn Hắc Dạ Gothic 🖤** bảo vệ **{target.name}** đã khiến bạn run sợ và thất bại!"
 
             embed = make_embed(
                 title="🚨 VỤ CƯỚP THẤT BẠI 🚨",
