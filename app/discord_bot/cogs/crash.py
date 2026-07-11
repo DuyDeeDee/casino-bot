@@ -80,18 +80,35 @@ class CrashBetModal(discord.ui.Modal):
             )
             return
 
-        if amount < 1000:
+        # Enforce global minimum and maximum bet limits
+        from app.discord_bot.modules.betting import validate_money_bet
+        from app.discord_bot.modules.helpers import BetLimitViolationException, InsufficientFundsException
+        try:
+            validate_money_bet(self.lobby_view.cog.economy, user.id, amount)
+        except BetLimitViolationException as e:
             await interaction.response.send_message(
-                "❌ Số tiền cược tối thiểu là **1,000 VND**.", ephemeral=True
+                f"❌ {str(e)}",
+                ephemeral=True,
             )
             return
-
-        if amount > current_money:
+        except InsufficientFundsException as e:
             await interaction.response.send_message(
                 f"❌ Bạn không đủ tiền! Số dư ví hiện tại của bạn là **{current_money:,} VND**.",
                 ephemeral=True,
             )
             return
+        except Exception:
+            if amount < 1000:
+                await interaction.response.send_message(
+                    "❌ Số tiền cược tối thiểu là **1,000 VND**.", ephemeral=True
+                )
+                return
+            if amount > current_money:
+                await interaction.response.send_message(
+                    f"❌ Bạn không đủ tiền! Số dư ví hiện tại của bạn là **{current_money:,} VND**.",
+                    ephemeral=True,
+                )
+                return
 
         # Deduct money immediately to prevent double spend exploit
         self.lobby_view.cog.economy.add_money(user.id, -amount)
