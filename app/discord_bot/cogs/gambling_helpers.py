@@ -1327,6 +1327,42 @@ class GamblingHelpers(commands.Cog, name="General"):
         self.economy.conn.commit()
         await ctx.send(f"✅ Đã cập nhật coinflip plays cho **{user.name}** thành {plays}.")
 
+    @commands.command(name="givedanhhieu", aliases=["givetitle"], hidden=True)
+    @commands.is_owner()
+    async def give_danh_hieu(
+        self,
+        ctx: commands.Context,
+        member: discord.Member,
+        *,
+        title: str = "Thuộc hạ Sally",
+    ):
+        """[ADMIN] Tặng danh hiệu cho người chơi (chỉ Owner mới dùng được)."""
+        title = title.strip()
+        if not title:
+            await ctx.send("❌ Tên danh hiệu không hợp lệ.")
+            return
+
+        self.economy.add_user_title(member.id, title)
+        await ctx.send(f"✅ Đã tặng danh hiệu **{title}** cho người chơi **{member.name}**.")
+
+    @commands.command(name="removedanhhieu", aliases=["removetitle"], hidden=True)
+    @commands.is_owner()
+    async def remove_danh_hieu(
+        self,
+        ctx: commands.Context,
+        member: discord.Member,
+        *,
+        title: str = "Thuộc hạ Sally",
+    ):
+        """[ADMIN] Gỡ bỏ danh hiệu của người chơi (chỉ Owner mới dùng được)."""
+        title = title.strip()
+        if not title:
+            await ctx.send("❌ Tên danh hiệu không hợp lệ.")
+            return
+
+        self.economy.remove_user_title(member.id, title)
+        await ctx.send(f"✅ Đã gỡ bỏ danh hiệu **{title}** của người chơi **{member.name}**.")
+
     @commands.command(name="settxconfig", hidden=True, aliases=["txconfig"])
     @commands.is_owner()
     async def set_taixiu_config(

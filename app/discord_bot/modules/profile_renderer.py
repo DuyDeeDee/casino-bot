@@ -2,6 +2,7 @@ import logging
 import urllib.request
 import os
 import aiohttp
+import unicodedata
 from io import BytesIO
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
@@ -107,6 +108,13 @@ def strip_emoji(text: str | None) -> str:
         return ""
     return "".join(c for c in text if ord(c) < 0x2000 or 0x20A0 <= ord(c) <= 0x20CF).strip()
 
+def remove_diacritics(text: str) -> str:
+    """Removes Vietnamese accents and diacritics from text."""
+    # Replace đ and Đ manually since NFKD normalization doesn't decompose them
+    text = text.replace('đ', 'd').replace('Đ', 'D')
+    normalized = unicodedata.normalize('NFKD', text)
+    return "".join(c for c in normalized if not unicodedata.combining(c))
+
 def draw_profile_content(
     img: Image.Image,
     draw: ImageDraw.Draw,
@@ -120,7 +128,8 @@ def draw_profile_content(
     inv_count: int,
     rl_title: str | None = None,
     daga_title: str | None = None,
-    cf_title: str | None = None
+    cf_title: str | None = None,
+    custom_titles: list[str] | None = None
 ) -> None:
     width, height = img.size
     
@@ -234,6 +243,20 @@ def draw_profile_content(
                 cf_bg = (160, 82, 45)  # Sienna
             raw_badges.append((clean_cf, cf_bg, (255, 255, 255)))
 
+    # Custom Titles
+    if custom_titles:
+        for title in custom_titles:
+            clean_title = strip_emoji(title)
+            if clean_title:
+                norm_title = remove_diacritics(clean_title).lower()
+                if "thuoc ha sally" in norm_title:
+                    title_bg = (139, 0, 139)  # Dark Purple/Magenta
+                elif "huyen thoai" in norm_title:
+                    title_bg = (75, 0, 130)  # Indigo
+                else:
+                    title_bg = (60, 60, 60)  # Dark gray
+                raw_badges.append((clean_title, title_bg, (255, 255, 255)))
+
     # Loan Warning Badge
     if loan_amount > 0:
         loan_text = f"Nợ: -{format_money_short(loan_amount)}"
@@ -246,7 +269,15 @@ def draw_profile_content(
     for text, bg_color, fg_color in raw_badges:
         badge_path = None
         if badge_dir.exists():
-            filenames_to_try = [f"{text}.png", f"{text.lower()}.png", f"{text.strip().lower()}.png"]
+            norm_text = remove_diacritics(text)
+            filenames_to_try = [
+                f"{text}.png",
+                f"{text.lower()}.png",
+                f"{text.strip().lower()}.png",
+                f"{norm_text}.png",
+                f"{norm_text.lower()}.png",
+                f"{norm_text.strip().lower()}.png"
+            ]
             for fname in filenames_to_try:
                 p = badge_dir / fname
                 if p.exists():
@@ -398,7 +429,8 @@ async def render_profile_banner(
     banner_path: Path | None = None,
     rl_title: str | None = None,
     daga_title: str | None = None,
-    cf_title: str | None = None
+    cf_title: str | None = None,
+    custom_titles: list[str] | None = None
 ) -> BytesIO:
     """Renders a beautiful profile banner card (static or dynamic GIF) and returns it as a BytesIO buffer."""
     width = 800
@@ -454,7 +486,8 @@ async def render_profile_banner(
                         inv_count=inv_count,
                         rl_title=rl_title,
                         daga_title=daga_title,
-                        cf_title=cf_title
+                        cf_title=cf_title,
+                        custom_titles=custom_titles
                     )
                     frames.append(frame)
                     
@@ -499,7 +532,8 @@ async def render_profile_banner(
                 inv_count=inv_count,
                 rl_title=rl_title,
                 daga_title=daga_title,
-                cf_title=cf_title
+                cf_title=cf_title,
+                custom_titles=custom_titles
             )
             
             if avatar_img:
@@ -536,7 +570,8 @@ async def render_profile_banner(
         inv_count=inv_count,
         rl_title=rl_title,
         daga_title=daga_title,
-        cf_title=cf_title
+        cf_title=cf_title,
+        custom_titles=custom_titles
     )
     
     if avatar_img:

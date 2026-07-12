@@ -2043,6 +2043,9 @@ class Simulator(commands.Cog):
                 cf_vip = get_cf_vip(cf_stats)
                 cf_title = cf_vip["title"]
 
+                # Fetch Custom Titles
+                custom_titles = self.economy.get_user_titles(user_id)
+
                 # Render banner
                 equipped = self.economy.get_equipped_banner(user_id)
                 banner_path = None
@@ -2064,7 +2067,8 @@ class Simulator(commands.Cog):
                     banner_path=banner_path,
                     rl_title=rl_title,
                     daga_title=daga_title,
-                    cf_title=cf_title
+                    cf_title=cf_title,
+                    custom_titles=custom_titles
                 )
                 
                 is_gif = getattr(img_buffer, "is_gif", False)

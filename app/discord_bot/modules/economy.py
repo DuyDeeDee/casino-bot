@@ -11,7 +11,7 @@ from app.config import config
 Entry = Tuple[int, int, int]
 DATABASE_PATH = Path(config.storage.database_path)
 LEGACY_DATABASE_PATH = Path(__file__).resolve().parents[3] / "economy.db"
-SCHEMA_VERSION = 31
+SCHEMA_VERSION = 32
 
 
 logger = logging.getLogger(__name__)
@@ -558,6 +558,19 @@ def _migration_31_add_tower_table(cur: sqlite3.Cursor) -> None:
         pass
 
 
+def _migration_32_add_user_titles_table(cur: sqlite3.Cursor) -> None:
+    try:
+        cur.execute(
+            """CREATE TABLE IF NOT EXISTS user_titles (
+            user_id INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            PRIMARY KEY (user_id, title)
+        )"""
+        )
+    except sqlite3.OperationalError:
+        pass
+
+
 MIGRATIONS: dict[int, Callable[[sqlite3.Cursor], None]] = {
     1: _migration_1_create_economy,
     2: _migration_2_add_indexes,
@@ -590,6 +603,7 @@ MIGRATIONS: dict[int, Callable[[sqlite3.Cursor], None]] = {
     29: _migration_29_add_marry_custom_columns,
     30: _migration_30_add_marry_saying_column,
     31: _migration_31_add_tower_table,
+    32: _migration_32_add_user_titles_table,
 }
 
 
@@ -2455,6 +2469,21 @@ class Economy:
 
         self.cur.execute(query, (limit,))
         return self.cur.fetchall()
+
+    def get_user_titles(self, user_id: int) -> list[str]:
+        """Gets all custom/exclusive titles of a user from user_titles table."""
+        self.cur.execute("SELECT title FROM user_titles WHERE user_id = ?", (user_id,))
+        return [row[0] for row in self.cur.fetchall()]
+
+    def add_user_title(self, user_id: int, title: str) -> None:
+        """Adds a custom/exclusive title for a user."""
+        self.cur.execute("INSERT OR IGNORE INTO user_titles (user_id, title) VALUES (?, ?)", (user_id, title))
+        self.conn.commit()
+
+    def remove_user_title(self, user_id: int, title: str) -> None:
+        """Removes a custom/exclusive title from a user."""
+        self.cur.execute("DELETE FROM user_titles WHERE user_id = ? AND title = ?", (user_id, title))
+        self.conn.commit()
 
 
 
