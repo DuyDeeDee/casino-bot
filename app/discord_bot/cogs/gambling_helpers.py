@@ -2197,6 +2197,9 @@ class GamblingHelpers(commands.Cog, name="General"):
                 return TW_ACH.get(key, all_ach_map.get(key, key))
             return all_ach_map.get(key, key)
             
+        # Sort logs by Vietnamese achievement display name, then by log ID (earliest first)
+        logs.sort(key=lambda x: (get_ach_name(x[3], x[2]), x[0]))
+            
         user_names = {}
         
         async def get_page_content(page_num: int) -> discord.Embed:
@@ -2213,14 +2216,11 @@ class GamblingHelpers(commands.Cog, name="General"):
                 u_name = user_names[u_id]
                 
                 ach_name = get_ach_name(key, game)
-                import datetime
-                dt = datetime.datetime.fromtimestamp(ts).strftime("%d/%m/%Y %H:%M")
-                
-                lines.append(f"`#{idx:02d}` **{u_name}** đạt thành tựu **{ach_name}** *({dt})*")
+                lines.append(f"`#{idx:02d}` **{u_name}** đạt thành tựu **{ach_name}**")
                 
             embed = make_embed(
                 title="🏆 BẢNG VÀNG THÀNH TỰU CASINO BOT 🏆",
-                description="Danh sách người chơi mở khóa thành tựu theo thứ tự thời gian sớm nhất:\n\n" + "\n".join(lines),
+                description="Danh sách thành tựu đã được mở khóa, sắp xếp theo tên thành tựu và thứ tự thời gian sớm nhất:\n\n" + "\n".join(lines),
                 color=discord.Color.gold()
             )
             embed.set_footer(text=f"Trang {page_num}/{total_pages} • Tổng cộng {len(logs)} thành tựu")
