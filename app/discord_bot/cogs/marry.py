@@ -1238,9 +1238,32 @@ class Marry(commands.Cog):
             
         # Try to add love points
         now = int(time.time())
-        points_to_add = 10 if action_type == "Fuck" else 5
+        base_points = 10 if action_type == "Fuck" else 5
+        
+        # Ring buff intimacy multipliers from shop descriptions
+        ring_love_buffs = {
+            "ring_quartz": 0.02,
+            "ring_aquamarine": 0.03,
+            "ring_emerald": 0.04,
+            "ring_amethyst": 0.05,
+            "ring_cupid": 0.07,
+            "ring_citrine": 0.09,
+            "ring_ruby": 0.12,
+            "ring_sapphire": 0.15,
+            "ring_sunburst": 0.20,
+            "ring_gothic": 0.25,
+            "ring_angel": 0.30,
+            "ring_divine": 0.50,
+            "ring_eternal_butterfly": 0.15
+        }
+        
         if ring_type == "ring_eternal_butterfly":
             points_to_add = 15 if action_type == "Fuck" else 7
+        else:
+            buff_pct = ring_love_buffs.get(ring_type, 0.0)
+            import math
+            points_to_add = math.ceil(base_points * (1 + buff_pct))
+            
         old_love_points = love_points
         new_points, success = self.economy.add_love_points(user_one, user_two, points_to_add, now)
         added_points = new_points - old_love_points
