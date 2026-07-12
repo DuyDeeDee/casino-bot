@@ -582,7 +582,13 @@ class ControlPanelView(discord.ui.View):
             stats = self.economy.get_simulator_stats(self.author.id)
             last_mine = stats[1]
             now = int(time.time())
-            cooldown = 5 * 3600
+            
+            # Fetch pickaxe upgrade level for dynamic cooldown display
+            upgrades = self.economy.get_upgrades(self.author.id)
+            pickaxe_level = upgrades[3]
+            cooldown_hours = {0: 5, 1: 4, 2: 3, 3: 2}
+            hours_cd = cooldown_hours.get(pickaxe_level, 5)
+            cooldown = hours_cd * 3600
             
             if now - last_mine < cooldown:
                 time_left = cooldown - (now - last_mine)
