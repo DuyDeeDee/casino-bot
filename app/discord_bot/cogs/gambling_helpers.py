@@ -1853,6 +1853,58 @@ class GamblingHelpers(commands.Cog, name="General"):
     @commands.cooldown(1, 1800, commands.BucketType.user)
     async def anxin(self, ctx: commands.Context, target: discord.Member | None = None, amount: int | None = None):
         if target is None:
+            # 2% chance to trigger lucky destiny (Cơ Duyên)
+            if random.random() < 0.02:
+                co_duyen_events = [
+                    {
+                        "title": "✨ CƠ DUYÊN KỲ NGỘ: NHẶT ĐƯỢC VÍ BỊ ĐÁNH RƠI ✨",
+                        "desc": "Trong lúc lang thang ăn xin xó chợ, bạn vô tình tìm thấy một chiếc ví da hiệu Hermes bị đánh rơi trong bụi rậm. Mở ra xem thử, bên trong toàn là các tờ polyme mệnh giá 500k xếp ngay ngắn và không có bất kỳ giấy tờ tùy thân nào!",
+                        "min": 5_000_000,
+                        "max": 15_000_000
+                    },
+                    {
+                        "title": "✨ CƠ DUYÊN KỲ NGỘ: ĐẠI GIA PHÁT TÂM ✨",
+                        "desc": "Một vị đại gia đi Mercedes-Benz Maybach dừng lại trước mặt bạn. Thấy bạn tuy nghèo khó nhưng ánh mắt sáng ngời, ông ấy quyết định rút ra một xấp tiền mặt lớn đưa cho bạn và bảo: 'Cầm lấy đi làm ăn, làm lại cuộc đời đi cháu!'",
+                        "min": 10_000_000,
+                        "max": 30_000_000
+                    },
+                    {
+                        "title": "✨ CƠ DUYÊN KỲ NGỘ: VÉ SỐ TRÚNG GIẢI ✨",
+                        "desc": "Bạn nhặt được một tờ vé số cũ nát nằm vất vưởng cạnh thùng rác. Tò mò mang ra đại lý dò thử, ai ngờ tờ vé số đó trúng ngay giải khuyến khích của Công ty Xổ số Kiến thiết!",
+                        "min": 8_000_000,
+                        "max": 20_000_000
+                    },
+                    {
+                        "title": "✨ CƠ DUYÊN KỲ NGỘ: TIỆM VÀNG MUA LẠI KỶ VẬT ✨",
+                        "desc": "Một bà cụ qua đường rủ lòng thương tặng bạn một chiếc nhẫn vàng tây cũ đã bị mờ. Bạn mang ra tiệm vàng đầu phố đổi thử, chủ tiệm trầm trồ khen chiếc nhẫn làm từ vàng chất lượng tốt và thu mua lại với giá cực cao!",
+                        "min": 6_000_000,
+                        "max": 18_000_000
+                    }
+                ]
+                event = random.choice(co_duyen_events)
+                reward = random.randint(event["min"], event["max"])
+                self.economy.add_money(ctx.author.id, reward)
+                log_wallet_change(
+                    logger,
+                    event="beg_co_duyen",
+                    user_id=ctx.author.id,
+                    money_delta=reward,
+                    ctx=ctx,
+                    event_title=event["title"]
+                )
+                embed = make_embed(
+                    title=event["title"],
+                    description=(
+                        f"{event['desc']}\n\n"
+                        f"🎉 **Vận may gõ cửa! Bạn nhận được:** `+{reward:,} VND`\n"
+                        f"💳 **Số dư mới:** `{self.economy.get_entry(ctx.author.id)[1]:,} VND`"
+                    ),
+                    color=discord.Color.gold(),
+                )
+                embed.set_thumbnail(url=ctx.author.display_avatar.url)
+                await ctx.send(embed=embed)
+                return
+
             # Begging from system NPCs
             npcs = [
                 {"name": "Tỷ phú Phạm Nhật Vượng 🚗", "success": 0.7, "amount_min": 10000, "amount_max": 100000, "success_msg": "ném cho bạn một tờ tiền polyme mới cứng.", "fail_msg": "đi lướt qua trên chiếc xe VinFast và không thèm nhìn bạn lấy một lần."},
