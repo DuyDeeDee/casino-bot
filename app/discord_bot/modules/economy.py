@@ -622,6 +622,17 @@ def _migration_33_add_achievements_log_table(cur: sqlite3.Cursor) -> None:
         pass
 
 
+def _migration_34_add_marry_interest_and_wish_columns(cur: sqlite3.Cursor) -> None:
+    try:
+        cur.execute("ALTER TABLE user_marry ADD COLUMN last_interest_time INTEGER DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        cur.execute("ALTER TABLE user_marry ADD COLUMN last_wish_time INTEGER DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
+
+
 MIGRATIONS: dict[int, Callable[[sqlite3.Cursor], None]] = {
     1: _migration_1_create_economy,
     2: _migration_2_add_indexes,
@@ -656,6 +667,7 @@ MIGRATIONS: dict[int, Callable[[sqlite3.Cursor], None]] = {
     31: _migration_31_add_tower_table,
     32: _migration_32_add_user_titles_table,
     33: _migration_33_add_achievements_log_table,
+    34: _migration_34_add_marry_interest_and_wish_columns,
 }
 
 
@@ -2340,17 +2352,17 @@ class Economy:
         self.conn.commit()
 
     def add_love_points(self, user_one: int, user_two: int, points: int, current_time: int) -> tuple[int, bool]:
-        """Adds love points. Resets daily counter if calendar date changed. Caps at 20 points/day."""
+        """Adds love points. Resets daily counter if calendar date changed. Caps at 20 points/day (30 for ring_eternal_butterfly)."""
         import time
         self.cur.execute(
-            "SELECT love_points, last_interact_time, interacts_today FROM user_marry WHERE user_one = ? AND user_two = ?",
+            "SELECT love_points, last_interact_time, interacts_today, ring_type FROM user_marry WHERE user_one = ? AND user_two = ?",
             (user_one, user_two)
         )
         row = self.cur.fetchone()
         if not row:
             return (0, False)
             
-        love_points, last_interact_time, interacts_today = row
+        love_points, last_interact_time, interacts_today, ring_type = row
         
         # Check calendar day reset
         now_struct = time.localtime(current_time)
@@ -2358,10 +2370,11 @@ class Economy:
         if now_struct.tm_yday != last_struct.tm_yday or now_struct.tm_year != last_struct.tm_year:
             interacts_today = 0
             
-        if interacts_today >= 20:
+        limit = 30 if ring_type == "ring_eternal_butterfly" else 20
+        if interacts_today >= limit:
             return (love_points, False)
             
-        points_to_add = min(points, 20 - interacts_today)
+        points_to_add = min(points, limit - interacts_today)
         new_love_points = love_points + points_to_add
         new_interacts = interacts_today + points_to_add
         
@@ -2428,6 +2441,7 @@ class Economy:
             "ring_gothic": (1.25, 0.025),
             "ring_angel": (1.30, 0.030),
             "ring_divine": (1.40, 0.040),
+            "ring_eternal_butterfly": (1.12, 0.010),
         }
         
         max_mult = 1.0
@@ -2449,6 +2463,36 @@ class Economy:
                 max_mult = mult
                 
         return max_mult
+
+    def get_marriage_times(self, user_one: int, user_two: int) -> tuple[int, int]:
+        """Returns (last_interest_time, last_wish_time) for a marriage"""
+        self.cur.execute(
+            "SELECT last_interest_time, last_wish_time FROM user_marry WHERE user_one = ? AND user_two = ?",
+            (user_one, user_two)
+        )
+        row = self.cur.fetchone()
+        if row:
+            return (row[0] or 0, row[1] or 0)
+        return (0, 0)
+
+    def update_marriage_times(self, user_one: int, user_two: int, last_interest_time: int | None = None, last_wish_time: int | None = None) -> None:
+        """Updates timestamps for a marriage"""
+        updates = []
+        params = []
+        if last_interest_time is not None:
+            updates.append("last_interest_time = ?")
+            params.append(last_interest_time)
+        if last_wish_time is not None:
+            updates.append("last_wish_time = ?")
+            params.append(last_wish_time)
+            
+        if updates:
+            params.extend([user_one, user_two])
+            self.cur.execute(
+                f"UPDATE user_marry SET {', '.join(updates)} WHERE user_one = ? AND user_two = ?",
+                tuple(params)
+            )
+            self.conn.commit()
 
 
     def get_marriage_ig(self, user_one: int, user_two: int) -> tuple[str, str]:

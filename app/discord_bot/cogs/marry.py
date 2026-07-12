@@ -31,7 +31,8 @@ RINGS = {
     "ring_sunburst": "Nhẫn Nhật Quang Thái Dương ☀️",
     "ring_gothic": "Nhẫn Hắc Dạ Gothic 🖤",
     "ring_angel": "Nhẫn Cánh Thần Sapphire 👼",
-    "ring_divine": "Nhẫn Hào Quang Vĩnh Cửu 🌌"
+    "ring_divine": "Nhẫn Hào Quang Vĩnh Cửu 🌌",
+    "ring_eternal_butterfly": "Nhẫn Song Điệp Vĩnh Hằng 🦋"
 }
 
 RING_IMAGES = {
@@ -47,7 +48,8 @@ RING_IMAGES = {
     "ring_sunburst": "Nhẫn Nhật Quang Thái Dương.png",
     "ring_gothic": "Nhẫn Hắc Dạ.png",
     "ring_angel": "Nhẫn Cánh Thần Sapphire.png",
-    "ring_divine": "Nhẫn Hào Quang Vĩnh Cửu.png"
+    "ring_divine": "Nhẫn Hào Quang Vĩnh Cửu.png",
+    "ring_eternal_butterfly": "Nhan_sal.png"
 }
 
 # Sweet sayings for interactions
@@ -598,6 +600,7 @@ class Marry(commands.Cog):
             
         # Prioritize divine > angel > gothic > sunburst > sapphire > ruby > citrine > cupid > amethyst > emerald > aquamarine > quartz > grass
         ring_priority = [
+            "ring_eternal_butterfly",
             "ring_divine",
             "ring_angel",
             "ring_gothic",
@@ -670,6 +673,36 @@ class Marry(commands.Cog):
             
         marriage = marriages[target_index - 1]
         user_one, user_two, ring_type, love_points, joint_wallet, married_at, _, _ = marriage
+        
+        # Accumulate Quỹ Chung interest if ring_eternal_butterfly
+        if ring_type == "ring_eternal_butterfly" and joint_wallet > 0:
+            last_interest, last_wish = self.economy.get_marriage_times(user_one, user_two)
+            now = int(time.time())
+            
+            # If last_interest is 0, initialize it to married_at
+            if last_interest == 0:
+                last_interest = married_at
+                self.economy.update_marriage_times(user_one, user_two, last_interest_time=last_interest)
+                
+            # Calculate calendar days since last interest
+            import datetime
+            last_date = datetime.date.fromtimestamp(last_interest)
+            now_date = datetime.date.fromtimestamp(now)
+            days_passed = (now_date - last_date).days
+            
+            if days_passed > 0:
+                total_interest = 0
+                temp_wallet = joint_wallet
+                for _ in range(min(days_passed, 30)): # Cap at 30 days of inactivity to prevent overflow
+                    day_interest = int(temp_wallet * 0.03)
+                    day_interest = min(15_000_000, day_interest) # Cap daily interest at 15M
+                    total_interest += day_interest
+                    temp_wallet += day_interest
+                
+                if total_interest > 0:
+                    self.economy.update_joint_wallet(user_one, user_two, total_interest)
+                    self.economy.update_marriage_times(user_one, user_two, last_interest_time=now)
+                    joint_wallet += total_interest
         
         # Get spouse object
         spouse_id = user_two if target_user.id == user_one else user_one
@@ -929,6 +962,7 @@ class Marry(commands.Cog):
         else:
             # Prioritize best ring
             ring_priority = [
+                "ring_eternal_butterfly",
                 "ring_divine",
                 "ring_angel",
                 "ring_gothic",
@@ -1105,6 +1139,54 @@ class Marry(commands.Cog):
         view.message = msg
 
 
+    @couple_cmd.command(name="wish", aliases=["uoc", "uocnguyen"], brief="Cầu chúc phúc phu thê nhận quà mỗi ngày (Chỉ dành cho Nhẫn Song Điệp Vĩnh Hằng).", usage="couple wish [chỉ_số]")
+    async def couple_wish(self, ctx: commands.Context, *, args_str: str = ""):
+        args = args_str.split()
+        marriage, remaining_args = self._resolve_marriage_and_args(ctx.author.id, args)
+        if not marriage:
+            await ctx.send("❌ Bạn phải kết hôn mới có thể thực hiện lệnh ước nguyện!")
+            return
+            
+        user_one, user_two, ring_type, love_points, joint_wallet, married_at, _, _ = marriage
+        if ring_type != "ring_eternal_butterfly":
+            await ctx.send("❌ **Lệnh này là đặc quyền độc nhất chỉ dành cho cặp đôi sở hữu Nhẫn Song Điệp Vĩnh Hằng 🦋!**")
+            return
+            
+        # Get timestamps
+        last_interest, last_wish = self.economy.get_marriage_times(user_one, user_two)
+        
+        # Check calendar day reset for wish
+        now = int(time.time())
+        now_struct = time.localtime(now)
+        last_wish_struct = time.localtime(last_wish)
+        
+        if last_wish > 0 and now_struct.tm_yday == last_wish_struct.tm_yday and now_struct.tm_year == last_wish_struct.tm_year:
+            await ctx.send("⏳ **Hôm nay hai bạn đã thực hiện ước nguyện rồi!** Vui lòng quay lại vào ngày mai nhé.")
+            return
+            
+        # Grant reward: +5 intimacy points and +200,000 VND to joint wallet
+        self.economy.update_marriage_times(user_one, user_two, last_wish_time=now)
+        self.economy.update_joint_wallet(user_one, user_two, 200_000)
+        
+        self.economy.cur.execute(
+            "UPDATE user_marry SET love_points = love_points + 5 WHERE user_one = ? AND user_two = ?",
+            (user_one, user_two)
+        )
+        self.economy.conn.commit()
+        
+        embed = make_embed(
+            title="🦋 ƯỚC NGUYỆN PHU THÊ VĨNH HẰNG 🦋",
+            description=(
+                f"💞 Hai bạn cùng hướng về **Nhẫn Song Điệp Vĩnh Hằng** lấp lánh và cầu nguyện cho tình cảm keo sơn vĩnh kết đồng tâm...\n\n"
+                f"✨ **Chúc phúc Ước nguyện thành công:**\n"
+                f"💖 **Điểm thân mật:** `+5 điểm`\n"
+                f"🏦 **Cộng vào Quỹ Chung:** `+200,000 VND`"
+            ),
+            color=discord.Color.magenta()
+        )
+        await ctx.send(embed=embed)
+
+
     async def process_interact(self, ctx: commands.Context, target: discord.Member, action: str, emoji: str, action_type: str):
         marriages = self.economy.get_marriages(ctx.author.id)
         if not marriages:
@@ -1157,14 +1239,17 @@ class Marry(commands.Cog):
         # Try to add love points
         now = int(time.time())
         points_to_add = 10 if action_type == "Fuck" else 5
+        if ring_type == "ring_eternal_butterfly":
+            points_to_add = 15 if action_type == "Fuck" else 7
         old_love_points = love_points
         new_points, success = self.economy.add_love_points(user_one, user_two, points_to_add, now)
         added_points = new_points - old_love_points
         
+        limit_desc = "30 điểm/ngày" if ring_type == "ring_eternal_butterfly" else "20 điểm/ngày"
         if success and added_points > 0:
-            pts_msg = f" Bạn nhận được `+{added_points} Điểm thân mật` (Giới hạn tối đa 20 điểm/ngày)."
+            pts_msg = f" Bạn nhận được `+{added_points} Điểm thân mật` (Giới hạn tối đa {limit_desc})."
         else:
-            pts_msg = " (Hôm nay hai bạn đã đạt giới hạn tối đa 20 Điểm thân mật)."
+            pts_msg = f" (Hôm nay hai bạn đã đạt giới hạn tối đa {limit_desc})."
             
         embed_desc = f"{emoji} **{ctx.author.name}** đã trao một {action} nồng thắm cho bạn đời của mình **{target.name}**!{pts_msg}"
         sayings = INTERACT_SAYINGS.get(action_type, [])
@@ -1285,6 +1370,9 @@ class Marry(commands.Cog):
         cash = author_profile[1]
         
         unilateral_cost = max(10_000_000, int(cash * 0.10))
+        if ring_type == "ring_eternal_butterfly":
+            unilateral_cost = unilateral_cost // 2
+            
         if cash < unilateral_cost:
             await ctx.send(f"❌ Bạn không đủ tiền mặt trong ví để trả án phí ly hôn đơn phương! Cần `{unilateral_cost:,} VND` nhưng bạn chỉ có `{cash:,} VND`.")
             return

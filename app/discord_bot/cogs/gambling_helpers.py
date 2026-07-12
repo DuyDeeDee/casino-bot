@@ -374,6 +374,13 @@ class GamblingHelpers(commands.Cog, name="General"):
         streak_bonus = 20_000 * min(streak, 7)
         total_money = base_reward + streak_bonus
         
+        # Ring buff check
+        marriage = self.economy.get_marriage(user_id)
+        ring_text = ""
+        if marriage and marriage[2] == "ring_eternal_butterfly":
+            total_money = int(total_money * 1.1)
+            ring_text = "\n💞 **Nhẫn Song Điệp Vĩnh Hằng:** Nhận thêm **+10%** tiền điểm danh!"
+        
         self.economy.add_money(user_id, total_money)
         
         bonus_gold = 0
@@ -403,7 +410,8 @@ class GamblingHelpers(commands.Cog, name="General"):
             description=(
                 f"Chúc mừng **{user.name}** đã điểm danh ngày thứ **{streak}** liên tiếp!\n\n"
                 f"💰 **Tiền thưởng nhận:** `+{total_money:,} VND`"
-                f"{gold_text}\n"
+                f"{gold_text}"
+                f"{ring_text}\n"
                 f"💳 **Số dư VND hiện tại:** `{new_balance:,} VND`\n"
                 f"<:32100goldbarsfortnite:1514192020921651251> **Số dư Vàng hiện tại:** `{new_gold:,} thỏi vàng`"
             ),
@@ -418,7 +426,34 @@ class GamblingHelpers(commands.Cog, name="General"):
         usage="work",
     )
     async def work(self, ctx: commands.Context):
+        balance_before = self.economy.get_entry(ctx.author.id)[1]
         embed = await self.process_work(ctx.author, ctx)
+        balance_after = self.economy.get_entry(ctx.author.id)[1]
+        
+        earned = balance_after - balance_before
+        if earned > 0:
+            marriage = self.economy.get_marriage(ctx.author.id)
+            if marriage and marriage[2] == "ring_eternal_butterfly":
+                share_bonus = int(earned * 0.05)
+                if share_bonus > 0:
+                    spouse_id = marriage[1] if ctx.author.id == marriage[0] else marriage[0]
+                    self.economy.add_money(spouse_id, share_bonus)
+                    
+                    log_wallet_change(
+                        logger,
+                        event="work_spouse_share",
+                        user_id=spouse_id,
+                        money_delta=share_bonus,
+                        ctx=ctx
+                    )
+                    
+                    spouse_mention = f"<@{spouse_id}>"
+                    spouse_obj = self.bot.get_user(spouse_id)
+                    if spouse_obj:
+                        spouse_mention = spouse_obj.mention
+                        
+                    embed.description += f"\n\n💞 **Đồng Cam Cộng Khổ:** Bạn đời của bạn ({spouse_mention}) đã nhận thêm **5%** tiền tiêu vặt (`+{share_bonus:,} VND`) vào ví!"
+
         await ctx.send(embed=embed)
 
     async def process_work(self, user: discord.User | discord.Member, ctx: commands.Context | None = None) -> discord.Embed:

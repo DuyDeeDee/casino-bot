@@ -354,6 +354,12 @@ SHOP_ITEMS = {
         "cost": 2000,
         "currency": "gold",
         "description": "Cực phẩm cánh thiên thần vàng đính đá ngũ sắc. Buff: +50% thân mật, +40% lương, miễn nhiễm cướp vĩnh viễn, hoàn trả 3% cược Casino, pháo hoa toàn server."
+    },
+    "ring_eternal_butterfly": {
+        "name": "<:Nhan_sal:1525903672658231328>Nhẫn Sally ",
+        "cost": 0,
+        "currency": "gold",
+        "description": "Nhẫn giới hạn. Buff: +15% thân mật, +12% lương, giảm 15% bị cướp, +5% tiền tiêu vặt phu thê, Quản lý tự động vĩnh viễn, Ước nguyện tri kỷ hàng ngày."
     }
 }
 
@@ -836,6 +842,12 @@ class ShopView(discord.ui.View):
         self.update_buttons()
         await interaction.response.edit_message(embed=self.get_embed(), view=self)
 
+    @discord.ui.button(label="👑 Nhẫn Đặc Biệt", style=discord.ButtonStyle.secondary, custom_id="shop_special_rings")
+    async def view_special_rings(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.category = "special_rings"
+        self.update_buttons()
+        await interaction.response.edit_message(embed=self.get_embed(), view=self)
+
     @discord.ui.button(label="🎨 Hình Nền", style=discord.ButtonStyle.secondary, custom_id="shop_banner")
     async def view_banner(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.category = "banner"
@@ -913,6 +925,24 @@ class ShopView(discord.ui.View):
                             value=f"**Giá:** `{cost_str}`\n**Mô tả:** {details['description']}",
                             inline=False
                         )
+        elif self.category == "special_rings":
+            embed = make_embed(
+                title="👑 CỬA HÀNG NHẪN ĐẶC BIỆT 👑",
+                description="Danh sách các nhẫn cưới độc quyền thượng hạng, chỉ có thể sở hữu thông qua sự kiện đặc biệt hoặc quà tặng Admin!",
+                color=discord.Color.magenta()
+            )
+            special_ring_keys = [
+                "ring_eternal_butterfly"
+            ]
+            for item_id in special_ring_keys:
+                if item_id in SHOP_ITEMS:
+                    details = SHOP_ITEMS[item_id]
+                    cost_str = "Không bán (Quà tặng độc quyền)"
+                    embed.add_field(
+                        name=f"{details['name']} (ID: `{item_id}`)",
+                        value=f"**Giá:** `{cost_str}`\n**Mô tả:** {details['description']}",
+                        inline=False
+                    )
         else:
             embed = make_embed(
                 title="🎨 CỬA HÀNG HÌNH NỀN & BANNER 🎨",
@@ -1855,6 +1885,25 @@ class Simulator(commands.Cog):
             # --- 4. Manager Automatic Business Collect ---
             try:
                 active_managers = self.economy.get_all_active_managers()
+                
+                # Fetch all users who have ring_eternal_butterfly marriage
+                try:
+                    self.economy.cur.execute(
+                        "SELECT user_one, user_two FROM user_marry WHERE ring_type = 'ring_eternal_butterfly'"
+                    )
+                    eternal_partners = []
+                    for row in self.economy.cur.fetchall():
+                        eternal_partners.extend([row[0], row[1]])
+                    
+                    active_manager_ids = {u_id for u_id, _, _ in active_managers}
+                    for u_id in eternal_partners:
+                        if u_id not in active_manager_ids:
+                            stats = self.economy.get_simulator_stats(u_id)
+                            last_collect = stats[0]
+                            active_managers.append((u_id, last_collect, now + 86400))
+                except Exception as inner_ex:
+                    logger.error(f"Error querying eternal butterfly managers: {inner_ex}")
+
                 for user_id, last_collect, manager_expiry in active_managers:
                     if now - last_collect >= 12 * 3600:
                         user = self.client.get_user(user_id)
@@ -2151,6 +2200,10 @@ class Simulator(commands.Cog):
     async def buyitem(self, ctx: commands.Context, item_id: str):
         if item_id not in SHOP_ITEMS:
             await ctx.send(f"❌ Vật phẩm ID `{item_id}` không tồn tại. Gõ `i?shop` để xem danh sách.")
+            return
+
+        if item_id == "ring_eternal_butterfly":
+            await ctx.send("❌ **Nhẫn Song Điệp Vĩnh Hằng là quà tặng độc quyền, không thể mua từ cửa hàng!**")
             return
 
         user_id = ctx.author.id
@@ -3011,16 +3064,20 @@ class Simulator(commands.Cog):
         bodyguard_active = target_upgrades[2] > now
         success_rate = 0.08 if bodyguard_active else 0.40
 
-        # Check ring protection modifiers (ring_angel reduces by 40%, ring_gothic reduces by 20%)
+        # Check ring protection modifiers (ring_angel reduces by 40%, ring_gothic reduces by 20%, ring_eternal_butterfly reduces by 15%)
         has_angel_ring = any(item == 'ring_angel' and qty > 0 for item, qty in target_inventory) or \
                          any(marriage[2] == 'ring_angel' for marriage in target_marriages)
         has_gothic_ring = any(item == 'ring_gothic' and qty > 0 for item, qty in target_inventory) or \
                           any(marriage[2] == 'ring_gothic' for marriage in target_marriages)
+        has_butterfly_ring = any(item == 'ring_eternal_butterfly' and qty > 0 for item, qty in target_inventory) or \
+                             any(marriage[2] == 'ring_eternal_butterfly' for marriage in target_marriages)
                           
         if has_angel_ring:
             success_rate *= 0.60
         elif has_gothic_ring:
             success_rate *= 0.80
+        elif has_butterfly_ring:
+            success_rate *= 0.85
 
         if random.random() < success_rate:
             # Success: steal a random 1% to 5% of target's money
@@ -3072,6 +3129,8 @@ class Simulator(commands.Cog):
                 fail_msg = f"Sức mạnh từ **Nhẫn Cánh Thần Sapphire 👼** bảo vệ **{target.name}** đã làm bạn lóa mắt và thất bại!"
             elif has_gothic_ring:
                 fail_msg = f"Hào quang hắc ám từ **Nhẫn Hắc Dạ Gothic 🖤** bảo vệ **{target.name}** đã khiến bạn run sợ và thất bại!"
+            elif has_butterfly_ring:
+                fail_msg = f"Sức mạnh kết giới từ **Nhẫn Song Điệp Vĩnh Hằng 🦋** bảo vệ **{target.name}** đã chặn đứng vụ cướp!"
 
             embed = make_embed(
                 title="🚨 VỤ CƯỚP THẤT BẠI 🚨",
@@ -3700,6 +3759,34 @@ class Simulator(commands.Cog):
             color=discord.Color.green()
         )
         embed.set_thumbnail(url=ctx.author.display_avatar.url)
+        await ctx.send(embed=embed)
+
+    @commands.command(
+        name="giveitem",
+        aliases=["give", "tangdo"],
+        brief="[ADMIN] Tặng vật phẩm cho người chơi.",
+        usage="giveitem <@user/user_id> <item_id> [số_lượng]",
+        hidden=True
+    )
+    @commands.is_owner()
+    async def giveitem(self, ctx: commands.Context, target: discord.Member, item_id: str, quantity: int = 1):
+        item_id = item_id.lower().strip()
+        self.economy.add_inventory_item(target.id, item_id, quantity)
+        
+        from app.discord_bot.cogs.marry import RINGS
+        item_name = item_id
+        if item_id in SHOP_ITEMS:
+            item_name = SHOP_ITEMS[item_id]["name"]
+        elif item_id in TREASURES:
+            item_name = TREASURES[item_id]["name"]
+        elif item_id in RINGS:
+            item_name = RINGS[item_id]
+            
+        embed = make_embed(
+            title="🎁 TẶNG VẬT PHẨM THÀNH CÔNG 🎁",
+            description=f"Admin đã tặng **{quantity}x {item_name}** (ID: `{item_id}`) cho **{target.mention}**!",
+            color=discord.Color.green()
+        )
         await ctx.send(embed=embed)
 
     def get_stock_chart_file(self, symbol: str) -> discord.File:
