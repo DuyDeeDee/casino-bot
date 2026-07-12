@@ -2209,7 +2209,7 @@ class GamblingHelpers(commands.Cog, name="General"):
                 _, u_id, game, key, ts = log_entry
                 
                 if u_id not in user_names:
-                    user_names[u_id] = await get_username(ctx.bot, u_id)
+                    user_names[u_id] = await get_user_name(ctx.bot, u_id)
                 u_name = user_names[u_id]
                 
                 ach_name = get_ach_name(key, game)
