@@ -3763,7 +3763,7 @@ class Simulator(commands.Cog):
 
     @commands.command(
         name="giveitem",
-        aliases=["give", "tangdo"],
+        aliases=["tangdo", "tangvatpham"],
         brief="[ADMIN] Tặng vật phẩm cho người chơi.",
         usage="giveitem <@user/user_id> <item_id> [số_lượng]",
         hidden=True
