@@ -2099,6 +2099,146 @@ class GamblingHelpers(commands.Cog, name="General"):
         except Exception as e:
             await ctx.send(f"❌ Có lỗi xảy ra khi gửi tin nhắn: {e}")
 
+    @commands.command(
+        name="bangthanhtuu",
+        aliases=["achievementsboard", "achboard", "bt"],
+        brief="Xem bảng vàng thành tựu đạt được của tất cả người chơi sắp xếp theo thứ tự sớm nhất.",
+        usage="bangthanhtuu"
+    )
+    async def bangthanhtuu(self, ctx: commands.Context):
+        """Xem bảng vàng thành tựu đạt được của tất cả người chơi sắp xếp theo thứ tự sớm nhất."""
+        logs = self.economy.get_all_logged_achievements()
+        if not logs:
+            await ctx.send("Hiện tại chưa có người chơi nào đạt được thành tựu! 🏆")
+            return
+            
+        per_page = 15
+        total_pages = (len(logs) + per_page - 1) // per_page
+        
+        # Mapping of all achievements keys to display names
+        from app.discord_bot.cogs.coinflip import ACHIEVEMENTS as CF_ACH
+        from app.discord_bot.cogs.highlow import HIGHLOW_ACHIEVEMENTS as HL_ACH
+        from app.discord_bot.cogs.mines import MINES_ACHIEVEMENTS as MN_ACH
+        from app.discord_bot.cogs.plinko import PLINKO_ACHIEVEMENTS as PK_ACH
+        from app.discord_bot.cogs.tower import TOWER_ACHIEVEMENTS as TW_ACH
+        
+        roulette_map = {
+            "Roulette đầu tiên": "Roulette đầu tiên 🎡",
+            "Thắng 10 lần": "Thắng 10 lần Roulette 🏆",
+            "Thắng 100 lần": "Thắng 100 lần Roulette 👑",
+            "Trúng số 0": "Trúng số 0 Roulette 💚",
+            "Trúng Lucky Number": "Trúng Lucky Number Roulette 🎯",
+            "Thắng 5 ván liên tiếp": "Thắng 5 ván liên tiếp Roulette 🔥",
+            "Cược 1 triệu trong một ván": "Cược 1 triệu trong một ván Roulette 💸",
+        }
+        
+        # General map for fallback lookups
+        all_ach_map = {
+            # Coinflip
+            "first_flip": "Đồng xu đầu tiên 🪙",
+            
+            # Highlow
+            "first_play": "Tân Binh Đoán Số (Chơi ván đầu) 🃏",
+            
+            # Mines
+            "first_mine": "Trò chơi dò mìn đầu tiên 💣",
+            "hit_mine_first": "Kẻ xui xẻo (Mất trắng ngay lượt đầu) 💥",
+            "full_clear_3": "Dọn sạch 3 bom ✨",
+            "full_clear_5": "Dọn sạch 5 bom ✨",
+            "full_clear_10": "Dọn sạch 10 bom ✨",
+            "full_clear_24": "Kỷ lục vô tiền khoáng hậu (24 bom sạch) 🏆",
+            
+            # Plinko
+            "first_plinko": "Lần đầu thả bóng 🪀",
+            "hit_100x": "Huyền thoại may mắn (Trúng ô 100x+) 🌟",
+            "hit_1000x": "Thần tài gõ cửa (Trúng ô 1000x+) 🏆",
+            "profit_10m": "Triệu phú Plinko (Lợi nhuận 10M+) 💸",
+            
+            # Tower
+            "first_tower": "Lần đầu leo tháp 🏰",
+            "reach_top_easy": "Leo đỉnh Easy (Tầng 9) 🪜",
+            "reach_top_medium": "Leo đỉnh Medium (Tầng 9) 🪜",
+            "reach_top_hard": "Leo đỉnh Hard (Tầng 9) 🪜",
+            "reach_top_expert": "Leo đỉnh Expert (Tầng 9) 🪜",
+            "reach_top_master": "Leo đỉnh Master (Tầng 9) 🪜",
+        }
+        
+        def get_ach_name(key: str, game: str) -> str:
+            if key == "win_10":
+                if game == "Coinflip": return "Thần may mắn (Thắng 10 ván Coinflip) 🍀"
+                if game == "Highlow": return "Nhà Tiên Tri Học Việc (Thắng 10 ván Highlow) 🔮"
+                if game == "Mines": return "Chuyên gia dò mìn (Thắng 10 ván Mines) 🛠️"
+            if key == "win_50":
+                if game == "Coinflip": return "Vua lật xu (Thắng 50 ván Coinflip) 👑"
+                if game == "Highlow": return "Đại Sư Bói Bài (Thắng 50 ván Highlow) 🧙"
+                if game == "Mines": return "Thần mìn đất nung (Thắng 50 ván Mines) 👑"
+            if key == "streak_5":
+                if game == "Coinflip": return "Chuỗi bất bại (Thắng 5 ván Coinflip) 🔥"
+                if game == "Highlow": return "Cảm Giác Nhạy Bén (Thắng 5 ván Highlow) ⚡"
+                if game == "Mines": return "Chuỗi sinh tồn (Thắng 5 ván Mines) 🔥"
+                if game == "Tower": return "Chuỗi bất bại leo tháp (Thắng 5 ván) 🔥"
+            if key == "bet_1m":
+                if game == "Coinflip": return "Dân chơi hệ tiền đô (Cược 1M+ Coinflip) 💸"
+                if game == "Highlow": return "Tay Chơi Liều Lĩnh (Cược 1M+ Highlow) 💰"
+                if game == "Mines": return "Cược lớn tầm cỡ (Cược 1M+ Mines) 💸"
+                if game == "Tower": return "Kẻ liều lĩnh leo tháp (Cược 1M+) 💰"
+
+            if game == "Roulette":
+                return roulette_map.get(key, key)
+            elif game == "Coinflip":
+                return CF_ACH.get(key, all_ach_map.get(key, key))
+            elif game == "Highlow":
+                return HL_ACH.get(key, all_ach_map.get(key, key))
+            elif game == "Mines":
+                return MN_ACH.get(key, all_ach_map.get(key, key))
+            elif game == "Plinko":
+                return PK_ACH.get(key, all_ach_map.get(key, key))
+            elif game == "Tower":
+                return TW_ACH.get(key, all_ach_map.get(key, key))
+            return all_ach_map.get(key, key)
+            
+        user_names = {}
+        
+        async def get_page_content(page_num: int) -> discord.Embed:
+            start_idx = (page_num - 1) * per_page
+            end_idx = start_idx + per_page
+            page_logs = logs[start_idx:end_idx]
+            
+            lines = []
+            for idx, log_entry in enumerate(page_logs, start=start_idx + 1):
+                _, u_id, game, key, ts = log_entry
+                
+                if u_id not in user_names:
+                    user_names[u_id] = await get_username(ctx.bot, u_id)
+                u_name = user_names[u_id]
+                
+                ach_name = get_ach_name(key, game)
+                import datetime
+                dt = datetime.datetime.fromtimestamp(ts).strftime("%d/%m/%Y %H:%M")
+                
+                lines.append(f"`#{idx:02d}` **{u_name}** đạt thành tựu **{ach_name}** *({dt})*")
+                
+            embed = make_embed(
+                title="🏆 BẢNG VÀNG THÀNH TỰU CASINO BOT 🏆",
+                description="Danh sách người chơi mở khóa thành tựu theo thứ tự thời gian sớm nhất:\n\n" + "\n".join(lines),
+                color=discord.Color.gold()
+            )
+            embed.set_footer(text=f"Trang {page_num}/{total_pages} • Tổng cộng {len(logs)} thành tựu")
+            return embed
+            
+        view = PaginatorView(ctx, total_pages, get_page_content)
+        
+        async def custom_check(interaction: discord.Interaction) -> bool:
+            if interaction.user.id != ctx.author.id:
+                await interaction.response.send_message("❌ Bảng điều khiển này không phải của bạn!", ephemeral=True)
+                return False
+            return True
+        view.interaction_check = custom_check
+        
+        embed = await get_page_content(1)
+        msg = await ctx.send(embed=embed, view=view)
+        view.message = msg
+
 
 class BegConfirmView(discord.ui.View):
     def __init__(self, beggar: discord.Member, target: discord.Member, amount: int, economy: Economy, timeout: float = 60.0):

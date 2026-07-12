@@ -11,7 +11,7 @@ from app.config import config
 Entry = Tuple[int, int, int]
 DATABASE_PATH = Path(config.storage.database_path)
 LEGACY_DATABASE_PATH = Path(__file__).resolve().parents[3] / "economy.db"
-SCHEMA_VERSION = 32
+SCHEMA_VERSION = 33
 
 
 logger = logging.getLogger(__name__)
@@ -571,6 +571,57 @@ def _migration_32_add_user_titles_table(cur: sqlite3.Cursor) -> None:
         pass
 
 
+def _migration_33_add_achievements_log_table(cur: sqlite3.Cursor) -> None:
+    try:
+        cur.execute(
+            """CREATE TABLE IF NOT EXISTS user_achievements_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            game TEXT NOT NULL,
+            achievement_key TEXT NOT NULL,
+            unlocked_at INTEGER NOT NULL
+        )"""
+        )
+        # Seed the achievements log table from existing game stats
+        import json
+        import time
+        now = int(time.time())
+        tables = {
+            'user_roulette': 'Roulette',
+            'user_coinflip': 'Coinflip',
+            'user_highlow': 'Highlow',
+            'user_mines': 'Mines',
+            'user_plinko': 'Plinko',
+            'user_tower': 'Tower'
+        }
+        idx = 0
+        for table, game_name in tables.items():
+            try:
+                cur.execute(f"SELECT user_id, achievements FROM {table}")
+                rows = cur.fetchall()
+                for user_id, ach_str in rows:
+                    try:
+                        ach_list = json.loads(ach_str)
+                        for ach in ach_list:
+                            # Stagger the insertion timestamp slightly to preserve a stable sequence
+                            cur.execute(
+                                "SELECT 1 FROM user_achievements_log WHERE user_id = ? AND game = ? AND achievement_key = ?",
+                                (user_id, game_name, ach)
+                            )
+                            if not cur.fetchone():
+                                cur.execute(
+                                    "INSERT INTO user_achievements_log (user_id, game, achievement_key, unlocked_at) VALUES (?, ?, ?, ?)",
+                                    (user_id, game_name, ach, now + idx)
+                                )
+                                idx += 1
+                    except Exception:
+                        pass
+            except sqlite3.OperationalError:
+                pass
+    except sqlite3.OperationalError:
+        pass
+
+
 MIGRATIONS: dict[int, Callable[[sqlite3.Cursor], None]] = {
     1: _migration_1_create_economy,
     2: _migration_2_add_indexes,
@@ -604,6 +655,7 @@ MIGRATIONS: dict[int, Callable[[sqlite3.Cursor], None]] = {
     30: _migration_30_add_marry_saying_column,
     31: _migration_31_add_tower_table,
     32: _migration_32_add_user_titles_table,
+    33: _migration_33_add_achievements_log_table,
 }
 
 
@@ -1315,6 +1367,8 @@ class Economy:
         if achievements is not None:
             updates.append("achievements = ?")
             params.append(json.dumps(achievements))
+            for ach in achievements:
+                self.log_achievement_unlock(user_id, "Roulette", ach)
             
         if updates:
             params.append(user_id)
@@ -1409,6 +1463,8 @@ class Economy:
         if achievements is not None:
             updates.append("achievements = ?")
             params.append(json.dumps(achievements))
+            for ach in achievements:
+                self.log_achievement_unlock(user_id, "Coinflip", ach)
             
         if updates:
             params.append(user_id)
@@ -1691,6 +1747,8 @@ class Economy:
         if achievements is not None:
             updates.append("achievements = ?")
             params.append(json.dumps(achievements))
+            for ach in achievements:
+                self.log_achievement_unlock(user_id, "Baito", ach)
             
         if updates:
             params.append(user_id)
@@ -1853,6 +1911,8 @@ class Economy:
         if achievements is not None:
             updates.append("achievements = ?")
             params.append(json.dumps(achievements))
+            for ach in achievements:
+                self.log_achievement_unlock(user_id, "Mines", ach)
             
         if updates:
             params.append(user_id)
@@ -1955,6 +2015,8 @@ class Economy:
         if achievements is not None:
             updates.append("achievements = ?")
             params.append(json.dumps(achievements))
+            for ach in achievements:
+                self.log_achievement_unlock(user_id, "Plinko", ach)
             
         if updates:
             params.append(user_id)
@@ -2051,6 +2113,8 @@ class Economy:
         if achievements is not None:
             updates.append("achievements = ?")
             params.append(json.dumps(achievements))
+            for ach in achievements:
+                self.log_achievement_unlock(user_id, "Highlow", ach)
             
         if updates:
             params.append(user_id)
@@ -2141,6 +2205,8 @@ class Economy:
         if achievements is not None:
             updates.append("achievements = ?")
             params.append(json.dumps(achievements))
+            for ach in achievements:
+                self.log_achievement_unlock(user_id, "Tower", ach)
             
         if updates:
             params.append(user_id)
@@ -2484,6 +2550,27 @@ class Economy:
         """Removes a custom/exclusive title from a user."""
         self.cur.execute("DELETE FROM user_titles WHERE user_id = ? AND title = ?", (user_id, title))
         self.conn.commit()
+
+    def log_achievement_unlock(self, user_id: int, game: str, achievement_key: str) -> bool:
+        """Logs an achievement unlock. Returns True if successfully logged (was not logged before)."""
+        self.cur.execute(
+            "SELECT 1 FROM user_achievements_log WHERE user_id = ? AND game = ? AND achievement_key = ?",
+            (user_id, game, achievement_key)
+        )
+        if self.cur.fetchone():
+            return False
+        import time
+        self.cur.execute(
+            "INSERT INTO user_achievements_log (user_id, game, achievement_key, unlocked_at) VALUES (?, ?, ?, ?)",
+            (user_id, game, achievement_key, int(time.time()))
+        )
+        self.conn.commit()
+        return True
+
+    def get_all_logged_achievements(self) -> list[tuple[int, int, str, str, int]]:
+        """Gets all achievements log ordered by earliest (id ASC)."""
+        self.cur.execute("SELECT id, user_id, game, achievement_key, unlocked_at FROM user_achievements_log ORDER BY id ASC")
+        return self.cur.fetchall()
 
 
 
