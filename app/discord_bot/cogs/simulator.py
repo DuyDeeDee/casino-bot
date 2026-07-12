@@ -625,6 +625,9 @@ class ControlPanelView(discord.ui.View):
             cf_stats = self.economy.get_coinflip(self.author.id)
             cf_vip = get_cf_vip(cf_stats)
             cf_title = cf_vip["title"]
+
+            # Fetch Custom Titles
+            custom_titles = self.economy.get_user_titles(self.author.id)
             
             # Fetch Businesses
             owned_bizs = []
@@ -666,12 +669,23 @@ class ControlPanelView(discord.ui.View):
             display_daga = strip_emoji(daga_title) if daga_title else ""
             display_cf = strip_emoji(cf_title) if cf_title else ""
 
+            danh_hieu_lines = [display_rank]
+            if display_rl:
+                danh_hieu_lines.append(display_rl)
+            if display_daga:
+                danh_hieu_lines.append(display_daga)
+            if display_cf:
+                danh_hieu_lines.append(display_cf)
+            for title in custom_titles:
+                clean_custom = strip_emoji(title)
+                if clean_custom:
+                    danh_hieu_lines.append(clean_custom)
+
+            danh_hieu_text = "\n".join(f"• {line}" for line in danh_hieu_lines if line.strip())
+
             desc = (
                 f"🎖️ **Danh hiệu:**\n"
-                f"• {display_rank}\n"
-                f"• {display_rl}\n"
-                f"• {display_daga}\n"
-                f"• {display_cf}\n\n"
+                f"{danh_hieu_text}\n\n"
                 f"💰 **Số tiền:** `{money:,} VND`\n"
                 f"<:32100goldbarsfortnite:1514192020921651251> **Số vàng:** `{gold:,} thỏi`\n"
                 f"🏢 **Doanh nghiệp:** `{biz_str}`\n"
@@ -2187,12 +2201,23 @@ class Simulator(commands.Cog):
                 display_daga = strip_emoji(daga_title) if daga_title else ""
                 display_cf = strip_emoji(cf_title) if cf_title else ""
 
+                danh_hieu_lines = [display_rank]
+                if display_rl:
+                    danh_hieu_lines.append(display_rl)
+                if display_daga:
+                    danh_hieu_lines.append(display_daga)
+                if display_cf:
+                    danh_hieu_lines.append(display_cf)
+                for title in custom_titles:
+                    clean_custom = strip_emoji(title)
+                    if clean_custom:
+                        danh_hieu_lines.append(clean_custom)
+
+                danh_hieu_text = "\n".join(f"• {line}" for line in danh_hieu_lines if line.strip())
+
                 desc = (
                     f"🎖️ **Danh hiệu:**\n"
-                    f"• {display_rank}\n"
-                    f"• {display_rl}\n"
-                    f"• {display_daga}\n"
-                    f"• {display_cf}\n\n"
+                    f"{danh_hieu_text}\n\n"
                     f"💵 **Tài khoản:** `{money:,} VND`\n"
                     f"<:32100goldbarsfortnite:1514192020921651251> **Két sắt:** `{gold} Vàng` *(Tỷ giá Vàng: {gold_price:,} VND)*\n"
                     f"🏢 **Doanh nghiệp:** `{biz_count} Cơ sở`\n"
