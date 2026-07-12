@@ -269,20 +269,21 @@ def draw_profile_content(
     for text, bg_color, fg_color in raw_badges:
         badge_path = None
         if badge_dir.exists():
-            norm_text = remove_diacritics(text)
-            filenames_to_try = [
-                f"{text}.png",
-                f"{text.lower()}.png",
-                f"{text.strip().lower()}.png",
-                f"{norm_text}.png",
-                f"{norm_text.lower()}.png",
-                f"{norm_text.strip().lower()}.png"
-            ]
-            for fname in filenames_to_try:
-                p = badge_dir / fname
-                if p.exists():
-                    badge_path = p
-                    break
+            try:
+                files_in_dir = list(badge_dir.iterdir())
+            except Exception:
+                files_in_dir = []
+            
+            clean_text = text.strip().lower()
+            norm_text = remove_diacritics(text).strip().lower()
+            
+            for p in files_in_dir:
+                if p.suffix.lower() == ".png":
+                    p_name_lower = p.stem.lower()
+                    p_name_norm = remove_diacritics(p.stem).lower()
+                    if p_name_lower == clean_text or p_name_norm == norm_text:
+                        badge_path = p
+                        break
                     
         if badge_path:
             try:
