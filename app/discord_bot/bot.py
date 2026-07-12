@@ -111,7 +111,10 @@ class CasinoBot(commands.Bot):
         self.add_check(self.global_cooldown_check)
 
     async def setup_hook(self) -> None:
-        self.add_command(setcooldown)
+        if getattr(self.economy, "conn", None) is None:
+            self.economy.open()
+        if not self.get_command("setcooldown"):
+            self.add_command(setcooldown)
         await register_cogs(self)
 
     async def close(self) -> None:

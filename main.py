@@ -32,8 +32,12 @@ async def main() -> None:
             logger.error("Bot crashed with unexpected error: %s — restarting in 5s...", e, exc_info=True)
             await asyncio.sleep(5)
         else:
-            # clean exit from client.start
-            break
+            if client.is_closed():
+                logger.info("Bot stopped cleanly (client is closed). Exiting.")
+                break
+            else:
+                logger.warning("client.start() finished unexpectedly (client is not closed). Reconnecting in 5s...")
+                await asyncio.sleep(5)
 
 
 if __name__ == "__main__":
