@@ -394,106 +394,7 @@ TREASURES = {
     "t_hop_pandora": {"name": "Chiếc hộp Pandora bí ẩn 🎁", "value": 1_800_000_000, "rarity": "Thần thoại"}
 }
 
-class ChestSelect(discord.ui.Select):
-    def __init__(self, current_value: str):
-        options = [
-            discord.SelectOption(label="Banner Thường - 1M", value="banner_thuong", description="Triệu hồi nhân vật C -> SS", emoji="🔮"),
-            discord.SelectOption(label="Banner Xịn - 5M", value="banner_xin", description="Triệu hồi nhân vật B -> SS (Bảo hiểm 50)", emoji="🔮"),
-            
-            discord.SelectOption(label="Garage Box Xe - 100k", value="box_garage", description="Mở xe Common -> Epic", emoji="🏎️"),
-            discord.SelectOption(label="Premium Box Xe - 1M", value="box_premium", description="Mở xe Rare -> Mythic", emoji="🏎️"),
-            discord.SelectOption(label="Luxury Box Xe - 10M", value="box_luxury", description="Mở xe Epic -> Exclusive", emoji="🏎️"),
-        ]
-        super().__init__(placeholder="Chọn loại Trứng / Rương cần mở...", min_values=1, max_values=1, options=options)
-        for opt in self.options:
-            opt.default = (opt.value == current_value)
 
-    async def callback(self, interaction: discord.Interaction):
-        self.view.selected_option = self.values[0]
-        for opt in self.options:
-            opt.default = (opt.value == self.view.selected_option)
-        embed = self.view.get_embed()
-        await interaction.response.edit_message(embed=embed, view=self.view)
-
-
-class OpenButton(discord.ui.Button):
-    def __init__(self, label: str, quantity: int, style: discord.ButtonStyle, emoji: str):
-        super().__init__(label=label, style=style, emoji=emoji)
-        self.quantity = quantity
-
-    async def callback(self, interaction: discord.Interaction):
-        try:
-            await self.view.cog.process_chest_open(interaction, self.view, self.view.selected_option, self.quantity)
-        except Exception as e:
-            import logging
-            logging.getLogger(__name__).exception("Error in process_chest_open callback")
-            try:
-                await interaction.response.send_message(f"❌ **Lỗi:** `{str(e)}`", ephemeral=True)
-            except Exception:
-                try:
-                    await interaction.followup.send(f"❌ **Lỗi:** `{str(e)}`", ephemeral=True)
-                except Exception:
-                    pass
-
-
-class ChestOpenView(discord.ui.View):
-    def __init__(self, cog, author: discord.User | discord.Member, timeout: float = 180.0):
-        super().__init__(timeout=timeout)
-        self.cog = cog
-        self.author = author
-        self.selected_option = "banner_thuong"
-        self.message = None
-        self.add_item(ChestSelect(self.selected_option))
-        self.add_item(OpenButton(label="Mở 1", quantity=1, style=discord.ButtonStyle.success, emoji="1️⃣"))
-        self.add_item(OpenButton(label="Mở 3", quantity=3, style=discord.ButtonStyle.primary, emoji="3️⃣"))
-        self.add_item(OpenButton(label="Mở 10", quantity=10, style=discord.ButtonStyle.danger, emoji="🔟"))
-
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        if interaction.user.id != self.author.id:
-            await interaction.response.send_message("❌ Bảng điều khiển này không phải của bạn!", ephemeral=True)
-            return False
-            
-        if not self.cog.economy.has_claimed_start(interaction.user.id):
-            await interaction.response.send_message("❌ Bạn chưa nhận quà khởi nghiệp! Hãy gõ `i?khoinghiep` trước.", ephemeral=True)
-            return False
-            
-        return True
-
-    def get_embed(self) -> discord.Embed:
-        details = {
-            "banner_thuong": ("🔮 Banner Thường", 1_000_000, "Triệu hồi nhân vật. Tỷ lệ: C (60%), B (30%), A (9%), S (0.8%), SS (0.2%)."),
-            "banner_xin": ("🔮 Banner Xịn", 5_000_000, "Triệu hồi nhân vật. Tỷ lệ: B (40%), A (45%), S (12%), SS (3%). Có bảo hiểm (pity) 50 lần."),
-
-            "box_garage": ("🏎️ Garage Box Xe", 100_000, "Mở xe / siêu xe. Tỷ lệ: Common (70%), Rare (25%), Epic (5%)."),
-            "box_premium": ("🏎️ Premium Box Xe", 1_000_000, "Mở xe / siêu xe. Tỷ lệ: Rare (50%), Epic (35%), Legendary (13%), Mythic (2%)."),
-            "box_luxury": ("🏎️ Luxury Box Xe", 10_000_000, "Mở xe / siêu xe. Tỷ lệ: Epic (40%), Legendary (35%), Mythic (20%), Exclusive (5%)."),
-        }
-        name, price, desc = details[self.selected_option]
-        
-        embed = make_embed(
-            title="🎁 CỬA HÀNG MỞ RƯƠNG NHANH 🎁",
-            description=(
-                f"### **{name}**\n"
-                f"💵 **Giá mở 1 lần:** `{price:,} VND`\n"
-                f"💵 **Giá mở 3 lần:** `{(price * 3):,} VND`\n"
-                f"💵 **Giá mở 10 lần:** `{(price * 10):,} VND`\n\n"
-                f"📝 **Mô tả:** *{desc}*\n\n"
-                f"▼ Chọn loại rương trong menu và bấm nút tương ứng để mở."
-            ),
-            color=discord.Color.gold()
-        )
-        embed.set_footer(text="Casino Bot • Mở Rương")
-        return embed
-
-    async def on_timeout(self):
-        for child in self.children:
-            if isinstance(child, (discord.ui.Button, discord.ui.Select)):
-                child.disabled = True
-        try:
-            if self.message:
-                await self.message.edit(view=self)
-        except Exception:
-            pass
 
 
 class InteractionContext:
@@ -547,31 +448,13 @@ class ControlPanelView(discord.ui.View):
         elif self.current_tab == "mine":
             self.add_item(MineButton())
             self.add_item(BackButton())
-        elif self.current_tab == "daga":
-            self.add_item(TrainButton())
-            self.add_item(BackButton())
         else:
             self.add_item(BackButton())
 
     async def get_current_embed_and_file(self) -> tuple[discord.Embed, discord.File | None]:
         embed = await self.get_current_embed()
         file = None
-        if self.current_tab == "daga":
-            active_row = self.economy.get_active_cock(self.author.id)
-            if active_row:
-                from app.discord_bot.cogs.daga import Cock
-                c = Cock(active_row)
-                img_name = get_cock_image_file(c.name)
-                if img_name:
-                    if Path(img_name).is_absolute():
-                        img_path = Path(img_name)
-                    else:
-                        img_path = ABS_PATH / "modules" / "daga" / img_name
-                    
-                    if img_path.exists():
-                        file = discord.File(img_path, filename="character.png")
-                        embed.set_image(url="attachment://character.png")
-        elif self.current_tab == "invest":
+        if self.current_tab == "invest":
             symbol = getattr(self, "selected_stock", "CASINO")
             file = self.cog.get_stock_chart_file(symbol)
             embed.set_image(url="attachment://chart.png")
@@ -610,15 +493,6 @@ class ControlPanelView(discord.ui.View):
             rl_stats = self.economy.get_roulette(self.author.id)
             rl_vip = get_user_vip(rl_stats)
             rl_title = rl_vip["title"]
-            
-            # Fetch Daga Title
-            active_cock_row = self.economy.get_active_cock(self.author.id)
-            if active_cock_row:
-                from app.discord_bot.cogs.daga import Cock
-                cock = Cock(active_cock_row)
-                daga_title = cock.get_title()
-            else:
-                daga_title = "Chưa xuất trận 🌟"
             
             # Fetch Coin Flip Title
             from app.discord_bot.cogs.coinflip import get_user_vip as get_cf_vip
@@ -666,14 +540,11 @@ class ControlPanelView(discord.ui.View):
             from app.discord_bot.modules.profile_renderer import strip_emoji
             display_rank = strip_emoji(rank_name)
             display_rl = strip_emoji(rl_title) if rl_title else ""
-            display_daga = strip_emoji(daga_title) if daga_title else ""
             display_cf = strip_emoji(cf_title) if cf_title else ""
 
             danh_hieu_lines = [display_rank]
             if display_rl:
                 danh_hieu_lines.append(display_rl)
-            if display_daga:
-                danh_hieu_lines.append(display_daga)
             if display_cf:
                 danh_hieu_lines.append(display_cf)
             for title in custom_titles:
@@ -706,10 +577,6 @@ class ControlPanelView(discord.ui.View):
             return self.cog.get_business_embed(self.author)
         elif self.current_tab == "invest":
             return self.cog.get_invest_embed(self.author, getattr(self, "selected_stock", "CASINO"))
-        elif self.current_tab == "daga":
-            return self.cog.get_daga_embed(self.author)
-        elif self.current_tab == "xe":
-            return self.cog.get_xe_embed(self.author)
         elif self.current_tab == "mine":
             # Mine view
             stats = self.economy.get_simulator_stats(self.author.id)
@@ -831,8 +698,6 @@ class AreaSelect(discord.ui.Select):
             discord.SelectOption(label="📊 Tổng Quan", description="Màn hình chính tổng quan tài sản", value="overview", emoji="📊"),
             discord.SelectOption(label="🏢 Doanh Nghiệp", description="Quản lý & thu hoạch doanh nghiệp", value="biz", emoji="🏢"),
             discord.SelectOption(label="📈 Chứng Khoán & Crypto", description="Thị trường đầu tư tài chính", value="invest", emoji="📈"),
-            discord.SelectOption(label="⚔️ Đại Chiến Anime", description="Quản lý nhân vật Anime", value="daga", emoji="⚔️"),
-            discord.SelectOption(label="🏎️ Gara Siêu Xe", description="Xem bộ sưu tập siêu xe cá nhân", value="xe", emoji="🏎️"),
             discord.SelectOption(label="⛏️ Khai Thác Mỏ", description="Đào mỏ quặng kiếm tiền và vàng", value="mine", emoji="⛏️"),
         ]
         super().__init__(placeholder="📁 Chọn khu vực quản lý...", min_values=1, max_values=1, options=options)
@@ -2042,15 +1907,6 @@ class Simulator(commands.Cog):
                 rl_vip = get_user_vip(rl_stats)
                 rl_title = rl_vip["title"]
                 
-                # Fetch Daga Title
-                active_cock_row = self.economy.get_active_cock(user_id)
-                if active_cock_row:
-                    from app.discord_bot.cogs.daga import Cock
-                    cock = Cock(active_cock_row)
-                    daga_title = cock.get_title()
-                else:
-                    daga_title = "Chưa xuất trận 🌟"
-
                 # Fetch Coin Flip Title
                 from app.discord_bot.cogs.coinflip import get_user_vip as get_cf_vip
                 cf_stats = self.economy.get_coinflip(user_id)
@@ -2080,7 +1936,6 @@ class Simulator(commands.Cog):
                     inv_count=inv_count,
                     banner_path=banner_path,
                     rl_title=rl_title,
-                    daga_title=daga_title,
                     cf_title=cf_title,
                     custom_titles=custom_titles
                 )
@@ -2149,46 +2004,6 @@ class Simulator(commands.Cog):
                         )
                         couple_embed.set_image(url=f"attachment://{couple_filename}")
                 
-                # Render Showcase side-by-side companion image if exists
-                active_cock = self.economy.get_active_cock(user_id)
-                fav_car = self.economy.get_favorite_car(user_id)
-                
-                cock_info = None
-                if active_cock:
-                    cock_info = {
-                        "name": active_cock[2],
-                        "rarity": active_cock[3],
-                        "level": active_cock[4],
-                        "wins": active_cock[15],
-                        "losses": active_cock[16],
-                        "streak": active_cock[17],
-                        "image_filename": get_cock_image_file(active_cock[2])
-                    }
-                    
-                car_info = None
-                if fav_car:
-                    car_info = {
-                        "model": fav_car[2],
-                        "rarity": fav_car[3],
-                        "serial": fav_car[4],
-                        "edition": fav_car[5],
-                        "collection": fav_car[6],
-                        "image_filename": get_car_image_file(fav_car[2])
-                    }
-                    
-                showcase_buffer = await render_showcase_image(cock_info, car_info)
-                showcase_file = None
-                showcase_embed = None
-                
-                if showcase_buffer:
-                    showcase_filename = f"showcase-{user_id}-{uuid4().hex[:6]}.png"
-                    showcase_file = discord.File(fp=showcase_buffer, filename=showcase_filename)
-                    showcase_embed = make_embed(
-                        title="🐓 BẠN ĐỒNG HÀNH & SIÊU XE TRƯNG BÀY 🏎️",
-                        color=discord.Color.purple()
-                    )
-                    showcase_embed.set_image(url=f"attachment://{showcase_filename}")
-
                 # Build embed with stats text below
                 showcase_treasure_id = self.economy.get_showcase_treasure(user_id)
                 showcase_treasure_text = "Chưa trưng bày"
@@ -2198,14 +2013,11 @@ class Simulator(commands.Cog):
                 from app.discord_bot.modules.profile_renderer import strip_emoji
                 display_rank = strip_emoji(rank_name)
                 display_rl = strip_emoji(rl_title) if rl_title else ""
-                display_daga = strip_emoji(daga_title) if daga_title else ""
                 display_cf = strip_emoji(cf_title) if cf_title else ""
 
                 danh_hieu_lines = [display_rank]
                 if display_rl:
                     danh_hieu_lines.append(display_rl)
-                if display_daga:
-                    danh_hieu_lines.append(display_daga)
                 if display_cf:
                     danh_hieu_lines.append(display_cf)
                 for title in custom_titles:
@@ -2239,17 +2051,12 @@ class Simulator(commands.Cog):
                 if couple_file and couple_embed:
                     files.append(couple_file)
                     embeds.append(couple_embed)
-                if showcase_file and showcase_embed:
-                    files.append(showcase_file)
-                    embeds.append(showcase_embed)
                     
                 await ctx.send(files=files, embeds=embeds)
                 
                 img_buffer.close()
                 if couple_buffer:
                     couple_buffer.close()
-                if showcase_buffer:
-                    showcase_buffer.close()
             except Exception as e:
                 logger.error(f"Failed to generate profile: {e}", exc_info=True)
                 await ctx.send(f"❌ Có lỗi xảy ra khi tạo profile: {e}")
@@ -2587,18 +2394,10 @@ class Simulator(commands.Cog):
             await ctx.send("❌ **Lỗi:** Vật phẩm này không thể bán hoặc không tồn tại! Chỉ có thể bán các cổ vật thợ săn đào được hoặc bằng cấp nghề nghiệp.")
             return
 
-    @commands.command(
-        brief="Triệu hồi nhân vật, mở hòm trang bị hoặc rương xe gacha.",
-        usage="moruong",
-        aliases=["mởruong", "open"]
-    )
-    async def moruong(self, ctx: commands.Context):
-        view = ChestOpenView(self, ctx.author)
-        embed = view.get_embed()
-        msg = await ctx.send(embed=embed, view=view)
-        view.message = msg
+
 
     async def process_chest_open(self, interaction: discord.Interaction, view: discord.ui.View, selected_option: str, quantity: int):
+        return
         user_id = interaction.user.id
         
         details = {

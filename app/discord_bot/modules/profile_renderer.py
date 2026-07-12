@@ -211,24 +211,6 @@ def draw_profile_content(
                 rl_bg = (160, 82, 45)  # Sienna
             raw_badges.append((clean_rl, rl_bg, (255, 255, 255)))
             
-    # Daga Title Badge
-    if daga_title:
-        clean_daga = strip_emoji(daga_title)
-        if clean_daga and clean_daga not in ["Chưa xuất trận", "Người mới"]:
-            if "Huyền Thoại" in clean_daga:
-                dg_bg = (148, 0, 211)  # Dark Violet
-            elif "Đại Sư Kê" in clean_daga:
-                dg_bg = (218, 165, 32)  # Goldenrod
-            elif "Sư Kê" in clean_daga:
-                dg_bg = (178, 34, 34)  # Firebrick
-            elif "Chiến Kê" in clean_daga:
-                dg_bg = (255, 140, 0)  # Dark Orange
-            elif "Tân Binh" in clean_daga:
-                dg_bg = (46, 139, 87)  # Sea Green
-            else:
-                dg_bg = (105, 105, 105)  # Dim Gray
-            raw_badges.append((clean_daga, dg_bg, (255, 255, 255)))
-            
     # Coin Flip Title Badge
     if cf_title:
         clean_cf = strip_emoji(cf_title)

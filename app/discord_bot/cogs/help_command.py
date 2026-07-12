@@ -13,7 +13,6 @@ COG_GROUP_MAPPING = {
     "Blackjack":     ("🎲", "Cờ Bạc"),
     "MultiBlackjack":("🎲", "Cờ Bạc"),
     "GamblingGames": ("🎲", "Cờ Bạc"),
-    "Daga":          ("🎲", "Cờ Bạc"),
     "Roulette":      ("🎲", "Cờ Bạc"),
     "CoinFlip":      ("🎲", "Cờ Bạc"),
     "HorseRace":     ("🎲", "Cờ Bạc"),
@@ -29,10 +28,9 @@ COG_GROUP_MAPPING = {
     "Simulator":     ("💼", "General"),
     "Slots":         ("📈", "Giao Dịch"),
     "AI":            ("🤖", "AI"),
-    "Xe":            ("🏎️", "Đua Xe"),
 }
 
-GROUP_ORDER = ["💼 General", "🎲 Cờ Bạc", "📈 Giao Dịch", "🏎️ Đua Xe", "🤖 AI"]
+GROUP_ORDER = ["💼 General", "🎲 Cờ Bạc", "📈 Giao Dịch", "🤖 AI"]
 
 
 def _build_groups(client: commands.Bot):
