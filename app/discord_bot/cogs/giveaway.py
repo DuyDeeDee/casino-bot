@@ -101,15 +101,22 @@ class Giveaway(commands.Cog, name="Giveaway"):
                 )
             """)
             self.economy.conn.commit()
+
+            # Check if bonus_roles column exists, if not, add it
+            self.economy.cur.execute("PRAGMA table_info(giveaways)")
+            columns = [col[1] for col in self.economy.cur.fetchall()]
+            if 'bonus_roles' not in columns:
+                self.economy.cur.execute("ALTER TABLE giveaways ADD COLUMN bonus_roles TEXT")
+                self.economy.conn.commit()
         except Exception as e:
             logger.error(f"Failed to create giveaways table: {e}", exc_info=True)
 
-    def save_giveaway(self, msg_id, guild_id, channel_id, prize, host_id, winner_count, ends_at, required_roles):
+    def save_giveaway(self, msg_id, guild_id, channel_id, prize, host_id, winner_count, ends_at, required_roles, bonus_roles):
         try:
             self.economy.cur.execute(
-                """INSERT INTO giveaways (id, guild_id, channel_id, message_id, prize, host_id, winner_count, ends_at, ended, required_roles, participants, winners)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, '[]', '[]')""",
-                (msg_id, guild_id, channel_id, msg_id, prize, host_id, winner_count, ends_at, json.dumps(required_roles))
+                """INSERT INTO giveaways (id, guild_id, channel_id, message_id, prize, host_id, winner_count, ends_at, ended, required_roles, bonus_roles, participants, winners)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, '[]', '[]')""",
+                (msg_id, guild_id, channel_id, msg_id, prize, host_id, winner_count, ends_at, json.dumps(required_roles), json.dumps(bonus_roles))
             )
             self.economy.conn.commit()
         except Exception as e:
@@ -118,7 +125,7 @@ class Giveaway(commands.Cog, name="Giveaway"):
     def get_giveaway(self, msg_id):
         try:
             self.economy.cur.execute(
-                """SELECT id, guild_id, channel_id, message_id, prize, host_id, winner_count, ends_at, ended, required_roles, participants, winners 
+                """SELECT id, guild_id, channel_id, message_id, prize, host_id, winner_count, ends_at, ended, required_roles, bonus_roles, participants, winners 
                    FROM giveaways WHERE id = ?""", 
                 (msg_id,)
             )
@@ -135,8 +142,9 @@ class Giveaway(commands.Cog, name="Giveaway"):
                     'ends_at': row[7],
                     'ended': row[8],
                     'required_roles': row[9],
-                    'participants': row[10],
-                    'winners': row[11]
+                    'bonus_roles': row[10] or '{}',
+                    'participants': row[11],
+                    'winners': row[12]
                 }
         except Exception as e:
             logger.error(f"Failed to get giveaway: {e}", exc_info=True)
@@ -180,6 +188,8 @@ class Giveaway(commands.Cog, name="Giveaway"):
         winner_count = giveaway['winner_count']
         ends_at = giveaway['ends_at']
         required_roles = json.loads(giveaway['required_roles'])
+        bonus_roles_str = giveaway.get('bonus_roles', '{}')
+        bonus_roles = json.loads(bonus_roles_str) if bonus_roles_str else {}
 
         embed = discord.Embed(title="🎉 GIVEAWAY 🎉", color=discord.Color.purple())
         embed.description = f"## **{prize}**\n\n"
@@ -190,6 +200,9 @@ class Giveaway(commands.Cog, name="Giveaway"):
         if required_roles:
             req_lines = [f"<@&{r_id}>" for r_id in required_roles]
             embed.add_field(name="🔒 Giới hạn", value="\n".join(req_lines), inline=False)
+        elif bonus_roles:
+            bonus_lines = [f"<@&{r_id}> (+{extra} lượt)" for r_id, extra in bonus_roles.items()]
+            embed.add_field(name="✨ Role cộng lượt", value="\n".join(bonus_lines), inline=False)
         else:
             embed.add_field(
                 name="✨ Role cộng lượt",
@@ -248,11 +261,21 @@ class Giveaway(commands.Cog, name="Giveaway"):
         if required_roles:
             entries = 1
         else:
-            entries = 1
-            member = interaction.user
-            for role in member.roles:
-                if not role.is_default() and not role.is_managed() and role.position > 0:
-                    entries += role.position
+            bonus_roles_str = giveaway.get('bonus_roles', '{}')
+            bonus_roles = json.loads(bonus_roles_str) if bonus_roles_str else {}
+            if bonus_roles:
+                entries = 1
+                member = interaction.user
+                for r_id_str, extra in bonus_roles.items():
+                    r_id = int(r_id_str)
+                    if member.get_role(r_id) is not None:
+                        entries += extra
+            else:
+                entries = 1
+                member = interaction.user
+                for role in member.roles:
+                    if not role.is_default() and not role.is_managed() and role.position > 0:
+                        entries += role.position
 
         # Send response
         if entries > 1:
@@ -265,7 +288,7 @@ class Giveaway(commands.Cog, name="Giveaway"):
 
     def parse_giveaway_args(self, args_str: str):
         """Parses arguments string to extract the prize description and flags."""
-        flags = ["--role", "-role", "--channel", "-channel"]
+        flags = ["--role", "-role", "--bonus", "-bonus", "--channel", "-channel"]
         min_index = len(args_str)
         
         for flag in flags:
@@ -277,6 +300,7 @@ class Giveaway(commands.Cog, name="Giveaway"):
         flags_part = args_str[min_index:].strip()
         
         required_roles = []
+        bonus_roles = {}
         target_channel = None
         
         if flags_part:
@@ -291,6 +315,19 @@ class Giveaway(commands.Cog, name="Giveaway"):
                         if role_id:
                             required_roles.append(role_id)
                         i += 1
+                elif tok in ["--bonus", "-bonus"]:
+                    i += 1
+                    while i < len(tokens) and not tokens[i].startswith("-"):
+                        role_id = parse_role_mention(tokens[i])
+                        if role_id:
+                            if i + 1 < len(tokens) and tokens[i+1].isdigit():
+                                bonus_roles[role_id] = int(tokens[i+1])
+                                i += 2
+                            else:
+                                bonus_roles[role_id] = 1
+                                i += 1
+                        else:
+                            i += 1
                 elif tok in ["--channel", "-channel"]:
                     i += 1
                     if i < len(tokens):
@@ -299,7 +336,7 @@ class Giveaway(commands.Cog, name="Giveaway"):
                 else:
                     i += 1
                     
-        return prize, required_roles, target_channel
+        return prize, required_roles, bonus_roles, target_channel
 
     @commands.group(
         name="giveaway",
@@ -320,13 +357,18 @@ class Giveaway(commands.Cog, name="Giveaway"):
             return
 
         # Parse args_str
-        prize, required_roles, target_channel = self.parse_giveaway_args(args_str)
+        prize, required_roles, bonus_roles, target_channel = self.parse_giveaway_args(args_str)
 
         # Delete command message immediately
         try:
             await ctx.message.delete()
         except Exception:
             pass
+
+        # Check mutual exclusion of private mode and custom bonus roles
+        if required_roles and bonus_roles:
+            await ctx.send("❌ Bạn không thể cấu hình giới hạn role và cộng lượt cùng lúc trong một giveaway!", delete_after=10)
+            return
 
         # Validate arguments
         duration_seconds = parse_time(time_str)
@@ -360,7 +402,8 @@ class Giveaway(commands.Cog, name="Giveaway"):
             'host_id': ctx.author.id,
             'winner_count': winners_count,
             'ends_at': ends_at,
-            'required_roles': json.dumps(required_roles)
+            'required_roles': json.dumps(required_roles),
+            'bonus_roles': json.dumps(bonus_roles)
         }
         embed = self.build_active_embed(giveaway_temp, 0)
         view = GiveawayView()
@@ -372,7 +415,7 @@ class Giveaway(commands.Cog, name="Giveaway"):
             return
 
         # Save to database
-        self.save_giveaway(msg.id, ctx.guild.id, channel.id, prize, ctx.author.id, winners_count, ends_at, required_roles)
+        self.save_giveaway(msg.id, ctx.guild.id, channel.id, prize, ctx.author.id, winners_count, ends_at, required_roles, bonus_roles)
 
     async def send_giveaway_help(self, ctx: commands.Context):
         prefix = ctx.prefix
@@ -382,9 +425,10 @@ class Giveaway(commands.Cog, name="Giveaway"):
             f"`{prefix}ga <thời_gian> <số_người_thắng> <phần_thưởng> [flags]`\n"
             f"👉 *Ví dụ:* `{prefix}ga 10m 1 100k` (Ga 10 phút, 1 người thắng, quà 100k)\n"
             f"👉 *Ví dụ (Giới hạn role):* `{prefix}ga 2h 2 Skin VIP --role @Donator @VIP`\n"
+            f"👉 *Ví dụ (Chọn role cộng lượt):* `{prefix}ga 1d 1 Nitro --bonus @Booster 2 @VIP 1`\n"
             f"👉 *Ví dụ (Kênh khác):* `{prefix}ga 1d 1 Nitro --channel #giveaways`\n\n"
             f"**💡 Lưu ý:**\n"
-            f"- Tự động cộng thêm lượt tương ứng với vị trí của Role trong server cho giveaway công khai.\n"
+            f"- Nếu không chỉ định `--bonus`, hệ thống sẽ tự động cộng thêm lượt tương ứng với vị trí của Role trong server cho giveaway công khai.\n"
             f"- Tự động xoá tin nhắn lệnh, chỉ giữ lại embed của bot.\n\n"
             f"**2. Quản lý giveaway:**\n"
             f"- Kết thúc sớm: `{prefix}ga ketthuc <id_tin_nhắn>`\n"
@@ -524,14 +568,23 @@ class Giveaway(commands.Cog, name="Giveaway"):
         # Build ticket pool
         ticket_pool = []
         required_roles = json.loads(giveaway['required_roles'])
+        bonus_roles_str = giveaway.get('bonus_roles', '{}')
+        bonus_roles = json.loads(bonus_roles_str) if bonus_roles_str else {}
         for member in valid_participants:
             if required_roles:
                 entries = 1
             else:
-                entries = 1
-                for role in member.roles:
-                    if not role.is_default() and not role.is_managed() and role.position > 0:
-                        entries += role.position
+                if bonus_roles:
+                    entries = 1
+                    for r_id_str, extra in bonus_roles.items():
+                        r_id = int(r_id_str)
+                        if member.get_role(r_id) is not None:
+                            entries += extra
+                else:
+                    entries = 1
+                    for role in member.roles:
+                        if not role.is_default() and not role.is_managed() and role.position > 0:
+                            entries += role.position
             for _ in range(entries):
                 ticket_pool.append(member.id)
 
@@ -631,14 +684,23 @@ class Giveaway(commands.Cog, name="Giveaway"):
 
         # Build the ticket pool
         ticket_pool = []
+        bonus_roles_str = giveaway.get('bonus_roles', '{}')
+        bonus_roles = json.loads(bonus_roles_str) if bonus_roles_str else {}
         for member in valid_participants:
             if required_roles:
                 entries = 1
             else:
-                entries = 1
-                for role in member.roles:
-                    if not role.is_default() and not role.is_managed() and role.position > 0:
-                        entries += role.position
+                if bonus_roles:
+                    entries = 1
+                    for r_id_str, extra in bonus_roles.items():
+                        r_id = int(r_id_str)
+                        if member.get_role(r_id) is not None:
+                            entries += extra
+                else:
+                    entries = 1
+                    for role in member.roles:
+                        if not role.is_default() and not role.is_managed() and role.position > 0:
+                            entries += role.position
             for _ in range(entries):
                 ticket_pool.append(member.id)
 
