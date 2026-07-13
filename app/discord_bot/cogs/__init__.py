@@ -23,6 +23,8 @@ from .highlow import HighLow
 from .marry import Marry
 from .uno import Uno
 from .tower import Tower
+from .giveaway import Giveaway
+
 
 
 
