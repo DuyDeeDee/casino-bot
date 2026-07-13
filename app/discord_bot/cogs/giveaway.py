@@ -182,6 +182,34 @@ class Giveaway(commands.Cog, name="Giveaway"):
             return True
         return False
 
+    def get_env_bonus_roles(self) -> dict[int, int]:
+        from app.config import config
+        raw = config.bot.giveaway_bonus_roles
+        if not raw:
+            return {}
+        
+        bonus_map = {}
+        parts = raw.split(",")
+        for part in parts:
+            part = part.strip()
+            if not part:
+                continue
+            if ":" in part:
+                subparts = part.split(":")
+                try:
+                    r_id = int(subparts[0].strip())
+                    extra = int(subparts[1].strip())
+                    bonus_map[r_id] = extra
+                except ValueError:
+                    pass
+            else:
+                try:
+                    r_id = int(part)
+                    bonus_map[r_id] = 1
+                except ValueError:
+                    pass
+        return bonus_map
+
     def build_active_embed(self, giveaway, participants_count: int) -> discord.Embed:
         prize = giveaway['prize']
         host_id = giveaway['host_id']
@@ -204,11 +232,10 @@ class Giveaway(commands.Cog, name="Giveaway"):
             bonus_lines = [f"<@&{r_id}> (+{extra} lượt)" for r_id, extra in bonus_roles.items()]
             embed.add_field(name="✨ Role cộng lượt", value="\n".join(bonus_lines), inline=False)
         else:
-            embed.add_field(
-                name="✨ Role cộng lượt",
-                value="Tự động cộng thêm lượt tương ứng với vị trí của Role trong server (Role càng cao càng được nhiều lượt).",
-                inline=False
-            )
+            env_bonus = self.get_env_bonus_roles()
+            if env_bonus:
+                bonus_lines = [f"<@&{r_id}> (+{extra} lượt)" for r_id, extra in env_bonus.items()]
+                embed.add_field(name="✨ Role cộng lượt", value="\n".join(bonus_lines), inline=False)
 
         embed.add_field(name="⏳ Kết thúc", value=f"<t:{ends_at}:F> (<t:{ends_at}:R>)", inline=False)
         embed.set_footer(text="Sylus Meow • Giveaway System")
@@ -271,11 +298,15 @@ class Giveaway(commands.Cog, name="Giveaway"):
                     if member.get_role(r_id) is not None:
                         entries += extra
             else:
-                entries = 1
-                member = interaction.user
-                for role in member.roles:
-                    if not role.is_default() and not role.is_managed() and role.position > 0:
-                        entries += role.position
+                env_bonus = self.get_env_bonus_roles()
+                if env_bonus:
+                    entries = 1
+                    member = interaction.user
+                    for r_id, extra in env_bonus.items():
+                        if member.get_role(r_id) is not None:
+                            entries += extra
+                else:
+                    entries = 1
 
         # Send response
         if entries > 1:
@@ -570,6 +601,7 @@ class Giveaway(commands.Cog, name="Giveaway"):
         required_roles = json.loads(giveaway['required_roles'])
         bonus_roles_str = giveaway.get('bonus_roles', '{}')
         bonus_roles = json.loads(bonus_roles_str) if bonus_roles_str else {}
+        env_bonus = self.get_env_bonus_roles()
         for member in valid_participants:
             if required_roles:
                 entries = 1
@@ -581,10 +613,13 @@ class Giveaway(commands.Cog, name="Giveaway"):
                         if member.get_role(r_id) is not None:
                             entries += extra
                 else:
-                    entries = 1
-                    for role in member.roles:
-                        if not role.is_default() and not role.is_managed() and role.position > 0:
-                            entries += role.position
+                    if env_bonus:
+                        entries = 1
+                        for r_id, extra in env_bonus.items():
+                            if member.get_role(r_id) is not None:
+                                entries += extra
+                    else:
+                        entries = 1
             for _ in range(entries):
                 ticket_pool.append(member.id)
 
@@ -686,6 +721,7 @@ class Giveaway(commands.Cog, name="Giveaway"):
         ticket_pool = []
         bonus_roles_str = giveaway.get('bonus_roles', '{}')
         bonus_roles = json.loads(bonus_roles_str) if bonus_roles_str else {}
+        env_bonus = self.get_env_bonus_roles()
         for member in valid_participants:
             if required_roles:
                 entries = 1
@@ -697,10 +733,13 @@ class Giveaway(commands.Cog, name="Giveaway"):
                         if member.get_role(r_id) is not None:
                             entries += extra
                 else:
-                    entries = 1
-                    for role in member.roles:
-                        if not role.is_default() and not role.is_managed() and role.position > 0:
-                            entries += role.position
+                    if env_bonus:
+                        entries = 1
+                        for r_id, extra in env_bonus.items():
+                            if member.get_role(r_id) is not None:
+                                entries += extra
+                    else:
+                        entries = 1
             for _ in range(entries):
                 ticket_pool.append(member.id)
 

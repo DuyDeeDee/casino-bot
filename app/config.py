@@ -24,6 +24,7 @@ class BotConfig(BaseModel):
     bonus_cooldown: int = Field(default=12, ge=1, le=168)
     blocked_channels: list[int] = Field(default_factory=list)
     allowed_channels: list[int] = Field(default_factory=list)
+    giveaway_bonus_roles: str = Field(default="")
 
 
 
@@ -91,6 +92,7 @@ def load_config() -> Config:
             bonus_cooldown=_parse_int_env("DISCORD_BONUS_COOLDOWN", 12),
             blocked_channels=_parse_owner_ids(getenv("DISCORD_BLOCKED_CHANNELS")),
             allowed_channels=_parse_owner_ids(getenv("DISCORD_ALLOWED_CHANNELS")),
+            giveaway_bonus_roles=getenv("GIVEAWAY_BONUS_ROLES", "").strip(),
         )
         data_dir = _parse_path_env("CASINO_DATA_DIR", DEFAULT_DATA_DIR)
         database_path = _parse_path_env(
