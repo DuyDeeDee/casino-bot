@@ -59,7 +59,7 @@ class GiveawayView(discord.ui.View):
     @discord.ui.button(
         label="Tham gia",
         emoji="🎉",
-        style=discord.ButtonStyle.primary,
+        style=discord.ButtonStyle.secondary,
         custom_id="giveaway_join"
     )
     async def join_button(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -219,7 +219,7 @@ class Giveaway(commands.Cog, name="Giveaway"):
         bonus_roles_str = giveaway.get('bonus_roles', '{}')
         bonus_roles = json.loads(bonus_roles_str) if bonus_roles_str else {}
 
-        embed = discord.Embed(title="# <a:thanhgia:1526231085221023845> Giveaway Bắt Đầu <a:thanhgia:1526231085221023845>", color=discord.Color.purple())
+        embed = discord.Embed(title="<a:thanhgia:1526231085221023845> Giveaway Bắt Đầu <a:thanhgia:1526231085221023845>", color=discord.Color.purple())
         embed.description = f"## **{prize}**\n\n"
         embed.add_field(name="<a:timden:1526230943478845450> *host:*", value=f"<@{host_id}>", inline=True)
         embed.add_field(name="<:ss:1526230022787043348>*Win:*", value=str(winner_count), inline=True)
@@ -765,7 +765,7 @@ class Giveaway(commands.Cog, name="Giveaway"):
         winners_mentions = ", ".join(f"<@{w_id}>" for w_id in winners)
 
         # Edit embed
-        embed = discord.Embed(title="# <a:thanhgia:1526231085221023845>**Giveaway Kết Thúc**<a:thanhgia:1526231085221023845>", color=discord.Color.purple())
+        embed = discord.Embed(title=" <a:thanhgia:1526231085221023845>**Giveaway Kết Thúc**<a:thanhgia:1526231085221023845>", color=discord.Color.purple())
         embed.description = f"### {prize}\n\n"
         embed.add_field(name="<a:timden:1526230943478845450> *host:*", value=f"<@{host_id}>", inline=True)
         embed.add_field(name="<:ss:1526230022787043348>*Win:*", value=str(winner_count), inline=True)
