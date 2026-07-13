@@ -237,7 +237,7 @@ class Giveaway(commands.Cog, name="Giveaway"):
                 bonus_lines = [f"<@&{r_id}> (+{extra} lượt)" for r_id, extra in env_bonus.items()]
                 embed.add_field(name="<a:kcden:1526231212887380108>*Boost Role*", value="\n".join(bonus_lines), inline=False)
 
-        embed.add_field(name="<:ss:1526230022787043348>*End:*", value=f"<t:{ends_at}:F> (<t:{ends_at}:R>)", inline=False)
+        embed.add_field(name="\u200b", value=f"<:ss:1526230022787043348>*End:* <t:{ends_at}:R>", inline=False)
         embed.set_footer(text="Sylus Meow • Giveaway System")
         return embed
 
