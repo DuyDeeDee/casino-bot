@@ -448,7 +448,7 @@ class GamblingHelpers(commands.Cog, name="General"):
                     )
                     
                     spouse_mention = f"<@{spouse_id}>"
-                    spouse_obj = self.bot.get_user(spouse_id)
+                    spouse_obj = self.client.get_user(spouse_id)
                     if spouse_obj:
                         spouse_mention = spouse_obj.mention
                         
