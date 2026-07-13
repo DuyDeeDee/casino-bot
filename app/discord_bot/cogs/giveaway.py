@@ -210,6 +210,17 @@ class Giveaway(commands.Cog, name="Giveaway"):
                     pass
         return bonus_map
 
+    def set_embed_host_thumbnail(self, embed: discord.Embed, host_id: int):
+        host = self.bot.get_user(host_id)
+        if not host:
+            for guild in self.bot.guilds:
+                member = guild.get_member(host_id)
+                if member:
+                    host = member
+                    break
+        if host and host.display_avatar:
+            embed.set_thumbnail(url=host.display_avatar.url)
+
     def build_active_embed(self, giveaway, participants_count: int) -> discord.Embed:
         prize = giveaway['prize']
         host_id = giveaway['host_id']
