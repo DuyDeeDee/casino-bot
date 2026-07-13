@@ -440,7 +440,7 @@ class Giveaway(commands.Cog, name="Giveaway"):
         view = GiveawayView()
 
         try:
-            msg = await channel.send(content="# 🪽 Giveaway Illys Sylus 🪽", embed=embed, view=view)
+            msg = await channel.send(content="# <a:lly_canh1:1514577597865132142> Giveaway Illys Sylus <a:lly_canh2:1514577645466161262>", embed=embed, view=view)
         except discord.Forbidden:
             await ctx.send(f"❌ Bot không có quyền gửi tin nhắn hoặc embed ở kênh {channel.mention}.", delete_after=10)
             return
