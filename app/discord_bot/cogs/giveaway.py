@@ -57,7 +57,7 @@ class GiveawayView(discord.ui.View):
         super().__init__(timeout=None)
 
     @discord.ui.button(
-        label="Tham gia",
+        label="Join",
         emoji="<:ghim:1526238405061640272>",
         style=discord.ButtonStyle.secondary,
         custom_id="giveaway_join"
