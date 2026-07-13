@@ -227,7 +227,7 @@ class Giveaway(commands.Cog, name="Giveaway"):
 
         if required_roles:
             req_lines = [f"<@&{r_id}>" for r_id in required_roles]
-            embed.add_field(name="🔒 Giới hạn", value="\n".join(req_lines), inline=False)
+            embed.add_field(name="<a:kcden:1526231212887380108> Giới hạn", value="\n".join(req_lines), inline=False)
         elif bonus_roles:
             bonus_lines = [f"<@&{r_id}> (+{extra} lượt)" for r_id, extra in bonus_roles.items()]
             embed.add_field(name="<a:kcden:1526231212887380108>*Boost Role*", value="\n".join(bonus_lines), inline=False)
@@ -239,6 +239,7 @@ class Giveaway(commands.Cog, name="Giveaway"):
 
         embed.add_field(name="\u200b", value=f"<:ss:1526230022787043348>*End:* <t:{ends_at}:R>", inline=False)
         embed.set_footer(text="Sylus Meow • Giveaway System")
+        self.set_embed_host_thumbnail(embed, host_id)
         return embed
 
     async def update_giveaway_embed_msg(self, message: discord.Message, giveaway, participants_count: int):
@@ -642,11 +643,12 @@ class Giveaway(commands.Cog, name="Giveaway"):
         # Edit embed
         embed = discord.Embed(title="🎉 GIVEAWAY ĐÃ QUAY LẠI KẾT QUẢ 🎉", color=discord.Color.purple())
         embed.description = f"### {prize}\n\n"
-        embed.add_field(name="Tổ chức bởi", value=f"<@{host_id}>", inline=True)
-        embed.add_field(name="Số người thắng mới", value=str(len(new_winners)), inline=True)
-        embed.add_field(name="Người tham gia", value=str(len(participants)), inline=True)
-        embed.add_field(name="🏆 Kết quả mới", value=new_winners_mentions, inline=False)
-        embed.set_footer(text="Sylus Meow • Giveaway System")
+        embed.add_field(name="<a:timden:1526230943478845450> *host:*", value=f"<@{host_id}>", inline=True)
+        embed.add_field(name="<:ss:1526230022787043348>*Win:*", value=str(len(new_winners)), inline=True)
+        embed.add_field(name="<a:timden:1526230943478845450> *Joined:*", value=str(len(participants)), inline=True)
+        embed.add_field(name="<a:key:1526234974150459593>*Result:*", value=new_winners_mentions, inline=False)
+        embed.set_footer(text="*Sylus Meow • Giveaway System*")
+        self.set_embed_host_thumbnail(embed, host_id)
         await message.edit(embed=embed, view=None)
 
         # Send congrats
@@ -686,11 +688,12 @@ class Giveaway(commands.Cog, name="Giveaway"):
             self.mark_ended(message_id, ended=1)
             embed = discord.Embed(title="# <a:thanhgia:1526231085221023845>**Giveaway Kết Thúc**<a:thanhgia:1526231085221023845>", color=discord.Color.purple())
             embed.description = f"### {prize}\n\n Không có ai tham gia giveaway này."
-            embed.add_field(name="Tổ chức bởi", value=f"<@{host_id}>", inline=True)
-            embed.add_field(name="Người tham gia", value="0", inline=True)
-            embed.set_footer(text="Sylus Meow • Giveaway System")
+            embed.add_field(name="<a:timden:1526230943478845450> *host:*", value=f"<@{host_id}>", inline=True)
+            embed.add_field(name="<a:timden:1526230943478845450>*Joined:*", value="0", inline=True)
+            embed.set_footer(text="*Sylus Meow • Giveaway System*")
+            self.set_embed_host_thumbnail(embed, host_id)
             await message.edit(embed=embed, view=None)
-            await channel.send(f"😢 Không có ai tham gia giveaway **{prize}**.")
+            await channel.send(f" Không có ai tham gia giveaway **{prize}**.")
             return
 
         # Fetch all members in participants to check if they are still in server
@@ -708,11 +711,12 @@ class Giveaway(commands.Cog, name="Giveaway"):
 
         if not valid_participants:
             self.mark_ended(message_id, ended=1)
-            embed = discord.Embed(title="🎉 GIVEAWAY ĐÃ KẾT THÚC 🎉", color=discord.Color.purple())
+            embed = discord.Embed(title="# <a:thanhgia:1526231085221023845>**Giveaway Kết Thúc**<a:thanhgia:1526231085221023845>", color=discord.Color.purple())
             embed.description = f"### {prize}\n\n😢 Không có người tham gia hợp lệ (người tham gia đã rời server)."
-            embed.add_field(name="Tổ chức bởi", value=f"<@{host_id}>", inline=True)
-            embed.add_field(name="Người tham gia", value=str(len(participants)), inline=True)
-            embed.set_footer(text="Sylus Meow • Giveaway System")
+            embed.add_field(name="<a:timden:1526230943478845450> *host:*", value=f"<@{host_id}>", inline=True)
+            embed.add_field(name="<a:timden:1526230943478845450>*Joined:*", value=str(len(participants)), inline=True)
+            embed.set_footer(text="*Sylus Meow • Giveaway System*")
+            self.set_embed_host_thumbnail(embed, host_id)
             await message.edit(embed=embed, view=None)
             await channel.send(f"😢 Không có ai thắng giveaway **{prize}** vì tất cả người tham gia đã rời server.")
             return
@@ -761,13 +765,14 @@ class Giveaway(commands.Cog, name="Giveaway"):
         winners_mentions = ", ".join(f"<@{w_id}>" for w_id in winners)
 
         # Edit embed
-        embed = discord.Embed(title="🎉 GIVEAWAY ĐÃ KẾT THÚC 🎉", color=discord.Color.purple())
+        embed = discord.Embed(title="# <a:thanhgia:1526231085221023845>**Giveaway Kết Thúc**<a:thanhgia:1526231085221023845>", color=discord.Color.purple())
         embed.description = f"### {prize}\n\n"
-        embed.add_field(name="Tổ chức bởi", value=f"<@{host_id}>", inline=True)
-        embed.add_field(name="Số người thắng", value=str(winner_count), inline=True)
-        embed.add_field(name="Người tham gia", value=str(len(participants)), inline=True)
-        embed.add_field(name="🏆 Kết quả", value=winners_mentions, inline=False)
-        embed.set_footer(text="Sylus Meow • Giveaway System")
+        embed.add_field(name="<a:timden:1526230943478845450> *host:*", value=f"<@{host_id}>", inline=True)
+        embed.add_field(name="<:ss:1526230022787043348>*Win:*", value=str(winner_count), inline=True)
+        embed.add_field(name="<a:timden:1526230943478845450> *Joined:*", value=str(len(participants)), inline=True)
+        embed.add_field(name="<a:key:1526234974150459593>*Result:*", value=winners_mentions, inline=False)
+        embed.set_footer(text="*Sylus Meow • Giveaway System*")
+        self.set_embed_host_thumbnail(embed, host_id)
         await message.edit(embed=embed, view=None)
 
         # Send congratulation message
