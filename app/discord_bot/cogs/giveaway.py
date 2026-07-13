@@ -219,25 +219,25 @@ class Giveaway(commands.Cog, name="Giveaway"):
         bonus_roles_str = giveaway.get('bonus_roles', '{}')
         bonus_roles = json.loads(bonus_roles_str) if bonus_roles_str else {}
 
-        embed = discord.Embed(title="🎉 GIVEAWAY 🎉", color=discord.Color.purple())
+        embed = discord.Embed(title="# <a:thanhgia:1526231085221023845> Giveaway Bắt Đầu <a:thanhgia:1526231085221023845>", color=discord.Color.purple())
         embed.description = f"## **{prize}**\n\n"
-        embed.add_field(name="Tổ chức bởi", value=f"<@{host_id}>", inline=True)
-        embed.add_field(name="Số người thắng", value=str(winner_count), inline=True)
-        embed.add_field(name="Người tham gia", value=str(participants_count), inline=True)
+        embed.add_field(name="<a:timden:1526230943478845450> *host:*", value=f"<@{host_id}>", inline=True)
+        embed.add_field(name="<:ss:1526230022787043348>*Win:*", value=str(winner_count), inline=True)
+        embed.add_field(name="<a:timden:1526230943478845450>*Joined:*", value=str(participants_count), inline=True)
 
         if required_roles:
             req_lines = [f"<@&{r_id}>" for r_id in required_roles]
             embed.add_field(name="🔒 Giới hạn", value="\n".join(req_lines), inline=False)
         elif bonus_roles:
             bonus_lines = [f"<@&{r_id}> (+{extra} lượt)" for r_id, extra in bonus_roles.items()]
-            embed.add_field(name="✨ Role cộng lượt", value="\n".join(bonus_lines), inline=False)
+            embed.add_field(name="<a:kcden:1526231212887380108>*Boost Role*", value="\n".join(bonus_lines), inline=False)
         else:
             env_bonus = self.get_env_bonus_roles()
             if env_bonus:
                 bonus_lines = [f"<@&{r_id}> (+{extra} lượt)" for r_id, extra in env_bonus.items()]
-                embed.add_field(name="✨ Role cộng lượt", value="\n".join(bonus_lines), inline=False)
+                embed.add_field(name="<a:kcden:1526231212887380108>*Boost Role*", value="\n".join(bonus_lines), inline=False)
 
-        embed.add_field(name="⏳ Kết thúc", value=f"<t:{ends_at}:F> (<t:{ends_at}:R>)", inline=False)
+        embed.add_field(name="<:ss:1526230022787043348>*End:*", value=f"<t:{ends_at}:F> (<t:{ends_at}:R>)", inline=False)
         embed.set_footer(text="Sylus Meow • Giveaway System")
         return embed
 
@@ -252,18 +252,18 @@ class Giveaway(commands.Cog, name="Giveaway"):
         message_id = interaction.message.id
         giveaway = self.get_giveaway(message_id)
         if not giveaway:
-            await interaction.response.send_message("❌ Không tìm thấy thông tin giveaway này trong hệ thống.", ephemeral=True)
+            await interaction.response.send_message("Không tìm thấy thông tin giveaway này trong hệ thống.", ephemeral=True)
             return
 
         if giveaway['ended'] != 0:
-            await interaction.response.send_message("⛔ Giveaway đã kết thúc.", ephemeral=True)
+            await interaction.response.send_message("Giveaway đã kết thúc.", ephemeral=True)
             return
 
         user_id = interaction.user.id
         participants = json.loads(giveaway['participants'])
 
         if user_id in participants:
-            await interaction.response.send_message("ℹ️ Bạn đã tham gia giveaway này rồi.", ephemeral=True)
+            await interaction.response.send_message("Bạn đã tham gia giveaway này rồi.", ephemeral=True)
             return
 
         # Check required roles (Private mode)
@@ -277,7 +277,7 @@ class Giveaway(commands.Cog, name="Giveaway"):
                     break
             if not has_role:
                 roles_mentions = ", ".join(f"<@&{r_id}>" for r_id in required_roles)
-                await interaction.response.send_message(f"⛔ Giveaway này chỉ dành cho role: {roles_mentions}", ephemeral=True)
+                await interaction.response.send_message(f"Giveaway này chỉ dành cho role: {roles_mentions}", ephemeral=True)
                 return
 
         # Add user to participants list
@@ -310,9 +310,9 @@ class Giveaway(commands.Cog, name="Giveaway"):
 
         # Send response
         if entries > 1:
-            await interaction.response.send_message(f"🎉 Tham gia thành công! Nhờ role đặc biệt bạn có **{entries} lượt** quay.", ephemeral=True)
+            await interaction.response.send_message(f"Tham gia thành công! Nhờ role đặc biệt bạn có **{entries} lượt** quay.", ephemeral=True)
         else:
-            await interaction.response.send_message("🎉 Tham gia thành công! Chúc bạn may mắn.", ephemeral=True)
+            await interaction.response.send_message("Tham gia thành công! Chúc bạn may mắn.", ephemeral=True)
 
         # Update embed count
         await self.update_giveaway_embed_msg(interaction.message, giveaway, len(participants))
@@ -440,7 +440,7 @@ class Giveaway(commands.Cog, name="Giveaway"):
         view = GiveawayView()
 
         try:
-            msg = await channel.send(content="# <a:lly_canh1:1514577597865132142> Giveaway Illys Sylus <a:lly_canh2:1514577645466161262>", embed=embed, view=view)
+            msg = await channel.send(content="# <a:w1:1526231439425667093> Giveaway Illys Sylus <a:w2:1526231455422877798>", embed=embed, view=view)
         except discord.Forbidden:
             await ctx.send(f"❌ Bot không có quyền gửi tin nhắn hoặc embed ở kênh {channel.mention}.", delete_after=10)
             return
@@ -684,8 +684,8 @@ class Giveaway(commands.Cog, name="Giveaway"):
         if not participants:
             # No one participated
             self.mark_ended(message_id, ended=1)
-            embed = discord.Embed(title="🎉 GIVEAWAY ĐÃ KẾT THÚC 🎉", color=discord.Color.purple())
-            embed.description = f"### {prize}\n\n😢 Không có ai tham gia giveaway này."
+            embed = discord.Embed(title="# <a:thanhgia:1526231085221023845>**Giveaway Kết Thúc**<a:thanhgia:1526231085221023845>", color=discord.Color.purple())
+            embed.description = f"### {prize}\n\n Không có ai tham gia giveaway này."
             embed.add_field(name="Tổ chức bởi", value=f"<@{host_id}>", inline=True)
             embed.add_field(name="Người tham gia", value="0", inline=True)
             embed.set_footer(text="Sylus Meow • Giveaway System")
@@ -771,7 +771,7 @@ class Giveaway(commands.Cog, name="Giveaway"):
         await message.edit(embed=embed, view=None)
 
         # Send congratulation message
-        await channel.send(f"🎉 Chúc mừng {winners_mentions} đã thắng giải **{prize}**! Liên hệ <@{host_id}> để nhận thưởng.")
+        await channel.send(f" <a:wing:1526230985987981393>*Chúc mừng {winners_mentions} đã thắng giải **{prize}**<a:key:1526234974150459593> Liên hệ <@{host_id}> để nhận thưởng.*")
 
     @commands.command(name="sync_giveaway", hidden=True)
     @commands.is_owner()
