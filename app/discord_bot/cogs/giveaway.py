@@ -295,28 +295,21 @@ class Giveaway(commands.Cog, name="Giveaway"):
         self.update_participants(message_id, participants)
 
         # Calculate entries
-        if required_roles:
-            entries = 1
+        bonus_roles_str = giveaway.get('bonus_roles', '{}')
+        bonus_roles = json.loads(bonus_roles_str) if bonus_roles_str else {}
+        entries = 1
+        member = interaction.user
+        if bonus_roles:
+            for r_id_str, extra in bonus_roles.items():
+                r_id = int(r_id_str)
+                if member.get_role(r_id) is not None:
+                    entries += extra
         else:
-            bonus_roles_str = giveaway.get('bonus_roles', '{}')
-            bonus_roles = json.loads(bonus_roles_str) if bonus_roles_str else {}
-            if bonus_roles:
-                entries = 1
-                member = interaction.user
-                for r_id_str, extra in bonus_roles.items():
-                    r_id = int(r_id_str)
+            env_bonus = self.get_env_bonus_roles()
+            if env_bonus:
+                for r_id, extra in env_bonus.items():
                     if member.get_role(r_id) is not None:
                         entries += extra
-            else:
-                env_bonus = self.get_env_bonus_roles()
-                if env_bonus:
-                    entries = 1
-                    member = interaction.user
-                    for r_id, extra in env_bonus.items():
-                        if member.get_role(r_id) is not None:
-                            entries += extra
-                else:
-                    entries = 1
 
         # Send response
         if entries > 1:
@@ -613,23 +606,17 @@ class Giveaway(commands.Cog, name="Giveaway"):
         bonus_roles = json.loads(bonus_roles_str) if bonus_roles_str else {}
         env_bonus = self.get_env_bonus_roles()
         for member in valid_participants:
-            if required_roles:
-                entries = 1
+            entries = 1
+            if bonus_roles:
+                for r_id_str, extra in bonus_roles.items():
+                    r_id = int(r_id_str)
+                    if member.get_role(r_id) is not None:
+                        entries += extra
             else:
-                if bonus_roles:
-                    entries = 1
-                    for r_id_str, extra in bonus_roles.items():
-                        r_id = int(r_id_str)
+                if env_bonus:
+                    for r_id, extra in env_bonus.items():
                         if member.get_role(r_id) is not None:
                             entries += extra
-                else:
-                    if env_bonus:
-                        entries = 1
-                        for r_id, extra in env_bonus.items():
-                            if member.get_role(r_id) is not None:
-                                entries += extra
-                    else:
-                        entries = 1
             for _ in range(entries):
                 ticket_pool.append(member.id)
 
@@ -718,12 +705,12 @@ class Giveaway(commands.Cog, name="Giveaway"):
         if not valid_participants:
             self.mark_ended(message_id, ended=1)
             embed = discord.Embed(title="# <a:thanhgia:1526231085221023845>**Giveaway Kết Thúc**<a:thanhgia:1526231085221023845>", color=discord.Color.purple())
-            embed.description = f"### {prize}\n\n😢 Không có người tham gia hợp lệ (người tham gia đã rời server)."
+            embed.description = f"### {prize}\n\n Không có người tham gia hợp lệ (người tham gia đã rời server)."
             embed.add_field(name="\u200b", value=f"<a:timden:1526230943478845450> *host:* <@{host_id}>\n<a:timden:1526230943478845450>*Joined:* {len(participants)}", inline=False)
             embed.set_footer(text="*Sylus Meow • Giveaway System*")
             self.set_embed_host_thumbnail(embed, host_id)
             await message.edit(embed=embed, view=None)
-            await channel.send(f"😢 Không có ai thắng giveaway **{prize}** vì tất cả người tham gia đã rời server.")
+            await channel.send(f" Không có ai thắng giveaway **{prize}** vì tất cả người tham gia đã rời server.")
             return
 
         # Build the ticket pool
@@ -732,23 +719,17 @@ class Giveaway(commands.Cog, name="Giveaway"):
         bonus_roles = json.loads(bonus_roles_str) if bonus_roles_str else {}
         env_bonus = self.get_env_bonus_roles()
         for member in valid_participants:
-            if required_roles:
-                entries = 1
+            entries = 1
+            if bonus_roles:
+                for r_id_str, extra in bonus_roles.items():
+                    r_id = int(r_id_str)
+                    if member.get_role(r_id) is not None:
+                        entries += extra
             else:
-                if bonus_roles:
-                    entries = 1
-                    for r_id_str, extra in bonus_roles.items():
-                        r_id = int(r_id_str)
+                if env_bonus:
+                    for r_id, extra in env_bonus.items():
                         if member.get_role(r_id) is not None:
                             entries += extra
-                else:
-                    if env_bonus:
-                        entries = 1
-                        for r_id, extra in env_bonus.items():
-                            if member.get_role(r_id) is not None:
-                                entries += extra
-                    else:
-                        entries = 1
             for _ in range(entries):
                 ticket_pool.append(member.id)
 
