@@ -75,6 +75,7 @@ class Giveaway(commands.Cog, name="Giveaway"):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.economy = getattr(bot, "economy", None) or Economy()
+        self.join_locks = {}
         self.init_db()
         self.giveaway_check_loop.start()
 
@@ -170,6 +171,7 @@ class Giveaway(commands.Cog, name="Giveaway"):
         try:
             self.economy.cur.execute("UPDATE giveaways SET ended = ?, winners = ? WHERE id = ?", (ended, json.dumps(winners), msg_id))
             self.economy.conn.commit()
+            self.join_locks.pop(msg_id, None)
         except Exception as e:
             logger.error(f"Failed to mark giveaway as ended: {e}", exc_info=True)
 
@@ -260,72 +262,74 @@ class Giveaway(commands.Cog, name="Giveaway"):
 
     async def handle_join_click(self, interaction: discord.Interaction):
         message_id = interaction.message.id
-        giveaway = self.get_giveaway(message_id)
-        if not giveaway:
-            await interaction.response.send_message("Không tìm thấy thông tin giveaway này trong hệ thống.", ephemeral=True)
-            return
-
-        if giveaway['ended'] != 0:
-            await interaction.response.send_message("Giveaway đã kết thúc.", ephemeral=True)
-            return
-
-        user_id = interaction.user.id
-        try:
-            participants = json.loads(giveaway['participants'])
-        except Exception:
-            participants = {}
-
-        # Backward compatibility: Convert list to dict
-        if isinstance(participants, list):
-            participants = {str(uid): 1 for uid in participants}
-
-        if str(user_id) in participants:
-            await interaction.response.send_message("Bạn đã tham gia giveaway này rồi.", ephemeral=True)
-            return
-
-        # Check required roles (Private mode)
-        required_roles = json.loads(giveaway['required_roles'])
-        if required_roles:
-            member = interaction.user
-            has_role = False
-            for r_id in required_roles:
-                if member.get_role(r_id) is not None:
-                    has_role = True
-                    break
-            if not has_role:
-                roles_mentions = ", ".join(f"<@&{r_id}>" for r_id in required_roles)
-                await interaction.response.send_message(f"Giveaway này chỉ dành cho role: {roles_mentions}", ephemeral=True)
+        lock = self.join_locks.setdefault(message_id, asyncio.Lock())
+        async with lock:
+            giveaway = self.get_giveaway(message_id)
+            if not giveaway:
+                await interaction.response.send_message("Không tìm thấy thông tin giveaway này trong hệ thống.", ephemeral=True)
                 return
 
-        # Calculate entries
-        bonus_roles_str = giveaway.get('bonus_roles', '{}')
-        bonus_roles = json.loads(bonus_roles_str) if bonus_roles_str else {}
-        entries = 1
-        member = interaction.user
-        if bonus_roles:
-            for r_id_str, extra in bonus_roles.items():
-                r_id = int(r_id_str)
-                if member.get_role(r_id) is not None:
-                    entries += extra
-        else:
-            env_bonus = self.get_env_bonus_roles()
-            if env_bonus:
-                for r_id, extra in env_bonus.items():
+            if giveaway['ended'] != 0:
+                await interaction.response.send_message("Giveaway đã kết thúc.", ephemeral=True)
+                return
+
+            user_id = interaction.user.id
+            try:
+                participants = json.loads(giveaway['participants'])
+            except Exception:
+                participants = {}
+
+            # Backward compatibility: Convert list to dict
+            if isinstance(participants, list):
+                participants = {str(uid): 1 for uid in participants}
+
+            if str(user_id) in participants:
+                await interaction.response.send_message("Bạn đã tham gia giveaway này rồi.", ephemeral=True)
+                return
+
+            # Check required roles (Private mode)
+            required_roles = json.loads(giveaway['required_roles'])
+            if required_roles:
+                member = interaction.user
+                has_role = False
+                for r_id in required_roles:
+                    if member.get_role(r_id) is not None:
+                        has_role = True
+                        break
+                if not has_role:
+                    roles_mentions = ", ".join(f"<@&{r_id}>" for r_id in required_roles)
+                    await interaction.response.send_message(f"Giveaway này chỉ dành cho role: {roles_mentions}", ephemeral=True)
+                    return
+
+            # Calculate entries
+            bonus_roles_str = giveaway.get('bonus_roles', '{}')
+            bonus_roles = json.loads(bonus_roles_str) if bonus_roles_str else {}
+            entries = 1
+            member = interaction.user
+            if bonus_roles:
+                for r_id_str, extra in bonus_roles.items():
+                    r_id = int(r_id_str)
                     if member.get_role(r_id) is not None:
                         entries += extra
+            else:
+                env_bonus = self.get_env_bonus_roles()
+                if env_bonus:
+                    for r_id, extra in env_bonus.items():
+                        if member.get_role(r_id) is not None:
+                            entries += extra
 
-        # Add user to participants dict
-        participants[str(user_id)] = entries
-        self.update_participants(message_id, participants)
+            # Add user to participants dict
+            participants[str(user_id)] = entries
+            self.update_participants(message_id, participants)
 
-        # Send response
-        if entries > 1:
-            await interaction.response.send_message(f"Tham gia thành công! Nhờ role đặc biệt bạn có **{entries} lượt** quay.", ephemeral=True)
-        else:
-            await interaction.response.send_message("Tham gia thành công! Chúc bạn may mắn.", ephemeral=True)
+            # Send response
+            if entries > 1:
+                await interaction.response.send_message(f"Tham gia thành công! Nhờ role đặc biệt bạn có **{entries} lượt** quay.", ephemeral=True)
+            else:
+                await interaction.response.send_message("Tham gia thành công! Chúc bạn may mắn.", ephemeral=True)
 
-        # Update embed count
-        await self.update_giveaway_embed_msg(interaction.message, giveaway, len(participants))
+            # Update embed count
+            await self.update_giveaway_embed_msg(interaction.message, giveaway, len(participants))
 
     def parse_giveaway_args(self, args_str: str):
         """Parses arguments string to extract the prize description and flags."""
