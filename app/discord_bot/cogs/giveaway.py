@@ -76,11 +76,15 @@ class Giveaway(commands.Cog, name="Giveaway"):
         self.bot = bot
         self.economy = getattr(bot, "economy", None) or Economy()
         self.join_locks = {}
+        self.pending_embed_updates = {}
+        self.update_tasks = {}
         self.init_db()
         self.giveaway_check_loop.start()
 
     def cog_unload(self) -> None:
         self.giveaway_check_loop.cancel()
+        for task in self.update_tasks.values():
+            task.cancel()
 
     def init_db(self):
         """Initializes the SQLite database table for giveaways."""
@@ -260,6 +264,23 @@ class Giveaway(commands.Cog, name="Giveaway"):
         except Exception as e:
             logger.warning(f"Could not edit giveaway message {message.id}: {e}")
 
+    def schedule_embed_update(self, message: discord.Message, giveaway, participants_count: int):
+        message_id = message.id
+        self.pending_embed_updates[message_id] = (message, giveaway, participants_count)
+        if message_id in self.update_tasks:
+            return
+        
+        loop = asyncio.get_running_loop()
+        self.update_tasks[message_id] = loop.create_task(self.run_debounced_embed_update(message_id))
+
+    async def run_debounced_embed_update(self, message_id: int):
+        await asyncio.sleep(2.0)
+        info = self.pending_embed_updates.pop(message_id, None)
+        self.update_tasks.pop(message_id, None)
+        if info:
+            message, giveaway, count = info
+            await self.update_giveaway_embed_msg(message, giveaway, count)
+
     async def handle_join_click(self, interaction: discord.Interaction):
         # Defer the interaction immediately to prevent the 3-second Discord timeout
         try:
@@ -327,15 +348,18 @@ class Giveaway(commands.Cog, name="Giveaway"):
             # Add user to participants dict
             participants[str(user_id)] = entries
             self.update_participants(message_id, participants)
+            
+            # Count for embed
+            participants_count = len(participants)
 
-            # Send response using followup
-            if entries > 1:
-                await interaction.followup.send(f"Tham gia thành công! Nhờ role đặc biệt bạn có **{entries} lượt** quay.", ephemeral=True)
-            else:
-                await interaction.followup.send("Tham gia thành công! Chúc bạn may mắn.", ephemeral=True)
+        # Send response using followup (OUTSIDE the lock!)
+        if entries > 1:
+            await interaction.followup.send(f"Tham gia thành công! Nhờ role đặc biệt bạn có **{entries} lượt** quay.", ephemeral=True)
+        else:
+            await interaction.followup.send("Tham gia thành công! Chúc bạn may mắn.", ephemeral=True)
 
-            # Update embed count
-            await self.update_giveaway_embed_msg(interaction.message, giveaway, len(participants))
+        # Schedule the embed update (OUTSIDE the lock, and debounced!)
+        self.schedule_embed_update(interaction.message, giveaway, participants_count)
 
     def parse_giveaway_args(self, args_str: str):
         """Parses arguments string to extract the prize description and flags."""
