@@ -261,16 +261,22 @@ class Giveaway(commands.Cog, name="Giveaway"):
             logger.warning(f"Could not edit giveaway message {message.id}: {e}")
 
     async def handle_join_click(self, interaction: discord.Interaction):
+        # Defer the interaction immediately to prevent the 3-second Discord timeout
+        try:
+            await interaction.response.defer(ephemeral=True)
+        except Exception:
+            pass
+
         message_id = interaction.message.id
         lock = self.join_locks.setdefault(message_id, asyncio.Lock())
         async with lock:
             giveaway = self.get_giveaway(message_id)
             if not giveaway:
-                await interaction.response.send_message("Không tìm thấy thông tin giveaway này trong hệ thống.", ephemeral=True)
+                await interaction.followup.send("❌ Không tìm thấy thông tin giveaway này trong hệ thống.", ephemeral=True)
                 return
 
             if giveaway['ended'] != 0:
-                await interaction.response.send_message("Giveaway đã kết thúc.", ephemeral=True)
+                await interaction.followup.send("❌ Giveaway đã kết thúc.", ephemeral=True)
                 return
 
             user_id = interaction.user.id
@@ -284,7 +290,7 @@ class Giveaway(commands.Cog, name="Giveaway"):
                 participants = {str(uid): 1 for uid in participants}
 
             if str(user_id) in participants:
-                await interaction.response.send_message("Bạn đã tham gia giveaway này rồi.", ephemeral=True)
+                await interaction.followup.send("Bạn đã tham gia giveaway này rồi.", ephemeral=True)
                 return
 
             # Check required roles (Private mode)
@@ -298,7 +304,7 @@ class Giveaway(commands.Cog, name="Giveaway"):
                         break
                 if not has_role:
                     roles_mentions = ", ".join(f"<@&{r_id}>" for r_id in required_roles)
-                    await interaction.response.send_message(f"Giveaway này chỉ dành cho role: {roles_mentions}", ephemeral=True)
+                    await interaction.followup.send(f"Giveaway này chỉ dành cho role: {roles_mentions}", ephemeral=True)
                     return
 
             # Calculate entries
@@ -322,11 +328,11 @@ class Giveaway(commands.Cog, name="Giveaway"):
             participants[str(user_id)] = entries
             self.update_participants(message_id, participants)
 
-            # Send response
+            # Send response using followup
             if entries > 1:
-                await interaction.response.send_message(f"Tham gia thành công! Nhờ role đặc biệt bạn có **{entries} lượt** quay.", ephemeral=True)
+                await interaction.followup.send(f"Tham gia thành công! Nhờ role đặc biệt bạn có **{entries} lượt** quay.", ephemeral=True)
             else:
-                await interaction.response.send_message("Tham gia thành công! Chúc bạn may mắn.", ephemeral=True)
+                await interaction.followup.send("Tham gia thành công! Chúc bạn may mắn.", ephemeral=True)
 
             # Update embed count
             await self.update_giveaway_embed_msg(interaction.message, giveaway, len(participants))
