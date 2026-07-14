@@ -271,8 +271,8 @@ class Giveaway(commands.Cog, name="Giveaway"):
         if payload.user_id == self.bot.user.id:
             return
 
-        # Check if the emoji is "🎉"
-        if str(payload.emoji) != "🎉":
+        # Check if the emoji matches the custom emoji <:ghim:1526238405061640272>
+        if not payload.emoji.is_custom_emoji() or payload.emoji.id != 1526238405061640272:
             return
 
         message_id = payload.message_id
@@ -311,7 +311,7 @@ class Giveaway(commands.Cog, name="Giveaway"):
             giveaway = self.get_giveaway(message_id)
             if not giveaway or giveaway['ended'] != 0:
                 try:
-                    await message.remove_reaction("🎉", member)
+                    await message.remove_reaction(payload.emoji, member)
                 except discord.HTTPException:
                     pass
                 return
@@ -340,7 +340,7 @@ class Giveaway(commands.Cog, name="Giveaway"):
                         break
                 if not has_role:
                     try:
-                        await message.remove_reaction("🎉", member)
+                        await message.remove_reaction(payload.emoji, member)
                     except discord.HTTPException:
                         pass
                     
@@ -387,8 +387,8 @@ class Giveaway(commands.Cog, name="Giveaway"):
         if payload.user_id == self.bot.user.id:
             return
 
-        # Check if the emoji is "🎉"
-        if str(payload.emoji) != "🎉":
+        # Check if the emoji matches the custom emoji <:ghim:1526238405061640272>
+        if not payload.emoji.is_custom_emoji() or payload.emoji.id != 1526238405061640272:
             return
 
         message_id = payload.message_id
@@ -558,7 +558,7 @@ class Giveaway(commands.Cog, name="Giveaway"):
 
         try:
             msg = await channel.send(content="# <a:w1:1526231439425667093> Giveaway Illys Sylus <a:w2:1526231455422877798>", embed=embed)
-            await msg.add_reaction("🎉")
+            await msg.add_reaction("<:ghim:1526238405061640272>")
         except discord.Forbidden:
             await ctx.send(f"❌ Bot không có quyền gửi tin nhắn hoặc embed ở kênh {channel.mention}.", delete_after=10)
             return
