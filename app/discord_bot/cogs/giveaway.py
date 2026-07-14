@@ -307,10 +307,7 @@ class Giveaway(commands.Cog, name="Giveaway"):
         if not channel:
             return
 
-        try:
-            message = await channel.fetch_message(message_id)
-        except discord.HTTPException:
-            return
+        message = channel.get_partial_message(message_id)
 
         # Lock per giveaway message ID to prevent race conditions during DB updates
         lock = self.join_locks.setdefault(message_id, asyncio.Lock())
@@ -408,10 +405,7 @@ class Giveaway(commands.Cog, name="Giveaway"):
         if not channel:
             return
 
-        try:
-            message = await channel.fetch_message(message_id)
-        except discord.HTTPException:
-            return
+        message = channel.get_partial_message(message_id)
 
         user_id = payload.user_id
 
