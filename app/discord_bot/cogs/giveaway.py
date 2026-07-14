@@ -51,23 +51,7 @@ def parse_time(time_str: str) -> Optional[int]:
     return None
 
 
-class GiveawayView(discord.ui.View):
-    """Persistent view with the Join button for the giveaways."""
-    def __init__(self):
-        super().__init__(timeout=None)
 
-    @discord.ui.button(
-        label="Join",
-        emoji="<:ghim:1526238405061640272>",
-        style=discord.ButtonStyle.secondary,
-        custom_id="giveaway_join"
-    )
-    async def join_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        cog = interaction.client.get_cog("Giveaway")
-        if not cog:
-            await interaction.response.send_message("❌ Hệ thống giveaway tạm thời không khả dụng.", ephemeral=True)
-            return
-        await cog.handle_join_click(interaction)
 
 
 class Giveaway(commands.Cog, name="Giveaway"):
@@ -281,26 +265,58 @@ class Giveaway(commands.Cog, name="Giveaway"):
             message, giveaway, count = info
             await self.update_giveaway_embed_msg(message, giveaway, count)
 
-    async def handle_join_click(self, interaction: discord.Interaction):
-        # Defer the interaction immediately to prevent the 3-second Discord timeout
-        try:
-            await interaction.response.defer(ephemeral=True)
-        except Exception:
-            pass
+    @commands.Cog.listener()
+    async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
+        # Ignore if reaction added by the bot itself
+        if payload.user_id == self.bot.user.id:
+            return
 
-        message_id = interaction.message.id
+        # Check if the emoji is "🎉"
+        if str(payload.emoji) != "🎉":
+            return
+
+        message_id = payload.message_id
+        giveaway = self.get_giveaway(message_id)
+        if not giveaway:
+            return
+
+        guild = self.bot.get_guild(payload.guild_id)
+        if not guild:
+            return
+
+        member = payload.member
+        if not member:
+            try:
+                member = await guild.fetch_member(payload.user_id)
+            except discord.HTTPException:
+                return
+
+        # If member is a bot, ignore
+        if member.bot:
+            return
+
+        channel = self.bot.get_channel(payload.channel_id)
+        if not channel:
+            return
+
+        try:
+            message = await channel.fetch_message(message_id)
+        except discord.HTTPException:
+            return
+
+        # Lock per giveaway message ID to prevent race conditions during DB updates
         lock = self.join_locks.setdefault(message_id, asyncio.Lock())
         async with lock:
+            # Re-fetch the giveaway within lock to get fresh DB state
             giveaway = self.get_giveaway(message_id)
-            if not giveaway:
-                await interaction.followup.send("❌ Không tìm thấy thông tin giveaway này trong hệ thống.", ephemeral=True)
+            if not giveaway or giveaway['ended'] != 0:
+                try:
+                    await message.remove_reaction("🎉", member)
+                except discord.HTTPException:
+                    pass
                 return
 
-            if giveaway['ended'] != 0:
-                await interaction.followup.send("❌ Giveaway đã kết thúc.", ephemeral=True)
-                return
-
-            user_id = interaction.user.id
+            user_id = member.id
             try:
                 participants = json.loads(giveaway['participants'])
             except Exception:
@@ -310,29 +326,40 @@ class Giveaway(commands.Cog, name="Giveaway"):
             if isinstance(participants, list):
                 participants = {str(uid): 1 for uid in participants}
 
+            # Check if already joined (should be rare on reaction add unless cache desync)
             if str(user_id) in participants:
-                await interaction.followup.send("Bạn đã tham gia giveaway này rồi.", ephemeral=True)
                 return
 
             # Check required roles (Private mode)
             required_roles = json.loads(giveaway['required_roles'])
             if required_roles:
-                member = interaction.user
                 has_role = False
                 for r_id in required_roles:
                     if member.get_role(r_id) is not None:
                         has_role = True
                         break
                 if not has_role:
+                    try:
+                        await message.remove_reaction("🎉", member)
+                    except discord.HTTPException:
+                        pass
+                    
                     roles_mentions = ", ".join(f"<@&{r_id}>" for r_id in required_roles)
-                    await interaction.followup.send(f"Giveaway này chỉ dành cho role: {roles_mentions}", ephemeral=True)
+                    try:
+                        embed = discord.Embed(
+                            title="❌ Tham gia Giveaway thất bại",
+                            description=f"Bạn không thể tham gia giveaway **{giveaway['prize']}** vì không có role yêu cầu.\nVai trò yêu cầu: {roles_mentions}",
+                            color=discord.Color.red()
+                        )
+                        await member.send(embed=embed)
+                    except discord.Forbidden:
+                        pass
                     return
 
             # Calculate entries
             bonus_roles_str = giveaway.get('bonus_roles', '{}')
             bonus_roles = json.loads(bonus_roles_str) if bonus_roles_str else {}
             entries = 1
-            member = interaction.user
             if bonus_roles:
                 for r_id_str, extra in bonus_roles.items():
                     r_id = int(r_id_str)
@@ -349,17 +376,76 @@ class Giveaway(commands.Cog, name="Giveaway"):
             participants[str(user_id)] = entries
             self.update_participants(message_id, participants)
             
-            # Count for embed
             participants_count = len(participants)
 
-        # Send response using followup (OUTSIDE the lock!)
-        if entries > 1:
-            await interaction.followup.send(f"Tham gia thành công! Nhờ role đặc biệt bạn có **{entries} lượt** quay.", ephemeral=True)
-        else:
-            await interaction.followup.send("Tham gia thành công! Chúc bạn may mắn.", ephemeral=True)
+            # Try to send a DM telling them they joined successfully
+            try:
+                embed = discord.Embed(
+                    title="🎉 Tham gia Giveaway thành công",
+                    description=f"Bạn đã tham gia thành công giveaway **{giveaway['prize']}**!\n"
+                                f"Lượt quay của bạn: **{entries} lượt** (phụ thuộc vào role của bạn).",
+                    color=discord.Color.green()
+                )
+                await member.send(embed=embed)
+            except discord.Forbidden:
+                pass
 
-        # Schedule the embed update (OUTSIDE the lock, and debounced!)
-        self.schedule_embed_update(interaction.message, giveaway, participants_count)
+        # Schedule the embed update (debounced, outside the lock!)
+        self.schedule_embed_update(message, giveaway, participants_count)
+
+    @commands.Cog.listener()
+    async def on_raw_reaction_remove(self, payload: discord.RawReactionActionEvent):
+        # Ignore if reaction removed by the bot itself
+        if payload.user_id == self.bot.user.id:
+            return
+
+        # Check if the emoji is "🎉"
+        if str(payload.emoji) != "🎉":
+            return
+
+        message_id = payload.message_id
+        giveaway = self.get_giveaway(message_id)
+        if not giveaway or giveaway['ended'] != 0:
+            return
+
+        channel = self.bot.get_channel(payload.channel_id)
+        if not channel:
+            return
+
+        try:
+            message = await channel.fetch_message(message_id)
+        except discord.HTTPException:
+            return
+
+        user_id = payload.user_id
+
+        # Lock per giveaway message ID to prevent race conditions during DB updates
+        lock = self.join_locks.setdefault(message_id, asyncio.Lock())
+        async with lock:
+            # Re-fetch giveaway
+            giveaway = self.get_giveaway(message_id)
+            if not giveaway or giveaway['ended'] != 0:
+                return
+
+            try:
+                participants = json.loads(giveaway['participants'])
+            except Exception:
+                participants = {}
+
+            if isinstance(participants, list):
+                participants = {str(uid): 1 for uid in participants}
+
+            if str(user_id) not in participants:
+                return
+
+            # Remove from dict
+            participants.pop(str(user_id), None)
+            self.update_participants(message_id, participants)
+            
+            participants_count = len(participants)
+
+        # Schedule embed update
+        self.schedule_embed_update(message, giveaway, participants_count)
 
     def parse_giveaway_args(self, args_str: str):
         """Parses arguments string to extract the prize description and flags."""
@@ -481,10 +567,10 @@ class Giveaway(commands.Cog, name="Giveaway"):
             'bonus_roles': json.dumps(bonus_roles)
         }
         embed = self.build_active_embed(giveaway_temp, 0)
-        view = GiveawayView()
 
         try:
-            msg = await channel.send(content="# <a:w1:1526231439425667093> Giveaway Illys Sylus <a:w2:1526231455422877798>", embed=embed, view=view)
+            msg = await channel.send(content="# <a:w1:1526231439425667093> Giveaway Illys Sylus <a:w2:1526231455422877798>", embed=embed)
+            await msg.add_reaction("🎉")
         except discord.Forbidden:
             await ctx.send(f"❌ Bot không có quyền gửi tin nhắn hoặc embed ở kênh {channel.mention}.", delete_after=10)
             return

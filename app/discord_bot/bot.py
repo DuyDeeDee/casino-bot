@@ -118,8 +118,6 @@ class CasinoBot(commands.Bot):
         if not self.get_command("setcooldown"):
             self.add_command(setcooldown)
         await register_cogs(self)
-        from app.discord_bot.cogs.giveaway import GiveawayView
-        self.add_view(GiveawayView())
 
     async def close(self) -> None:
         try:
