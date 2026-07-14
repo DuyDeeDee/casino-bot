@@ -773,7 +773,7 @@ class Giveaway(commands.Cog, name="Giveaway"):
         await self.bot.tree.sync()
         await ctx.send("Synced giveaway slash/hybrid commands!")
 
-    @tasks.loop(seconds=10)
+    @tasks.loop(seconds=5)
     async def giveaway_check_loop(self):
         try:
             now = int(time.time())
