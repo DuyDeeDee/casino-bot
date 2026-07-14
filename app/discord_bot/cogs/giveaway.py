@@ -378,18 +378,6 @@ class Giveaway(commands.Cog, name="Giveaway"):
             
             participants_count = len(participants)
 
-            # Try to send a DM telling them they joined successfully
-            try:
-                embed = discord.Embed(
-                    title="🎉 Tham gia Giveaway thành công",
-                    description=f"Bạn đã tham gia thành công giveaway **{giveaway['prize']}**!\n"
-                                f"Lượt quay của bạn: **{entries} lượt** (phụ thuộc vào role của bạn).",
-                    color=discord.Color.green()
-                )
-                await member.send(embed=embed)
-            except discord.Forbidden:
-                pass
-
         # Schedule the embed update (debounced, outside the lock!)
         self.schedule_embed_update(message, giveaway, participants_count)
 
