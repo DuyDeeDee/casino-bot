@@ -160,6 +160,11 @@ class Giveaway(commands.Cog, name="Giveaway"):
             self.economy.cur.execute("UPDATE giveaways SET ended = ?, winners = ? WHERE id = ?", (ended, json.dumps(winners), msg_id))
             self.economy.conn.commit()
             self.join_locks.pop(msg_id, None)
+            # Cancel any pending debounced updates for this ended giveaway
+            self.pending_embed_updates.pop(msg_id, None)
+            task = self.update_tasks.pop(msg_id, None)
+            if task:
+                task.cancel()
         except Exception as e:
             logger.error(f"Failed to mark giveaway as ended: {e}", exc_info=True)
 
@@ -263,7 +268,10 @@ class Giveaway(commands.Cog, name="Giveaway"):
         self.update_tasks.pop(message_id, None)
         if info:
             message, giveaway, count = info
-            await self.update_giveaway_embed_msg(message, giveaway, count)
+            # Double-check that the giveaway is still active before editing the embed
+            fresh = self.get_giveaway(message_id)
+            if fresh and fresh['ended'] == 0:
+                await self.update_giveaway_embed_msg(message, fresh, count)
 
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
