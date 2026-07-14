@@ -115,7 +115,7 @@ class Giveaway(commands.Cog, name="Giveaway"):
         try:
             self.economy.cur.execute(
                 """INSERT INTO giveaways (id, guild_id, channel_id, message_id, prize, host_id, winner_count, ends_at, ended, required_roles, bonus_roles, participants, winners)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, '[]', '[]')""",
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, '{}', '[]')""",
                 (msg_id, guild_id, channel_id, msg_id, prize, host_id, winner_count, ends_at, json.dumps(required_roles), json.dumps(bonus_roles))
             )
             self.economy.conn.commit()
@@ -270,9 +270,16 @@ class Giveaway(commands.Cog, name="Giveaway"):
             return
 
         user_id = interaction.user.id
-        participants = json.loads(giveaway['participants'])
+        try:
+            participants = json.loads(giveaway['participants'])
+        except Exception:
+            participants = {}
 
-        if user_id in participants:
+        # Backward compatibility: Convert list to dict
+        if isinstance(participants, list):
+            participants = {str(uid): 1 for uid in participants}
+
+        if str(user_id) in participants:
             await interaction.response.send_message("Bạn đã tham gia giveaway này rồi.", ephemeral=True)
             return
 
@@ -290,10 +297,6 @@ class Giveaway(commands.Cog, name="Giveaway"):
                 await interaction.response.send_message(f"Giveaway này chỉ dành cho role: {roles_mentions}", ephemeral=True)
                 return
 
-        # Add user to participants list
-        participants.append(user_id)
-        self.update_participants(message_id, participants)
-
         # Calculate entries
         bonus_roles_str = giveaway.get('bonus_roles', '{}')
         bonus_roles = json.loads(bonus_roles_str) if bonus_roles_str else {}
@@ -310,6 +313,10 @@ class Giveaway(commands.Cog, name="Giveaway"):
                 for r_id, extra in env_bonus.items():
                     if member.get_role(r_id) is not None:
                         entries += extra
+
+        # Add user to participants dict
+        participants[str(user_id)] = entries
+        self.update_participants(message_id, participants)
 
         # Send response
         if entries > 1:
@@ -575,61 +582,57 @@ class Giveaway(commands.Cog, name="Giveaway"):
             await ctx.send(f"❌ Lỗi khi lấy tin nhắn: {e}", delete_after=10)
             return
 
-        participants = json.loads(giveaway['participants'])
+        try:
+            participants = json.loads(giveaway['participants'])
+        except Exception:
+            participants = {}
+
+        # Backward compatibility: Convert list to dict
+        if isinstance(participants, list):
+            participants = {str(uid): 1 for uid in participants}
+
         old_winners = json.loads(giveaway['winners'])
         prize = giveaway['prize']
         host_id = giveaway['host_id']
 
-        # Exclude old winners from the new drawing pool
-        valid_participants = []
-        for user_id in participants:
+        # Build ticket pool from weights stored in participants dict
+        ticket_pool = []
+        for user_id_str, entries in participants.items():
+            try:
+                user_id = int(user_id_str)
+            except ValueError:
+                continue
             if user_id in old_winners:
                 continue
-            member = guild.get_member(user_id)
-            if not member:
-                try:
-                    member = await guild.fetch_member(user_id)
-                except discord.NotFound:
-                    continue # Member left server
-                except Exception:
-                    continue
-            valid_participants.append(member)
-
-        if not valid_participants:
-            await ctx.send("❌ Không còn người tham gia hợp lệ nào khác để quay lại (reroll).", delete_after=10)
-            return
-
-        # Build ticket pool
-        ticket_pool = []
-        required_roles = json.loads(giveaway['required_roles'])
-        bonus_roles_str = giveaway.get('bonus_roles', '{}')
-        bonus_roles = json.loads(bonus_roles_str) if bonus_roles_str else {}
-        env_bonus = self.get_env_bonus_roles()
-        for member in valid_participants:
-            entries = 1
-            if bonus_roles:
-                for r_id_str, extra in bonus_roles.items():
-                    r_id = int(r_id_str)
-                    if member.get_role(r_id) is not None:
-                        entries += extra
-            else:
-                if env_bonus:
-                    for r_id, extra in env_bonus.items():
-                        if member.get_role(r_id) is not None:
-                            entries += extra
             for _ in range(entries):
-                ticket_pool.append(member.id)
+                ticket_pool.append(user_id)
 
         import random
         random.shuffle(ticket_pool)
 
         # Draw new winners
         new_winners = []
-        for user_id in ticket_pool:
-            if user_id not in new_winners:
-                new_winners.append(user_id)
-                if len(new_winners) == count:
-                    break
+        failed_users = set()
+        while len(new_winners) < count and len(ticket_pool) > 0:
+            candidate = ticket_pool.pop()
+            if candidate in new_winners or candidate in failed_users:
+                continue
+            
+            member = guild.get_member(candidate)
+            if not member:
+                try:
+                    member = await guild.fetch_member(candidate)
+                except discord.NotFound:
+                    failed_users.add(candidate)
+                    continue
+                except Exception:
+                    failed_users.add(candidate)
+                    continue
+            new_winners.append(candidate)
+
+        if not new_winners:
+            await ctx.send("❌ Không còn người tham gia hợp lệ nào khác để quay lại (reroll).", delete_after=10)
+            return
 
         # Save to DB
         self.update_winners(message_id, new_winners)
@@ -671,7 +674,15 @@ class Giveaway(commands.Cog, name="Giveaway"):
         except Exception:
             return
 
-        participants = json.loads(giveaway['participants'])
+        try:
+            participants = json.loads(giveaway['participants'])
+        except Exception:
+            participants = {}
+
+        # Backward compatibility: Convert list to dict
+        if isinstance(participants, list):
+            participants = {str(uid): 1 for uid in participants}
+
         winner_count = giveaway['winner_count']
         prize = giveaway['prize']
         host_id = giveaway['host_id']
@@ -689,20 +700,40 @@ class Giveaway(commands.Cog, name="Giveaway"):
             await channel.send(f" Không có ai tham gia giveaway **{prize}**.")
             return
 
-        # Fetch all members in participants to check if they are still in server
-        valid_participants = []
-        for user_id in participants:
-            member = guild.get_member(user_id)
+        # Build the ticket pool
+        ticket_pool = []
+        for user_id_str, entries in participants.items():
+            try:
+                user_id = int(user_id_str)
+                for _ in range(entries):
+                    ticket_pool.append(user_id)
+            except ValueError:
+                continue
+
+        import random
+        random.shuffle(ticket_pool)
+
+        # Draw winners and verify they are still in server
+        winners = []
+        failed_users = set()
+        while len(winners) < winner_count and len(ticket_pool) > 0:
+            candidate = ticket_pool.pop()
+            if candidate in winners or candidate in failed_users:
+                continue
+
+            member = guild.get_member(candidate)
             if not member:
                 try:
-                    member = await guild.fetch_member(user_id)
+                    member = await guild.fetch_member(candidate)
                 except discord.NotFound:
-                    continue # Member left server
-                except Exception:
+                    failed_users.add(candidate)
                     continue
-            valid_participants.append(member)
+                except Exception:
+                    failed_users.add(candidate)
+                    continue
+            winners.append(candidate)
 
-        if not valid_participants:
+        if not winners:
             self.mark_ended(message_id, ended=1)
             embed = discord.Embed(title="# <a:thanhgia:1526231085221023845>**Giveaway Kết Thúc**<a:thanhgia:1526231085221023845>", color=discord.Color.purple())
             embed.description = f"### {prize}\n\n Không có người tham gia hợp lệ (người tham gia đã rời server)."
@@ -712,37 +743,6 @@ class Giveaway(commands.Cog, name="Giveaway"):
             await message.edit(embed=embed, view=None)
             await channel.send(f" Không có ai thắng giveaway **{prize}** vì tất cả người tham gia đã rời server.")
             return
-
-        # Build the ticket pool
-        ticket_pool = []
-        bonus_roles_str = giveaway.get('bonus_roles', '{}')
-        bonus_roles = json.loads(bonus_roles_str) if bonus_roles_str else {}
-        env_bonus = self.get_env_bonus_roles()
-        for member in valid_participants:
-            entries = 1
-            if bonus_roles:
-                for r_id_str, extra in bonus_roles.items():
-                    r_id = int(r_id_str)
-                    if member.get_role(r_id) is not None:
-                        entries += extra
-            else:
-                if env_bonus:
-                    for r_id, extra in env_bonus.items():
-                        if member.get_role(r_id) is not None:
-                            entries += extra
-            for _ in range(entries):
-                ticket_pool.append(member.id)
-
-        # Draw winners
-        import random
-        random.shuffle(ticket_pool)
-
-        winners = []
-        for user_id in ticket_pool:
-            if user_id not in winners:
-                winners.append(user_id)
-                if len(winners) == winner_count:
-                    break
 
         # Save to DB
         self.mark_ended(message_id, ended=1, winners=winners)
