@@ -360,6 +360,12 @@ SHOP_ITEMS = {
         "cost": 0,
         "currency": "gold",
         "description": "Nhẫn giới hạn. Buff: +15% thân mật, +12% lương, giảm 15% bị cướp, +5% tiền tiêu vặt phu thê, Quản lý tự động vĩnh viễn, Ước nguyện tri kỷ hàng ngày."
+    },
+    "ring_nhankat": {
+        "name": "<:NhanKat:1527628223364464650>Nhẫn Kat ",
+        "cost": 0,
+        "currency": "gold",
+        "description": "Nhẫn độc quyền không thể mua. Buff: +8% điểm thân mật, +8% lương, giảm 10% bị cướp."
     }
 }
 
@@ -932,7 +938,8 @@ class ShopView(discord.ui.View):
                 color=discord.Color.magenta()
             )
             special_ring_keys = [
-                "ring_eternal_butterfly"
+                "ring_eternal_butterfly",
+                "ring_nhankat"
             ]
             for item_id in special_ring_keys:
                 if item_id in SHOP_ITEMS:
@@ -2206,6 +2213,10 @@ class Simulator(commands.Cog):
             await ctx.send("❌ **Nhẫn Song Điệp Vĩnh Hằng là quà tặng độc quyền, không thể mua từ cửa hàng!**")
             return
 
+        if item_id == "ring_nhankat":
+            await ctx.send("❌ **Nhẫn Kat là nhẫn độc quyền, không thể mua từ cửa hàng!**")
+            return
+
         user_id = ctx.author.id
         item = SHOP_ITEMS[item_id]
         
@@ -3064,13 +3075,15 @@ class Simulator(commands.Cog):
         bodyguard_active = target_upgrades[2] > now
         success_rate = 0.08 if bodyguard_active else 0.40
 
-        # Check ring protection modifiers (ring_angel reduces by 40%, ring_gothic reduces by 20%, ring_eternal_butterfly reduces by 15%)
+        # Check ring protection modifiers (ring_angel reduces by 40%, ring_gothic reduces by 20%, ring_eternal_butterfly reduces by 15%, ring_nhankat reduces by 10%)
         has_angel_ring = any(item == 'ring_angel' and qty > 0 for item, qty in target_inventory) or \
                          any(marriage[2] == 'ring_angel' for marriage in target_marriages)
         has_gothic_ring = any(item == 'ring_gothic' and qty > 0 for item, qty in target_inventory) or \
                           any(marriage[2] == 'ring_gothic' for marriage in target_marriages)
         has_butterfly_ring = any(item == 'ring_eternal_butterfly' and qty > 0 for item, qty in target_inventory) or \
                              any(marriage[2] == 'ring_eternal_butterfly' for marriage in target_marriages)
+        has_nhankat_ring = any(item == 'ring_nhankat' and qty > 0 for item, qty in target_inventory) or \
+                           any(marriage[2] == 'ring_nhankat' for marriage in target_marriages)
                           
         if has_angel_ring:
             success_rate *= 0.60
@@ -3078,6 +3091,8 @@ class Simulator(commands.Cog):
             success_rate *= 0.80
         elif has_butterfly_ring:
             success_rate *= 0.85
+        elif has_nhankat_ring:
+            success_rate *= 0.90
 
         if random.random() < success_rate:
             # Success: steal a random 1% to 5% of target's money

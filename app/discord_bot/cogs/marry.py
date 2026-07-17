@@ -32,7 +32,8 @@ RINGS = {
     "ring_gothic": "Nhẫn Hắc Dạ Gothic 🖤",
     "ring_angel": "Nhẫn Cánh Thần Sapphire 👼",
     "ring_divine": "Nhẫn Hào Quang Vĩnh Cửu 🌌",
-    "ring_eternal_butterfly": "Nhẫn Song Điệp Vĩnh Hằng 🦋"
+    "ring_eternal_butterfly": "Nhẫn Song Điệp Vĩnh Hằng 🦋",
+    "ring_nhankat": "Nhẫn Kat 🌸"
 }
 
 RING_IMAGES = {
@@ -49,7 +50,8 @@ RING_IMAGES = {
     "ring_gothic": "Nhẫn Hắc Dạ.png",
     "ring_angel": "Nhẫn Cánh Thần Sapphire.png",
     "ring_divine": "Nhẫn Hào Quang Vĩnh Cửu.png",
-    "ring_eternal_butterfly": "Nhan_sal.png"
+    "ring_eternal_butterfly": "Nhan_sal.png",
+    "ring_nhankat": "NhanKat.png"
 }
 
 # Sweet sayings for interactions
@@ -598,7 +600,7 @@ class Marry(commands.Cog):
             await ctx.send("❌ **Bạn không sở hữu nhẫn cưới nào!** Hãy sử dụng `i?shop` để mua một chiếc nhẫn cầu hôn trước.")
             return
             
-        # Prioritize divine > angel > gothic > sunburst > sapphire > ruby > citrine > cupid > amethyst > emerald > aquamarine > quartz > grass
+        # Prioritize divine > angel > gothic > sunburst > sapphire > ruby > citrine > nhankat > cupid > amethyst > emerald > aquamarine > quartz > grass
         ring_priority = [
             "ring_eternal_butterfly",
             "ring_divine",
@@ -608,6 +610,7 @@ class Marry(commands.Cog):
             "ring_sapphire",
             "ring_ruby",
             "ring_citrine",
+            "ring_nhankat",
             "ring_cupid",
             "ring_amethyst",
             "ring_emerald",
@@ -970,6 +973,7 @@ class Marry(commands.Cog):
                 "ring_sapphire",
                 "ring_ruby",
                 "ring_citrine",
+                "ring_nhankat",
                 "ring_cupid",
                 "ring_amethyst",
                 "ring_emerald",
@@ -1247,6 +1251,7 @@ class Marry(commands.Cog):
             "ring_emerald": 0.04,
             "ring_amethyst": 0.05,
             "ring_cupid": 0.07,
+            "ring_nhankat": 0.08,
             "ring_citrine": 0.09,
             "ring_ruby": 0.12,
             "ring_sapphire": 0.15,

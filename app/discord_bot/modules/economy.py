@@ -2553,6 +2553,7 @@ class Economy:
             "ring_emerald": (1.04, 0.005),
             "ring_amethyst": (1.05, 0.007),
             "ring_cupid": (1.07, 0.008),
+            "ring_nhankat": (1.08, 0.009),
             "ring_citrine": (1.09, 0.010),
             "ring_ruby": (1.12, 0.012),
             "ring_sapphire": (1.15, 0.015),
