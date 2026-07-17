@@ -646,7 +646,19 @@ class GiaiMaGameView(discord.ui.View):
         
     async def update_board(self):
         embed = make_game_embed(self)
-        await self.message.edit(embed=embed, view=self)
+        if self.guesses:
+            img_buf = render_guess_image(
+                self.guesses[-1][0],
+                self.guesses[-1][1],
+                difficulty=self.difficulty,
+                attempt=len(self.guesses),
+                max_attempts=self.cfg["guesses"]
+            )
+            file = discord.File(img_buf, filename="guess.png")
+            embed.set_image(url="attachment://guess.png")
+            await self.message.edit(embed=embed, view=self, attachments=[file])
+        else:
+            await self.message.edit(embed=embed, view=self)
         
     async def on_timeout(self):
         if not self.game_finished:
