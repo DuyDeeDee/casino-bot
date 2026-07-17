@@ -57,6 +57,54 @@ def load_rajdhani_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFon
                 
     return ImageFont.load_default()
 
+def get_roboto_font_path() -> Path:
+    """Gets local path to Roboto font, downloading it if not present."""
+    font_dir = Path(config.storage.data_dir) / "fonts"
+    font_dir.mkdir(parents=True, exist_ok=True)
+    
+    font_path = font_dir / "Roboto-Bold.ttf"
+    
+    if not font_path.exists():
+        url = "https://github.com/googlefonts/roboto-2/raw/main/src/hinted/Roboto-Bold.ttf"
+        try:
+            logger.info(f"Downloading Roboto-Bold font from {url} to {font_path}...")
+            urllib.request.urlretrieve(url, str(font_path))
+        except Exception as e:
+            logger.error(f"Failed to download font Roboto-Bold: {e}")
+            
+    return font_path
+
+def load_roboto_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
+    font_path = get_roboto_font_path()
+    if font_path.exists():
+        try:
+            return ImageFont.truetype(str(font_path), size)
+        except Exception:
+            pass
+            
+    # fallbacks
+    fallbacks = []
+    if os.name == 'nt':  # Windows
+        fallbacks.extend(["arialbd.ttf", "segoeuib.ttf"])
+    else:
+        fallbacks.extend(["DejaVuSans-Bold.ttf", "LiberationSans-Bold.ttf", "FreeSansBold.ttf"])
+        
+    for f in fallbacks:
+        try:
+            return ImageFont.truetype(f, size)
+        except Exception:
+            try:
+                if os.name == 'nt':
+                    p = Path("C:/Windows/Fonts") / f
+                else:
+                    p = Path("/usr/share/fonts/truetype") / f
+                if p.exists():
+                    return ImageFont.truetype(str(p), size)
+            except Exception:
+                pass
+                
+    return ImageFont.load_default()
+
 def render_guess_image(
     digits: list,
     colors: list,
@@ -101,15 +149,15 @@ def render_guess_image(
     draw = ImageDraw.Draw(image)
     
     # Load fonts
-    font_header_left = load_rajdhani_font(24)
-    font_header_right = load_rajdhani_font(18)
-    font_digit = load_rajdhani_font(52)
+    font_header_left = load_roboto_font(20)   # Roboto supports Vietnamese!
+    font_header_right = load_roboto_font(16)  # Roboto supports Vietnamese!
+    font_digit = load_rajdhani_font(52)       # Rajdhani ONLY for digits!
     
     # Render Header Text
-    # Left Header: Game Title
-    left_title = "🔐 GIẢI MÃ BÍ MẬT"
+    # Left Header: Game Title (No emojis, avoiding boxes)
+    left_title = "GIẢI MÃ BÍ MẬT"
     if difficulty == "boss":
-        left_title = "👾 BOSS SERVER"
+        left_title = "BOSS SERVER"
     draw.text((40, 20), left_title, fill=(200, 168, 75, 255), font=font_header_left) # Golden Accent
     
     # Right Header: Difficulty and attempt info
