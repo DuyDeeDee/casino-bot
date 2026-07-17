@@ -49,6 +49,7 @@ from app.discord_bot.cogs import (
     Uno,
     Tower,
     Giveaway,
+    GiaiMa,
 )
 
 from app.discord_bot.modules.economy import Economy
@@ -80,6 +81,7 @@ COGS = (
     Uno,
     Tower,
     Giveaway,
+    GiaiMa,
 )
 
 

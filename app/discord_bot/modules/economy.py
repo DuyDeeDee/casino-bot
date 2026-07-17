@@ -11,7 +11,7 @@ from app.config import config
 Entry = Tuple[int, int, int]
 DATABASE_PATH = Path(config.storage.database_path)
 LEGACY_DATABASE_PATH = Path(__file__).resolve().parents[3] / "economy.db"
-SCHEMA_VERSION = 34
+SCHEMA_VERSION = 35
 
 
 logger = logging.getLogger(__name__)
@@ -633,6 +633,25 @@ def _migration_34_add_marry_interest_and_wish_columns(cur: sqlite3.Cursor) -> No
         pass
 
 
+def _migration_35_add_giaima_table(cur: sqlite3.Cursor) -> None:
+    try:
+        cur.execute(
+            """CREATE TABLE IF NOT EXISTS user_giaima (
+            user_id INTEGER NOT NULL PRIMARY KEY,
+            plays INTEGER NOT NULL DEFAULT 0,
+            wins INTEGER NOT NULL DEFAULT 0,
+            losses INTEGER NOT NULL DEFAULT 0,
+            profit INTEGER NOT NULL DEFAULT 0,
+            streak INTEGER NOT NULL DEFAULT 0,
+            max_streak INTEGER NOT NULL DEFAULT 0,
+            last_free_play INTEGER NOT NULL DEFAULT 0,
+            achievements TEXT NOT NULL DEFAULT '[]'
+        )"""
+        )
+    except sqlite3.OperationalError:
+        pass
+
+
 MIGRATIONS: dict[int, Callable[[sqlite3.Cursor], None]] = {
     1: _migration_1_create_economy,
     2: _migration_2_add_indexes,
@@ -668,6 +687,7 @@ MIGRATIONS: dict[int, Callable[[sqlite3.Cursor], None]] = {
     32: _migration_32_add_user_titles_table,
     33: _migration_33_add_achievements_log_table,
     34: _migration_34_add_marry_interest_and_wish_columns,
+    35: _migration_35_add_giaima_table,
 }
 
 
@@ -786,6 +806,7 @@ class Economy:
         self.cur.execute("DELETE FROM user_simulator_stats")
         self.cur.execute("DELETE FROM user_roulette")
         self.cur.execute("DELETE FROM user_tower")
+        self.cur.execute("DELETE FROM user_giaima")
         self.conn.commit()
 
     def has_claimed_start(self, user_id: int) -> bool:
@@ -2223,6 +2244,104 @@ class Economy:
         if updates:
             params.append(user_id)
             query = f"UPDATE user_tower SET {', '.join(updates)} WHERE user_id=?"
+            self.cur.execute(query, tuple(params))
+            self.conn.commit()
+
+    def get_giaima_stats(self, user_id: int) -> dict:
+        self._ensure_entry(user_id)
+        self.cur.execute(
+            """SELECT plays, wins, losses, profit, streak, max_streak, last_free_play, achievements 
+               FROM user_giaima WHERE user_id=?""",
+            (user_id,),
+        )
+        row = self.cur.fetchone()
+        if row is None:
+            self.cur.execute(
+                """INSERT OR IGNORE INTO user_giaima(user_id, plays, wins, losses, profit, streak, max_streak, last_free_play, achievements) 
+                   VALUES(?, 0, 0, 0, 0, 0, 0, 0, '[]')""",
+                (user_id,),
+            )
+            self.conn.commit()
+            return {
+                "plays": 0,
+                "wins": 0,
+                "losses": 0,
+                "profit": 0,
+                "streak": 0,
+                "max_streak": 0,
+                "last_free_play": 0,
+                "achievements": [],
+            }
+        
+        import json
+        try:
+            achievements = json.loads(row[7])
+        except Exception:
+            achievements = []
+            
+        return {
+            "user_id": user_id,
+            "plays": row[0],
+            "wins": row[1],
+            "losses": row[2],
+            "profit": row[3],
+            "streak": row[4],
+            "max_streak": row[5],
+            "last_free_play": row[6],
+            "achievements": achievements,
+        }
+
+    def update_giaima_stats(
+        self,
+        user_id: int,
+        *,
+        plays: int = 0,
+        wins: int = 0,
+        losses: int = 0,
+        profit: int = 0,
+        streak: int | None = None,
+        max_streak: int | None = None,
+        last_free_play: int | None = None,
+        achievements: list | None = None,
+    ) -> None:
+        self._ensure_entry(user_id)
+        self.get_giaima_stats(user_id)
+        
+        updates = []
+        params = []
+        
+        if plays != 0:
+            updates.append("plays = plays + ?")
+            params.append(plays)
+        if wins != 0:
+            updates.append("wins = wins + ?")
+            params.append(wins)
+        if losses != 0:
+            updates.append("losses = losses + ?")
+            params.append(losses)
+        if profit != 0:
+            updates.append("profit = profit + ?")
+            params.append(profit)
+        if streak is not None:
+            updates.append("streak = ?")
+            params.append(streak)
+        if max_streak is not None:
+            updates.append("max_streak = ?")
+            params.append(max_streak)
+        if last_free_play is not None:
+            updates.append("last_free_play = ?")
+            params.append(last_free_play)
+            
+        import json
+        if achievements is not None:
+            updates.append("achievements = ?")
+            params.append(json.dumps(achievements))
+            for ach in achievements:
+                self.log_achievement_unlock(user_id, "GiaiMa", ach)
+            
+        if updates:
+            params.append(user_id)
+            query = f"UPDATE user_giaima SET {', '.join(updates)} WHERE user_id=?"
             self.cur.execute(query, tuple(params))
             self.conn.commit()
 

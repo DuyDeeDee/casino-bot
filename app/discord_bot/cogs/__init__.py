@@ -24,6 +24,7 @@ from .marry import Marry
 from .uno import Uno
 from .tower import Tower
 from .giveaway import Giveaway
+from .giaima import GiaiMa
 
 
 
