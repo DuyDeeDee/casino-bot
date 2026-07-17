@@ -57,13 +57,20 @@ def load_rajdhani_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFon
                 
     return ImageFont.load_default()
 
-def render_guess_image(digits: list, colors: list) -> io.BytesIO:
+def render_guess_image(
+    digits: list,
+    colors: list,
+    difficulty: str = "normal",
+    attempt: int = 1,
+    max_attempts: int = 5
+) -> io.BytesIO:
     """
     Renders an image of the guess digits with their corresponding colors:
     - green: correct digit & correct position
     - yellow: correct digit wrong position
     - gray: incorrect digit
     - blue: wildcard match
+    Also renders a modern cyberpunk game card layout with header information.
     """
     length = len(digits)
     
@@ -73,28 +80,73 @@ def render_guess_image(digits: list, colors: list) -> io.BytesIO:
     margin = 40
     
     width = length * box_size + (length - 1) * gap + margin * 2
-    height = 200
+    height = 250  # Increased height to fit header
     
     # Base dark background #1e1e2e
     image = Image.new("RGBA", (width, height), (30, 30, 46, 255))
     draw = ImageDraw.Draw(image)
     
-    # Radial purple gradient glow in the center
-    cx, cy = width / 2, height / 2
-    max_radius = max(width, height) * 0.75
+    # Radial purple gradient glow in the center of digit boxes area
+    cx, cy = width / 2, 65 + (height - 65) / 2
+    max_radius = max(width, height - 65) * 0.8
     for r in range(int(max_radius), 0, -4):
         alpha = int(24 * (1 - (r / max_radius) ** 2))
         if alpha > 0:
             glow_layer = Image.new("RGBA", (width, height), (0, 0, 0, 0))
             glow_draw = ImageDraw.Draw(glow_layer)
-            # Violet color: (139, 92, 246)
             glow_draw.ellipse([cx - r, cy - r, cx + r, cy + r], fill=(139, 92, 246, alpha))
             image = Image.alpha_composite(image, glow_layer)
             
     # Re-draw on the composited image
     draw = ImageDraw.Draw(image)
     
-    # Color palette
+    # Load fonts
+    font_header_left = load_rajdhani_font(24)
+    font_header_right = load_rajdhani_font(18)
+    font_digit = load_rajdhani_font(52)
+    
+    # Render Header Text
+    # Left Header: Game Title
+    left_title = "🔐 GIẢI MÃ BÍ MẬT"
+    if difficulty == "boss":
+        left_title = "👾 BOSS SERVER"
+    draw.text((40, 20), left_title, fill=(200, 168, 75, 255), font=font_header_left) # Golden Accent
+    
+    # Right Header: Difficulty and attempt info
+    diff_name = "THƯỜNG"
+    diff_color = (255, 255, 255, 255)
+    if difficulty == "easy":
+        diff_name = "DỄ"
+        diff_color = (46, 204, 113, 255) # Green
+    elif difficulty == "normal":
+        diff_name = "THƯỜNG"
+        diff_color = (241, 196, 15, 255) # Gold
+    elif difficulty == "hard":
+        diff_name = "KHÓ"
+        diff_color = (230, 126, 34, 255) # Orange
+    elif difficulty == "nightmare":
+        diff_name = "ÁC MỘNG"
+        diff_color = (231, 76, 60, 255) # Red
+    elif difficulty == "boss":
+        diff_name = "JACKPOT"
+        diff_color = (155, 89, 182, 255) # Purple
+        
+    if difficulty == "boss":
+        right_text = "MẬT MÃ TOÀN SERVER"
+    else:
+        right_text = f"{diff_name} • LƯỢT {attempt}/{max_attempts}"
+        
+    # Draw right text aligned to right
+    try:
+        draw.text((width - 40, 24), right_text, fill=diff_color, font=font_header_right, anchor="ra")
+    except Exception:
+        text_w = draw.textlength(right_text, font=font_header_right)
+        draw.text((width - 40 - text_w, 24), right_text, fill=diff_color, font=font_header_right)
+        
+    # Divider line
+    draw.line([(40, 58), (width - 40, 58)], fill=(69, 71, 90, 255), width=2) # #45475a
+    
+    # Color palette for digit boxes
     color_map = {
         "green": {
             "fill": (40, 167, 69, 255),    # #28a745
@@ -114,12 +166,9 @@ def render_guess_image(digits: list, colors: list) -> io.BytesIO:
         }
     }
     
-    # Load fonts
-    font_digit = load_rajdhani_font(52)
-    
-    # Centering math
+    # Centering math for boxes in body
     start_x = (width - (length * box_size + (length - 1) * gap)) / 2
-    y_pos = (height - box_size) / 2
+    y_pos = 58 + (height - 58 - box_size) / 2
     
     for i in range(length):
         digit = str(digits[i])

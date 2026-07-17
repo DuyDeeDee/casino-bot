@@ -726,7 +726,13 @@ class GiaiMaGameView(discord.ui.View):
             achievements=new_achievements
         )
         
-        img_buf = render_guess_image(self.guesses[-1][0], self.guesses[-1][1])
+        img_buf = render_guess_image(
+            self.guesses[-1][0],
+            self.guesses[-1][1],
+            difficulty=self.difficulty,
+            attempt=len(self.guesses),
+            max_attempts=self.cfg["guesses"]
+        )
         emoji_str = " ".join(get_color_emoji(c) for c in self.guesses[-1][1])
         
         desc = (
@@ -803,7 +809,13 @@ class GiaiMaGameView(discord.ui.View):
         )
         
         if self.guesses:
-            img_buf = render_guess_image(self.guesses[-1][0], self.guesses[-1][1])
+            img_buf = render_guess_image(
+                self.guesses[-1][0],
+                self.guesses[-1][1],
+                difficulty=self.difficulty,
+                attempt=len(self.guesses),
+                max_attempts=self.cfg["guesses"]
+            )
             file = discord.File(img_buf, filename="guess.png")
             embed.set_image(url="attachment://guess.png")
             await self.message.edit(embed=embed, view=self, attachments=[file])
@@ -997,7 +1009,13 @@ class GiaiMaPvPMatchView(discord.ui.View):
             dig_str = " ".join(f"[{d}]" for d in g_dig)
             history_text += f"Lượt {idx+1}: {dig_str}  →  {emoji_str}\n"
             
-        img_buf = render_guess_image(guesses[-1][0], guesses[-1][1])
+        img_buf = render_guess_image(
+            guesses[-1][0],
+            guesses[-1][1],
+            difficulty="normal",
+            attempt=len(guesses),
+            max_attempts=5
+        )
         file = discord.File(img_buf, filename="my_guess.png")
         
         await interaction.followup.send(content=history_text, file=file, ephemeral=True)
@@ -1031,7 +1049,13 @@ class GiaiMaPvPMatchView(discord.ui.View):
             dig_str = " ".join(f"[{d}]" for d in g_dig)
             history_text += f"Lượt {idx+1}: {dig_str}  →  {emoji_str}\n"
             
-        img_buf = render_guess_image(guess_digits, colors)
+        img_buf = render_guess_image(
+            guess_digits,
+            colors,
+            difficulty="normal",
+            attempt=len(guesses),
+            max_attempts=5
+        )
         file = discord.File(img_buf, filename="guess.png")
         
         await interaction.followup.send(content=history_text, file=file, ephemeral=True)
@@ -1215,7 +1239,7 @@ class GiaiMaBossInputModal(discord.ui.Modal):
         jackpot_str = self.cog.economy.get_setting("giaima_boss_jackpot") or "100000"
         jackpot = int(jackpot_str)
         
-        img_buf = render_guess_image(guess_digits, colors)
+        img_buf = render_guess_image(guess_digits, colors, difficulty="boss")
         file = discord.File(img_buf, filename="boss_guess.png")
         
         if is_win:
