@@ -23,36 +23,36 @@ DIFF_CONFIGS = {
         "emoji": "🟢",
         "length": 4,
         "duplicates": False,
-        "guesses": 6,
-        "time_limit": 300,  # 5 minutes
-        "multiplier": 1.2
+        "guesses": 5,          # Giảm từ 6 xuống 5
+        "time_limit": 120,      # Giảm từ 5 phút xuống 2 phút (120 giây)
+        "multiplier": 1.1       # Giảm từ 1.2 xuống 1.1
     },
     "normal": {
         "name": "Thường",
         "emoji": "🟡",
         "length": 5,
         "duplicates": False,
-        "guesses": 5,
-        "time_limit": 300,  # 5 minutes
-        "multiplier": 2.2
+        "guesses": 4,          # Giảm từ 5 xuống 4
+        "time_limit": 120,      # Giảm từ 5 phút xuống 2 phút (120 giây)
+        "multiplier": 1.6       # Giảm từ 2.2 xuống 1.6
     },
     "hard": {
         "name": "Khó",
         "emoji": "🟠",
         "length": 5,
         "duplicates": True,
-        "guesses": 4,
-        "time_limit": 180,  # 3 minutes
-        "multiplier": 4.0
+        "guesses": 3,          # Giảm từ 4 xuống 3
+        "time_limit": 90,       # Giảm từ 3 phút xuống 90 giây
+        "multiplier": 2.8       # Giảm từ 4.0 xuống 2.8
     },
     "nightmare": {
         "name": "Ác Mộng",
         "emoji": "🔴",
         "length": 6,
         "duplicates": True,
-        "guesses": 3,
-        "time_limit": 120,  # 2 minutes
-        "multiplier": 8.0
+        "guesses": 3,          # Giữ nguyên 3 lượt đoán nhưng thời gian ít hơn nhiều
+        "time_limit": 60,       # Giảm từ 2 phút xuống 60 giây
+        "multiplier": 5.0       # Giảm từ 8.0 xuống 5.0
     }
 }
 
@@ -540,6 +540,10 @@ class GiaiMaGameView(discord.ui.View):
         
     @discord.ui.button(label="💡 Mua Gợi Ý", style=discord.ButtonStyle.primary, custom_id="giaima_game_hint")
     async def hint_click(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.difficulty in ["hard", "nightmare"]:
+            await interaction.response.send_message("❌ Chế độ Khó và Ác Mộng không hỗ trợ gợi ý!", ephemeral=True)
+            return
+
         elapsed = time.time() - self.start_time
         if elapsed >= self.cfg["time_limit"]:
             await self.process_loss(reason="timeout")
@@ -554,12 +558,12 @@ class GiaiMaGameView(discord.ui.View):
                 discord.SelectOption(
                     label="Gợi ý nhẹ",
                     value="light",
-                    description=f"Giá: {1000 if self.is_free_play else int(1000 + 0.1 * self.bet_amount):,} VND - Tiết lộ 1 vị trí"
+                    description=f"Giá: {2000 if self.is_free_play else int(2000 + 0.2 * self.bet_amount):,} VND - Tiết lộ 1 vị trí"
                 ),
                 discord.SelectOption(
                     label="Gợi ý mạnh",
                     value="strong",
-                    description=f"Giá: {2000 if self.is_free_play else int(2000 + 0.2 * self.bet_amount):,} VND - Loại trừ 2 số sai"
+                    description=f"Giá: {5000 if self.is_free_play else int(5000 + 0.4 * self.bet_amount):,} VND - Loại trừ 2 số sai"
                 )
             ]
         )
@@ -571,9 +575,9 @@ class GiaiMaGameView(discord.ui.View):
             await inter.response.defer(ephemeral=True)
             
             hint_type = select.values[0]
-            price = 1000 if hint_type == "light" else 2000
+            price = 2000 if hint_type == "light" else 5000
             if not self.is_free_play:
-                price = int(1000 + 0.1 * self.bet_amount) if hint_type == "light" else int(2000 + 0.2 * self.bet_amount)
+                price = int(2000 + 0.2 * self.bet_amount) if hint_type == "light" else int(5000 + 0.4 * self.bet_amount)
                 
             user_money = self.cog.economy.get_entry(self.user.id)[1]
             if user_money < price:
@@ -697,15 +701,15 @@ class GiaiMaGameView(discord.ui.View):
         time_ratio = remaining / self.cfg["time_limit"]
         
         combo_bonus = 0.1 * min(self.streak, 5)
-        hint_penalty = 0.15 * self.hints_used
+        hint_penalty = 0.3 * self.hints_used
         
         payout = 0
         net_mult = 0
         if self.is_free_play:
-            net_mult = (1 + combo_bonus) * (1 - hint_penalty) * (0.7 + 0.3 * guesses_ratio) * (0.8 + 0.2 * time_ratio)
+            net_mult = (1 + combo_bonus) * (1 - hint_penalty) * (0.4 + 0.6 * guesses_ratio) * (0.8 + 0.2 * time_ratio)
             payout = int(500 * net_mult)
         else:
-            net_mult = self.cfg["multiplier"] * (1 + combo_bonus) * (1 - hint_penalty) * (0.7 + 0.3 * guesses_ratio) * (0.8 + 0.2 * time_ratio)
+            net_mult = self.cfg["multiplier"] * (1 + combo_bonus) * (1 - hint_penalty) * (0.4 + 0.6 * guesses_ratio) * (0.8 + 0.2 * time_ratio)
             payout = int(self.bet_amount * net_mult)
             
         payout = max(0, payout)
@@ -1361,10 +1365,10 @@ class GiaiMa(commands.Cog, name="GiaiMa"):
                 "⬛ **Xám:** Số không có trong mật mã.\n"
                 "🟦 **Xanh dương (Nightmare):** Số thuộc về Wildcard trúng bất kỳ vị trí nào.\n\n"
                 "⚙️ **Bảng độ khó & Hệ số thưởng:**\n"
-                "• 🟢 **Dễ:** 4 chữ số, không trùng lặp | 5 phút | 6 lượt | `x1.2`\n"
-                "• 🟡 **Thường:** 5 chữ số, không trùng lặp | 5 phút | 5 lượt | `x2.2`\n"
-                "• 🟠 **Khó:** 5 chữ số, có trùng lặp | 3 phút | 4 lượt | `x4.0`\n"
-                "• 🔴 **Ác Mộng:** 6 chữ số, có trùng lặp | 2 phút | 3 lượt | `x8.0`\n\n"
+                "• 🟢 **Dễ:** 4 chữ số, không trùng lặp | 2 phút | 5 lượt | `x1.1`\n"
+                "• 🟡 **Thường:** 5 chữ số, không trùng lặp | 2 phút | 4 lượt | `x1.6`\n"
+                "• 🟠 **Khó:** 5 chữ số, có trùng lặp | 1.5 phút | 3 lượt | `x2.8` (Không gợi ý)\n"
+                "• 🔴 **Ác Mộng:** 6 chữ số, có trùng lặp | 1 phút | 3 lượt | `x5.0` (Không gợi ý)\n\n"
                 "👉 Hãy click vào một trong các nút dưới đây để bắt đầu chơi hoặc xem xếp hạng!"
             ),
             color=discord.Color.purple()
