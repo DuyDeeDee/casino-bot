@@ -21,10 +21,7 @@ class Afk(commands.Cog, name="afk"):
         user_id = ctx.author.id
         self._afk[user_id] = {"reason": reason, "time": time.time()}
 
-        embed = discord.Embed(
-            description=f"**{ctx.author.mention}** I set your AFK: {reason}",
-        )
-        await ctx.send(embed=embed)
+        await ctx.send(f"{ctx.author.mention} I set your AFK: {reason}")
 
     # ─────────────────────────────────────────────
     # Listener: on_message
@@ -45,11 +42,11 @@ class Afk(commands.Cog, name="afk"):
             afk_since = self._afk[author_id]["time"]
             if time.time() - afk_since > 3:
                 del self._afk[author_id]
-                embed = discord.Embed(
-                    description=f"✅ **{message.author.mention}** AFK của bạn đã được xóa!",
-                )
                 try:
-                    await message.channel.send(embed=embed, delete_after=8)
+                    await message.channel.send(
+                        f"✅ {message.author.mention} AFK của bạn đã được xóa!",
+                        delete_after=8,
+                    )
                 except Exception:
                     pass
                 return  # không cần kiểm tra mention dưới nữa
@@ -83,15 +80,10 @@ class Afk(commands.Cog, name="afk"):
                     days = elapsed // 86400
                     time_str = f"{days} ngày"
 
-                embed = discord.Embed(
-                    description=(
-                        f"💤 **{member.display_name}** hiện đang AFK: {reason}\n"
-                        f"⏱️ Đã AFK được **{time_str}**."
-                    ),
-                )
-                embed.set_thumbnail(url=member.display_avatar.url)
                 try:
-                    await message.channel.send(embed=embed)
+                    await message.channel.send(
+                        f"💤 **{member.display_name}** hiện đang AFK: {reason} — Đã AFK được **{time_str}**."
+                    )
                 except Exception:
                     pass
                 notified.add(member.id)
