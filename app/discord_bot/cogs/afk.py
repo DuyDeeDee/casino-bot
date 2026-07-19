@@ -21,7 +21,7 @@ class Afk(commands.Cog, name="afk"):
         user_id = ctx.author.id
         self._afk[user_id] = {"reason": reason, "time": time.time()}
 
-        await ctx.send(f"{ctx.author.mention} I set your AFK: {reason}")
+        await ctx.send(f"{ctx.author.mention} <a:heartw:1528469641603579924>I set your AFK: {reason}")
 
     # ─────────────────────────────────────────────
     # Listener: on_message
