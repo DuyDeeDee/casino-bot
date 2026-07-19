@@ -1,3 +1,4 @@
+from .afk import Afk
 from .blackjack import Blackjack
 from .gambling_helpers import GamblingHelpers
 from .handlers import Handlers

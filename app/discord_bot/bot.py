@@ -25,6 +25,7 @@ discord.Embed.colour = _forced_color
 
 from app.config import config
 from app.discord_bot.cogs import (
+    Afk,
     Blackjack,
     GamblingHelpers,
     Handlers,
@@ -57,6 +58,7 @@ from app.discord_bot.modules.economy import Economy
 logger = logging.getLogger(__name__)
 
 COGS = (
+    Afk,
     Blackjack,
     GamblingHelpers,
     Handlers,
