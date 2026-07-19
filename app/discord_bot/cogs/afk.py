@@ -44,7 +44,7 @@ class Afk(commands.Cog, name="afk"):
                 del self._afk[author_id]
                 try:
                     await message.channel.send(
-                        f"✅ {message.author.mention} AFK của bạn đã được xóa!",
+                        f"<a:lly_ty2:1528463592876277772> {message.author.mention} AFK của bạn đã được xóa!",
                         delete_after=8,
                     )
                 except Exception:
