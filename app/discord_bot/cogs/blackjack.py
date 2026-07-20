@@ -99,6 +99,7 @@ class Blackjack(commands.Cog):
 
     def __init__(self, client: commands.Bot):
         self.client = client
+        self.bot = client  # alias để tránh lỗi 'has no attribute bot'
         self.economy = getattr(client, "economy", Economy())
 
     def check_bet(
