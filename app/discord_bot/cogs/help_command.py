@@ -28,9 +28,15 @@ COG_GROUP_MAPPING = {
     "Simulator":     ("💼", "General"),
     "Slots":         ("📈", "Giao Dịch"),
     "AI":            ("🤖", "AI"),
+    # Fungame
+    "UNO":           ("🎮", "Fungame"),
+    "GiaiMa":        ("🎮", "Fungame"),
+    # Function
+    "afk":           ("⚙️", "Function"),
+    "Giveaway":      ("⚙️", "Function"),
 }
 
-GROUP_ORDER = ["💼 General", "🎲 Cờ Bạc", "📈 Giao Dịch", "🤖 AI"]
+GROUP_ORDER = ["💼 General", "🎲 Cờ Bạc", "📈 Giao Dịch", "🤖 AI", "🎮 Fungame", "⚙️ Function"]
 
 
 def _build_groups(client: commands.Bot):
