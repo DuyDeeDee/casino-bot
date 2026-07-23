@@ -554,7 +554,8 @@ class Slots(commands.Cog):
             return
 
         current_price = self.economy.get_gold_price()
-        self.economy.set_gold_prices(new_price, current_price)
+        # Set both current and prev to new_price so baseline comparison resets cleanly
+        self.economy.set_gold_prices(new_price, new_price)
         self.economy.set_setting("gold_price_last_update", str(int(time.time())))
 
         embed = make_embed(
