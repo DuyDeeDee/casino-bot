@@ -316,7 +316,7 @@ class Slots(commands.Cog):
         else:
             trend = "↔️ KHÔNG ĐỔI"
             color = discord.Color.light_grey()
-            desc = "↔️ Giá vàng ổn định so với chu kỳ trước."
+            desc = f"↔️ Giá vàng ổn định ở mức cân bằng **{current:,} VND**."
 
         current_time = int(time.time())
         last_update_str = self.economy.get_setting("gold_price_last_update")
