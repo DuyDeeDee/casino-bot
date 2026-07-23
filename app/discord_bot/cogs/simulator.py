@@ -120,21 +120,22 @@ BUSINESSES = {
     "iot": {
         "name": "Nhà Máy",
         "base_cost": 50_000_000,
-        "base_revenue": 500_000, # per hour
+        "base_revenue": 450_000, # per hour (10% nerf from 500k)
         "currency": "money"
     },
     "gym": {
         "name": "Phòng Gym Thể hình 🏋️",
         "base_cost": 100_000_000,
-        "base_revenue": 1_200_000, # per hour
+        "base_revenue": 1_080_000, # per hour (10% nerf from 1.2M)
         "currency": "money",
-        "buff": "Sinh ra 1.2M VND/giờ + Tặng giáp sức khỏe tinh thần chống nản."
+        "buff": "Sinh ra 1.08M VND/giờ + Tặng giáp sức khỏe tinh thần chống nản."
     },
     "gold_shop": {
         "name": "Chuỗi Tiệm Vàng <:32100goldbarsfortnite:1514192020921651251>",
         "base_cost": 10, # 10 Gold (credits)
-        "base_revenue": 0.1 / 24, # 0.1 Gold per day (approx 0.00416 Gold per hour)
-        "currency": "gold"
+        "base_revenue": 0.5 / 24, # 0.5 Gold per day
+        "currency": "gold",
+        "buff": "Sinh ra 0.5 Thỏi Vàng/ngày (~15M VND/ngày theo tỷ giá hiện tại)."
     }
 }
 
@@ -150,19 +151,19 @@ SHOP_ITEMS = {
         "name": "Bằng Kiến Trúc Sư 📐",
         "cost": 10,
         "currency": "gold",
-        "description": "Mở khóa các dự án thiết kế công trình trong lệnh $work để nhận từ 1,800,000 VND đến 3,000,000 VND mỗi giờ."
+        "description": "Mở khóa các dự án thiết kế công trình trong lệnh $work để nhận từ 1,620,000 VND đến 2,700,000 VND mỗi giờ."
     },
     "bang_phi_hanh": {
         "name": "Chứng Chỉ Phi Hành Gia 🚀",
         "cost": 15,
         "currency": "gold",
-        "description": "Mở khóa nhiệm vụ thám hiểm vũ trụ trong lệnh $work để nhận từ 4,500,000 VND đến 8,000,000 VND mỗi giờ."
+        "description": "Mở khóa nhiệm vụ thám hiểm vũ trụ trong lệnh $work để nhận từ 4,050,000 VND đến 7,200,000 VND mỗi giờ."
     },
     "bang_bac_si": {
         "name": "Bằng Bác Sĩ Chuyên Khoa 🩺",
         "cost": 35,
         "currency": "gold",
-        "description": "Mở khóa công việc chăm sóc sức khỏe VIP trong lệnh $work để nhận từ 10,000,000 VND đến 20,000,000 VND mỗi giờ."
+        "description": "Mở khóa công việc chăm sóc sức khỏe VIP trong lệnh $work để nhận từ 10,800,000 VND đến 18,000,000 VND mỗi giờ."
     },
     "the_tho_mo": {
         "name": "Nghề Khai Thác Vàng ⛏️",
@@ -175,6 +176,12 @@ SHOP_ITEMS = {
         "cost": 500,
         "currency": "gold",
         "description": "Mở khóa thám hiểm hầm mộ cổ đại trong lệnh $work để tìm kiếm các kho báu giá trị (có thể sưu tầm hoặc bán bằng lệnh i?sellitem)."
+    },
+    "bang_sieu_trom": {
+        "name": "Bằng Siêu Trộm Vàng 🥷",
+        "cost": 1500,
+        "currency": "gold",
+        "description": "Mở khóa kỹ năng trộm thỏi vàng của người khác bằng lệnh i?robgold @user (Tỷ lệ 50%, trộm từ 1-10 Thỏi Vàng/lần, cooldown 12 giờ)."
     },
     "banner_aesthetic": {
         "name": "Banner Aesthetic Động ✨",
@@ -3152,6 +3159,117 @@ class Simulator(commands.Cog):
                 description=(
                     f"{fail_msg}\n\n"
                     f"💸 **Bồi thường thiệt hại cho nạn nhân:** `-{fine:,} VND`"
+                ),
+                color=discord.Color.red()
+            )
+            embed.set_thumbnail(url=ctx.author.display_avatar.url)
+            await ctx.send(embed=embed)
+
+    @commands.command(
+        brief="Cướp thỏi vàng từ người khác (Yêu cầu Bằng Siêu Trộm Vàng).",
+        usage="robgold @user",
+        aliases=["rob_gold", "cuopvang"]
+    )
+    async def robgold(self, ctx: commands.Context, target: discord.Member):
+        if target.bot:
+            await ctx.send("❌ Không thể cướp thỏi vàng của bot!")
+            return
+        if target.id == ctx.author.id:
+            await ctx.send("❌ Bạn không thể tự cướp thỏi vàng của chính mình!")
+            return
+            
+        if target.id in config.bot.owner_ids or target.id in config.bot.admin_ids:
+            await ctx.send("❌ **Đòi cướp vàng của Admin, có cái quần què!!!**")
+            return
+            
+        user_id = ctx.author.id
+        
+        # Check license
+        inventory = self.economy.get_inventory(user_id)
+        has_license = any(item == "bang_sieu_trom" and qty > 0 for item, qty in inventory)
+        if not has_license:
+            await ctx.send("❌ Bạn cần sở hữu **Bằng Siêu Trộm Vàng 🥷** trong Cửa hàng (giá **1,500 Thỏi Vàng**) bằng lệnh `i?buy bang_sieu_trom` mới có thể thực hiện phi vụ này!")
+            return
+
+        # Check Cooldown (12 hours)
+        now = int(time.time())
+        cooldown = 12 * 3600
+        last_time_str = self.economy.get_setting(f"cooldown_robgold_{user_id}")
+        last_time = int(last_time_str) if last_time_str else 0
+        
+        if now - last_time < cooldown:
+            time_left = cooldown - (now - last_time)
+            hours = time_left // 3600
+            minutes = (time_left % 3600) // 60
+            await ctx.send(f"⏳ **Cảnh sát đang ráo riết truy nã:** Bạn cần lẩn trốn thêm **{hours} giờ {minutes} phút** trước khi đi trộm thỏi vàng tiếp!")
+            return
+
+        # Check target gold
+        target_profile = self.economy.get_entry(target.id)
+        target_gold = target_profile[2]
+        
+        if target_gold < 1:
+            await ctx.send(f"❌ **Mục tiêu không có vàng:** **{target.name}** không sở hữu thỏi vàng nào trong ví!")
+            return
+
+        # Check target immunity ring (ring_divine)
+        target_marriages = self.economy.get_marriages(target.id)
+        target_inv = self.economy.get_inventory(target.id)
+        has_divine_ring = any(item == 'ring_divine' and qty > 0 for item, qty in target_inv) or \
+                           any(marriage[2] == 'ring_divine' for marriage in target_marriages)
+                           
+        if has_divine_ring:
+            await ctx.send(f"🛡️ **Mục tiêu miễn nhiễm:** **{target.name}** được bảo vệ bởi **Nhẫn Hào Quang Vĩnh Cửu 🌌**, không thể bị cướp thỏi vàng!")
+            return
+
+        self.economy.set_setting(f"cooldown_robgold_{user_id}", str(now))
+
+        # 50% success chance
+        success_rate = 0.50
+
+        if random.random() < success_rate:
+            # Steal limited range: 1 to 10 gold bars (maxed at target's available gold)
+            max_steal = min(10, target_gold)
+            stolen_gold = random.randint(1, max_steal)
+            
+            self.economy.add_credits(target.id, -stolen_gold)
+            self.economy.add_credits(user_id, stolen_gold)
+            
+            gold_price = self.economy.get_gold_price()
+            est_val = stolen_gold * gold_price
+            
+            log_wallet_change(logger, event="robgold_success", user_id=user_id, credits_delta=stolen_gold, victim_id=target.id, ctx=ctx)
+            log_wallet_change(logger, event="robgold_victim", user_id=target.id, credits_delta=-stolen_gold, actor_id=user_id, ctx=ctx)
+            
+            embed = make_embed(
+                title="🥷 PHI VỤ TRỘM VÀNG THÀNH CÔNG! 🥷",
+                description=(
+                    f"**{ctx.author.mention}** đã đột nhập két sắt của **{target.mention}** và nẫng tay trên thành công!\n\n"
+                    f"✨ **Thỏi vàng cướp được:** `+{stolen_gold}` Thỏi Vàng <:32100goldbarsfortnite:1514192020921651251>\n"
+                    f"💵 **Giá trị ước tính:** `~{est_val:,} VND`\n\n"
+                    f"🔒 *Khuyên nạn nhân hãy cẩn trọng hơn trước các Siêu Trộm Vàng!*"
+                ),
+                color=discord.Color.gold()
+            )
+            embed.set_thumbnail(url=ctx.author.display_avatar.url)
+            await ctx.send(embed=embed)
+        else:
+            # Failure: fine in money VND (3,000,000 VND compensate to target)
+            fine = 3_000_000
+            robber_money = self.economy.get_entry(user_id)[1]
+            actual_fine = min(robber_money, fine)
+            
+            if actual_fine > 0:
+                self.economy.add_money(user_id, -actual_fine)
+                self.economy.add_money(target.id, actual_fine)
+                
+            log_wallet_change(logger, event="robgold_failed", user_id=user_id, money_delta=-actual_fine, victim_id=target.id, ctx=ctx)
+            
+            embed = make_embed(
+                title="🚨 TRỘM VÀNG BỊ BẮT QUẢ TANG! 🚨",
+                description=(
+                    f"**{ctx.author.mention}** cố gắng bẻ khóa két thỏi vàng của **{target.mention}** nhưng bị bắt quả tang!\n\n"
+                    f"👮 **Bị cảnh sát tóm gọn & phạt đền bù cho nạn nhân:** `-{actual_fine:,} VND`"
                 ),
                 color=discord.Color.red()
             )

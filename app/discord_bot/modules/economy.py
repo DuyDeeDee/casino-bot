@@ -11,7 +11,7 @@ from app.config import config
 Entry = Tuple[int, int, int]
 DATABASE_PATH = Path(config.storage.database_path)
 LEGACY_DATABASE_PATH = Path(__file__).resolve().parents[3] / "economy.db"
-SCHEMA_VERSION = 35
+SCHEMA_VERSION = 36
 
 
 logger = logging.getLogger(__name__)
@@ -58,10 +58,10 @@ def _migration_5_add_market_table(cur: sqlite3.Cursor) -> None:
         )"""
         )
         cur.execute(
-            "INSERT OR IGNORE INTO system_settings(key, value) VALUES('gold_price', '10000000')"
+            "INSERT OR IGNORE INTO system_settings(key, value) VALUES('gold_price', '30000000')"
         )
         cur.execute(
-            "INSERT OR IGNORE INTO system_settings(key, value) VALUES('gold_price_prev', '10000000')"
+            "INSERT OR IGNORE INTO system_settings(key, value) VALUES('gold_price_prev', '30000000')"
         )
     except sqlite3.OperationalError:
         pass
@@ -115,6 +115,15 @@ def _migration_6_add_simulator_tables(cur: sqlite3.Cursor) -> None:
         cur.execute("INSERT OR IGNORE INTO stock_prices(symbol, price, prev_price, change_percent) VALUES('BTC', 1000000, 1000000, 0.0)")
         cur.execute("INSERT OR IGNORE INTO stock_prices(symbol, price, prev_price, change_percent) VALUES('CASINO', 100000, 100000, 0.0)")
         cur.execute("INSERT OR IGNORE INTO stock_prices(symbol, price, prev_price, change_percent) VALUES('AGV', 10000, 10000, 0.0)")
+        
+        cur.execute(
+            """CREATE TABLE IF NOT EXISTS user_topups (
+            user_id INTEGER NOT NULL PRIMARY KEY,
+            total_vnd INTEGER NOT NULL DEFAULT 0,
+            total_gold INTEGER NOT NULL DEFAULT 0,
+            updated_at INTEGER NOT NULL DEFAULT 0
+        )"""
+        )
     except sqlite3.OperationalError:
         pass
 
@@ -652,6 +661,28 @@ def _migration_35_add_giaima_table(cur: sqlite3.Cursor) -> None:
         pass
 
 
+def _migration_36_add_couple_assets(cur: sqlite3.Cursor) -> None:
+    try:
+        cur.execute(
+            """CREATE TABLE IF NOT EXISTS couple_assets (
+            user_one INTEGER NOT NULL,
+            user_two INTEGER NOT NULL,
+            estate_id TEXT DEFAULT NULL,
+            estate_price INTEGER DEFAULT 0,
+            estate_bought_by INTEGER DEFAULT 0,
+            vehicle_id TEXT DEFAULT NULL,
+            vehicle_price INTEGER DEFAULT 0,
+            vehicle_bought_by INTEGER DEFAULT 0,
+            pet_id TEXT DEFAULT NULL,
+            pet_price INTEGER DEFAULT 0,
+            pet_bought_by INTEGER DEFAULT 0,
+            PRIMARY KEY (user_one, user_two)
+        )"""
+        )
+    except sqlite3.OperationalError:
+        pass
+
+
 MIGRATIONS: dict[int, Callable[[sqlite3.Cursor], None]] = {
     1: _migration_1_create_economy,
     2: _migration_2_add_indexes,
@@ -688,6 +719,7 @@ MIGRATIONS: dict[int, Callable[[sqlite3.Cursor], None]] = {
     33: _migration_33_add_achievements_log_table,
     34: _migration_34_add_marry_interest_and_wish_columns,
     35: _migration_35_add_giaima_table,
+    36: _migration_36_add_couple_assets,
 }
 
 
@@ -908,12 +940,12 @@ class Economy:
     def get_gold_price(self) -> int:
         self.cur.execute("SELECT value FROM system_settings WHERE key='gold_price'")
         row = self.cur.fetchone()
-        return int(row[0]) if row else 10_000_000
+        return int(row[0]) if row else 30_000_000
 
     def get_prev_gold_price(self) -> int:
         self.cur.execute("SELECT value FROM system_settings WHERE key='gold_price_prev'")
         row = self.cur.fetchone()
-        return int(row[0]) if row else 10_000_000
+        return int(row[0]) if row else 30_000_000
 
     def set_gold_prices(self, current_price: int, prev_price: int) -> None:
         self.cur.execute(
@@ -950,6 +982,38 @@ class Economy:
             (user_id, biz_id, level),
         )
         self.conn.commit()
+
+    def add_user_topup(self, user_id: int, amount_vnd: int, gold_gained: int) -> int:
+        """Adds topup amount in VND and Gold to user_topups table. Returns new total VND."""
+        self._ensure_entry(user_id)
+        now = int(time.time())
+        self.cur.execute(
+            """INSERT INTO user_topups(user_id, total_vnd, total_gold, updated_at)
+               VALUES(?, ?, ?, ?)
+               ON CONFLICT(user_id) DO UPDATE SET
+               total_vnd = total_vnd + EXCLUDED.total_vnd,
+               total_gold = total_gold + EXCLUDED.total_gold,
+               updated_at = EXCLUDED.updated_at""",
+            (user_id, amount_vnd, gold_gained, now),
+        )
+        self.conn.commit()
+        self.cur.execute("SELECT total_vnd FROM user_topups WHERE user_id=?", (user_id,))
+        row = self.cur.fetchone()
+        return row[0] if row else amount_vnd
+
+    def get_user_topup(self, user_id: int) -> tuple[int, int]:
+        """Returns (total_vnd, total_gold) for user."""
+        self.cur.execute("SELECT total_vnd, total_gold FROM user_topups WHERE user_id=?", (user_id,))
+        row = self.cur.fetchone()
+        return (row[0], row[1]) if row else (0, 0)
+
+    def get_topup_leaderboard(self, limit: int = 10) -> list[tuple[int, int, int]]:
+        """Returns list of (user_id, total_vnd, total_gold) ordered by total_vnd DESC."""
+        self.cur.execute(
+            "SELECT user_id, total_vnd, total_gold FROM user_topups ORDER BY total_vnd DESC LIMIT ?",
+            (limit,),
+        )
+        return self.cur.fetchall()
 
     def get_inventory(self, user_id: int) -> list[tuple[str, int]]:
         self._ensure_entry(user_id)
@@ -2470,8 +2534,8 @@ class Economy:
         )
         self.conn.commit()
 
-    def add_love_points(self, user_one: int, user_two: int, points: int, current_time: int) -> tuple[int, bool]:
-        """Adds love points. Resets daily counter if calendar date changed. Caps at 20 points/day (30 for ring_eternal_butterfly)."""
+    def add_love_points(self, user_one: int, user_two: int, points: int, current_time: int, daily_limit: int = None) -> tuple[int, bool]:
+        """Adds love points. Resets daily counter if calendar date changed. Caps at limit points/day."""
         import time
         self.cur.execute(
             "SELECT love_points, last_interact_time, interacts_today, ring_type FROM user_marry WHERE user_one = ? AND user_two = ?",
@@ -2489,7 +2553,11 @@ class Economy:
         if now_struct.tm_yday != last_struct.tm_yday or now_struct.tm_year != last_struct.tm_year:
             interacts_today = 0
             
-        limit = 30 if ring_type == "ring_eternal_butterfly" else 20
+        if daily_limit is not None:
+            limit = daily_limit
+        else:
+            limit = 30 if ring_type == "ring_eternal_butterfly" else 20
+
         if interacts_today >= limit:
             return (love_points, False)
             
@@ -2735,6 +2803,67 @@ class Economy:
         """Gets all achievements log ordered by earliest (id ASC)."""
         self.cur.execute("SELECT id, user_id, game, achievement_key, unlocked_at FROM user_achievements_log ORDER BY id ASC")
         return self.cur.fetchall()
+
+    def get_couple_assets(self, user_one: int, user_two: int) -> tuple | None:
+        """
+        Returns (estate_id, estate_price, estate_bought_by, vehicle_id, vehicle_price, vehicle_bought_by, pet_id, pet_price, pet_bought_by)
+        or None if no assets record exists.
+        """
+        self.cur.execute(
+            "SELECT estate_id, estate_price, estate_bought_by, vehicle_id, vehicle_price, vehicle_bought_by, pet_id, pet_price, pet_bought_by FROM couple_assets WHERE (user_one = ? AND user_two = ?) OR (user_one = ? AND user_two = ?)",
+            (user_one, user_two, user_two, user_one)
+        )
+        return self.cur.fetchone()
+
+    def set_couple_estate(self, user_one: int, user_two: int, estate_id: str, price: int, bought_by: int) -> None:
+        row = self.get_couple_assets(user_one, user_two)
+        if row:
+            self.cur.execute(
+                "UPDATE couple_assets SET estate_id = ?, estate_price = ?, estate_bought_by = ? WHERE (user_one = ? AND user_two = ?) OR (user_one = ? AND user_two = ?)",
+                (estate_id, price, bought_by, user_one, user_two, user_two, user_one)
+            )
+        else:
+            self.cur.execute(
+                "INSERT INTO couple_assets (user_one, user_two, estate_id, estate_price, estate_bought_by) VALUES (?, ?, ?, ?, ?)",
+                (user_one, user_two, estate_id, price, bought_by)
+            )
+        self.conn.commit()
+
+    def set_couple_vehicle(self, user_one: int, user_two: int, vehicle_id: str, price: int, bought_by: int) -> None:
+        row = self.get_couple_assets(user_one, user_two)
+        if row:
+            self.cur.execute(
+                "UPDATE couple_assets SET vehicle_id = ?, vehicle_price = ?, vehicle_bought_by = ? WHERE (user_one = ? AND user_two = ?) OR (user_one = ? AND user_two = ?)",
+                (vehicle_id, price, bought_by, user_one, user_two, user_two, user_one)
+            )
+        else:
+            self.cur.execute(
+                "INSERT INTO couple_assets (user_one, user_two, vehicle_id, vehicle_price, vehicle_bought_by) VALUES (?, ?, ?, ?, ?)",
+                (user_one, user_two, vehicle_id, price, bought_by)
+            )
+        self.conn.commit()
+
+    def set_couple_pet(self, user_one: int, user_two: int, pet_id: str, price: int, bought_by: int) -> None:
+        row = self.get_couple_assets(user_one, user_two)
+        if row:
+            self.cur.execute(
+                "UPDATE couple_assets SET pet_id = ?, pet_price = ?, pet_bought_by = ? WHERE (user_one = ? AND user_two = ?) OR (user_one = ? AND user_two = ?)",
+                (pet_id, price, bought_by, user_one, user_two, user_two, user_one)
+            )
+        else:
+            self.cur.execute(
+                "INSERT INTO couple_assets (user_one, user_two, pet_id, pet_price, pet_bought_by) VALUES (?, ?, ?, ?, ?)",
+                (user_one, user_two, pet_id, price, bought_by)
+            )
+        self.conn.commit()
+
+    def clear_couple_assets(self, user_one: int, user_two: int) -> None:
+        self.cur.execute(
+            "DELETE FROM couple_assets WHERE (user_one = ? AND user_two = ?) OR (user_one = ? AND user_two = ?)",
+            (user_one, user_two, user_two, user_one)
+        )
+        self.conn.commit()
+
 
 
 

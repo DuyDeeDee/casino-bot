@@ -582,10 +582,10 @@ class GamblingHelpers(commands.Cog, name="General"):
                     )
                 else:
                     tech_jobs = [
-                        ("Thiết kế cho công ty khởi nghiệp 🛠️", 1_500_000),
-                        ("Setup thành công server cho khách hàng 🎮", 800_000),
-                        ("Phát triển ứng dụng Mobile mini cho shop quần áo 📱", 1_200_000),
-                        ("Khắc phục sự cố mạng doanh nghiệp trong đêm 🌐", 1_000_000)
+                        ("Thiết kế cho công ty khởi nghiệp 🛠️", 1_350_000),
+                        ("Setup thành công server cho khách hàng 🎮", 720_000),
+                        ("Phát triển ứng dụng Mobile mini cho shop quần áo 📱", 1_080_000),
+                        ("Khắc phục sự cố mạng doanh nghiệp trong đêm 🌐", 900_000)
                     ]
                     job_desc, reward = random.choice(tech_jobs)
                     if marriage_multiplier > 1.0:
@@ -638,9 +638,9 @@ class GamblingHelpers(commands.Cog, name="General"):
                     )
                 else:
                     arch_jobs = [
-                        ("Vẽ bản thiết kế biệt thự nghỉ dưỡng ở Đà Lạt 📐", 2_400_000),
-                        ("Tư vấn quy hoạch đô thị cho tập đoàn bất động sản 🏙️", 1_800_000),
-                        ("Thiết kế nội thất căn hộ Penthouse sang trọng 🛋️", 3_000_000)
+                        ("Vẽ bản thiết kế biệt thự nghỉ dưỡng ở Đà Lạt 📐", 2_160_000),
+                        ("Tư vấn quy hoạch đô thị cho tập đoàn bất động sản 🏙️", 1_620_000),
+                        ("Thiết kế nội thất căn hộ Penthouse sang trọng 🛋️", 2_700_000)
                     ]
                     job_desc, reward = random.choice(arch_jobs)
                     if marriage_multiplier > 1.0:
@@ -693,9 +693,9 @@ class GamblingHelpers(commands.Cog, name="General"):
                     )
                 else:
                     astro_jobs = [
-                        ("Thực hiện chuyến đi bộ ngoài không gian sửa tấm pin mặt trời 🚀", 6_000_000),
-                        ("Nghiên cứu mẫu đất đá quý từ Sao Hỏa gửi về Trái Đất ☄️", 4_500_000),
-                        ("Huấn luyện phi hành đoàn kế cận tại trung tâm vũ trụ 🌌", 8_000_000)
+                        ("Thực hiện chuyến đi bộ ngoài không gian sửa tấm pin mặt trời 🚀", 5_400_000),
+                        ("Nghiên cứu mẫu đất đá quý từ Sao Hỏa gửi về Trái Đất ☄️", 4_050_000),
+                        ("Huấn luyện phi hành đoàn kế cận tại trung tâm vũ trụ 🌌", 7_200_000)
                     ]
                     job_desc, reward = random.choice(astro_jobs)
                     if marriage_multiplier > 1.0:
@@ -748,9 +748,9 @@ class GamblingHelpers(commands.Cog, name="General"):
                     )
                 else:
                     doc_jobs = [
-                        ("Phẫu thuật thành công ca ghép tim phức tạp 🩺", 18_000_000),
-                        ("Điều trị phục hồi sức khỏe VIP cho tỷ phú 🏥", 12_000_000),
-                        ("Nghiên cứu lâm sàng vắc-xin thế hệ mới 🧪", 20_000_000)
+                        ("Phẫu thuật thành công ca ghép tim phức tạp 🩺", 16_200_000),
+                        ("Điều trị phục hồi sức khỏe VIP cho tỷ phú 🏥", 10_800_000),
+                        ("Nghiên cứu lâm sàng vắc-xin thế hệ mới 🧪", 18_000_000)
                     ]
                     job_desc, reward = random.choice(doc_jobs)
                     if marriage_multiplier > 1.0:
@@ -882,7 +882,7 @@ class GamblingHelpers(commands.Cog, name="General"):
                 "Streamer part-time 🎮"
             ]
             job = random.choice(jobs)
-            reward = random.randint(20_000, 50_000)
+            reward = random.randint(18_000, 45_000)
             if marriage_multiplier > 1.0:
                 reward = int(reward * marriage_multiplier)
             

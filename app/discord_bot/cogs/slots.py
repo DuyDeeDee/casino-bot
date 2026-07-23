@@ -345,6 +345,185 @@ class Slots(commands.Cog):
         embed.set_footer(text="Gõ i?muavang <số lượng> hoặc i?banvang <số lượng> để giao dịch")
         await ctx.send(embed=embed)
 
+    @commands.command(
+        brief="Xem tỷ giá nạp Thỏi Vàng bằng tiền VND thực tế ngoài đời và tính toán ưu đãi chiết khấu.",
+        usage="nap [số_tiền_VND/số_k]",
+        aliases=["topup", "napgold", "naptien"]
+    )
+    async def nap(self, ctx: commands.Context, amount_str: str = None):
+        """
+        Base rate: 1k VND (1,000 VND) = 3 Gold
+        Discount / Bonus: Every 100k VND grants +2% bonus Gold (capped at 40%).
+        """
+        def parse_amount(s: str) -> int | None:
+            if not s:
+                return None
+            s = s.lower().strip().replace(".", "").replace(",", "")
+            try:
+                if s.endswith("k"):
+                    return int(float(s[:-1]) * 1000)
+                elif s.endswith("m"):
+                    return int(float(s[:-1]) * 1_000_000)
+                else:
+                    return int(s)
+            except ValueError:
+                return None
+
+        def calc_gold(vnd: int) -> tuple[int, int, int, int]:
+            base_gold = (vnd // 1000) * 3
+            bonus_tier = vnd // 100_000
+            discount_pct = min(40, bonus_tier * 2)
+            bonus_gold = int(base_gold * (discount_pct / 100))
+            total_gold = base_gold + bonus_gold
+            return base_gold, bonus_gold, discount_pct, total_gold
+
+        vnd_amount = parse_amount(amount_str)
+
+        if vnd_amount is None or vnd_amount <= 0:
+            sample_amounts = [10_000, 50_000, 100_000, 200_000, 500_000, 1_000_000, 2_000_000]
+            table_rows = []
+            for amt in sample_amounts:
+                base_g, bonus_g, disc_p, tot_g = calc_gold(amt)
+                amt_k = f"{amt // 1000:,}k" if amt < 1_000_000 else f"{amt / 1_000_000:.1f}M".replace(".0", "")
+                disc_str = f" (+{disc_p}%)" if disc_p > 0 else ""
+                table_rows.append(f"• **`{amt_k:>6}` VND** ➔ **`{tot_g:,}`** Gold {disc_str}")
+
+            table_text = "\n".join(table_rows)
+
+            embed = make_embed(
+                title="💳 BẢNG GIÁ NẠP THỎI VÀNG (TIỀN MẶT NGOÀI ĐỜI) 💳",
+                description=(
+                    f"✨ **Tỷ giá cơ bản:** `1,000 VND (1k)` = **`3 Thỏi Vàng`** <:32100goldbarsfortnite:1514192020921651251>\n"
+                    f"🎁 **Ưu đãi nạp lớn:** Cứ mỗi **`100,000 VND (100k)`** nạp vào ➔ **Tặng thêm +2% Gold** (tối đa 40%).\n\n"
+                    f"### 📋 BẢNG GIÁ QUY ĐỔI MẪU:\n"
+                    f"{table_text}\n\n"
+                    f"💡 **Tính số Gold cho mốc nạp tùy chỉnh:**\n"
+                    f"Gõ: `i?nap <số_tiền>` (Ví dụ: `i?nap 100k`, `i?nap 250k`, `i?nap 500000`)"
+                ),
+                color=discord.Color.gold()
+            )
+            embed.set_footer(text="Liên hệ Admin / Owner máy chủ để thực hiện giao dịch nạp.")
+            await ctx.send(embed=embed)
+        else:
+            base_g, bonus_g, disc_p, tot_g = calc_gold(vnd_amount)
+            vnd_formatted = f"{vnd_amount:,} VND"
+
+            desc = (
+                f"💵 **Số tiền nạp:** `{vnd_formatted}`\n"
+                f"🪙 **Số Gold gốc (1k = 3 Gold):** `{base_g:,}` Thỏi Vàng\n"
+                f"🎁 **Ưu đãi chiết khấu (+{disc_p}%):** `+{bonus_g:,}` Thỏi Vàng\n"
+                f"─────────────────────────────\n"
+                f"👑 **TỔNG GOLD NHẬN ĐƯỢC:** **`{tot_g:,}` Thỏi Vàng** <:32100goldbarsfortnite:1514192020921651251>"
+            )
+
+            embed = make_embed(
+                title="💳 TÍNH TOÁN GIÁ NẠP GOLD 💳",
+                description=desc,
+                color=discord.Color.green()
+            )
+            embed.set_footer(text="Liên hệ Admin / Owner máy chủ để hoàn tất chuyển khoản nạp.")
+            await ctx.send(embed=embed)
+
+    @commands.command(
+        brief="Xem bảng xếp hạng Top Nạp Tiền (Top VIP) của máy chủ.",
+        usage="topnap",
+        aliases=["naptop", "topupboard", "bxhnap"]
+    )
+    async def topnap(self, ctx: commands.Context):
+        top_list = self.economy.get_topup_leaderboard(10)
+        
+        rank_emojis = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]
+        
+        if not top_list:
+            embed = make_embed(
+                title="🏆 BẢNG XẾP HẠNG TOP NẠP VÀNG (TOP VIP) 🏆",
+                description="✨ Chưa có dữ liệu nạp tiền trên hệ thống.\nGõ `i?nap` để xem bảng giá quy đổi Gold!",
+                color=discord.Color.gold()
+            )
+            await ctx.send(embed=embed)
+            return
+
+        lines = []
+        author_rank = None
+        
+        for idx, (uid, total_vnd, total_gold) in enumerate(top_list):
+            emoji = rank_emojis[idx] if idx < len(rank_emojis) else f"`#{idx+1}`"
+            
+            user = self.bot.get_user(uid)
+            user_name = user.display_name if user else f"User ID {uid}"
+            
+            if uid == ctx.author.id:
+                author_rank = idx + 1
+                lines.append(f"{emoji} **{user_name}** *(Bạn)* — **`{total_vnd:,}` VND** (`{total_gold:,}` Gold)")
+            else:
+                lines.append(f"{emoji} **{user_name}** — **`{total_vnd:,}` VND** (`{total_gold:,}` Gold)")
+
+        user_vnd, user_gold = self.economy.get_user_topup(ctx.author.id)
+        user_rank_str = f"thứ #{author_rank}" if author_rank else "chưa xếp hạng"
+
+        embed = make_embed(
+            title="🏆 BẢNG XẾP HẠNG TOP NẠP VÀNG (TOP VIP) 🏆",
+            description="\n".join(lines),
+            color=discord.Color.gold()
+        )
+        embed.set_footer(
+            text=f"Thứ hạng của bạn: {user_rank_str} | Tổng nạp: {user_vnd:,} VND ({user_gold:,} Gold)"
+        )
+        await ctx.send(embed=embed)
+
+    @commands.command(
+        brief="[ADMIN] Cộng tiền nạp VND và tự động quy đổi Gold cho người chơi.",
+        usage="addtopup @user <số_tiền_VND/số_k>",
+        aliases=["addtop", "congnap"]
+    )
+    async def addtopup(self, ctx: commands.Context, target: discord.Member, amount_str: str):
+        if ctx.author.id not in config.bot.owner_ids and ctx.author.id not in config.bot.admin_ids:
+            await ctx.send("❌ Lệnh này chỉ dành cho Admin / Owner!")
+            return
+
+        def parse_amount(s: str) -> int | None:
+            if not s:
+                return None
+            s = s.lower().strip().replace(".", "").replace(",", "")
+            try:
+                if s.endswith("k"):
+                    return int(float(s[:-1]) * 1000)
+                elif s.endswith("m"):
+                    return int(float(s[:-1]) * 1_000_000)
+                else:
+                    return int(s)
+            except ValueError:
+                return None
+
+        vnd_amount = parse_amount(amount_str)
+        if not vnd_amount or vnd_amount <= 0:
+            await ctx.send("❌ Số tiền nạp không hợp lệ! Ví dụ: `i?addtopup @user 100k` hoặc `i?addtopup @user 500000`.")
+            return
+
+        base_gold = (vnd_amount // 1000) * 3
+        bonus_tier = vnd_amount // 100_000
+        discount_pct = min(40, bonus_tier * 2)
+        bonus_gold = int(base_gold * (discount_pct / 100))
+        total_gold = base_gold + bonus_gold
+
+        self.economy.add_credits(target.id, total_gold)
+        new_total_vnd = self.economy.add_user_topup(target.id, vnd_amount, total_gold)
+        
+        log_wallet_change(logger, event="admin_add_topup", user_id=target.id, credits_delta=total_gold, actor_id=ctx.author.id, ctx=ctx)
+
+        embed = make_embed(
+            title="🎉 NẠP THỎI VÀNG THÀNH CÔNG 🎉",
+            description=(
+                f"ADMIN **{ctx.author.mention}** đã xác nhận nạp tiền cho **{target.mention}**!\n\n"
+                f"💵 **Số tiền nạp:** `{vnd_amount:,} VND`\n"
+                f"✨ **Số Gold nhận được (+{discount_pct}%):** `+{total_gold:,}` Thỏi Vàng <:32100goldbarsfortnite:1514192020921651251>\n"
+                f"🏆 **Tổng nạp tích lũy (Top Nạp):** `{new_total_vnd:,} VND`"
+            ),
+            color=discord.Color.green()
+        )
+        embed.set_thumbnail(url=target.display_avatar.url)
+        await ctx.send(embed=embed)
+
     @tasks.loop(minutes=10)
     async def update_gold_price(self):
         current_time = int(time.time())
@@ -361,15 +540,15 @@ class Slots(commands.Cog):
             current_price = self.economy.get_gold_price()
             
             # Mean-reverting random walk
-            base_price = 10_000_000
+            base_price = 30_000_000
             drift = 0.05 * (base_price - current_price) / base_price
             
             # High volatility: random shock up to 25%
             random_shock = random.uniform(-0.25, 0.25)
             
             new_price = int(current_price * (1 + drift + random_shock))
-            # Clamp between 1,000,000 and 50,000,000
-            new_price = max(1_000_000, min(50_000_000, new_price))
+            # Clamp between 3,000,000 and 150,000,000
+            new_price = max(3_000_000, min(150_000_000, new_price))
             # Round to nearest 1,000
             new_price = (new_price // 1000) * 1000
             

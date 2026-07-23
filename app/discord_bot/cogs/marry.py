@@ -54,6 +54,111 @@ RING_IMAGES = {
     "ring_nhankat": "NhanKat.png"
 }
 
+# Couple Assets Dictionaries
+COUPLE_ESTATES = {
+    "estate_apartment":     {"name": "<:cozyhouse:1529904984311857192> Căn Hộ Ấm Cúng",           "price": 30,              "buff": 6},
+    "estate_villa":         {"name": "<:modernluxuryvillawithpool:1529905019498004510> Biệt Thự Vườn",             "price": 50,             "buff": 15},
+    "estate_beach":         {"name": "<:beachresort:1529905154214727830>Nhà Biển Thiên Đường",     "price": 80,             "buff": 20},
+    "estate_penthouse":     {"name": "<:penhouse:1529905033900982273> Penthouse Sky View",         "price": 120,             "buff": 28},
+    "estate_island":        {"name": "<:tropicalisland:1529905080730648667> Đảo Riêng Tư",             "price": 200,            "buff": 38},
+    "estate_palace":        {"name": "<:palacehouse:1529905194672984064> Cung Điện Hoàng Gia",       "price": 400,            "buff": 50},
+    "estate_sky_castle":    {"name": "<:cloudcastle:1529905210779242566> Lâu Đài Trên Mây",          "price": 1_000,          "buff": 70},
+    "estate_space_station": {"name": "<:spaceshiphouse:1529905224356073613> Trạm Vũ Trụ Tình Yêu",     "price": 5_000,          "buff": 100},
+}
+
+COUPLE_VEHICLES = {
+    "vehicle_scooter":   {"name": "<:Scooter:1529908359988514847> Xe Máy Đôi",          "price": 9,              "buff": 2},
+    "vehicle_car":       {"name": "<:romanticcar:1529908376262410300> Ô Tô Lãng Mạn",       "price": 19,              "buff": 5},
+    "vehicle_suv":       {"name": "<:SUV:1529908436437958666> SUV Gia Đình",         "price": 49,              "buff": 9},
+    "vehicle_limo":      {"name": "<:limousine:1529908452661395536> Limousine Sang Trọng", "price": 89,             "buff": 14},
+    "vehicle_supercar":  {"name": "<:supercar:1529908470751690822> Siêu Xe Thể Thao",   "price": 149,             "buff": 20},
+    "vehicle_yacht":     {"name": "<:boatpng:1529908484546498802> Du Thuyền Tình Yêu",  "price": 349,            "buff": 28},
+    "vehicle_jet":       {"name": "<:plane:1529914731962433548> Phi Cơ Riêng",        "price": 599,            "buff": 38},
+    "vehicle_spaceship": {"name": "<:spaceshipremovebgpreview:1529914772500381917> Phi Thuyền Vũ Trụ",   "price": 1_999,          "buff": 55},
+}
+
+COUPLE_PETS = {
+    "pet_hamster":  {"name": "<:cute_hamster:1529906150756061274> Hamster Đôi",          "price": 2,              "buff": 1},
+    "pet_cat":      {"name": "<:cute_cat:1529906168556818432> Mèo Anh Lông Dài",     "price": 15,              "buff": 4},
+    "pet_dog":      {"name": "<:cute_corgi:1529906218100064397> Shiba Inu Ngốc Nghếch","price": 39,              "buff": 8},
+    "pet_capybara": {"name": "<:capybara:1529907688274661518> Capybara Thân Thiện",  "price": 64,             "buff": 12},
+    "pet_fox":      {"name": "<:arctic_fox:1529907673494192200> Cáo Tuyết Đô Thị",     "price": 84,            "buff": 25},
+    "pet_dragon":   {"name": "<:fantasy_dragon:1529907944089583717> Rồng Linh Thú Cổ Đại", "price": 104,            "buff": 35},
+    "pet_phoenix":  {"name": "<:phoenix:1529907955657343117> Phượng Hoàng Băng Tuyết","price": 149,          "buff": 50},
+    "pet_unicorn":  {"name": "<:unicorn:1529907967535612087> Kỳ Lân Tinh Tú",      "price": 499,          "buff": 80},
+}
+
+ESTATE_IMAGES = {
+    "estate_apartment": "cozyhouse.png",
+    "estate_villa": "modern luxury villa with pool.png",
+    "estate_beach": "beachresort.png",
+    "estate_penthouse": "penhouse.png",
+    "estate_island": "tropicalisland.png",
+    "estate_palace": "palace-house.png",
+    "estate_sky_castle": "cloudcastle.png",
+    "estate_space_station": "spaceship.png"
+}
+
+VEHICLE_IMAGES = {
+    "vehicle_scooter": "Scooter.png",
+    "vehicle_car": "romanticcar.png",
+    "vehicle_suv": "SUV.png",
+    "vehicle_limo": "limousine.png",
+    "vehicle_supercar": "supercar.png",
+    "vehicle_yacht": "boat-png.png",
+    "vehicle_jet": "plane.png",
+    "vehicle_spaceship": "spaceship-removebg-preview.png"
+}
+
+PET_IMAGES = {
+    "pet_hamster": "cute_hamster.png",
+    "pet_cat": "cute_cat.png",
+    "pet_dog": "cute_corgi.png",
+    "pet_capybara": "capybara.png",
+    "pet_fox": "arctic_fox.png",
+    "pet_dragon": "fantasy_dragon.png",
+    "pet_phoenix": "phoenix.png",
+    "pet_unicorn": "unicorn.png"
+}
+
+
+def refund_couple_assets_on_divorce(economy: Economy, user_one: int, user_two: int) -> str:
+    """Refunds 25% of purchased estate, vehicle, and pet prices to original buyers upon divorce."""
+    assets = economy.get_couple_assets(user_one, user_two)
+    if not assets:
+        return ""
+    
+    estate_id, estate_price, estate_bought_by, vehicle_id, vehicle_price, vehicle_bought_by, pet_id, pet_price, pet_bought_by = assets
+    refund_messages = []
+    
+    if estate_id and estate_price > 0 and estate_bought_by > 0:
+        estate_refund = int(estate_price * 0.25)
+        if estate_refund > 0:
+            economy.add_credits(estate_bought_by, estate_refund)
+            estate_name = COUPLE_ESTATES.get(estate_id, {}).get("name", estate_id)
+            refund_messages.append(f"🏠 **{estate_name}:** Hoàn trả 25% (`+{estate_refund:,} Thỏi Vàng`) cho <@{estate_bought_by}>")
+            
+    if vehicle_id and vehicle_price > 0 and vehicle_bought_by > 0:
+        vehicle_refund = int(vehicle_price * 0.25)
+        if vehicle_refund > 0:
+            economy.add_credits(vehicle_bought_by, vehicle_refund)
+            vehicle_name = COUPLE_VEHICLES.get(vehicle_id, {}).get("name", vehicle_id)
+            refund_messages.append(f"🚗 **{vehicle_name}:** Hoàn trả 25% (`+{vehicle_refund:,} Thỏi Vàng`) cho <@{vehicle_bought_by}>")
+
+    if pet_id and pet_price > 0 and pet_bought_by > 0:
+        pet_refund = int(pet_price * 0.25)
+        if pet_refund > 0:
+            economy.add_credits(pet_bought_by, pet_refund)
+            pet_name = COUPLE_PETS.get(pet_id, {}).get("name", pet_id)
+            refund_messages.append(f"🐾 **{pet_name}:** Hoàn trả 25% (`+{pet_refund:,} Thỏi Vàng`) cho <@{pet_bought_by}>")
+
+    economy.clear_couple_assets(user_one, user_two)
+    
+    if refund_messages:
+        return "\n\n💰 **Thanh lý tài sản phu thê (25% giá trị):**\n" + "\n".join(refund_messages)
+    return ""
+
+
 # Sweet sayings for interactions
 INTERACT_SAYINGS = {
     "Kiss": [
@@ -97,15 +202,37 @@ def get_avatar_img(user) -> Image.Image:
     return Image.new("RGBA", (150, 150), (120, 120, 120, 255))
 
 
-def crop_circle(img: Image.Image, size: int = 120) -> Image.Image:
-    """Crops an image into a circle with transparency."""
-    img = img.resize((size, size), Image.Resampling.LANCZOS)
+def crop_circle(img: Image.Image, size: int = 120, mode: str = "cover") -> Image.Image:
+    """Crops an image into a circle with transparency, supporting cover or contain modes."""
+    img = img.convert("RGBA")
+    w, h = img.size
+    
+    if mode == "cover":
+        min_dim = min(w, h)
+        left = (w - min_dim) // 2
+        top = (h - min_dim) // 2
+        img = img.crop((left, top, left + min_dim, top + min_dim))
+        img = img.resize((size, size), Image.Resampling.LANCZOS)
+    else:  # contain / fit mode (for Xe & Pet object PNGs so subject is fully preserved)
+        target_max = int(size * 0.88)
+        scale = min(target_max / w, target_max / h)
+        new_w = max(1, int(w * scale))
+        new_h = max(1, int(h * scale))
+        resized_img = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
+        
+        canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+        offset_x = (size - new_w) // 2
+        offset_y = (size - new_h) // 2
+        canvas.paste(resized_img, (offset_x, offset_y), mask=resized_img)
+        img = canvas
+
     mask = Image.new("L", (size, size), 0)
     mask_draw = ImageDraw.Draw(mask)
     mask_draw.ellipse((0, 0, size, size), fill=255)
     
     output = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     output.paste(img, (0, 0), mask=mask)
+    img.close()
     return output
 
 
@@ -169,7 +296,7 @@ def render_marriage_certificate(proposer, target, ring_id: str) -> BytesIO:
     return buf
 
 
-def render_couple_banner(proposer, target, ring_type: str, love_points: int, joint_wallet: int, married_days: int, proposer_ig: str = "", target_ig: str = "", relationship_status: str = "Vợ Chồng", married_at: int = 0, saying: str = "") -> BytesIO:
+def render_couple_banner(proposer, target, ring_type: str, love_points: int, joint_wallet: int, married_days: int, proposer_ig: str = "", target_ig: str = "", relationship_status: str = "Vợ Chồng", married_at: int = 0, saying: str = "", estate_name: str = "", vehicle_name: str = "", pet_name: str = "") -> BytesIO:
     """Draws a beautiful custom profile banner for married couples using the template."""
     bg_path = ABS_PATH.parent.parent / "pictures" / "Marry" / "banner_marry2.png"
     if bg_path.exists():
@@ -204,7 +331,7 @@ def render_couple_banner(proposer, target, ring_type: str, love_points: int, joi
 
     font_large   = _vogue(30)   # display names (decreased from 56 to 30)
     font_medium  = _vogue(48)   # status text "Vợ Chồng" (increased to 48 and pulled higher)
-    font_stats   = _vogue(22)   # stats inside heart (decreased from 36 to 22)
+    font_stats   = _vogue(20)   # stats inside heart (decreased to 20 to fit assets)
     font_username = _vogue(30)  # usernames below avatar (decreased from 42 to 30)
     font_regular = _roboto(22)  # IG text in bottom box (decreased from 28 to 22)
     
@@ -248,14 +375,19 @@ def render_couple_banner(proposer, target, ring_type: str, love_points: int, joi
     # 4. Relationship status high above the big heart: "Kéo chữ vợ chồng lên cao hơn nữa đi" (moved to Y = 180)
     draw.text((836, 180), relationship_status, fill=PASTEL_PINK, anchor="mm", font=font_medium)
 
-    # 5. Stats inside the big heart: "thông tin như ngày kết hôn,... thì cung đổi sang font Selly Calligraphy và đặt ở giữa trái tim"
+    # 5. Stats inside the big heart
     date_str = "Chưa rõ"
     if married_at > 0:
         date_str = datetime.fromtimestamp(married_at).strftime("%d/%m/%Y")
 
-    draw.text((836, 420), f"Ngày Kết Hôn : {date_str}",      fill=PASTEL_PINK, anchor="mm", font=font_stats)
-    draw.text((836, 465), f"Đã Kết Hôn : {married_days} ngày", fill=PASTEL_PINK, anchor="mm", font=font_stats)
-    draw.text((836, 510), f"Điểm thân mật : {love_points:,}",  fill=PASTEL_PINK, anchor="mm", font=font_stats)
+    draw.text((836, 385), f"Ngày Kết Hôn : {date_str}",      fill=PASTEL_PINK, anchor="mm", font=font_stats)
+    draw.text((836, 420), f"Đã Kết Hôn : {married_days} ngày", fill=PASTEL_PINK, anchor="mm", font=font_stats)
+    draw.text((836, 455), f"Điểm thân mật : {love_points:,}",  fill=PASTEL_PINK, anchor="mm", font=font_stats)
+    
+    asset_line = f"🏠 {estate_name or 'Chưa có'}  |  🚗 {vehicle_name or 'Chưa có'}"
+    draw.text((836, 490), asset_line, fill=PASTEL_PINK, anchor="mm", font=font_stats)
+    pet_line = f"🐾 Thú Cưng: {pet_name or 'Chưa có'}"
+    draw.text((836, 525), pet_line, fill=PASTEL_PINK, anchor="mm", font=font_stats)
     
     # 6. Load and paste Ring image centered exactly at the bottom-right heart: "fix lại hình chiếc nhẫn sao cho nó nằm ở giữa cái trái tim ở góc dưới"
     ring_file = RING_IMAGES.get(ring_type)
@@ -314,6 +446,223 @@ def render_couple_banner(proposer, target, ring_type: str, love_points: int, joi
     buf.seek(0)
     bg.close()
     return buf
+
+
+def render_assets_banner(proposer, target, estate_id: str | None, estate_price: int, vehicle_id: str | None, vehicle_price: int, pet_id: str | None, pet_price: int, total_buff: int) -> BytesIO:
+    """Draws custom assets banner for married couples displaying BĐS, Xe, and Pet."""
+    bg_path = ABS_PATH.parent.parent / "pictures" / "Marry" / "banner_bds_xe_pet.png"
+    if bg_path.exists():
+        bg = Image.open(bg_path).convert("RGBA")
+    else:
+        bg = Image.new("RGBA", (1672, 941), (252, 229, 237, 255))
+        
+    overlay = Image.new("RGBA", bg.size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
+
+    _font_dir = ABS_PATH.parent.parent / "data" / "fonts"
+    _font_path = _font_dir / "vogueeb.ttf"
+
+    def _vogue(size: int) -> ImageFont.FreeTypeFont:
+        try:
+            return ImageFont.truetype(str(_font_path), size)
+        except Exception:
+            return load_font("bold", size)
+
+    font_title = _vogue(28)
+    font_text  = _vogue(22)
+
+    PASTEL_PINK = (235, 110, 145, 255)
+    DARK_TEXT   = (180, 70, 105, 255)
+
+    marry_dir = ABS_PATH.parent.parent / "pictures" / "Marry"
+
+    from app.discord_bot.modules.profile_renderer import strip_emoji
+
+    # Row 1: BĐS (CX: 345, CY: 240, diameter: 150) - mode="cover" for scenery photos
+    if estate_id and estate_id in ESTATE_IMAGES:
+        e_path = marry_dir / "BĐS" / ESTATE_IMAGES[estate_id]
+        if e_path.exists():
+            try:
+                e_img = Image.open(e_path).convert("RGBA")
+                e_c = crop_circle(e_img, 150, mode="cover")
+                overlay.paste(e_c, (345 - 150 // 2, 240 - 150 // 2), mask=e_c)
+                e_img.close()
+                e_c.close()
+            except Exception as e:
+                logger.error(f"Failed to draw estate image: {e}")
+
+    e_info = COUPLE_ESTATES.get(estate_id, {}) if estate_id else {}
+    e_name = strip_emoji(e_info.get("name", "Chưa sở hữu"))
+    e_buff = e_info.get("buff", 0)
+    draw.text((953, 195), f"BẤT ĐỘNG SẢN : {e_name}", fill=DARK_TEXT, anchor="mm", font=font_title)
+    draw.text((953, 245), f"Giá trị : {estate_price:,} Gold" if estate_id else "Giá trị : 0 Gold", fill=PASTEL_PINK, anchor="mm", font=font_text)
+    draw.text((953, 285), f"Buff : +{e_buff} pts/ngày vào giới hạn thân mật", fill=PASTEL_PINK, anchor="mm", font=font_text)
+
+    # Row 2: Xe (CX: 345, CY: 505, diameter: 150) - mode="contain" for object PNGs
+    if vehicle_id and vehicle_id in VEHICLE_IMAGES:
+        v_path = marry_dir / "Xe" / VEHICLE_IMAGES[vehicle_id]
+        if v_path.exists():
+            try:
+                v_img = Image.open(v_path).convert("RGBA")
+                v_c = crop_circle(v_img, 150, mode="contain")
+                overlay.paste(v_c, (345 - 150 // 2, 505 - 150 // 2), mask=v_c)
+                v_img.close()
+                v_c.close()
+            except Exception as e:
+                logger.error(f"Failed to draw vehicle image: {e}")
+
+    v_info = COUPLE_VEHICLES.get(vehicle_id, {}) if vehicle_id else {}
+    v_name = strip_emoji(v_info.get("name", "Chưa sở hữu"))
+    v_buff = v_info.get("buff", 0)
+    draw.text((953, 460), f"PHƯƠNG TIỆN : {v_name}", fill=DARK_TEXT, anchor="mm", font=font_title)
+    draw.text((953, 510), f"Giá trị : {vehicle_price:,} Gold" if vehicle_id else "Giá trị : 0 Gold", fill=PASTEL_PINK, anchor="mm", font=font_text)
+    draw.text((953, 550), f"Buff : +{v_buff} pts/ngày vào giới hạn thân mật", fill=PASTEL_PINK, anchor="mm", font=font_text)
+
+    # Row 3: Pet (CX: 345, CY: 765, diameter: 150) - mode="contain" for object PNGs
+    if pet_id and pet_id in PET_IMAGES:
+        p_path = marry_dir / "Pet" / PET_IMAGES[pet_id]
+        if p_path.exists():
+            try:
+                p_img = Image.open(p_path).convert("RGBA")
+                p_c = crop_circle(p_img, 150, mode="contain")
+                overlay.paste(p_c, (345 - 150 // 2, 765 - 150 // 2), mask=p_c)
+                p_img.close()
+                p_c.close()
+            except Exception as e:
+                logger.error(f"Failed to draw pet image: {e}")
+
+    p_info = COUPLE_PETS.get(pet_id, {}) if pet_id else {}
+    p_name = strip_emoji(p_info.get("name", "Chưa sở hữu"))
+    p_buff = p_info.get("buff", 0)
+    draw.text((953, 720), f"THÚ CƯNG : {p_name}", fill=DARK_TEXT, anchor="mm", font=font_title)
+    draw.text((953, 770), f"Giá trị : {pet_price:,} Gold" if pet_id else "Giá trị : 0 Gold", fill=PASTEL_PINK, anchor="mm", font=font_text)
+    draw.text((953, 810), f"Buff : +{p_buff} pts/ngày vào giới hạn thân mật", fill=PASTEL_PINK, anchor="mm", font=font_text)
+
+    bg.paste(overlay, (0, 0), mask=overlay)
+    overlay.close()
+
+    buf = BytesIO()
+    bg.save(buf, format="PNG")
+    buf.seek(0)
+    bg.close()
+    return buf
+
+
+class CoupleBannerView(discord.ui.View):
+    """View with 2 buttons: 'Couple 💖' and 'Tài sản 🏰' to switch between couple profile and assets banner."""
+    def __init__(self, author: discord.Member, proposer, spouse, marriage_data: tuple, assets_data: tuple | None, economy: Economy, timeout: float = 120.0):
+        super().__init__(timeout=timeout)
+        self.author = author
+        self.proposer = proposer
+        self.spouse = spouse
+        self.marriage_data = marriage_data
+        self.assets_data = assets_data
+        self.economy = economy
+        self.current_tab = 0
+        self.message = None
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.author.id:
+            await interaction.response.send_message("❌ Nút bấm này không phải dành cho bạn!", ephemeral=True)
+            return False
+        return True
+
+    def update_buttons(self):
+        for child in self.children:
+            if isinstance(child, discord.ui.Button):
+                if child.custom_id == f"banner_tab_{self.current_tab}":
+                    child.style = discord.ButtonStyle.primary
+                else:
+                    child.style = discord.ButtonStyle.secondary
+
+    @discord.ui.button(label="Couple 💖", style=discord.ButtonStyle.primary, custom_id="banner_tab_0")
+    async def tab_couple(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
+        self.current_tab = 0
+        self.update_buttons()
+
+        user_one, user_two, ring_type, love_points, joint_wallet, married_at, _, _ = self.marriage_data
+        married_days = max(1, (int(time.time()) - married_at) // 86400)
+        ig_handles = self.economy.get_marriage_ig(user_one, user_two)
+        if self.proposer.id == user_one:
+            author_ig, spouse_ig = ig_handles[0], ig_handles[1]
+        else:
+            author_ig, spouse_ig = ig_handles[1], ig_handles[0]
+        rel_status = self.economy.get_marriage_status(user_one, user_two)
+        saying = self.economy.get_marriage_saying(user_one, user_two)
+
+        estate_name, vehicle_name, pet_name = "", "", ""
+        if self.assets_data:
+            if self.assets_data[0] and self.assets_data[0] in COUPLE_ESTATES:
+                estate_name = COUPLE_ESTATES[self.assets_data[0]]["name"]
+            if self.assets_data[3] and self.assets_data[3] in COUPLE_VEHICLES:
+                vehicle_name = COUPLE_VEHICLES[self.assets_data[3]]["name"]
+            if self.assets_data[6] and self.assets_data[6] in COUPLE_PETS:
+                pet_name = COUPLE_PETS[self.assets_data[6]]["name"]
+
+        buf = await asyncio.to_thread(
+            render_couple_banner,
+            self.proposer,
+            self.spouse,
+            ring_type,
+            love_points,
+            joint_wallet,
+            married_days,
+            author_ig,
+            spouse_ig,
+            rel_status,
+            married_at,
+            saying,
+            estate_name,
+            vehicle_name,
+            pet_name
+        )
+        file = discord.File(fp=buf, filename="couple_profile.png")
+        await interaction.edit_original_response(attachments=[file], view=self)
+
+    @discord.ui.button(label="Tài Sản 🏰", style=discord.ButtonStyle.secondary, custom_id="banner_tab_1")
+    async def tab_assets(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
+        self.current_tab = 1
+        self.update_buttons()
+
+        e_id, e_price, v_id, v_price, p_id, p_price = None, 0, None, 0, None, 0
+        if self.assets_data:
+            e_id, e_price = self.assets_data[0], self.assets_data[1]
+            v_id, v_price = self.assets_data[3], self.assets_data[4]
+            p_id, p_price = self.assets_data[6], self.assets_data[7]
+
+        ring_type = self.marriage_data[2]
+        ring_base = 30 if ring_type == "ring_eternal_butterfly" else 20
+        e_buff = COUPLE_ESTATES.get(e_id, {}).get("buff", 0) if e_id else 0
+        v_buff = COUPLE_VEHICLES.get(v_id, {}).get("buff", 0) if v_id else 0
+        p_buff = COUPLE_PETS.get(p_id, {}).get("buff", 0) if p_id else 0
+        total_buff = ring_base + e_buff + v_buff + p_buff
+
+        buf = await asyncio.to_thread(
+            render_assets_banner,
+            self.proposer,
+            self.spouse,
+            e_id,
+            e_price,
+            v_id,
+            v_price,
+            p_id,
+            p_price,
+            total_buff
+        )
+        file = discord.File(fp=buf, filename="couple_assets.png")
+        await interaction.edit_original_response(attachments=[file], view=self)
+
+    async def on_timeout(self):
+        for child in self.children:
+            if isinstance(child, discord.ui.Button):
+                child.disabled = True
+        try:
+            if self.message:
+                await self.message.edit(view=self)
+        except Exception:
+            pass
 
 
 class MarriageView(discord.ui.View):
@@ -419,6 +768,9 @@ class DivorceView(discord.ui.View):
             user_one, user_two, ring_type, love_points, joint_wallet, married_at, _, _ = marriage
             split = joint_wallet // 2
             
+            # Refund assets 25%
+            refund_str = refund_couple_assets_on_divorce(self.economy, user_one, user_two)
+
             # Delete marriage and return wallet cash
             self.economy.delete_marriage(user_one, user_two)
             if split > 0:
@@ -428,6 +780,7 @@ class DivorceView(discord.ui.View):
             desc = (
                 f"💔 Hai bạn đã chính thức đường ai nấy đi.\n"
                 f"🏦 **Quỹ chung chia đôi:** Mỗi người nhận lại `+{split:,} VND` vào tài khoản ví."
+                f"{refund_str}"
             )
         else:
             desc = "❌ Không tìm thấy thông tin hôn nhân để chia tài sản."
@@ -448,6 +801,93 @@ class DivorceView(discord.ui.View):
             child.disabled = True
         await interaction.response.edit_message(view=self)
         await interaction.channel.send(f"❌ **{self.spouse.mention}** đã từ chối ký đơn ly hôn đồng thuận. Hãy dùng tùy chọn ly hôn đơn phương!")
+
+
+class CoupleShopView(discord.ui.View):
+    """View with 3 tab buttons to browse Estate, Vehicle, and Pet shop."""
+    def __init__(self, author: discord.Member, timeout: float = 60.0):
+        super().__init__(timeout=timeout)
+        self.author = author
+        self.current_tab = 0
+        self.message = None
+
+    def get_embed(self) -> discord.Embed:
+        if self.current_tab == 0:
+            desc = "### 🏠 DANH SÁCH BẤT ĐỘNG SẢN CẶP ĐÔI\n"
+            desc += "Mua bằng lệnh: `i?couple buy nha <ID>` (trừ thỏi vàng cá nhân)\n\n"
+            for k, v in COUPLE_ESTATES.items():
+                desc += f"• **`{k}`** — {v['name']}\n  └ Giá: **{v['price']:,} Thỏi Vàng** | Buff: `+{v['buff']} pts/ngày` vào giới hạn thân mật\n"
+            embed = make_embed(
+                title="🏬 CỬA HÀNG CẶP ĐÔI - BẤT ĐỘNG SẢN 🏠",
+                description=desc,
+                color=discord.Color.gold()
+            )
+            embed.set_footer(text="Trang 1/3 • Bất Động Sản")
+        elif self.current_tab == 1:
+            desc = "### 🚗 DANH SÁCH PHƯƠNG TIỆN CẶP ĐÔI\n"
+            desc += "Mua bằng lệnh: `i?couple buy xe <ID>` (trừ thỏi vàng cá nhân)\n\n"
+            for k, v in COUPLE_VEHICLES.items():
+                desc += f"• **`{k}`** — {v['name']}\n  └ Giá: **{v['price']:,} Thỏi Vàng** | Buff: `+{v['buff']} pts/ngày` vào giới hạn thân mật\n"
+            embed = make_embed(
+                title="🏬 CỬA HÀNG CẶP ĐÔI - PHƯƠNG TIỆN 🚗",
+                description=desc,
+                color=discord.Color.blue()
+            )
+            embed.set_footer(text="Trang 2/3 • Phương Tiện")
+        else:
+            desc = "### 🐾 DANH SÁCH THÚ CƯNG CẶP ĐÔI\n"
+            desc += "Mua bằng lệnh: `i?couple buy pet <ID>` (trừ thỏi vàng cá nhân)\n\n"
+            for k, v in COUPLE_PETS.items():
+                desc += f"• **`{k}`** — {v['name']}\n  └ Giá: **{v['price']:,} Thỏi Vàng** | Buff: `+{v['buff']} pts/ngày` vào giới hạn thân mật\n"
+            embed = make_embed(
+                title="🏬 CỬA HÀNG CẶP ĐÔI - THÚ CƯNG 🐾",
+                description=desc,
+                color=discord.Color.green()
+            )
+            embed.set_footer(text="Trang 3/3 • Thú Cưng")
+        return embed
+
+    def update_buttons(self):
+        for child in self.children:
+            if isinstance(child, discord.ui.Button):
+                if child.custom_id == f"tab_{self.current_tab}":
+                    child.style = discord.ButtonStyle.primary
+                else:
+                    child.style = discord.ButtonStyle.secondary
+
+    @discord.ui.button(label="Bất Động Sản 🏠", style=discord.ButtonStyle.primary, custom_id="tab_0")
+    async def tab_estate(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.current_tab = 0
+        self.update_buttons()
+        await interaction.response.edit_message(embed=self.get_embed(), view=self)
+
+    @discord.ui.button(label="Phương Tiện 🚗", style=discord.ButtonStyle.secondary, custom_id="tab_1")
+    async def tab_vehicle(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.current_tab = 1
+        self.update_buttons()
+        await interaction.response.edit_message(embed=self.get_embed(), view=self)
+
+    @discord.ui.button(label="Thú Cưng 🐾", style=discord.ButtonStyle.secondary, custom_id="tab_2")
+    async def tab_pet(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.current_tab = 2
+        self.update_buttons()
+        await interaction.response.edit_message(embed=self.get_embed(), view=self)
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.author.id:
+            await interaction.response.send_message("❌ Menu này không phải của bạn!", ephemeral=True)
+            return False
+        return True
+
+    async def on_timeout(self):
+        for child in self.children:
+            if isinstance(child, discord.ui.Button):
+                child.disabled = True
+        try:
+            if self.message:
+                await self.message.edit(view=self)
+        except Exception:
+            pass
 
 
 class CoupleWithdrawView(discord.ui.View):
@@ -742,6 +1182,19 @@ class Marry(commands.Cog):
         # Get custom saying
         saying = self.economy.get_marriage_saying(user_one, user_two)
         
+        # Get couple assets for banner display
+        assets = self.economy.get_couple_assets(user_one, user_two)
+        estate_name = ""
+        vehicle_name = ""
+        pet_name = ""
+        if assets:
+            if assets[0] and assets[0] in COUPLE_ESTATES:
+                estate_name = COUPLE_ESTATES[assets[0]]["name"]
+            if assets[3] and assets[3] in COUPLE_VEHICLES:
+                vehicle_name = COUPLE_VEHICLES[assets[3]]["name"]
+            if assets[6] and assets[6] in COUPLE_PETS:
+                pet_name = COUPLE_PETS[assets[6]]["name"]
+
         buf = await asyncio.to_thread(
             render_couple_banner, 
             target_user, 
@@ -754,10 +1207,15 @@ class Marry(commands.Cog):
             spouse_ig,
             rel_status,
             married_at,
-            saying
+            saying,
+            estate_name,
+            vehicle_name,
+            pet_name
         )
+        view = CoupleBannerView(ctx.author, target_user, spouse, marriage, assets, self.economy)
         file = discord.File(fp=buf, filename="couple_profile.png")
-        await ctx.send(file=file)
+        msg = await ctx.send(file=file, view=view)
+        view.message = msg
         
         try:
             await loading_msg.delete()
@@ -1190,6 +1648,286 @@ class Marry(commands.Cog):
         )
         await ctx.send(embed=embed)
 
+    def _get_couple_daily_limit(self, ring_type: str, assets: tuple | None) -> int:
+        base = 30 if ring_type == "ring_eternal_butterfly" else 20
+        if not assets:
+            return base
+        e_id, _, _, v_id, _, _, p_id, _, _ = assets
+        e_buff = COUPLE_ESTATES.get(e_id, {}).get("buff", 0) if e_id else 0
+        v_buff = COUPLE_VEHICLES.get(v_id, {}).get("buff", 0) if v_id else 0
+        p_buff = COUPLE_PETS.get(p_id, {}).get("buff", 0) if p_id else 0
+        return base + e_buff + v_buff + p_buff
+
+    @couple_cmd.command(name="shop", aliases=["store", "cuahang"], brief="Xem danh sách bất động sản, phương tiện và thú cưng cặp đôi.")
+    async def couple_shop(self, ctx: commands.Context):
+        view = CoupleShopView(ctx.author)
+        embed = view.get_embed()
+        msg = await ctx.send(embed=embed, view=view)
+        view.message = msg
+
+    @couple_cmd.group(name="buy", brief="Mua nhà, xe hoặc thú cưng cho cặp đôi.", invoke_without_command=True)
+    async def couple_buy(self, ctx: commands.Context, item_type: str = None, item_id: str = None):
+        if ctx.invoked_subcommand is None:
+            if item_type and item_id:
+                item_type = item_type.lower().strip()
+                if item_type in ["nha", "bds", "estate"]:
+                    await ctx.invoke(self.couple_buy_nha, item_id=item_id)
+                    return
+                elif item_type in ["xe", "vehicle", "phuongtien"]:
+                    await ctx.invoke(self.couple_buy_xe, item_id=item_id)
+                    return
+                elif item_type in ["pet", "thucung", "thu"]:
+                    await ctx.invoke(self.couple_buy_pet, item_id=item_id)
+                    return
+            await ctx.send("❌ Cú pháp: `i?couple buy nha <ID>`, `i?couple buy xe <ID>`, hoặc `i?couple buy pet <ID>`. Gõ `i?couple shop` để xem danh sách món đồ!")
+
+    @couple_buy.command(name="nha", aliases=["bds", "estate"], brief="Mua nhà / bất động sản cho cặp đôi.")
+    async def couple_buy_nha(self, ctx: commands.Context, item_id: str):
+        marriage, _ = self._resolve_marriage_and_args(ctx.author.id, [])
+        if not marriage:
+            await ctx.send("❌ Bạn chưa kết hôn nên không thể mua bất động sản cặp đôi!")
+            return
+
+        user_one, user_two = marriage[0], marriage[1]
+        item_id = item_id.lower().strip()
+        if item_id not in COUPLE_ESTATES:
+            await ctx.send(f"❌ ID bất động sản `{item_id}` không hợp lệ! Hãy gõ `i?couple shop` để xem danh sách.")
+            return
+
+        estate_info = COUPLE_ESTATES[item_id]
+        price = estate_info["price"]
+
+        profile = self.economy.get_entry(ctx.author.id)
+        gold = profile[2]
+        if gold < price:
+            await ctx.send(f"❌ Bạn không đủ thỏi vàng! `{estate_info['name']}` có giá `{price:,} Thỏi Vàng`, nhưng bạn chỉ có `{gold:,} Thỏi Vàng`.")
+            return
+
+        assets = self.economy.get_couple_assets(user_one, user_two)
+        refund_msg = ""
+        if assets and assets[0] and assets[1] > 0 and assets[2] > 0:
+            old_id, old_price, old_buyer = assets[0], assets[1], assets[2]
+            if old_id == item_id:
+                await ctx.send(f"❌ Cặp đôi của bạn hiện đã sở hữu {estate_info['name']} rồi!")
+                return
+            refund_amount = int(old_price * 0.25)
+            if refund_amount > 0 and old_buyer > 0:
+                self.economy.add_credits(old_buyer, refund_amount)
+                old_name = COUPLE_ESTATES.get(old_id, {}).get("name", old_id)
+                refund_msg = f"\n📦 **Thanh lý {old_name} cũ:** Hoàn lại 25% (`+{refund_amount:,} Thỏi Vàng`) cho <@{old_buyer}>."
+
+        self.economy.add_credits(ctx.author.id, -price)
+        self.economy.set_couple_estate(user_one, user_two, item_id, price, ctx.author.id)
+
+        log_wallet_change(
+            logger,
+            event="couple_buy_estate",
+            user_id=ctx.author.id,
+            credits_delta=-price,
+            estate_id=item_id,
+            ctx=ctx
+        )
+
+        embed = make_embed(
+            title="🏠 MUA BẤT ĐỘNG SẢN CẶP ĐÔI THÀNH CÔNG 🏠",
+            description=(
+                f"**{ctx.author.name}** đã mua thành công **{estate_info['name']}** cho tổ ấm gia đình!\n\n"
+                f"🟡 **Chi phí:** `-{price:,} Thỏi Vàng` (trừ ví vàng cá nhân)\n"
+                f"✨ **Buff thân mật:** `+{estate_info['buff']} pts/ngày` vào giới hạn thân mật hàng ngày!{refund_msg}"
+            ),
+            color=discord.Color.gold()
+        )
+        await ctx.send(embed=embed)
+
+    @couple_buy.command(name="xe", aliases=["vehicle", "phuongtien"], brief="Mua xe / phương tiện cho cặp đôi.")
+    async def couple_buy_xe(self, ctx: commands.Context, item_id: str):
+        marriage, _ = self._resolve_marriage_and_args(ctx.author.id, [])
+        if not marriage:
+            await ctx.send("❌ Bạn chưa kết hôn nên không thể mua phương tiện cặp đôi!")
+            return
+
+        user_one, user_two = marriage[0], marriage[1]
+        item_id = item_id.lower().strip()
+        if item_id not in COUPLE_VEHICLES:
+            await ctx.send(f"❌ ID phương tiện `{item_id}` không hợp lệ! Hãy gõ `i?couple shop` để xem danh sách.")
+            return
+
+        vehicle_info = COUPLE_VEHICLES[item_id]
+        price = vehicle_info["price"]
+
+        profile = self.economy.get_entry(ctx.author.id)
+        gold = profile[2]
+        if gold < price:
+            await ctx.send(f"❌ Bạn không đủ thỏi vàng! `{vehicle_info['name']}` có giá `{price:,} Thỏi Vàng`, nhưng bạn chỉ có `{gold:,} Thỏi Vàng`.")
+            return
+
+        assets = self.economy.get_couple_assets(user_one, user_two)
+        refund_msg = ""
+        if assets and assets[3] and assets[4] > 0 and assets[5] > 0:
+            old_id, old_price, old_buyer = assets[3], assets[4], assets[5]
+            if old_id == item_id:
+                await ctx.send(f"❌ Cặp đôi của bạn hiện đã sở hữu {vehicle_info['name']} rồi!")
+                return
+            refund_amount = int(old_price * 0.25)
+            if refund_amount > 0 and old_buyer > 0:
+                self.economy.add_credits(old_buyer, refund_amount)
+                old_name = COUPLE_VEHICLES.get(old_id, {}).get("name", old_id)
+                refund_msg = f"\n📦 **Thanh lý {old_name} cũ:** Hoàn lại 25% (`+{refund_amount:,} Thỏi Vàng`) cho <@{old_buyer}>."
+
+        self.economy.add_credits(ctx.author.id, -price)
+        self.economy.set_couple_vehicle(user_one, user_two, item_id, price, ctx.author.id)
+
+        log_wallet_change(
+            logger,
+            event="couple_buy_vehicle",
+            user_id=ctx.author.id,
+            credits_delta=-price,
+            vehicle_id=item_id,
+            ctx=ctx
+        )
+
+        embed = make_embed(
+            title="🚗 MUA PHƯƠNG TIỆN CẶP ĐÔI THÀNH CÔNG 🚗",
+            description=(
+                f"**{ctx.author.name}** đã sắm thành công **{vehicle_info['name']}** cho cặp đôi!\n\n"
+                f"🟡 **Chi phí:** `-{price:,} Thỏi Vàng` (trừ ví vàng cá nhân)\n"
+                f"✨ **Buff thân mật:** `+{vehicle_info['buff']} pts/ngày` vào giới hạn thân mật hàng daily!{refund_msg}"
+            ),
+            color=discord.Color.blue()
+        )
+        await ctx.send(embed=embed)
+
+    @couple_buy.command(name="pet", aliases=["thucung", "thu"], brief="Mua thú cưng cho cặp đôi.")
+    async def couple_buy_pet(self, ctx: commands.Context, item_id: str):
+        marriage, _ = self._resolve_marriage_and_args(ctx.author.id, [])
+        if not marriage:
+            await ctx.send("❌ Bạn chưa kết hôn nên không thể mua thú cưng cặp đôi!")
+            return
+
+        user_one, user_two = marriage[0], marriage[1]
+        item_id = item_id.lower().strip()
+        if item_id not in COUPLE_PETS:
+            await ctx.send(f"❌ ID thú cưng `{item_id}` không hợp lệ! Hãy gõ `i?couple shop` để xem danh sách.")
+            return
+
+        pet_info = COUPLE_PETS[item_id]
+        price = pet_info["price"]
+
+        profile = self.economy.get_entry(ctx.author.id)
+        gold = profile[2]
+        if gold < price:
+            await ctx.send(f"❌ Bạn không đủ thỏi vàng! `{pet_info['name']}` có giá `{price:,} Thỏi Vàng`, nhưng bạn chỉ có `{gold:,} Thỏi Vàng`.")
+            return
+
+        assets = self.economy.get_couple_assets(user_one, user_two)
+        refund_msg = ""
+        if assets and assets[6] and assets[7] > 0 and assets[8] > 0:
+            old_id, old_price, old_buyer = assets[6], assets[7], assets[8]
+            if old_id == item_id:
+                await ctx.send(f"❌ Cặp đôi của bạn hiện đã sở hữu {pet_info['name']} rồi!")
+                return
+            refund_amount = int(old_price * 0.25)
+            if refund_amount > 0 and old_buyer > 0:
+                self.economy.add_credits(old_buyer, refund_amount)
+                old_name = COUPLE_PETS.get(old_id, {}).get("name", old_id)
+                refund_msg = f"\n📦 **Thanh lý {old_name} cũ:** Hoàn lại 25% (`+{refund_amount:,} Thỏi Vàng`) cho <@{old_buyer}>."
+
+        self.economy.add_credits(ctx.author.id, -price)
+        self.economy.set_couple_pet(user_one, user_two, item_id, price, ctx.author.id)
+
+        log_wallet_change(
+            logger,
+            event="couple_buy_pet",
+            user_id=ctx.author.id,
+            credits_delta=-price,
+            pet_id=item_id,
+            ctx=ctx
+        )
+
+        embed = make_embed(
+            title="🐾 MUA THÚ CƯNG CẶP ĐÔI THÀNH CÔNG 🐾",
+            description=(
+                f"**{ctx.author.name}** đã nhận nuôi thành công **{pet_info['name']}** cho hai bạn!\n\n"
+                f"🟡 **Chi phí:** `-{price:,} Thỏi Vàng` (trừ ví vàng cá nhân)\n"
+                f"✨ **Buff thân mật:** `+{pet_info['buff']} pts/ngày` vào giới hạn thân mật hàng daily!{refund_msg}"
+            ),
+            color=discord.Color.green()
+        )
+        await ctx.send(embed=embed)
+
+    @couple_cmd.command(name="assets", aliases=["estate", "vehicle", "pet", "items", "taisan"], brief="Xem danh sách tài sản và buff của cặp đôi.", usage="couple assets [chỉ_số/người_dùng]")
+    async def couple_assets_cmd(self, ctx: commands.Context, index_or_user: str = None, index: int = None):
+        target_user = ctx.author
+        target_index = 1
+        
+        if index_or_user is not None:
+            try:
+                target_index = int(index_or_user)
+            except ValueError:
+                try:
+                    target_user = await commands.MemberConverter().convert(ctx, index_or_user)
+                except commands.BadArgument:
+                    await ctx.send("❌ Người dùng không hợp lệ!")
+                    return
+                if index is not None:
+                    target_index = index
+                    
+        marriages = self.economy.get_marriages(target_user.id)
+        if not marriages:
+            await ctx.send(f"❌ {'Bạn' if target_user.id == ctx.author.id else target_user.name} chưa kết hôn!")
+            return
+            
+        if target_index < 1 or target_index > len(marriages):
+            await ctx.send(f"❌ Chỉ số cặp đôi không hợp lệ! (1 đến {len(marriages)})")
+            return
+            
+        marriage = marriages[target_index - 1]
+        user_one, user_two, ring_type, love_points, joint_wallet, married_at, _, _ = marriage
+        
+        assets = self.economy.get_couple_assets(user_one, user_two)
+        
+        estate_str = "Chưa có"
+        estate_buff = 0
+        vehicle_str = "Chưa có"
+        vehicle_buff = 0
+        pet_str = "Chưa có"
+        pet_buff = 0
+
+        if assets:
+            e_id, e_price, e_buyer, v_id, v_price, v_buyer, p_id, p_price, p_buyer = assets
+            if e_id and e_id in COUPLE_ESTATES:
+                e_info = COUPLE_ESTATES[e_id]
+                estate_str = f"{e_info['name']} (`+{e_info['buff']} pts/ngày`)"
+                estate_buff = e_info['buff']
+            if v_id and v_id in COUPLE_VEHICLES:
+                v_info = COUPLE_VEHICLES[v_id]
+                vehicle_str = f"{v_info['name']} (`+{v_info['buff']} pts/ngày`)"
+                vehicle_buff = v_info['buff']
+            if p_id and p_id in COUPLE_PETS:
+                p_info = COUPLE_PETS[p_id]
+                pet_str = f"{p_info['name']} (`+{p_info['buff']} pts/ngày`)"
+                pet_buff = p_info['buff']
+
+        ring_base = 30 if ring_type == "ring_eternal_butterfly" else 20
+        total_limit = ring_base + estate_buff + vehicle_buff + pet_buff
+        ring_name = RINGS.get(ring_type, ring_type)
+
+        desc = (
+            f"💍 **Tín vật kết duyên:** {ring_name} (`{ring_base} pts/ngày`)\n\n"
+            f"🏠 **Bất Động Sản:** {estate_str}\n"
+            f"🚗 **Phương Tiện:** {vehicle_str}\n"
+            f"🐾 **Thú Cưng:** {pet_str}\n\n"
+            f"📊 **TỔNG GIỚI HẠN THÂN MẬT HÀNG NGÀY:**\n"
+            f"💖 **`{total_limit} Điểm thân mật / ngày`** (Nhẫn {ring_base} + BĐS {estate_buff} + Xe {vehicle_buff} + Thú {pet_buff})"
+        )
+
+        embed = make_embed(
+            title=f"🏰 TÀI SẢN PHU THÊ & BUFF CẶP ĐÔI 🏰",
+            description=desc,
+            color=discord.Color.magenta()
+        )
+        await ctx.send(embed=embed)
+
 
     async def process_interact(self, ctx: commands.Context, target: discord.Member, action: str, emoji: str, action_type: str):
         marriages = self.economy.get_marriages(ctx.author.id)
@@ -1270,10 +2008,12 @@ class Marry(commands.Cog):
             points_to_add = math.ceil(base_points * (1 + buff_pct))
             
         old_love_points = love_points
-        new_points, success = self.economy.add_love_points(user_one, user_two, points_to_add, now)
+        assets = self.economy.get_couple_assets(user_one, user_two)
+        total_limit = self._get_couple_daily_limit(ring_type, assets)
+        new_points, success = self.economy.add_love_points(user_one, user_two, points_to_add, now, daily_limit=total_limit)
         added_points = new_points - old_love_points
         
-        limit_desc = "30 điểm/ngày" if ring_type == "ring_eternal_butterfly" else "20 điểm/ngày"
+        limit_desc = f"{total_limit} điểm/ngày"
         if success and added_points > 0:
             pts_msg = f" Bạn nhận được `+{added_points} Điểm thân mật` (Giới hạn tối đa {limit_desc})."
         else:
@@ -1405,6 +2145,9 @@ class Marry(commands.Cog):
             await ctx.send(f"❌ Bạn không đủ tiền mặt trong ví để trả án phí ly hôn đơn phương! Cần `{unilateral_cost:,} VND` nhưng bạn chỉ có `{cash:,} VND`.")
             return
             
+        # Refund assets 25%
+        refund_str = refund_couple_assets_on_divorce(self.economy, user_one, user_two)
+
         # Execute force divorce
         split = joint_wallet // 2
         self.economy.delete_marriage(user_one, user_two)
@@ -1438,6 +2181,7 @@ class Marry(commands.Cog):
                 f"💸 **Án phí khấu trừ:** `-{unilateral_cost:,} VND` từ ví của bạn.\n"
                 f"🎁 **Bồi thường tổn thất phu thê:** chuyển `+{compensation:,} VND` cho <@{spouse_id}>.\n"
                 f"🏦 **Quỹ chung chia đôi:** Mỗi người nhận lại `+{split:,} VND`."
+                f"{refund_str}"
             ),
             color=discord.Color.red()
         )
@@ -1493,6 +2237,9 @@ class Marry(commands.Cog):
         ring_name = RINGS.get(ring_type, ring_type)
         days = max(1, (int(time.time()) - married_at) // 86400)
 
+        # Refund assets 25%
+        refund_str = refund_couple_assets_on_divorce(self.economy, user_one, user_two)
+
         # Delete marriage record
         self.economy.delete_marriage(user_one, user_two)
 
@@ -1510,7 +2257,8 @@ class Marry(commands.Cog):
                 f"👤 **Người 2:** <@{user_two}> (ID: `{user_two}`)\n"
                 f"💍 **Nhẫn:** {ring_name}\n"
                 f"📅 **Thời gian kết hôn:** {days:,} ngày\n"
-                f"🏦 **Quỹ chung bị xoá:** {joint_wallet:,} VND *(không hoàn trả)*\n\n"
+                f"🏦 **Quỹ chung bị xoá:** {joint_wallet:,} VND *(không hoàn trả)*"
+                f"{refund_str}\n\n"
                 f"⚠️ *Cặp đôi sẽ không nhận được thông báo tự động.*"
             ),
             color=discord.Color.dark_red()
