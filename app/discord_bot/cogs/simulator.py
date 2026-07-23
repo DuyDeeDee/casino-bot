@@ -874,7 +874,7 @@ class ShopView(discord.ui.View):
                 description="Trang bị các bằng cấp và chứng chỉ để nâng cấp bản thân và mở khóa các công việc mới!",
                 color=discord.Color.gold()
             )
-            career_keys = ["bang_cap", "bang_kien_truc", "bang_phi_hanh", "bang_bac_si", "the_tho_mo", "the_tho_san"]
+            career_keys = ["bang_cap", "bang_kien_truc", "bang_phi_hanh", "bang_bac_si", "the_tho_mo", "the_tho_san", "bang_sieu_trom"]
             for item_id in career_keys:
                 if item_id in SHOP_ITEMS:
                     details = SHOP_ITEMS[item_id]
