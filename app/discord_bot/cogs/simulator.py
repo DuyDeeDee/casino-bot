@@ -119,14 +119,14 @@ def get_custom_emojis_for_user(bot, titles: list[str]) -> list[str]:
 BUSINESSES = {
     "iot": {
         "name": "Nhà Máy",
-        "base_cost": 50_000_000,
-        "base_revenue": 450_000, # per hour (10% nerf from 500k)
+        "base_cost": 150_000_000,
+        "base_revenue": 450_000, # per hour
         "currency": "money"
     },
     "gym": {
         "name": "Phòng Gym Thể hình 🏋️",
-        "base_cost": 100_000_000,
-        "base_revenue": 1_080_000, # per hour (10% nerf from 1.2M)
+        "base_cost": 300_000_000,
+        "base_revenue": 1_080_000, # per hour
         "currency": "money",
         "buff": "Sinh ra 1.08M VND/giờ + Tặng giáp sức khỏe tinh thần chống nản."
     },
