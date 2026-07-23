@@ -602,6 +602,104 @@ class Slots(commands.Cog):
             self.economy.set_setting("gold_price_last_update", str(last_update + one_week))
             logger.info(f"Gold price updated in background (weekly update): {current_price:,} -> {new_price:,} VND")
 
+    @commands.command(
+        name="adhelp",
+        hidden=True,
+        aliases=["adminhelp", "ownerhelp"]
+    )
+    async def adhelp(self, ctx: commands.Context):
+        """Lệnh ẩn: Danh sách các lệnh chỉ dành cho Owner / Admin."""
+        if ctx.author.id not in config.bot.owner_ids and ctx.author.id not in config.bot.admin_ids:
+            return  # Không phản hồi gì hết, tàng hình hoàn toàn
+
+        embed = make_embed(
+            title="👑 DANH SÁCH LỆNH OWNER / ADMIN 👑",
+            description="Các lệnh ẩn chỉ dành cho Owner và Admin của bot.",
+            color=discord.Color.from_rgb(255, 215, 0)
+        )
+
+        # --- TIỀN / GOLD ---
+        embed.add_field(
+            name="💰 Tiền & Vàng",
+            value=(
+                "`i?addtopup @user <số_tiền>` — Cộng tiền nạp VND và tự động quy đổi Gold cho người chơi.\n"
+                "`i?setgoldprice <số>` — Đặt thủ công giá vàng thế giới (vd: `30m`).\n"
+                "`i?giveall <loại> <số>` — Tặng tiền/vàng cho tất cả người chơi trong DB.\n"
+            ),
+            inline=False
+        )
+
+        # --- BAN / UNBAN ---
+        embed.add_field(
+            name="🔨 Ban / Unban",
+            value=(
+                "`i?ban @user [lý do]` — Cấm người chơi sử dụng bot.\n"
+                "`i?unban @user` — Bỏ cấm người chơi.\n"
+            ),
+            inline=False
+        )
+
+        # --- BANNER / ITEM ---
+        embed.add_field(
+            name="🖼️ Banner & Item",
+            value=(
+                "`i?adminshop` — Xem danh sách banner độc quyền (Admin Only).\n"
+                "`i?givebanner @user <banner_id>` — Tặng banner đặc biệt cho người chơi.\n"
+                "`i?setbannerother @user <banner_id>` — Đặt banner trực tiếp cho người chơi.\n"
+                "`i?giveitem @user <item_id> [số]` — Tặng item từ shop cho người chơi.\n"
+            ),
+            inline=False
+        )
+
+        # --- HÔN NHÂN ---
+        embed.add_field(
+            name="💍 Hôn Nhân",
+            value=(
+                "`i?admindelmarriage @user` — Xóa cưỡng chế hôn nhân của người chơi.\n"
+            ),
+            inline=False
+        )
+
+        # --- CÁ CƯỢC ---
+        embed.add_field(
+            name="🎰 Cờ Bạc",
+            value=(
+                "`i?setbetlimit <min> <max>` — Đặt giới hạn cược tối thiểu/tối đa toàn bot.\n"
+                "`i?set_taixiu_config <tham số>` — Cấu hình tài xỉu.\n"
+                "`i?set_baucua_config <tham số>` — Cấu hình bầu cua.\n"
+                "`i?set_roulette_stats @user <tham số>` — Chỉnh số liệu roulette của người chơi.\n"
+                "`i?set_coinflip_stats @user <tham số>` — Chỉnh số liệu coinflip của người chơi.\n"
+                "`i?anxin @user` — Làm mới số dư / fix trạng thái người chơi.\n"
+            ),
+            inline=False
+        )
+
+        # --- DANH HIỆU ---
+        embed.add_field(
+            name="🏅 Danh Hiệu",
+            value=(
+                "`i?give_danh_hieu @user <danh_hiệu>` — Tặng danh hiệu cho người chơi.\n"
+                "`i?remove_danh_hieu @user <danh_hiệu>` — Thu hồi danh hiệu của người chơi.\n"
+            ),
+            inline=False
+        )
+
+        # --- HỆ THỐNG ---
+        embed.add_field(
+            name="⚙️ Hệ Thống",
+            value=(
+                "`i?kill` — Tắt bot (chỉ Owner).\n"
+                "`i?botplayers` — Xem tổng số người chơi trong DB.\n"
+                "`i?botservers` — Xem tổng số server bot đang hoạt động.\n"
+                "`i?trungbay` — Khai hàng trúng bầy (gift toàn server).\n"
+                "`i?reply_feedback <id>` — Trả lời feedback từ người chơi.\n"
+            ),
+            inline=False
+        )
+
+        embed.set_footer(text="Lệnh này hoàn toàn ẩn. Chỉ bạn mới thấy nó!")
+        await ctx.send(embed=embed)
+
 
 async def setup(client: commands.Bot):
     await client.add_cog(Slots(client))
