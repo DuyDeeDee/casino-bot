@@ -683,6 +683,13 @@ def _migration_36_add_couple_assets(cur: sqlite3.Cursor) -> None:
         pass
 
 
+def _migration_37_update_gold_price_to_30m(cur: sqlite3.Cursor) -> None:
+    try:
+        cur.execute("UPDATE system_settings SET value = '30000000' WHERE key IN ('gold_price', 'gold_price_prev')")
+    except sqlite3.OperationalError:
+        pass
+
+
 MIGRATIONS: dict[int, Callable[[sqlite3.Cursor], None]] = {
     1: _migration_1_create_economy,
     2: _migration_2_add_indexes,
@@ -720,6 +727,7 @@ MIGRATIONS: dict[int, Callable[[sqlite3.Cursor], None]] = {
     34: _migration_34_add_marry_interest_and_wish_columns,
     35: _migration_35_add_giaima_table,
     36: _migration_36_add_couple_assets,
+    37: _migration_37_update_gold_price_to_30m,
 }
 
 

@@ -524,6 +524,50 @@ class Slots(commands.Cog):
         embed.set_thumbnail(url=target.display_avatar.url)
         await ctx.send(embed=embed)
 
+    @commands.command(
+        brief="[ADMIN] Đặt thủ công giá vàng thế giới.",
+        usage="setgoldprice <số_tiền_VND/số_m>",
+        aliases=["setgiavang", "doigiavang"]
+    )
+    async def setgoldprice(self, ctx: commands.Context, price_str: str):
+        if ctx.author.id not in config.bot.owner_ids and ctx.author.id not in config.bot.admin_ids:
+            await ctx.send("❌ Lệnh này chỉ dành cho Admin / Owner!")
+            return
+
+        def parse_amount(s: str) -> int | None:
+            if not s:
+                return None
+            s = s.lower().strip().replace(".", "").replace(",", "")
+            try:
+                if s.endswith("k"):
+                    return int(float(s[:-1]) * 1000)
+                elif s.endswith("m"):
+                    return int(float(s[:-1]) * 1_000_000)
+                else:
+                    return int(s)
+            except ValueError:
+                return None
+
+        new_price = parse_amount(price_str)
+        if not new_price or new_price < 1_000_000:
+            await ctx.send("❌ Giá vàng không hợp lệ! Mức tối thiểu là 1,000,000 VND. Ví dụ: `i?setgoldprice 30m` hoặc `i?setgoldprice 30000000`.")
+            return
+
+        current_price = self.economy.get_gold_price()
+        self.economy.set_gold_prices(new_price, current_price)
+        self.economy.set_setting("gold_price_last_update", str(int(time.time())))
+
+        embed = make_embed(
+            title="<:32100goldbarsfortnite:1514192020921651251> ĐÃ CẬP NHẬT GIÁ VÀNG THẾ GIỚI <:32100goldbarsfortnite:1514192020921651251>",
+            description=(
+                f"ADMIN **{ctx.author.mention}** đã cập nhật giá vàng thế giới thành công!\n\n"
+                f"📈 **Giá cũ:** `{current_price:,} VND` / thỏi\n"
+                f"💰 **Giá mới:** `{new_price:,} VND` / thỏi"
+            ),
+            color=discord.Color.gold()
+        )
+        await ctx.send(embed=embed)
+
     @tasks.loop(minutes=10)
     async def update_gold_price(self):
         current_time = int(time.time())
