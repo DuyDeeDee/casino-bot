@@ -384,11 +384,6 @@ def render_couple_banner(proposer, target, ring_type: str, love_points: int, joi
     draw.text((836, 420), f"Đã Kết Hôn : {married_days} ngày", fill=PASTEL_PINK, anchor="mm", font=font_stats)
     draw.text((836, 455), f"Điểm thân mật : {love_points:,}",  fill=PASTEL_PINK, anchor="mm", font=font_stats)
     
-    asset_line = f"🏠 {estate_name or 'Chưa có'}  |  🚗 {vehicle_name or 'Chưa có'}"
-    draw.text((836, 490), asset_line, fill=PASTEL_PINK, anchor="mm", font=font_stats)
-    pet_line = f"🐾 Thú Cưng: {pet_name or 'Chưa có'}"
-    draw.text((836, 525), pet_line, fill=PASTEL_PINK, anchor="mm", font=font_stats)
-    
     # 6. Load and paste Ring image centered exactly at the bottom-right heart: "fix lại hình chiếc nhẫn sao cho nó nằm ở giữa cái trái tim ở góc dưới"
     ring_file = RING_IMAGES.get(ring_type)
     if ring_file:

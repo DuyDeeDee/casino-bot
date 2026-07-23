@@ -1,4 +1,5 @@
 import logging
+import re
 import urllib.request
 import os
 import aiohttp
@@ -103,10 +104,14 @@ def get_rank_info(net_worth: int) -> tuple[str, tuple[int, int, int], tuple[int,
         return "Tỷ Phú Đô La", (255, 69, 0), (255, 255, 255) # Red-Orange
 
 def strip_emoji(text: str | None) -> str:
-    """Removes emojis and special characters from title string for clean PIL rendering."""
+    """Removes emojis, custom discord emojis (<:name:id>), and special characters for clean PIL rendering."""
     if not text:
         return ""
-    return "".join(c for c in text if ord(c) < 0x2000 or 0x20A0 <= ord(c) <= 0x20CF).strip()
+    # Remove discord custom emoji tags <:name:id> or <a:name:id>
+    text = re.sub(r"<a?:[a-zA-Z0-9_]+:\d+>", "", text)
+    # Remove unicode emojis and symbols
+    clean_chars = [c for c in text if ord(c) < 0x2000 or 0x20A0 <= ord(c) <= 0x20CF]
+    return re.sub(r"\s+", " ", "".join(clean_chars)).strip()
 
 def remove_diacritics(text: str) -> str:
     """Removes Vietnamese accents and diacritics from text."""
