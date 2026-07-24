@@ -159,7 +159,12 @@ class BkbSoloView(discord.ui.View):
             await interaction.followup.send(f"❌ {e}", ephemeral=True)
             return
 
-        bot_choice = random.choice(["bua", "keo", "bao"])
+        # 15% bot counter-pick chance to lower player win rate (House edge)
+        counter_hands = {"bua": "bao", "keo": "bua", "bao": "keo"}
+        if random.random() < 0.15:
+            bot_choice = counter_hands[player_choice]
+        else:
+            bot_choice = random.choice(["bua", "keo", "bao"])
         outcome = evaluate_hands(player_choice, bot_choice)
         
         stats = self.cog.economy.get_bkb_stats(self.user_id)
