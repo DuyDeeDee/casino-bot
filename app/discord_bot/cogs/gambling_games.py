@@ -1602,7 +1602,7 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
             jackpot_val_won = 0
             if dice[0] == dice[1] == dice[2]:
                 jackpot_rate_str = self.economy.get_setting("baucua_jackpot_rate")
-                jackpot_rate = float(jackpot_rate_str) if jackpot_rate_str is not None else 1.0
+                jackpot_rate = float(jackpot_rate_str) if jackpot_rate_str else 1.0
                 
                 if random.random() < jackpot_rate:
                     total_session_bets = sum(session_bets.values())
@@ -1613,20 +1613,20 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
                         jackpot_val_won = jackpot_val
                         for uid, amt in session_bets.items():
                             share = int(jackpot_val * (amt / total_session_bets))
-                        if share > 0:
-                            self.economy.add_money(uid, share)
-                            if share >= 1_000_000:
-                                from app.discord_bot.modules.betting import reward_spouse_share
-                                await reward_spouse_share(self.client, uid, share, ctx.channel)
-                            jackpot_winners.append((uid, share))
-                            log_wallet_change(
-                                logger,
-                                event="baucua_jackpot_win",
-                                user_id=uid,
-                                money_delta=share,
-                                ctx=ctx,
-                                session_id=session_id,
-                            )
+                            if share > 0:
+                                self.economy.add_money(uid, share)
+                                if share >= 1_000_000:
+                                    from app.discord_bot.modules.betting import reward_spouse_share
+                                    await reward_spouse_share(self.client, uid, share, ctx.channel)
+                                jackpot_winners.append((uid, share))
+                                log_wallet_change(
+                                    logger,
+                                    event="baucua_jackpot_win",
+                                    user_id=uid,
+                                    money_delta=share,
+                                    ctx=ctx,
+                                    session_id=session_id,
+                                )
                     self.economy.set_setting("baucua_jackpot", "0")
 
             winners = []
@@ -1643,7 +1643,7 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
 
             # Read tax rate setting (same pattern as taixiu)
             tax_rate_str = self.economy.get_setting("baucua_tax_rate")
-            tax_rate = float(tax_rate_str) if tax_rate_str is not None else 0.0
+            tax_rate = float(tax_rate_str) if tax_rate_str else 0.0
             
             for uid in user_ids:
                 name = view.user_names.get(uid, f"User {uid}")
@@ -1780,7 +1780,7 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
                 await ctx.send(f"🎉 Chúc mừng các đại gia đã chiến thắng phiên #{session_id}: {', '.join(winner_mentions)}!")
         except Exception as e:
             logger.error(f"Error in baucua command: {e}", exc_info=True)
-            await ctx.send(f"❌ Có lỗi xảy ra trong phiên Bầu Cua #{session_id}.")
+            await ctx.send(f"❌ Có lỗi xảy ra trong phiên Bầu Cua #{session_id}: `{e}`")
         finally:
             self.active_baucua_sessions.discard(channel_id)
 
