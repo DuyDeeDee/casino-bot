@@ -405,6 +405,9 @@ class Slots(commands.Cog):
             embed.set_footer(text="Liên hệ Admin / Owner máy chủ để thực hiện giao dịch nạp.")
             await ctx.send(embed=embed)
         else:
+            base_g, bonus_g, disc_p, tot_g = calc_gold(vnd_amount)
+            vnd_formatted = f"{vnd_amount:,} VND"
+
             bank_id = self.economy.get_setting("bank_id", "MB")
             bank_account = self.economy.get_setting("bank_account", "0000000000")
             account_name = self.economy.get_setting("account_name", "ADMIN CASINO")
