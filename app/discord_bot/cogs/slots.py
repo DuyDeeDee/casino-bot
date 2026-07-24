@@ -405,24 +405,90 @@ class Slots(commands.Cog):
             embed.set_footer(text="Liên hệ Admin / Owner máy chủ để thực hiện giao dịch nạp.")
             await ctx.send(embed=embed)
         else:
-            base_g, bonus_g, disc_p, tot_g = calc_gold(vnd_amount)
-            vnd_formatted = f"{vnd_amount:,} VND"
+            bank_id = self.economy.get_setting("bank_id", "MB")
+            bank_account = self.economy.get_setting("bank_account", "0000000000")
+            account_name = self.economy.get_setting("account_name", "ADMIN CASINO")
+
+            from urllib.parse import quote
+            add_info = f"NAP {ctx.author.id}"
+            encoded_acc_name = quote(account_name)
+            encoded_add_info = quote(add_info)
+            vietqr_url = f"https://img.vietqr.io/image/{bank_id}-{bank_account}-compact2.png?amount={vnd_amount}&addInfo={encoded_add_info}&accountName={encoded_acc_name}"
 
             desc = (
+                f"👤 **Người nạp:** {ctx.author.mention}\n"
                 f"💵 **Số tiền nạp:** `{vnd_formatted}`\n"
                 f"🪙 **Số Gold gốc (1k = 3 Gold):** `{base_g:,}` Thỏi Vàng\n"
                 f"🎁 **Ưu đãi chiết khấu (+{disc_p}%):** `+{bonus_g:,}` Thỏi Vàng\n"
                 f"─────────────────────────────\n"
-                f"👑 **TỔNG GOLD NHẬN ĐƯỢC:** **`{tot_g:,}` Thỏi Vàng** <:32100goldbarsfortnite:1514192020921651251>"
+                f"👑 **TỔNG GOLD SẼ NHẬN:** **`{tot_g:,}` Thỏi Vàng** <:32100goldbarsfortnite:1514192020921651251>\n\n"
+                f"🏦 **Ngân hàng:** `{bank_id}`\n"
+                f"💳 **Số tài khoản:** `{bank_account}`\n"
+                f"📛 **Chủ tài khoản:** `{account_name}`\n"
+                f"📝 **Nội dung chuyển khoản:** `{add_info}` *(Giữ nguyên nội dung này!)*\n\n"
+                f"📲 **Quét mã VietQR bên dưới bằng app ngân hàng để chuyển khoản nhanh.**\n"
+                f"📌 Sau khi chuyển khoản xong, hãy gửi ảnh biên lai cho Admin/Owner để được xác nhận cộng Gold ngay!"
             )
 
             embed = make_embed(
-                title="💳 TÍNH TOÁN GIÁ NẠP GOLD 💳",
+                title="💳 MÃ VIETQR NẠP THỎI VÀNG 💳",
                 description=desc,
                 color=discord.Color.green()
             )
-            embed.set_footer(text="Liên hệ Admin / Owner máy chủ để hoàn tất chuyển khoản nạp.")
+            embed.set_image(url=vietqr_url)
+            embed.set_footer(text="Admin sẽ dùng lệnh i?addtopup để xác nhận và cộng Gold cho bạn.")
             await ctx.send(embed=embed)
+
+    @commands.command(
+        name="setbank",
+        brief="[ADMIN] Cấu hình thông tin ngân hàng hiển thị trên mã VietQR.",
+        usage="setbank <bank_id> <số_tài_khoản> <tên_chủ_tài_khoản>",
+        aliases=["setbankinfo", "bankset"],
+        hidden=True
+    )
+    async def setbank(self, ctx: commands.Context, bank_id: str = None, bank_account: str = None, *, account_name: str = None):
+        if ctx.author.id not in config.bot.owner_ids and ctx.author.id not in config.bot.admin_ids:
+            await ctx.send("❌ Lệnh này chỉ dành cho Admin / Owner!")
+            return
+
+        if not bank_id or not bank_account or not account_name:
+            curr_bank = self.economy.get_setting("bank_id", "MB")
+            curr_acc = self.economy.get_setting("bank_account", "0000000000")
+            curr_name = self.economy.get_setting("account_name", "ADMIN CASINO")
+
+            embed = make_embed(
+                title="🏦 THÔNG TIN NGÂN HÀNG VIETQR HIỆN TẠI 🏦",
+                description=(
+                    f"🏦 **Mã ngân hàng (Bank ID):** `{curr_bank}` (VD: MB, VCB, ACB, TPB, ICB, BIDV...)\n"
+                    f"💳 **Số tài khoản:** `{curr_acc}`\n"
+                    f"👤 **Chủ tài khoản:** `{curr_name}`\n\n"
+                    f"💡 *Sử dụng cú pháp sau để thay đổi:* `i?setbank <mã_NH> <STK> <Tên_chủ_TK>`\n"
+                    f"Ví dụ: `i?setbank MB 0123456789 NGUYEN VAN A`"
+                ),
+                color=discord.Color.blue()
+            )
+            await ctx.send(embed=embed)
+            return
+
+        bank_id = bank_id.upper().strip()
+        bank_account = bank_account.strip()
+        account_name = account_name.strip()
+
+        self.economy.set_setting("bank_id", bank_id)
+        self.economy.set_setting("bank_account", bank_account)
+        self.economy.set_setting("account_name", account_name)
+
+        embed = make_embed(
+            title="✅ CẬP NHẬT THÔNG TIN NGÂN HÀNG THÀNH CÔNG ✅",
+            description=(
+                f"Đã cập nhật thông tin VietQR mới thành công:\n\n"
+                f"🏦 **Ngân hàng:** `{bank_id}`\n"
+                f"💳 **Số tài khoản:** `{bank_account}`\n"
+                f"👤 **Chủ tài khoản:** `{account_name}`"
+            ),
+            color=discord.Color.green()
+        )
+        await ctx.send(embed=embed)
 
     @commands.command(
         brief="Xem bảng xếp hạng Top Nạp Tiền (Top VIP) của máy chủ.",

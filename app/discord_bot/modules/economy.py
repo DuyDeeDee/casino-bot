@@ -2895,6 +2895,21 @@ class Economy:
         )
         self.conn.commit()
 
+    def get_setting(self, key: str, default: str = "") -> str:
+        """Gets a string setting from system_settings table."""
+        self.cur.execute("SELECT value FROM system_settings WHERE key = ?", (key,))
+        row = self.cur.fetchone()
+        return row[0] if row and row[0] is not None else default
+
+    def set_setting(self, key: str, value: str) -> None:
+        """Sets or updates a string setting in system_settings table."""
+        self.cur.execute(
+            """INSERT INTO system_settings (key, value) VALUES (?, ?)
+               ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value""",
+            (key, str(value))
+        )
+        self.conn.commit()
+
 
 
 
