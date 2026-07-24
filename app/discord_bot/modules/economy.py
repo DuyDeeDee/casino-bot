@@ -690,6 +690,13 @@ def _migration_37_update_gold_price_to_30m(cur: sqlite3.Cursor) -> None:
         pass
 
 
+def _migration_38_reset_gold_price_prev_to_30m(cur: sqlite3.Cursor) -> None:
+    try:
+        cur.execute("UPDATE system_settings SET value = '30000000' WHERE key IN ('gold_price', 'gold_price_prev')")
+    except sqlite3.OperationalError:
+        pass
+
+
 def _migration_39_add_user_topups_table(cur: sqlite3.Cursor) -> None:
     try:
         cur.execute(
