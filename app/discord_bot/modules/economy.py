@@ -11,7 +11,7 @@ from app.config import config
 Entry = Tuple[int, int, int]
 DATABASE_PATH = Path(config.storage.database_path)
 LEGACY_DATABASE_PATH = Path(__file__).resolve().parents[3] / "economy.db"
-SCHEMA_VERSION = 38
+SCHEMA_VERSION = 39
 
 
 logger = logging.getLogger(__name__)
@@ -690,9 +690,16 @@ def _migration_37_update_gold_price_to_30m(cur: sqlite3.Cursor) -> None:
         pass
 
 
-def _migration_38_reset_gold_price_prev_to_30m(cur: sqlite3.Cursor) -> None:
+def _migration_39_add_user_topups_table(cur: sqlite3.Cursor) -> None:
     try:
-        cur.execute("UPDATE system_settings SET value = '30000000' WHERE key IN ('gold_price', 'gold_price_prev')")
+        cur.execute(
+            """CREATE TABLE IF NOT EXISTS user_topups (
+            user_id INTEGER NOT NULL PRIMARY KEY,
+            total_vnd INTEGER NOT NULL DEFAULT 0,
+            total_gold INTEGER NOT NULL DEFAULT 0,
+            updated_at INTEGER NOT NULL DEFAULT 0
+        )"""
+        )
     except sqlite3.OperationalError:
         pass
 
@@ -736,6 +743,7 @@ MIGRATIONS: dict[int, Callable[[sqlite3.Cursor], None]] = {
     36: _migration_36_add_couple_assets,
     37: _migration_37_update_gold_price_to_30m,
     38: _migration_38_reset_gold_price_prev_to_30m,
+    39: _migration_39_add_user_topups_table,
 }
 
 
