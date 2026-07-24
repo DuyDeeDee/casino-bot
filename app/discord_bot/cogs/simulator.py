@@ -139,6 +139,22 @@ BUSINESSES = {
     }
 }
 
+# Treasure map items (dropped by Treasure Hunter job, not sold in shop)
+MAP_ITEMS = {
+    "map_normal": {
+        "name": "Bản đồ Thám hiểm Thường 📜",
+        "description": "Bản đồ cổ tìm thấy khi làm nghề Thợ săn Kho báu. Dùng `i?explore normal` để thám hiểm hầm mộ cổ."
+    },
+    "map_rare": {
+        "name": "Bản đồ Thám hiểm Hiếm 📘",
+        "description": "Bản đồ cổ quý tìm thấy khi làm nghề Thợ săn Kho báu. Dùng `i?explore rare` để thám hiểm hầm mộ cổ."
+    },
+    "map_legend": {
+        "name": "Bản đồ Thám hiểm Huyền thoại 📙",
+        "description": "Bản đồ cổ huyền thoại tìm thấy khi làm nghề Thợ săn Kho báu. Dùng `i?explore legend` để thám hiểm hầm mộ cổ."
+    }
+}
+
 # Shop items config
 SHOP_ITEMS = {
     "bang_cap": {
@@ -1043,6 +1059,14 @@ class Simulator(commands.Cog):
                 embed.add_field(
                     name=f"{item['name']}",
                     value=f"• Số lượng: **{qty}**\n• Chức năng: *{item['description']}*",
+                    inline=False
+                )
+                has_items = True
+            elif item_id in MAP_ITEMS:
+                item = MAP_ITEMS[item_id]
+                embed.add_field(
+                    name=f"{item['name']} (ID: `{item_id}`)",
+                    value=f"• Số lượng: **{qty}**\n• Mô tả: *{item['description']}*",
                     inline=False
                 )
                 has_items = True
@@ -2854,11 +2878,15 @@ class Simulator(commands.Cog):
         usage="explore <normal / rare / legend>",
         aliases=["thamhiem"]
     )
-    async def explore(self, ctx: commands.Context, map_type: str):
+    async def explore(self, ctx: commands.Context, map_type: str = None):
+        if not map_type:
+            await ctx.send("❌ Cú pháp: `i?explore <normal / rare / legend>` (Ví dụ: `i?explore normal`, `i?explore rare`, `i?explore legend`).")
+            return
+
         map_type = map_type.lower().strip()
         map_item_id = f"map_{map_type}"
         
-        if map_item_id not in SHOP_ITEMS:
+        if map_item_id not in MAP_ITEMS and map_item_id not in SHOP_ITEMS:
             await ctx.send("❌ Cấp độ bản đồ không hợp lệ! Vui lòng chọn: `normal` (thường), `rare` (hiếm), `legend` (huyền thoại).")
             return
             
@@ -2866,8 +2894,10 @@ class Simulator(commands.Cog):
         inventory = self.economy.get_inventory(user_id)
         owned_qty = next((qty for iid, qty in inventory if iid == map_item_id), 0)
         
+        map_name = MAP_ITEMS[map_item_id]["name"] if map_item_id in MAP_ITEMS else SHOP_ITEMS[map_item_id]["name"]
+        
         if owned_qty <= 0:
-            await ctx.send(f"❌ Bạn không sở hữu **{SHOP_ITEMS[map_item_id]['name']}**! Hãy dùng `i?buyitem {map_item_id}` để mua trong shop trước.")
+            await ctx.send(f"❌ Bạn không sở hữu **{map_name}** trong túi đồ! Hãy làm nghề **Thợ săn Kho báu** (lệnh `i?work`) để tìm kiếm bản đồ.")
             return
             
         # Deduct 1 map from inventory
@@ -2907,7 +2937,6 @@ class Simulator(commands.Cog):
             ctx=ctx
         )
         
-        map_name = SHOP_ITEMS[map_item_id]["name"]
         embed = make_embed(
             title="🏴‍☠️ CUỘC THÁM HIỂM KHO BÁU BẮT ĐẦU 🏴‍☠️",
             description=(

@@ -824,9 +824,9 @@ class GamblingHelpers(commands.Cog, name="General"):
                     # Add to inventory
                     self.economy.add_inventory_item(user_id, chosen_id, 1)
                     
-                    # 15% chance to find a Treasure Map in addition to the treasure
+                    # 35% chance to find a Treasure Map in addition to the treasure
                     found_map_msg = ""
-                    if random.random() < 0.15:
+                    if random.random() < 0.35:
                         map_roll = random.random()
                         if map_roll < 0.65:
                             found_map = "map_normal"
@@ -838,7 +838,7 @@ class GamblingHelpers(commands.Cog, name="General"):
                             found_map = "map_legend"
                             map_name = "Bản đồ Thám hiểm Huyền thoại 📙"
                         self.economy.add_inventory_item(user_id, found_map, 1)
-                        found_map_msg = f"\n\n🗺️ **ĐẶC BIỆT:** Bạn tìm thấy thêm một **{map_name}**!"
+                        found_map_msg = f"\n\n🗺️ **ĐẶC BIỆT:** Bạn đào được thêm **{map_name}**! Dùng `i?explore` để thám hiểm hầm mộ!"
                     
                     # Log finding item
                     log_wallet_change(
