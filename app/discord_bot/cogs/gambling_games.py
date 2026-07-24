@@ -9,6 +9,8 @@ import discord
 from discord.ext import commands
 from PIL import Image, ImageDraw, ImageFont
 
+from pathlib import Path
+
 from app.config import config
 from app.discord_bot.modules.betting import validate_money_bet
 from app.discord_bot.modules.economy import Economy
@@ -17,6 +19,7 @@ from app.discord_bot.modules.wallet_logging import log_wallet_change
 from app.discord_bot.modules.profile_renderer import load_font
 
 logger = logging.getLogger(__name__)
+REPO_ROOT = Path(__file__).resolve().parents[3]
 
 MASCOT_MAPPING = {
     "ca": "🐟 Cá",
@@ -105,16 +108,18 @@ def draw_dice_face(value: int, size: int = 60) -> Image.Image:
 
 
 def generate_taixiu_image(seconds_remaining: int, tai_bets: dict, xiu_bets: dict, result_text: str = None, dice: list[int] = None) -> io.BytesIO:
-    base_img_path = "pictures/taixiu_bg.png"
+    base_img_path = REPO_ROOT / "pictures" / "taixiu_bg.png"
+    if not base_img_path.exists():
+        base_img_path = "pictures/taixiu_bg.png"
     img = Image.open(base_img_path).convert("RGBA")
     # Crop to frame (924x570)
     cropped = img.crop((50, 200, 974, 770))
     draw = ImageDraw.Draw(cropped)
     
     # Load fonts
-    font_large = ImageFont.truetype("data/fonts/Roboto-Bold.ttf", 100)
-    font_medium = ImageFont.truetype("data/fonts/Roboto-Bold.ttf", 36)
-    font_small = ImageFont.truetype("data/fonts/Roboto-Bold.ttf", 24)
+    font_large = load_font("bold", 100)
+    font_medium = load_font("bold", 36)
+    font_small = load_font("bold", 24)
     
     # Draw Left bet amount below "TÀI"
     tai_total = sum(tai_bets.values())
@@ -191,14 +196,16 @@ def draw_bet_box(draw: ImageDraw.Draw, x: int, y: int, amount: int, font: ImageF
 
 
 def generate_baucua_image(seconds_remaining: int, bets: dict, result_text: str = None, dice_results: list[str] = None) -> io.BytesIO:
-    base_img_path = "pictures/baucua_bg.png"
+    base_img_path = REPO_ROOT / "pictures" / "baucua_bg.png"
+    if not base_img_path.exists():
+        base_img_path = "pictures/baucua_bg.png"
     img = Image.open(base_img_path).convert("RGBA")
     draw = ImageDraw.Draw(img)
     
     # Load fonts
-    font_large = ImageFont.truetype("data/fonts/Roboto-Bold.ttf", 60)
-    font_medium = ImageFont.truetype("data/fonts/Roboto-Bold.ttf", 32)
-    font_small = ImageFont.truetype("data/fonts/Roboto-Bold.ttf", 18)
+    font_large = load_font("bold", 60)
+    font_medium = load_font("bold", 32)
+    font_small = load_font("bold", 18)
     
     # Sum bets for each mascot
     nai_total = sum(bets.get("nai", {}).values())
@@ -1518,7 +1525,7 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
                 await ctx.send(f"🎉 Chúc mừng các đại gia đã chiến thắng phiên #{session_id}: {', '.join(winner_mentions)}!")
         except Exception as e:
             logger.error(f"Error in taixiu command: {e}", exc_info=True)
-            await ctx.send(f"❌ Có lỗi xảy ra trong phiên Tài Xỉu #{session_id}.")
+            await ctx.send(f"❌ Có lỗi xảy ra trong phiên Tài Xỉu #{session_id}: `{e}`")
         finally:
             self.active_taixiu_sessions.discard(channel_id)
 
