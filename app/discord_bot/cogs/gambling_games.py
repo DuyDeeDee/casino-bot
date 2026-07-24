@@ -488,7 +488,7 @@ class TaiXiuLobbyView(discord.ui.View):
         jackpot_val = int(jackpot_str) if jackpot_str else 0
         
         min_bet_str = self.cog.economy.get_setting("taixiu_jackpot_min_bet")
-        jackpot_min_bet = int(min_bet_str) if min_bet_str is not None else 50000
+        jackpot_min_bet = int(min_bet_str) if min_bet_str else 50000
         
         embed = make_embed(
             title=f"🎲 PHIÊN TÀI XỈU #{self.session_id} 🎲",
