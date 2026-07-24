@@ -474,7 +474,8 @@ class Slots(commands.Cog):
     @commands.command(
         brief="[ADMIN] Cộng tiền nạp VND và tự động quy đổi Gold cho người chơi.",
         usage="addtopup @user <số_tiền_VND/số_k>",
-        aliases=["addtop", "congnap"]
+        aliases=["addtop", "congnap"],
+        hidden=True
     )
     async def addtopup(self, ctx: commands.Context, target: discord.Member, amount_str: str):
         if ctx.author.id not in config.bot.owner_ids and ctx.author.id not in config.bot.admin_ids:
@@ -527,7 +528,8 @@ class Slots(commands.Cog):
     @commands.command(
         brief="[ADMIN] Đặt thủ công giá vàng thế giới.",
         usage="setgoldprice <số_tiền_VND/số_m>",
-        aliases=["setgiavang", "doigiavang"]
+        aliases=["setgiavang", "doigiavang"],
+        hidden=True
     )
     async def setgoldprice(self, ctx: commands.Context, price_str: str):
         if ctx.author.id not in config.bot.owner_ids and ctx.author.id not in config.bot.admin_ids:

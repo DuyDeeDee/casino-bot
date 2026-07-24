@@ -39,11 +39,22 @@ COG_GROUP_MAPPING = {
 GROUP_ORDER = ["💼 General", "🎲 Cờ Bạc", "📈 Giao Dịch", "🤖 AI", "🎮 Fungame", "⚙️ Function"]
 
 
+def _is_admin_command(cmd: commands.Command) -> bool:
+    """Kiểm tra xem lệnh có phải là lệnh admin/owner hay không."""
+    if cmd.hidden:
+        return True
+    brief = (cmd.brief or "").lower()
+    name = cmd.name.lower()
+    if brief.startswith("[admin]") or "[admin]" in brief or "admin" in name or "owner" in name:
+        return True
+    return False
+
+
 def _build_groups(client: commands.Bot):
     """Gom các lệnh theo nhóm, trả về dict {group_label: [commands]}."""
     groups: dict[str, list[commands.Command]] = {}
     for cog in client.cogs.values():
-        cog_cmds = [c for c in cog.get_commands() if not c.hidden]
+        cog_cmds = [c for c in cog.get_commands() if not _is_admin_command(c)]
         if not cog_cmds:
             continue
         emoji, name = COG_GROUP_MAPPING.get(cog.qualified_name, ("📦", cog.qualified_name))
@@ -171,7 +182,7 @@ class Help(commands.Cog, name="help"):
         # ── Chi tiết 1 lệnh cụ thể ──
         if request:
             command = self.client.get_command(request)
-            if command is None:
+            if command is None or _is_admin_command(command):
                 await ctx.invoke(self.client.get_command("help"))
                 return
 
@@ -188,7 +199,7 @@ class Help(commands.Cog, name="help"):
 
             if isinstance(command, commands.Group):
                 subs = sorted(
-                    [s for s in command.commands if not s.hidden],
+                    [s for s in command.commands if not _is_admin_command(s)],
                     key=lambda c: c.name,
                 )
                 if subs:

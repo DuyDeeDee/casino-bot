@@ -3815,7 +3815,8 @@ class Simulator(commands.Cog):
         name="setbetlimit",
         brief="Đặt giới hạn cược tối thiểu và tối đa cho các trò chơi cờ bạc (Chỉ Admin/Owner).",
         usage="setbetlimit [min] [max]",
-        aliases=["betlimit", "setlimit"]
+        aliases=["betlimit", "setlimit"],
+        hidden=True
     )
     async def setbetlimit(self, ctx: commands.Context, min_bet: str = None, max_bet: str = None):
         # Check permissions
