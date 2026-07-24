@@ -1250,8 +1250,8 @@ class Simulator(commands.Cog):
             )
             
         if last_collect > 0:
-            elapsed = (now - last_collect) // 60
-            embed.set_footer(text=f"Đã tích lũy doanh thu trong {elapsed} phút qua. Gõ i?collect để nhận.")
+            elapsed = min((now - last_collect) // 60, 720)
+            embed.set_footer(text=f"Đã tích lũy doanh thu trong {elapsed} phút qua (tối đa 12h). Gõ i?collect để nhận.")
         else:
             embed.set_footer(text="Gõ i?biz buy <id> hoặc i?biz upgrade <id> để mua/nâng cấp.")
             
@@ -1292,7 +1292,7 @@ class Simulator(commands.Cog):
             return embed
             
         hours = elapsed_sec / 3600.0
-        hours = min(24.0, hours)
+        hours = min(12.0, hours)
         
         earned_money = 0
         earned_gold_frac = 0.0
@@ -1375,10 +1375,11 @@ class Simulator(commands.Cog):
         gold_str = f"\n<:32100goldbarsfortnite:1514192020921651251> **Vàng nhận:** `+{int_gold} thỏi vàng`" if int_gold > 0 else ""
         accident_embed_str = f"\n\n{accident_msg}" if accident_triggered else ""
         
+        display_minutes = min(elapsed_sec // 60, 720)
         embed = make_embed(
             title="🏢 BÁO CÁO DOANH THU DOANH NGHIỆP 🏢",
             description=(
-                f"Sau **{elapsed_sec // 60} phút** làm việc chăm chỉ, các doanh nghiệp của bạn đã báo cáo thu hoạch:\n\n"
+                f"Sau **{display_minutes} phút** làm việc chăm chỉ, các doanh nghiệp của bạn đã báo cáo thu hoạch:\n\n"
                 f"💰 **VND nhận:** `+{earned_money:,} VND`"
                 f"{gold_str}\n"
                 f"💳 **Vàng lẻ tích lũy thêm:** `+{earned_gold_frac:.4f} Vàng` (Số dư dư: `{new_frac} Vàng`)"
