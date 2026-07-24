@@ -1202,13 +1202,13 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
             
             # Retrieve rigging settings
             rig_rate_str = self.economy.get_setting("taixiu_rig_rate")
-            rig_rate = float(rig_rate_str) if rig_rate_str is not None else 0.0
+            rig_rate = float(rig_rate_str) if rig_rate_str else 0.0
             
             threshold_str = self.economy.get_setting("taixiu_anti_bankruptcy_threshold")
-            threshold = int(threshold_str) if threshold_str is not None else 10000000  # Default 10M VND
+            threshold = int(threshold_str) if threshold_str else 10000000  # Default 10M VND
             
             tax_rate_str = self.economy.get_setting("taixiu_tax_rate")
-            tax_rate = float(tax_rate_str) if tax_rate_str is not None else 0.0
+            tax_rate = float(tax_rate_str) if tax_rate_str else 0.0
             
             # Calculate total bets placed in this session
             total_session_bets = (
@@ -1290,11 +1290,11 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
             jackpot_val_won = 0
             if (dice[0] == dice[1] == dice[2]) and (dice[0] in (1, 6)):
                 jackpot_rate_str = self.economy.get_setting("taixiu_jackpot_rate")
-                jackpot_rate = float(jackpot_rate_str) if jackpot_rate_str is not None else 1.0
+                jackpot_rate = float(jackpot_rate_str) if jackpot_rate_str else 1.0
                 
                 if random.random() < jackpot_rate:
                     min_bet_str = self.economy.get_setting("taixiu_jackpot_min_bet")
-                    jackpot_min_bet = int(min_bet_str) if min_bet_str is not None else 50000
+                    jackpot_min_bet = int(min_bet_str) if min_bet_str else 50000
                     
                     jackpot_winning_side = "xiu" if dice[0] == 1 else "tai"
                     side_bets = view.xiu_bets if jackpot_winning_side == "xiu" else view.tai_bets
@@ -1332,7 +1332,7 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
             user_ids = set(session_bets.keys())
             
             tax_rate_str = self.economy.get_setting("taixiu_tax_rate")
-            tax_rate = float(tax_rate_str) if tax_rate_str is not None else 0.0
+            tax_rate = float(tax_rate_str) if tax_rate_str else 0.0
             total_tax_collected = 0
             
             for uid in user_ids:

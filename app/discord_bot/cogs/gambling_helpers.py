@@ -1412,26 +1412,26 @@ class GamblingHelpers(commands.Cog, name="General"):
         if key in ("status", "info", "view"):
             # Display current config
             rig_rate_str = self.economy.get_setting("taixiu_rig_rate")
-            rig_rate = float(rig_rate_str) if rig_rate_str is not None else 0.0
+            rig_rate = float(rig_rate_str) if rig_rate_str else 0.0
             
             threshold_str = self.economy.get_setting("taixiu_anti_bankruptcy_threshold")
-            threshold = int(threshold_str) if threshold_str is not None else 10000000
+            threshold = int(threshold_str) if threshold_str else 10000000
             
             jackpot_rate_str = self.economy.get_setting("taixiu_jackpot_rate")
-            jackpot_rate = float(jackpot_rate_str) if jackpot_rate_str is not None else 1.0
+            jackpot_rate = float(jackpot_rate_str) if jackpot_rate_str else 1.0
             overall_jackpot_rate = jackpot_rate * (2.0 / 216.0)
             
             min_bet_str = self.economy.get_setting("taixiu_jackpot_min_bet")
-            jackpot_min_bet = int(min_bet_str) if min_bet_str is not None else 50000
+            jackpot_min_bet = int(min_bet_str) if min_bet_str else 50000
             
             tax_rate_str = self.economy.get_setting("taixiu_tax_rate")
-            tax_rate = float(tax_rate_str) if tax_rate_str is not None else 0.0
+            tax_rate = float(tax_rate_str) if tax_rate_str else 0.0
             
             jackpot_val_str = self.economy.get_setting("taixiu_jackpot")
-            jackpot_val = int(jackpot_val_str) if jackpot_val_str is not None else 0
+            jackpot_val = int(jackpot_val_str) if jackpot_val_str else 0
             
             max_bet_str = self.economy.get_setting("taixiu_max_bet")
-            max_bet = int(max_bet_str) if max_bet_str is not None else 10000000
+            max_bet = int(max_bet_str) if max_bet_str else 10000000
             
             embed = make_embed(
                 title="⚙️ CẤU HÌNH TÀI XỈU (ADMIN ONLY)",
