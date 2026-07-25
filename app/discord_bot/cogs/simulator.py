@@ -388,7 +388,7 @@ SHOP_ITEMS = {
         "name": "<:NhanKat:1527628223364464650>Nhẫn Kat ",
         "cost": 0,
         "currency": "gold",
-        "description": "Nhẫn độc quyền không thể mua. Buff: +8% điểm thân mật, +8% lương, giảm 10% bị cướp."
+        "description": "Nhẫn độc quyền không thể mua. Buff: +20% điểm thân mật, +30% lương, miễn nhiễm mọi hình thức cướp."
     }
 }
 
@@ -3063,15 +3063,20 @@ class Simulator(commands.Cog):
             await ctx.send(f"❌ **Mục tiêu quá nghèo:** {target.name} chỉ có `{target_money:,} VND` trong ví. Hãy để họ yên!")
             return
 
-        # Check target immunity ring (ring_divine)
+        # Check target immunity ring (ring_divine, ring_nhankat)
         target_inventory = self.economy.get_inventory(target.id)
         target_marriages = self.economy.get_marriages(target.id)
         
         has_divine_ring = any(item == 'ring_divine' and qty > 0 for item, qty in target_inventory) or \
                           any(marriage[2] == 'ring_divine' for marriage in target_marriages)
+        has_nhankat_ring = any(item == 'ring_nhankat' and qty > 0 for item, qty in target_inventory) or \
+                           any(marriage[2] == 'ring_nhankat' for marriage in target_marriages)
                           
         if has_divine_ring:
             await ctx.send(f"🛡️ **Mục tiêu miễn nhiễm cướp:** **{target.name}** được bảo vệ bởi sức mạnh của **Nhẫn Hào Quang Vĩnh Cửu 🌌**, không thể bị cướp!")
+            return
+        if has_nhankat_ring:
+            await ctx.send(f"🛡️ **Mục tiêu miễn nhiễm cướp:** **{target.name}** được bảo vệ bởi sức mạnh của **Nhẫn Kat 🌸**, không thể bị cướp!")
             return
 
         # 40% success rate
@@ -3112,15 +3117,13 @@ class Simulator(commands.Cog):
         bodyguard_active = target_upgrades[2] > now
         success_rate = 0.08 if bodyguard_active else 0.40
 
-        # Check ring protection modifiers (ring_angel reduces by 40%, ring_gothic reduces by 20%, ring_eternal_butterfly reduces by 15%, ring_nhankat reduces by 10%)
+        # Check ring protection modifiers (ring_angel reduces by 40%, ring_gothic reduces by 20%, ring_eternal_butterfly reduces by 15%)
         has_angel_ring = any(item == 'ring_angel' and qty > 0 for item, qty in target_inventory) or \
                          any(marriage[2] == 'ring_angel' for marriage in target_marriages)
         has_gothic_ring = any(item == 'ring_gothic' and qty > 0 for item, qty in target_inventory) or \
                           any(marriage[2] == 'ring_gothic' for marriage in target_marriages)
         has_butterfly_ring = any(item == 'ring_eternal_butterfly' and qty > 0 for item, qty in target_inventory) or \
                              any(marriage[2] == 'ring_eternal_butterfly' for marriage in target_marriages)
-        has_nhankat_ring = any(item == 'ring_nhankat' and qty > 0 for item, qty in target_inventory) or \
-                           any(marriage[2] == 'ring_nhankat' for marriage in target_marriages)
                           
         if has_angel_ring:
             success_rate *= 0.60
@@ -3128,8 +3131,6 @@ class Simulator(commands.Cog):
             success_rate *= 0.80
         elif has_butterfly_ring:
             success_rate *= 0.85
-        elif has_nhankat_ring:
-            success_rate *= 0.90
 
         if random.random() < success_rate:
             # Success: steal a random 1% to 5% of target's money
@@ -3242,14 +3243,19 @@ class Simulator(commands.Cog):
             await ctx.send(f"❌ **Mục tiêu không có vàng:** **{target.name}** không sở hữu thỏi vàng nào trong ví!")
             return
 
-        # Check target immunity ring (ring_divine)
+        # Check target immunity ring (ring_divine, ring_nhankat)
         target_marriages = self.economy.get_marriages(target.id)
         target_inv = self.economy.get_inventory(target.id)
         has_divine_ring = any(item == 'ring_divine' and qty > 0 for item, qty in target_inv) or \
                            any(marriage[2] == 'ring_divine' for marriage in target_marriages)
+        has_nhankat_ring = any(item == 'ring_nhankat' and qty > 0 for item, qty in target_inv) or \
+                           any(marriage[2] == 'ring_nhankat' for marriage in target_marriages)
                            
         if has_divine_ring:
             await ctx.send(f"🛡️ **Mục tiêu miễn nhiễm:** **{target.name}** được bảo vệ bởi **Nhẫn Hào Quang Vĩnh Cửu 🌌**, không thể bị cướp thỏi vàng!")
+            return
+        if has_nhankat_ring:
+            await ctx.send(f"🛡️ **Mục tiêu miễn nhiễm:** **{target.name}** được bảo vệ bởi **Nhẫn Kat 🌸**, không thể bị cướp thỏi vàng!")
             return
 
         self.economy.set_setting(f"cooldown_robgold_{user_id}", str(now))
