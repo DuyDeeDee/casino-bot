@@ -56,6 +56,7 @@ class Slots(commands.Cog):
 
     def __init__(self, client: commands.Bot):
         self.client = client
+        self.bot = client
         self.economy = getattr(client, "economy", Economy())
         self._assets_path = Path(ABS_PATH) / "modules"
         self._slot_facade = Image.open(self._assets_path / "slot-face.png").convert("RGBA")
