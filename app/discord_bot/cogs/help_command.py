@@ -34,9 +34,9 @@ COG_GROUP_MAPPING = {
     "UNO":           ("<:game:1531333922535768226>", "Fungame"),
     "GiaiMa":        ("<:game:1531333922535768226>", "Fungame"),
     # Function
-    "afk":           ("⚙️", "Function"),
-    "Afk":           ("⚙️", "Function"),
-    "Giveaway":      ("⚙️", "Function"),
+    "afk":           ("<:function:1531341821257716025>", "Function"),
+    "Afk":           ("<:function:1531341821257716025>", "Function"),
+    "Giveaway":      ("<:function:1531341821257716025>", "Function"),
     # Lixi & Marry
     "Lixi":          ("<:lixi:1531333938164007032>", "Lixi"),
     "Marry":         ("<:marry:1531333950234955799>", "Marry"),
@@ -48,7 +48,7 @@ GROUP_ORDER = [
     "<:trade:1531333907868291132> Giao Dịch",
     "🤖 AI",
     "<:game:1531333922535768226> Fungame",
-    "⚙️ Function",
+    "<:function:1531341821257716025> Function",
     "<:lixi:1531333938164007032> Lixi",
     "<:marry:1531333950234955799> Marry",
 ]
