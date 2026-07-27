@@ -26,8 +26,8 @@ COG_GROUP_MAPPING = {
     "Tower":         ("<:cobac:1531333888931135518>", "Cờ Bạc"),
     "General":       ("💼", "General"),
     "Simulator":     ("💼", "General"),
-    "Slots":         ("📈", "Giao Dịch"),
-    "Xe":            ("🏎️", "Giao Dịch"),
+    "Slots":         ("<:trade:1531333907868291132>", "Giao Dịch"),
+    "Xe":            ("<:trade:1531333907868291132>", "Giao Dịch"),
     "AI":            ("🤖", "AI"),
     "AIHelper":      ("🤖", "AI"),
     # Fungame
