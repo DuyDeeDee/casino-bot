@@ -10,33 +10,48 @@ from app.discord_bot.modules.helpers import ABS_PATH, make_embed
 #  Mapping cog → nhóm hiển thị
 # ──────────────────────────────────────────────
 COG_GROUP_MAPPING = {
-    "Blackjack":     ("🎲", "Cờ Bạc"),
-    "MultiBlackjack":("🎲", "Cờ Bạc"),
-    "GamblingGames": ("🎲", "Cờ Bạc"),
-    "Roulette":      ("🎲", "Cờ Bạc"),
-    "CoinFlip":      ("🎲", "Cờ Bạc"),
-    "HorseRace":     ("🎲", "Cờ Bạc"),
-    "Crash":         ("🎲", "Cờ Bạc"),
-    "ScratchCard":   ("🎲", "Cờ Bạc"),
-    "Bkb":           ("🎲", "Cờ Bạc"),
-    "Baito":         ("🎲", "Cờ Bạc"),
-    "Mines":         ("🎲", "Cờ Bạc"),
-    "Plinko":        ("🎲", "Cờ Bạc"),
-    "HighLow":       ("🎲", "Cờ Bạc"),
-    "Tower":         ("🎲", "Cờ Bạc"),
+    "Blackjack":     ("<:cobac:1531333888931135518>", "Cờ Bạc"),
+    "MultiBlackjack":("<:cobac:1531333888931135518>", "Cờ Bạc"),
+    "GamblingGames": ("<:cobac:1531333888931135518>", "Cờ Bạc"),
+    "Roulette":      ("<:cobac:1531333888931135518>", "Cờ Bạc"),
+    "CoinFlip":      ("<:cobac:1531333888931135518>", "Cờ Bạc"),
+    "HorseRace":     ("<:cobac:1531333888931135518>", "Cờ Bạc"),
+    "Crash":         ("<:cobac:1531333888931135518>", "Cờ Bạc"),
+    "ScratchCard":   ("<:cobac:1531333888931135518>", "Cờ Bạc"),
+    "Bkb":           ("<:cobac:1531333888931135518>", "Cờ Bạc"),
+    "Baito":         ("<:cobac:1531333888931135518>", "Cờ Bạc"),
+    "Mines":         ("<:cobac:1531333888931135518>", "Cờ Bạc"),
+    "Plinko":        ("<:cobac:1531333888931135518>", "Cờ Bạc"),
+    "HighLow":       ("<:cobac:1531333888931135518>", "Cờ Bạc"),
+    "Tower":         ("<:cobac:1531333888931135518>", "Cờ Bạc"),
     "General":       ("💼", "General"),
     "Simulator":     ("💼", "General"),
     "Slots":         ("📈", "Giao Dịch"),
+    "Xe":            ("🏎️", "Giao Dịch"),
     "AI":            ("🤖", "AI"),
+    "AIHelper":      ("🤖", "AI"),
     # Fungame
-    "UNO":           ("🎮", "Fungame"),
-    "GiaiMa":        ("🎮", "Fungame"),
+    "UNO":           ("<:game:1531333922535768226>", "Fungame"),
+    "GiaiMa":        ("<:game:1531333922535768226>", "Fungame"),
     # Function
     "afk":           ("⚙️", "Function"),
+    "Afk":           ("⚙️", "Function"),
     "Giveaway":      ("⚙️", "Function"),
+    # Lixi & Marry
+    "Lixi":          ("<:lixi:1531333938164007032>", "Lixi"),
+    "Marry":         ("<:marry:1531333950234955799>", "Marry"),
 }
 
-GROUP_ORDER = ["💼 General", "🎲 Cờ Bạc", "📈 Giao Dịch", "🤖 AI", "🎮 Fungame", "⚙️ Function"]
+GROUP_ORDER = [
+    "💼 General",
+    "<:cobac:1531333888931135518> Cờ Bạc",
+    "<:trade:1531333907868291132> Giao Dịch",
+    "🤖 AI",
+    "<:game:1531333922535768226> Fungame",
+    "⚙️ Function",
+    "<:lixi:1531333938164007032> Lixi",
+    "<:marry:1531333950234955799> Marry",
+]
 
 
 def _is_admin_command(cmd: commands.Command) -> bool:
