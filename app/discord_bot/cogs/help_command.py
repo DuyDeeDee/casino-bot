@@ -24,12 +24,12 @@ COG_GROUP_MAPPING = {
     "Plinko":        ("<:cobac:1531333888931135518>", "Cờ Bạc"),
     "HighLow":       ("<:cobac:1531333888931135518>", "Cờ Bạc"),
     "Tower":         ("<:cobac:1531333888931135518>", "Cờ Bạc"),
-    "General":       ("💼", "General"),
-    "Simulator":     ("💼", "General"),
+    "General":       ("<:gen:1531709110376988743>", "General"),
+    "Simulator":     ("<:gen:1531709110376988743>", "General"),
     "Slots":         ("<:trade:1531333907868291132>", "Giao Dịch"),
     "Xe":            ("<:trade:1531333907868291132>", "Giao Dịch"),
-    "AI":            ("🤖", "AI"),
-    "AIHelper":      ("🤖", "AI"),
+    "AI":            ("<:AI:1531709092362457292>", "AI"),
+    "AIHelper":      ("<:AI:1531709092362457292>", "AI"),
     # Fungame
     "UNO":           ("<:game:1531333922535768226>", "Fungame"),
     "GiaiMa":        ("<:game:1531333922535768226>", "Fungame"),
@@ -43,10 +43,10 @@ COG_GROUP_MAPPING = {
 }
 
 GROUP_ORDER = [
-    "💼 General",
+    "<:gen:1531709110376988743> General",
     "<:cobac:1531333888931135518> Cờ Bạc",
     "<:trade:1531333907868291132> Giao Dịch",
-    "🤖 AI",
+    "<:AI:1531709092362457292> AI",
     "<:game:1531333922535768226> Fungame",
     "<:function:1531341821257716025> Function",
     "<:lixi:1531333938164007032> Lixi",
