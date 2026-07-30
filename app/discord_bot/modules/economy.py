@@ -1047,6 +1047,13 @@ class Economy:
         )
         return self.cur.fetchall()
 
+    def remove_user_topup(self, user_id: int) -> bool:
+        """Removes user entry from user_topups table. Returns True if a row was deleted."""
+        self.cur.execute("DELETE FROM user_topups WHERE user_id=?", (user_id,))
+        self.conn.commit()
+        return self.cur.rowcount > 0
+
+
     def get_inventory(self, user_id: int) -> list[tuple[str, int]]:
         self._ensure_entry(user_id)
         self.cur.execute("SELECT item_id, quantity FROM user_inventory WHERE user_id=?", (user_id,))

@@ -596,6 +596,30 @@ class Slots(commands.Cog):
         await ctx.send(embed=embed)
 
     @commands.command(
+        brief="[ADMIN] Xoá người chơi khỏi bảng xếp hạng top nạp.",
+        usage="removetopup @user",
+        aliases=["removetop", "xoatopnap", "xoatop", "deltopup"],
+        hidden=True
+    )
+    async def removetopup(self, ctx: commands.Context, target: discord.User):
+        if ctx.author.id not in config.bot.owner_ids and ctx.author.id not in config.bot.admin_ids:
+            await ctx.send("❌ Lệnh này chỉ dành cho Admin / Owner!")
+            return
+
+        removed = self.economy.remove_user_topup(target.id)
+        if not removed:
+            await ctx.send(f"⚠️ Người chơi **{target.mention}** không có dữ liệu trong bảng xếp hạng top nạp.")
+            return
+
+        embed = make_embed(
+            title="🗑️ ĐÃ XOÁ KHỎI TOP NẠP",
+            description=f"ADMIN **{ctx.author.mention}** đã xoá **{target.mention}** (ID: `{target.id}`) khỏi bảng xếp hạng top nạp.",
+            color=discord.Color.red()
+        )
+        embed.set_thumbnail(url=target.display_avatar.url)
+        await ctx.send(embed=embed)
+
+    @commands.command(
         brief="[ADMIN] Đặt thủ công giá vàng thế giới.",
         usage="setgoldprice <số_tiền_VND/số_m>",
         aliases=["setgiavang", "doigiavang"],
@@ -695,6 +719,7 @@ class Slots(commands.Cog):
             name="💰 Tiền & Vàng",
             value=(
                 "`i?addtopup @user <số_tiền>` — Cộng tiền nạp VND và tự động quy đổi Gold cho người chơi.\n"
+                "`i?removetopup @user` — Xoá người chơi khỏi bảng xếp hạng top nạp.\n"
                 "`i?setgoldprice <số>` — Đặt thủ công giá vàng thế giới (vd: `30m`).\n"
                 "`i?giveall <loại> <số>` — Tặng tiền/vàng cho tất cả người chơi trong DB.\n"
             ),
