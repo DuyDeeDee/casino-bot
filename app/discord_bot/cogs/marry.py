@@ -1384,6 +1384,54 @@ class Marry(commands.Cog):
         self.economy.update_marriage_saying(user_one, user_two, clean_saying)
         await ctx.send(f"✅ Đã cập nhật câu nói thành: `{clean_saying}` cho cuộc hôn nhân này!")
 
+    @couple_cmd.command(name="setdate", aliases=["editdate", "setngay", "ngaykethon", "setmarrydate"], brief="Chỉnh sửa ngày bắt đầu kết hôn của cặp đôi.", usage="couple setdate [chỉ_số] <ngày_tháng_năm>")
+    async def couple_setdate(self, ctx: commands.Context, *, args_str: str = ""):
+        """Chỉnh sửa ngày bắt đầu kết hôn cho cặp đôi (Định dạng: DD/MM/YYYY hoặc YYYY-MM-DD)."""
+        args = args_str.split()
+        marriage, remaining_args = self._resolve_marriage_and_args(ctx.author.id, args)
+        if not marriage:
+            await ctx.send("❌ Bạn chưa kết hôn!")
+            return
+            
+        if not remaining_args:
+            await ctx.send("❌ Vui lòng nhập ngày bắt đầu kết hôn! Cú pháp: `i?couple setdate 14/02/2024` hoặc `i?couple setdate DD/MM/YYYY`.")
+            return
+
+        date_input = remaining_args[0].strip()
+        
+        parsed_ts = None
+        date_formats = ["%d/%m/%Y", "%d-%m-%Y", "%Y-%m-%d", "%d/%m/%y", "%d-%m-%y"]
+        for fmt in date_formats:
+            try:
+                dt = datetime.strptime(date_input, fmt)
+                if dt.timestamp() > time.time() + 86400:
+                    await ctx.send("❌ Ngày bắt đầu kết hôn không thể nằm ở tương lai!")
+                    return
+                parsed_ts = int(dt.timestamp())
+                break
+            except ValueError:
+                continue
+
+        if parsed_ts is None:
+            await ctx.send("❌ Định dạng ngày không hợp lệ! Vui lòng nhập định dạng `DD/MM/YYYY` (Ví dụ: `14/02/2024` hoặc `25/12/2023`).")
+            return
+
+        user_one, user_two = marriage[0], marriage[1]
+        self.economy.update_marriage_date(user_one, user_two, parsed_ts)
+
+        new_date_str = datetime.fromtimestamp(parsed_ts).strftime("%d/%m/%Y")
+        days = max(1, (int(time.time()) - parsed_ts) // 86400)
+
+        embed = make_embed(
+            title="📅 CẬP NHẬT NGÀY KẾT HÔN THÀNH CÔNG 📅",
+            description=(
+                f"🎉 Ngày bắt đầu kết hôn đã được đổi thành **`{new_date_str}`**!\n"
+                f"💞 Hai bạn đã đồng hành bên nhau **`{days:,}` ngày**."
+            ),
+            color=discord.Color.magenta()
+        )
+        await ctx.send(embed=embed)
+
     @couple_cmd.command(name="changering", aliases=["doinhan", "doi_nhan", "swapring"], brief="Thay nhẫn cưới hiện tại bằng nhẫn mới (hoàn nhẫn cũ).", usage="couple changering [chỉ_số] [tên_nhẫn]")
     async def couple_changering(self, ctx: commands.Context, *, args_str: str = ""):
         """Thay thế nhẫn cưới hiện tại bằng một chiếc nhẫn mới trong túi đồ của bạn (hoàn lại nhẫn cũ)."""

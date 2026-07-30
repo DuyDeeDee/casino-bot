@@ -2793,6 +2793,15 @@ class Economy:
         )
         self.conn.commit()
 
+    def update_marriage_date(self, user_one: int, user_two: int, timestamp: int) -> None:
+        """Updates the married_at timestamp for a specific marriage entry"""
+        self.cur.execute(
+            "UPDATE user_marry SET married_at = ? WHERE user_one = ? AND user_two = ?",
+            (timestamp, user_one, user_two)
+        )
+        self.conn.commit()
+
+
     def get_top_marriages(self, sort_by: str, limit: int = 10) -> list[tuple]:
         """Returns list of top marriages ordered by the given criteria: love_points, joint_wallet, or married_at (ascending/longest)."""
         if sort_by == "love_points":
