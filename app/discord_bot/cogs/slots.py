@@ -300,6 +300,8 @@ class Slots(commands.Cog):
         aliases=["goldprice", "price", "gia"],
     )
     async def giavang(self, ctx: commands.Context):
+        self._check_and_update_gold_price()
+
         current = self.economy.get_gold_price()
         prev = self.economy.get_prev_gold_price()
         
@@ -327,7 +329,13 @@ class Slots(commands.Cog):
             if diff_time > 0:
                 days = diff_time // (24 * 3600)
                 hours = (diff_time % (24 * 3600)) // 3600
-                next_update_str = f"Cập nhật tiếp theo sau {days} ngày {hours} giờ"
+                minutes = (diff_time % 3600) // 60
+                if days > 0:
+                    next_update_str = f"Cập nhật tiếp theo sau {days} ngày {hours} giờ"
+                elif hours > 0:
+                    next_update_str = f"Cập nhật tiếp theo sau {hours} giờ {minutes} phút"
+                else:
+                    next_update_str = f"Cập nhật tiếp theo sau {max(1, minutes)} phút"
             else:
                 next_update_str = "Cập nhật tiếp theo: Đang chờ chu kỳ mới"
         else:
@@ -665,14 +673,13 @@ class Slots(commands.Cog):
         )
         await ctx.send(embed=embed)
 
-    @tasks.loop(minutes=10)
-    async def update_gold_price(self):
+    def _check_and_update_gold_price(self) -> bool:
         current_time = int(time.time())
         last_update_str = self.economy.get_setting("gold_price_last_update")
         
         if last_update_str is None:
             self.economy.set_setting("gold_price_last_update", str(current_time))
-            return
+            return False
             
         last_update = int(last_update_str)
         one_week = 7 * 24 * 3600
@@ -696,7 +703,13 @@ class Slots(commands.Cog):
             self.economy.set_gold_prices(new_price, current_price)
             # Update timestamp to the expected schedule boundary to prevent time drift
             self.economy.set_setting("gold_price_last_update", str(last_update + one_week))
-            logger.info(f"Gold price updated in background (weekly update): {current_price:,} -> {new_price:,} VND")
+            logger.info(f"Gold price updated (weekly update): {current_price:,} -> {new_price:,} VND")
+            return True
+        return False
+
+    @tasks.loop(minutes=10)
+    async def update_gold_price(self):
+        self._check_and_update_gold_price()
 
     @commands.command(
         name="adhelp",
