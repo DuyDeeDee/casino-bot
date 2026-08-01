@@ -586,21 +586,6 @@ class Masoi(commands.Cog):
         msg = await ctx.send(embed=embed, view=view)
         game.message_id = msg.id
 
-        # Tự động tạo Thread thảo luận ngay bên dưới tin nhắn lobby
-        try:
-            thread = await msg.create_thread(
-                name="💬 Bàn Luận — Ván Ma Sói",
-                auto_archive_duration=60,
-                reason="Thread thảo luận tự động cho ván Ma Sói"
-            )
-            game.thread_id = thread.id
-            await thread.send(
-                "💬 **Chào mừng các bạn đến với Thread Thảo Luận Ma Sói!**\n"
-                "Khi ban ngày đến, mọi người chơi sẽ trao đổi tại thread này."
-            )
-        except Exception as e:
-            logger.warning("Không thể tạo thread thảo luận: %s", e)
-
     @commands.command(
         name="masoirank",
         aliases=["masoirankboard", "masoi-rank"],
@@ -643,15 +628,6 @@ class Masoi(commands.Cog):
         game.phase = GamePhase.GAME_END
         if key in self.active_games:
             del self.active_games[key]
-
-        if game.thread_id:
-            thread = self.bot.get_channel(game.thread_id)
-            if thread and isinstance(thread, discord.Thread):
-                try:
-                    await thread.send(f"🛑 **Ván đấu đã bị hủy bởi {stopped_by_name}.** Thread được đóng.")
-                    await thread.edit(archived=True, locked=True)
-                except Exception:
-                    pass
 
         embed = make_embed(
             title="🛑 ĐÃ HỦY VÁN MA SÓI",
@@ -921,7 +897,7 @@ class Masoi(commands.Cog):
 
                 embed_announce = make_embed(
                     title=f"☀️ Ban Ngày — Ngày {game.day_count}",
-                    description=f"{day_msg_text}\n\n💬 Mọi người hãy vào **Thread Thảo Luận** để bàn luận!",
+                    description=f"{day_msg_text}\n\n💬 Mọi người hãy trao đổi và thảo luận tại kênh này!",
                     color=discord.Color.gold()
                 )
                 await message.channel.send(embed=embed_announce)
@@ -1032,13 +1008,3 @@ class Masoi(commands.Cog):
 
         end_view = GameEndView(game, self)
         await message.channel.send(embed=end_embed, view=end_view)
-
-        # Khóa/Lưu thread thảo luận
-        if game.thread_id:
-            thread = self.bot.get_channel(game.thread_id)
-            if thread and isinstance(thread, discord.Thread):
-                try:
-                    await thread.send("🔒 **Ván đấu đã kết thúc! Thread thảo luận được khóa lại.**")
-                    await thread.edit(archived=True, locked=True)
-                except Exception:
-                    pass
