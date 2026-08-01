@@ -586,7 +586,7 @@ class Masoi(commands.Cog):
         game.phase = GamePhase.GAME_END
         if key in self.active_games:
             del self.active_games[key]
-
+        await self.restore_channel_permissions(game, channel)
         embed = make_embed(
             title="🛑 ĐÃ HỦY VÁN MA SÓI",
             description=f"Ván Ma Sói ở kênh này đã bị hủy ép buộc bởi **{stopped_by_name}**.",
@@ -698,24 +698,56 @@ class Masoi(commands.Cog):
         except Exception as e:
             logger.warning("Không thể edit vote embed: %s", e)
 
-    async def sync_thread_permissions(self, game: MasoiGame):
-        """Cập nhật quyền chat trong thread cho người đã chết."""
-        if not game.thread_id or game.settings.dead_can_chat:
+    @commands.Cog.listener()
+    async def on_message(self, message: discord.Message):
+        """Tự động xoá tin nhắn của người chơi đã chết nếu cài đặt cấm chat."""
+        if message.author.bot or not message.guild:
+            return
+        key = f"{message.guild.id}-{message.channel.id}"
+        game = self.active_games.get(key)
+        if not game or game.phase in (GamePhase.LOBBY, GamePhase.GAME_END):
             return
 
-        thread = self.bot.get_channel(game.thread_id)
-        if not thread or not isinstance(thread, discord.Thread):
+        if not game.settings.dead_can_chat:
+            player = game.players.get(message.author.id)
+            if player and not player.is_alive:
+                try:
+                    await message.delete()
+                    await message.channel.send(
+                        f"💀 {message.author.mention}, bạn đã qua đời nên không thể chat trong ván Ma Sói!",
+                        delete_after=4
+                    )
+                except Exception:
+                    pass
+
+    async def sync_channel_permissions(self, game: MasoiGame, channel: discord.TextChannel):
+        """Cập nhật quyền cấm chat ở kênh chính cho người đã chết."""
+        if game.settings.dead_can_chat or not isinstance(channel, discord.TextChannel):
             return
 
-        guild = thread.guild
+        guild = channel.guild
         for p in game.players.values():
             if not p.is_alive:
                 member = guild.get_member(p.user_id)
                 if member:
                     try:
-                        await thread.set_permissions(member, send_messages=False, send_messages_in_threads=False, view_channel=True)
+                        await channel.set_permissions(member, send_messages=False)
                     except Exception:
                         pass
+
+    async def restore_channel_permissions(self, game: MasoiGame, channel: discord.TextChannel):
+        """Khôi phục lại quyền chat bình thường khi ván đấu kết thúc."""
+        if not isinstance(channel, discord.TextChannel):
+            return
+
+        guild = channel.guild
+        for p in game.players.values():
+            member = guild.get_member(p.user_id)
+            if member:
+                try:
+                    await channel.set_permissions(member, overwrite=None)
+                except Exception:
+                    pass
 
     # ──────────────────────────────────────────────
     #  Core State Machine Flow
@@ -837,7 +869,7 @@ class Masoi(commands.Cog):
                 # ── BƯỚC 2: CÔNG BỐ BAN NGÀY ──
                 game.phase = GamePhase.DAY_ANNOUNCE
                 game.start_day()
-                await self.sync_thread_permissions(game)
+                await self.sync_channel_permissions(game, message.channel)
 
                 if night_deaths:
                     death_names = []
@@ -904,7 +936,7 @@ class Masoi(commands.Cog):
                     pass
 
                 executed_id = game.resolve_day_vote()
-                await self.sync_thread_permissions(game)
+                await self.sync_channel_permissions(game, message.channel)
 
                 if executed_id:
                     p = game.players[executed_id]
@@ -964,3 +996,4 @@ class Masoi(commands.Cog):
 
         end_view = GameEndView(game, self)
         await message.channel.send(embed=end_embed, view=end_view)
+        await self.restore_channel_permissions(game, message.channel)
