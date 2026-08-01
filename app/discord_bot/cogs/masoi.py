@@ -88,6 +88,16 @@ class LobbyView(discord.ui.View):
         embed = self.cog.build_settings_embed(self.game)
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
+    @discord.ui.button(label="Hủy Ván", style=discord.ButtonStyle.secondary, emoji="🛑", custom_id="masoi_cancel")
+    async def cancel_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.game.host_id:
+            await interaction.response.send_message("❌ Chỉ Host mới được bấm hủy ván!", ephemeral=True)
+            return
+
+        self.stop()
+        await interaction.response.defer()
+        await self.cog.force_stop_game(self.game, interaction.channel, interaction.user.display_name)
+
 
 class SettingsView(discord.ui.View):
     def __init__(self, game: MasoiGame, cog: "Masoi", lobby_message: discord.Message):
@@ -558,6 +568,55 @@ class Masoi(commands.Cog):
     async def masoirank_cmd(self, ctx: commands.Context):
         embed = self.build_rankboard_embed()
         await ctx.send(embed=embed)
+
+    @commands.command(
+        name="stopmasoi",
+        aliases=["endmasoi", "masoiend", "masoistop", "masoi-stop", "masoi-end", "cancelmasoi"],
+        brief="Hủy / Kết thúc ván Ma Sói ở kênh hiện tại ngay lập tức.",
+        usage="stopmasoi",
+    )
+    async def stopmasoi_cmd(self, ctx: commands.Context):
+        key = f"{ctx.guild.id}-{ctx.channel.id}"
+        game = self.active_games.get(key)
+        if not game:
+            await ctx.send("❌ Không có ván Ma Sói nào đang diễn ra hoặc trong phòng chờ ở kênh này!")
+            return
+
+        is_host = (ctx.author.id == game.host_id)
+        is_admin = False
+        if hasattr(ctx.author, "guild_permissions"):
+            perms = ctx.author.guild_permissions
+            is_admin = perms.administrator or perms.manage_guild
+        is_owner = await self.bot.is_owner(ctx.author)
+
+        if not (is_host or is_admin or is_owner):
+            await ctx.send("❌ Chỉ Host ván đấu hoặc Quản trị viên mới có quyền hủy ván Ma Sói!")
+            return
+
+        await self.force_stop_game(game, ctx.channel, ctx.author.display_name)
+
+    async def force_stop_game(self, game: MasoiGame, channel, stopped_by_name: str):
+        """Hủy ván game đang diễn ra hoặc phòng chờ ép buộc."""
+        key = f"{game.guild_id}-{game.channel_id}"
+        game.phase = GamePhase.GAME_END
+        if key in self.active_games:
+            del self.active_games[key]
+
+        if game.thread_id:
+            thread = self.bot.get_channel(game.thread_id)
+            if thread and isinstance(thread, discord.Thread):
+                try:
+                    await thread.send(f"🛑 **Ván đấu đã bị hủy bởi {stopped_by_name}.** Thread được đóng.")
+                    await thread.edit(archived=True, locked=True)
+                except Exception:
+                    pass
+
+        embed = make_embed(
+            title="🛑 ĐÃ HỦY VÁN MA SÓI",
+            description=f"Ván Ma Sói ở kênh này đã bị hủy ép buộc bởi **{stopped_by_name}**.",
+            color=discord.Color.red()
+        )
+        await channel.send(embed=embed)
 
     # ──────────────────────────────────────────────
     #  Embed Builders
