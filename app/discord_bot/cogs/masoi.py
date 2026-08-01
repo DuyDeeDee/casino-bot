@@ -506,7 +506,7 @@ class Masoi(commands.Cog):
         self.bot = bot
         self.active_games: Dict[str, MasoiGame] = {}  # key: f"{guild_id}-{channel_id}"
 
-    def get_economy((self)):
+    def get_economy(self):
         return getattr(self.bot, "economy", None)
 
     # ──────────────────────────────────────────────
