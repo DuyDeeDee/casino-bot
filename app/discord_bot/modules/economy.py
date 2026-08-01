@@ -12,7 +12,7 @@ from app.config import config
 Entry = Tuple[int, int, int]
 DATABASE_PATH = Path(config.storage.database_path)
 LEGACY_DATABASE_PATH = Path(__file__).resolve().parents[3] / "economy.db"
-SCHEMA_VERSION = 39
+SCHEMA_VERSION = 40
 
 
 logger = logging.getLogger(__name__)
@@ -698,6 +698,7 @@ def _migration_38_reset_gold_price_prev_to_30m(cur: sqlite3.Cursor) -> None:
         pass
 
 
+
 def _migration_39_add_user_topups_table(cur: sqlite3.Cursor) -> None:
     try:
         cur.execute(
@@ -706,6 +707,24 @@ def _migration_39_add_user_topups_table(cur: sqlite3.Cursor) -> None:
             total_vnd INTEGER NOT NULL DEFAULT 0,
             total_gold INTEGER NOT NULL DEFAULT 0,
             updated_at INTEGER NOT NULL DEFAULT 0
+        )"""
+        )
+    except sqlite3.OperationalError:
+        pass
+
+
+def _migration_40_add_masoi_tables(cur: sqlite3.Cursor) -> None:
+    try:
+        cur.execute(
+            """CREATE TABLE IF NOT EXISTS user_masoi_stats (
+            user_id INTEGER NOT NULL PRIMARY KEY,
+            points INTEGER NOT NULL DEFAULT 0,
+            plays INTEGER NOT NULL DEFAULT 0,
+            wins INTEGER NOT NULL DEFAULT 0,
+            losses INTEGER NOT NULL DEFAULT 0,
+            wolf_wins INTEGER NOT NULL DEFAULT 0,
+            villager_wins INTEGER NOT NULL DEFAULT 0,
+            tanner_wins INTEGER NOT NULL DEFAULT 0
         )"""
         )
     except sqlite3.OperationalError:
@@ -752,6 +771,7 @@ MIGRATIONS: dict[int, Callable[[sqlite3.Cursor], None]] = {
     37: _migration_37_update_gold_price_to_30m,
     38: _migration_38_reset_gold_price_prev_to_30m,
     39: _migration_39_add_user_topups_table,
+    40: _migration_40_add_masoi_tables,
 }
 
 
@@ -2926,6 +2946,59 @@ class Economy:
             (key, str(value))
         )
         self.conn.commit()
+
+    def get_masoi_stats(self, user_id: int) -> dict:
+        """Returns dict of user's Ma Sói rank stats."""
+        self.cur.execute(
+            "SELECT points, plays, wins, losses, wolf_wins, villager_wins, tanner_wins FROM user_masoi_stats WHERE user_id = ?",
+            (user_id,)
+        )
+        row = self.cur.fetchone()
+        if not row:
+            return {
+                "user_id": user_id, "points": 0, "plays": 0, "wins": 0,
+                "losses": 0, "wolf_wins": 0, "villager_wins": 0, "tanner_wins": 0
+            }
+        return {
+            "user_id": user_id, "points": row[0], "plays": row[1], "wins": row[2],
+            "losses": row[3], "wolf_wins": row[4], "villager_wins": row[5], "tanner_wins": row[6]
+        }
+
+    def add_masoi_points(self, user_id: int, points_delta: int, is_win: bool, faction: str = "VILLAGER") -> None:
+        """Updates Ma Sói rank points and game stats for a player."""
+        stats = self.get_masoi_stats(user_id)
+        new_points = max(0, stats["points"] + points_delta)
+        new_plays = stats["plays"] + 1
+        new_wins = stats["wins"] + (1 if is_win else 0)
+        new_losses = stats["losses"] + (0 if is_win else 1)
+        
+        wolf_wins = stats["wolf_wins"] + (1 if is_win and faction == "WEREWOLF" else 0)
+        villager_wins = stats["villager_wins"] + (1 if is_win and faction == "VILLAGER" else 0)
+        tanner_wins = stats["tanner_wins"] + (1 if is_win and faction == "INDEPENDENT" else 0)
+
+        self.cur.execute(
+            """INSERT INTO user_masoi_stats (user_id, points, plays, wins, losses, wolf_wins, villager_wins, tanner_wins)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(user_id) DO UPDATE SET
+                 points = EXCLUDED.points,
+                 plays = EXCLUDED.plays,
+                 wins = EXCLUDED.wins,
+                 losses = EXCLUDED.losses,
+                 wolf_wins = EXCLUDED.wolf_wins,
+                 villager_wins = EXCLUDED.villager_wins,
+                 tanner_wins = EXCLUDED.tanner_wins""",
+            (user_id, new_points, new_plays, new_wins, new_losses, wolf_wins, villager_wins, tanner_wins)
+        )
+        self.conn.commit()
+
+    def get_masoi_leaderboard(self, limit: int = 10) -> list[tuple[int, int, int, int]]:
+        """Returns list of (user_id, points, plays, wins) ordered by points DESC."""
+        self.cur.execute(
+            "SELECT user_id, points, plays, wins FROM user_masoi_stats ORDER BY points DESC, wins DESC LIMIT ?",
+            (limit,)
+        )
+        return self.cur.fetchall()
+
 
 
 

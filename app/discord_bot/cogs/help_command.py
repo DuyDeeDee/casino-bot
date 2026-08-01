@@ -33,6 +33,7 @@ COG_GROUP_MAPPING = {
     # Fungame
     "UNO":           ("<:game:1531333922535768226>", "Fungame"),
     "GiaiMa":        ("<:game:1531333922535768226>", "Fungame"),
+    "Masoi":         ("<:game:1531333922535768226>", "Fungame"),
     # Function
     "afk":           ("<:function:1531341821257716025>", "Function"),
     "Afk":           ("<:function:1531341821257716025>", "Function"),

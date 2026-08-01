@@ -51,6 +51,7 @@ from app.discord_bot.cogs import (
     Tower,
     Giveaway,
     GiaiMa,
+    Masoi,
 )
 
 from app.discord_bot.modules.economy import Economy
@@ -84,6 +85,7 @@ COGS = (
     Tower,
     Giveaway,
     GiaiMa,
+    Masoi,
 )
 
 
