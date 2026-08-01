@@ -260,7 +260,7 @@ class NightSeerView(discord.ui.View):
                 if seer_p:
                     seer_p.seer_found_wolf = True
             else:
-                res_str = f"👤 **{target_p.display_name}** là **DÂN VÀNG** (không phải Sói)."
+                res_str = f"👤 **{target_p.display_name}** là **DÂN LÀNG** (không phải Sói)."
             self.game.night_seer_result = res_str
         else:
             res_str = "Không tìm thấy thông tin."
