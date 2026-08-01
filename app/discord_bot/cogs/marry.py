@@ -86,6 +86,7 @@ COUPLE_PETS = {
     "pet_dragon":   {"name": "<:fantasy_dragon:1529907944089583717> Rồng Linh Thú Cổ Đại", "price": 104,            "buff": 35},
     "pet_phoenix":  {"name": "<:phoenix:1529907955657343117> Phượng Hoàng Băng Tuyết","price": 149,          "buff": 50},
     "pet_unicorn":  {"name": "<:unicorn:1529907967535612087> Kỳ Lân Tinh Tú",      "price": 499,          "buff": 80},
+    "pet_hr_meow":  {"name": "<:cute_cat:1529906168556818432> Mèo Hr Meow",       "price": 999,          "buff": 100},
 }
 
 ESTATE_IMAGES = {
@@ -118,7 +119,8 @@ PET_IMAGES = {
     "pet_fox": "arctic_fox.png",
     "pet_dragon": "fantasy_dragon.png",
     "pet_phoenix": "phoenix.png",
-    "pet_unicorn": "unicorn.png"
+    "pet_unicorn": "unicorn.png",
+    "pet_hr_meow": "Hr meow.png"
 }
 
 
@@ -1850,8 +1852,15 @@ class Marry(commands.Cog):
         user_one, user_two = marriage[0], marriage[1]
         item_id = item_id.lower().strip()
         if item_id not in COUPLE_PETS:
-            await ctx.send(f"❌ ID thú cưng `{item_id}` không hợp lệ! Hãy gõ `i?couple shop` để xem danh sách.")
-            return
+            if f"pet_{item_id}" in COUPLE_PETS:
+                item_id = f"pet_{item_id}"
+            elif item_id.replace(" ", "_") in COUPLE_PETS:
+                item_id = item_id.replace(" ", "_")
+            elif f"pet_{item_id.replace(' ', '_')}" in COUPLE_PETS:
+                item_id = f"pet_{item_id.replace(' ', '_')}"
+            else:
+                await ctx.send(f"❌ ID thú cưng `{item_id}` không hợp lệ! Hãy gõ `i?couple shop` để xem danh sách.")
+                return
 
         pet_info = COUPLE_PETS[item_id]
         price = pet_info["price"]
