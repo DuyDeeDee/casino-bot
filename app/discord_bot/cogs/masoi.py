@@ -827,12 +827,63 @@ class Masoi(commands.Cog):
                 game.start_night()
                 game.phase = GamePhase.NIGHT_GUARD
 
+                # Gửi DM riêng cho các vai trò ban đêm
+                # 1. Bảo Vệ
+                guard_p = game.get_player_by_role(Role.GUARD)
+                if guard_p:
+                    g_user = self.bot.get_user(guard_p.user_id)
+                    if g_user:
+                        embed = make_embed(title=f"🛡️ Đêm {game.night_count} — Lượt Bảo Vệ", description="Hãy chọn 1 người chơi để bảo vệ khỏi bị Sói cắn đêm nay!")
+                        view = NightGuardView(game, guard_p.user_id)
+                        try:
+                            await g_user.send(embed=embed, view=view)
+                        except Exception:
+                            pass
+
+                # 2. Bầy Sói
+                for w in game.get_alive_wolves():
+                    w_user = self.bot.get_user(w.user_id)
+                    if w_user:
+                        embed = make_embed(title=f"🐺 Đêm {game.night_count} — Lượt Bầy Sói", description="Hãy chọn 1 người chơi để cắn đêm nay!")
+                        view = NightWolfView(game, w.user_id)
+                        try:
+                            await w_user.send(embed=embed, view=view)
+                        except Exception:
+                            pass
+
+                # 3. Tiên Tri
+                seer_p = game.get_player_by_role(Role.SEER)
+                if seer_p:
+                    s_user = self.bot.get_user(seer_p.user_id)
+                    if s_user:
+                        embed = make_embed(title=f"🔮 Đêm {game.night_count} — Lượt Tiên Tri", description="Hãy chọn 1 người chơi để soi phe!")
+                        view = NightSeerView(game, seer_p.user_id)
+                        try:
+                            await s_user.send(embed=embed, view=view)
+                        except Exception:
+                            pass
+
+                # 4. Phù Thủy
+                witch_p = game.get_player_by_role(Role.WITCH)
+                if witch_p:
+                    wt_user = self.bot.get_user(witch_p.user_id)
+                    if wt_user:
+                        victim_id = game.resolve_wolf_target()
+                        victim_p = game.players.get(victim_id) if victim_id else None
+                        v_name = victim_p.display_name if victim_p else "Không ai"
+                        embed = make_embed(title=f"🧪 Đêm {game.night_count} — Lượt Phù Thủy", description=f"Đêm nay, bầy Sói nhắm cắn: **{v_name}**.\nBạn muốn dùng bình cứu hay bình độc không?")
+                        view = NightWitchView(game, witch_p.user_id, victim_id)
+                        try:
+                            await wt_user.send(embed=embed, view=view)
+                        except Exception:
+                            pass
+
                 embed_night = make_embed(
                     title=f"🌙 Ban Đêm — Đêm {game.night_count}",
                     description=(
                         f"Màn đêm đã buông xuống làng...\n"
-                        f"Các vai trò có kỹ năng (🛡️ Bảo Vệ, 🐺 Sói, 🔮 Tiên Tri, 🧪 Phù Thủy) "
-                        f"hãy bấm nút **[ 🌙 Hành Động Ban Đêm ]** bên dưới để mở giao diện riêng *(100% ẩn, chỉ bạn thấy)*!\n\n"
+                        f"Bot đã gửi tin nhắn riêng (DM) cho các vai trò ban đêm để bỏ phiếu/hành động!\n"
+                        f"*(Hoặc bấm nút **[ 🌙 Hành Động Ban Đêm ]** dưới đây nếu bạn bị chặn DM)*\n\n"
                         f"⏱️ **Thời gian đêm:** `{game.settings.night_time}s`"
                     ),
                     color=discord.Color.dark_purple()
