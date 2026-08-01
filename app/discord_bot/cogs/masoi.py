@@ -169,48 +169,6 @@ class SettingsView(discord.ui.View):
 #  Night Ephemeral Views
 # ==============================================================================
 
-class NightActionMainView(discord.ui.View):
-    """View công khai trên kênh chính ban đêm có nút mở giao diện Ephemeral."""
-    def __init__(self, game: MasoiGame, cog: "Masoi"):
-        super().__init__(timeout=game.settings.night_time)
-        self.game = game
-        self.cog = cog
-
-    @discord.ui.button(label="Hành Động Ban Đêm", style=discord.ButtonStyle.primary, emoji="🌙", custom_id="masoi_night_action_btn")
-    async def night_action_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        user_id = interaction.user.id
-        p = self.game.players.get(user_id)
-        if not p or not p.is_alive:
-            await interaction.response.send_message("😴 Bạn không tham gia ván đấu hoặc đã chết.", ephemeral=True)
-            return
-
-        if p.role == Role.GUARD:
-            embed = make_embed(title="🛡️ Giao Diện Bảo Vệ", description="Hãy chọn 1 người chơi để bảo vệ khỏi bị Sói cắn đêm nay!")
-            view = NightGuardView(self.game, user_id)
-            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
-
-        elif p.role == Role.WOLF:
-            embed = make_embed(title="🐺 Giao Diện Bầy Sói", description="Hãy chọn 1 người chơi để cắn đêm nay!")
-            view = NightWolfView(self.game, user_id)
-            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
-
-        elif p.role == Role.SEER:
-            embed = make_embed(title="🔮 Giao Diện Tiên Tri", description="Hãy chọn 1 người chơi để soi phe!")
-            view = NightSeerView(self.game, user_id)
-            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
-
-        elif p.role == Role.WITCH:
-            victim_id = self.game.resolve_wolf_target()
-            victim_p = self.game.players.get(victim_id) if victim_id else None
-            v_name = victim_p.display_name if victim_p else "Chưa có / Không ai"
-            embed = make_embed(title="🧪 Giao Diện Phù Thủy", description=f"Đêm nay bầy Sói nhắm cắn: **{v_name}**.\nBạn muốn dùng bình cứu hay bình độc không?")
-            view = NightWitchView(self.game, user_id, victim_id)
-            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
-
-        else:
-            await interaction.response.send_message("😴 Bạn không có kỹ năng ban đêm. Hãy nghỉ ngơi chờ ban ngày!", ephemeral=True)
-
-
 class NightGuardView(discord.ui.View):
     """View Ephemeral chọn mục tiêu bảo vệ cho Bảo Vệ."""
     def __init__(self, game: MasoiGame, guard_id: int):
@@ -858,14 +816,12 @@ class Masoi(commands.Cog):
                     title=f"🌙 Ban Đêm — Đêm {game.night_count}",
                     description=(
                         f"Màn đêm đã buông xuống làng...\n"
-                        f"Bot đã gửi tin nhắn riêng (DM) cho các vai trò ban đêm để bỏ phiếu/hành động!\n"
-                        f"*(Hoặc bấm nút **[ 🌙 Hành Động Ban Đêm ]** dưới đây nếu bạn bị chặn DM)*\n\n"
+                        f"Bot đã gửi tin nhắn riêng (DM) tới các vai trò ban đêm để bỏ phiếu/hành động!\n\n"
                         f"⏱️ **Thời gian đêm:** `{game.settings.night_time}s`"
                     ),
                     color=discord.Color.dark_purple()
                 )
-                night_view = NightActionMainView(game, self)
-                night_msg = await message.channel.send(embed=embed_night, view=night_view)
+                night_msg = await message.channel.send(embed=embed_night)
 
                 await asyncio.sleep(game.settings.night_time)
 
