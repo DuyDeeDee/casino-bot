@@ -55,6 +55,25 @@ GROUP_ORDER = [
 ]
 
 
+def _parse_label_and_emoji(raw_label: str):
+    """Tách emoji (custom hoặc unicode) và label sạch cho SelectOption."""
+    import re
+    match = re.match(r"^(<a?:\w+:\d+>)\s*(.*)$", raw_label)
+    if match:
+        emoji_str, clean_title = match.groups()
+        try:
+            emoji = discord.PartialEmoji.from_str(emoji_str)
+        except Exception:
+            emoji = None
+        return clean_title.strip(), emoji
+
+    parts = raw_label.split(" ", 1)
+    if len(parts) == 2:
+        return parts[1].strip(), parts[0].strip()
+
+    return raw_label, None
+
+
 def _is_admin_command(cmd: commands.Command) -> bool:
     """Kiểm tra xem lệnh có phải là lệnh admin/owner hay không."""
     if cmd.hidden:
@@ -139,14 +158,16 @@ class CategorySelect(Select):
         all_groups = ordered + others
 
         options = [
-            discord.SelectOption(label="🏠 Trang chủ", value="__home__", description="Quay về danh sách danh mục")
+            discord.SelectOption(label="Trang chủ", value="__home__", emoji="🏠", description="Quay về danh sách danh mục")
         ]
         for label in all_groups:
             cmds = groups[label]
+            clean_label, emoji = _parse_label_and_emoji(label)
             options.append(
                 discord.SelectOption(
-                    label=label,
+                    label=clean_label,
                     value=label,
+                    emoji=emoji,
                     description=f"{len(cmds)} lệnh",
                 )
             )
