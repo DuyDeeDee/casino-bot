@@ -169,6 +169,48 @@ class SettingsView(discord.ui.View):
 #  Night Ephemeral Views
 # ==============================================================================
 
+class NightActionMainView(discord.ui.View):
+    """View công khai trên kênh chính ban đêm có nút mở giao diện Ephemeral."""
+    def __init__(self, game: MasoiGame, cog: "Masoi"):
+        super().__init__(timeout=game.settings.night_time)
+        self.game = game
+        self.cog = cog
+
+    @discord.ui.button(label="Hành Động Ban Đêm", style=discord.ButtonStyle.primary, emoji="🌙", custom_id="masoi_night_action_btn")
+    async def night_action_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        user_id = interaction.user.id
+        p = self.game.players.get(user_id)
+        if not p or not p.is_alive:
+            await interaction.response.send_message("😴 Bạn không tham gia ván đấu hoặc đã chết.", ephemeral=True)
+            return
+
+        if p.role == Role.GUARD:
+            embed = make_embed(title="🛡️ Giao Diện Bảo Vệ", description="Hãy chọn 1 người chơi để bảo vệ khỏi bị Sói cắn đêm nay!")
+            view = NightGuardView(self.game, user_id)
+            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
+        elif p.role == Role.WOLF:
+            embed = make_embed(title="🐺 Giao Diện Bầy Sói", description="Hãy chọn 1 người chơi để cắn đêm nay!")
+            view = NightWolfView(self.game, user_id)
+            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
+        elif p.role == Role.SEER:
+            embed = make_embed(title="🔮 Giao Diện Tiên Tri", description="Hãy chọn 1 người chơi để soi phe!")
+            view = NightSeerView(self.game, user_id)
+            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
+        elif p.role == Role.WITCH:
+            victim_id = self.game.resolve_wolf_target()
+            victim_p = self.game.players.get(victim_id) if victim_id else None
+            v_name = victim_p.display_name if victim_p else "Chưa có / Không ai"
+            embed = make_embed(title="🧪 Giao Diện Phù Thủy", description=f"Đêm nay bầy Sói nhắm cắn: **{v_name}**.\nBạn muốn dùng bình cứu hay bình độc không?")
+            view = NightWitchView(self.game, user_id, victim_id)
+            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
+        else:
+            await interaction.response.send_message("😴 Bạn không có kỹ năng ban đêm. Hãy nghỉ ngơi chờ ban ngày!", ephemeral=True)
+
+
 class NightGuardView(discord.ui.View):
     """View Ephemeral chọn mục tiêu bảo vệ cho Bảo Vệ."""
     def __init__(self, game: MasoiGame, guard_id: int):
@@ -783,69 +825,27 @@ class Masoi(commands.Cog):
             while game.phase != GamePhase.GAME_END:
                 # ── BƯỚC 1: ĐÊM ──
                 game.start_night()
+                game.phase = GamePhase.NIGHT_GUARD
 
-                # 1.1 Lượt Bảo Vệ
-                guard_p = game.get_player_by_role(Role.GUARD)
-                if guard_p:
-                    game.phase = GamePhase.NIGHT_GUARD
-                    user = self.bot.get_user(guard_p.user_id)
-                    if user:
-                        embed = make_embed(title=f"🛡️ Đêm {game.night_count} — Lượt Bảo Vệ", description="Hãy chọn 1 người chơi để bảo vệ khỏi bị Sói cắn đêm nay!")
-                        view = NightGuardView(game, guard_p.user_id)
-                        try:
-                            await message.channel.send(embed=embed, view=view, delete_after=game.settings.night_time)
-                        except Exception:
-                            pass
-                    await asyncio.sleep(game.settings.night_time)
+                embed_night = make_embed(
+                    title=f"🌙 Ban Đêm — Đêm {game.night_count}",
+                    description=(
+                        f"Màn đêm đã buông xuống làng...\n"
+                        f"Các vai trò có kỹ năng (🛡️ Bảo Vệ, 🐺 Sói, 🔮 Tiên Tri, 🧪 Phù Thủy) "
+                        f"hãy bấm nút **[ 🌙 Hành Động Ban Đêm ]** bên dưới để mở giao diện riêng *(100% ẩn, chỉ bạn thấy)*!\n\n"
+                        f"⏱️ **Thời gian đêm:** `{game.settings.night_time}s`"
+                    ),
+                    color=discord.Color.dark_purple()
+                )
+                night_view = NightActionMainView(game, self)
+                night_msg = await message.channel.send(embed=embed_night, view=night_view)
 
-                # 1.2 Lượt Sói
-                alive_wolves = game.get_alive_wolves()
-                if alive_wolves:
-                    game.phase = GamePhase.NIGHT_WOLF
-                    for w in alive_wolves:
-                        w_user = self.bot.get_user(w.user_id)
-                        if w_user:
-                            embed = make_embed(title=f"🐺 Đêm {game.night_count} — Lượt Bầy Sói", description="Hãy chọn 1 người chơi để cắn đêm nay!")
-                            view = NightWolfView(game, w.user_id)
-                            try:
-                                await message.channel.send(embed=embed, view=view, delete_after=game.settings.night_time)
-                            except Exception:
-                                pass
-                    await asyncio.sleep(game.settings.night_time)
+                await asyncio.sleep(game.settings.night_time)
 
-                # 1.3 Lượt Tiên Tri
-                seer_p = game.get_player_by_role(Role.SEER)
-                if seer_p:
-                    game.phase = GamePhase.NIGHT_SEER
-                    user = self.bot.get_user(seer_p.user_id)
-                    if user:
-                        embed = make_embed(title=f"🔮 Đêm {game.night_count} — Lượt Tiên Tri", description="Hãy chọn 1 người chơi để soi phe!")
-                        view = NightSeerView(game, seer_p.user_id)
-                        try:
-                            await message.channel.send(embed=embed, view=view, delete_after=game.settings.night_time)
-                        except Exception:
-                            pass
-                    await asyncio.sleep(game.settings.night_time)
-
-                # 1.4 Lượt Phù Thủy
-                witch_p = game.get_player_by_role(Role.WITCH)
-                if witch_p:
-                    game.phase = GamePhase.NIGHT_WITCH
-                    user = self.bot.get_user(witch_p.user_id)
-                    victim_id = game.resolve_wolf_target()
-                    if user:
-                        victim_p = game.players.get(victim_id) if victim_id else None
-                        v_name = victim_p.display_name if victim_p else "Không ai"
-                        embed = make_embed(
-                            title=f"🧪 Đêm {game.night_count} — Lượt Phù Thủy",
-                            description=f"Đêm nay, bầy Sói nhắm cắn: **{v_name}**.\nBạn muốn dùng bình cứu hay bình độc không?"
-                        )
-                        view = NightWitchView(game, witch_p.user_id, victim_id)
-                        try:
-                            await message.channel.send(embed=embed, view=view, delete_after=game.settings.night_time)
-                        except Exception:
-                            pass
-                    await asyncio.sleep(game.settings.night_time)
+                try:
+                    await night_msg.delete()
+                except Exception:
+                    pass
 
                 # 1.5 Tính toán đêm
                 game.phase = GamePhase.NIGHT_RESOLVE
