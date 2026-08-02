@@ -829,7 +829,7 @@ class Masoi(commands.Cog):
         embed = self.build_lobby_embed(game)
         view = LobbyView(game, self)
         msg = await ctx.send(
-            content=f"🏆 **{ctx.author.display_name}** đã trả **1 thỏi vàng** phí tạo phòng Ma Sói!",
+            content=f"<a:yay:1533444499827851505> **{ctx.author.display_name}** đã trả **1 thỏi vàng** phí tạo phòng Ma Sói!",
             embed=embed,
             view=view
         )
