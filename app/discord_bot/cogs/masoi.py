@@ -885,10 +885,10 @@ class Masoi(commands.Cog):
             eco = self.get_economy()
             if eco:
                 eco.add_credits(game.host_id, MASOI_CREATE_FEE)
-                refund_text = f"\n🏆 Đã hoàn lại **1 thỏi vàng** cho Host **{game.host_name}**."
+                refund_text = f"\n<a:muiten:1533428497098473623> Đã hoàn lại **1 thỏi vàng** cho Host **{game.host_name}**."
 
         embed = make_embed(
-            title="🛑 ĐÃ HỦY VÁN MA SÓI",
+            title="<a:luuy:1533429265293508888> ĐÃ HỦY VÁN MA SÓI",
             description=f"Ván Ma Sói ở kênh này đã bị hủy ép buộc bởi **{stopped_by_name}**.{refund_text}",
             color=discord.Color.red()
         )
@@ -962,7 +962,7 @@ class Masoi(commands.Cog):
             value=f"{divider}\n<a:muiten:1533428497098473623> *Bấm **Tham gia** để vào ván, chủ phòng bấm **Bắt đầu** khi đủ 5 người trở lên.*",
             inline=False
         )
-        embed.set_footer(text="📌 Phí tạo phòng: 1 thỏi vàng")
+        embed.set_footer(text=" Phí tạo phòng: 1 thỏi vàng")
         return embed
 
     def build_settings_embed(self, game: MasoiGame) -> discord.Embed:
