@@ -18,6 +18,7 @@ class Role(Enum):
     SEER = "Tiên Tri"
     GUARD = "Bảo Vệ"
     WITCH = "Phù Thủy"
+    CUPID = "Thần Tình Yêu"
     HUNTER = "Thợ Săn"
     TANNER = "Kẻ Ngốc"
 
@@ -29,6 +30,7 @@ class Role(Enum):
             Role.SEER: "🔮",
             Role.GUARD: "🛡️",
             Role.WITCH: "🧪",
+            Role.CUPID: "💘",
             Role.HUNTER: "🏹",
             Role.TANNER: "🃏",
         }
@@ -51,6 +53,7 @@ class Role(Enum):
             Role.SEER: "Mỗi đêm chọn 1 người để soi phe (Sói hay Dân).",
             Role.GUARD: "Mỗi đêm chọn 1 người để bảo vệ khỏi bị Sói cắn (không chọn trùng 2 đêm liền).",
             Role.WITCH: "Có 1 bình Cứu (hồi sinh người bị cắn) và 1 bình Độc (giết 1 người), mỗi bình dùng 1 lần/ván.",
+            Role.CUPID: "Đêm 1 chọn 2 người làm Cặp Đôi Tình Nhân. Nếu 1 trong 2 người chết, người kia sẽ chết theo.",
             Role.HUNTER: "Khi bị loại (bị Sói cắn hoặc bị treo cổ), bạn được chọn 1 người chơi để kéo theo cùng.",
             Role.TANNER: "Bạn thuộc phe Độc Lập. Bạn THẮNG NGAY LẬP TỨC nếu bị dân làng treo cổ ban ngày!",
         }
@@ -61,6 +64,7 @@ class Faction(Enum):
     WEREWOLF = "Phe Sói 🐺"
     VILLAGER = "Phe Dân Làng 👥"
     INDEPENDENT = "Phe Độc Lập 🃏"
+    LOVERS = "Phe Tình Nhân 💘"
 
 
 class GamePhase(Enum):
@@ -389,6 +393,18 @@ class MasoiGame:
                 witch_p.witch_useful_use_count += 1
             self.record_log("WITCH_POISON", target_id=poison_target, result="Phù thủy dùng bình độc")
 
+        # Cập nhật Lover chết theo
+        lover_deaths = set()
+        for uid in list(deaths):
+            p = self.players.get(uid)
+            if p and p.lover_id and p.lover_id in self.players:
+                lover_p = self.players[p.lover_id]
+                if lover_p.is_alive and lover_p.user_id not in deaths:
+                    lover_deaths.add(lover_p.user_id)
+                    self.record_log("LOVER_DEATH", target_id=lover_p.user_id, result="Chết vì đau thương do tình nhân qua đời")
+
+        deaths.update(lover_deaths)
+
         # Cập nhật trạng thái sống/chết
         final_deaths = list(deaths)
         for uid in final_deaths:
@@ -442,6 +458,14 @@ class MasoiGame:
             self.winner_faction = Faction.INDEPENDENT
             self.record_log("GAME_WIN", actor_id=executed_id, result="Kẻ Ngốc thắng vì bị xử tử!")
 
+        # Cập nhật Lover chết theo khi bị treo cổ
+        ex_p = self.players[executed_id]
+        if ex_p.lover_id and ex_p.lover_id in self.players:
+            lover_p = self.players[ex_p.lover_id]
+            if lover_p.is_alive:
+                lover_p.is_alive = False
+                self.record_log("LOVER_DEATH", target_id=lover_p.user_id, result="Chết vì đau thương do tình nhân bị treo cổ")
+
         return executed_id
 
     def check_win_condition(self) -> Optional[Faction]:
@@ -450,6 +474,13 @@ class MasoiGame:
             return self.winner_faction
 
         alive_players = self.get_alive_players()
+        if len(alive_players) == 2:
+            p1, p2 = alive_players[0], alive_players[1]
+            if p1.lover_id == p2.user_id and p1.role.faction != p2.role.faction:
+                self.winner_faction = Faction.LOVERS
+                self.record_log("GAME_WIN", result="Phe Tình Nhân chiến thắng (cặp đôi sống sót cuối cùng)!")
+                return Faction.LOVERS
+
         alive_wolves = [p for p in alive_players if p.is_wolf]
         alive_non_wolves = [p for p in alive_players if not p.is_wolf]
 

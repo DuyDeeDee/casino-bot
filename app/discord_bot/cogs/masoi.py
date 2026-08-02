@@ -341,6 +341,72 @@ class NightSeerView(discord.ui.View):
         await interaction.response.edit_message(embed=embed, view=None)
 
 
+class NightCupidView(discord.ui.View):
+    """View Ephemeral chọn 2 người làm Cặp Đôi Tình Nhân cho Thần Tình Yêu."""
+    def __init__(self, game: MasoiGame, cupid_id: int):
+        super().__init__(timeout=game.settings.night_time)
+        self.game = game
+        self.cupid_id = cupid_id
+
+        options = []
+        for p in game.get_alive_players():
+            options.append(discord.SelectOption(label=p.display_name, value=str(p.user_id), emoji="💘"))
+
+        if options:
+            self.select = discord.ui.Select(
+                placeholder="💘 Chọn đúng 2 người làm Cặp Đôi...",
+                min_values=min(2, len(options)),
+                max_values=min(2, len(options)),
+                options=options[:25],
+                row=0
+            )
+            self.select.callback = self.select_callback
+            self.add_item(self.select)
+
+            self.confirm_btn = discord.ui.Button(label="Xác nhận ghép đôi", style=discord.ButtonStyle.primary, row=1)
+            self.confirm_btn.callback = self.confirm_callback
+            self.add_item(self.confirm_btn)
+
+    async def select_callback(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+
+    async def confirm_callback(self, interaction: discord.Interaction):
+        if len(self.select.values) < 2:
+            await interaction.response.send_message("❌ Vui lòng chọn đúng 2 người!", ephemeral=True)
+            return
+
+        id1, id2 = int(self.select.values[0]), int(self.select.values[1])
+        p1, p2 = self.game.players.get(id1), self.game.players.get(id2)
+        if p1 and p2:
+            p1.lover_id = id2
+            p2.lover_id = id1
+            name1, name2 = p1.display_name, p2.display_name
+        else:
+            name1, name2 = "Người 1", "Người 2"
+
+        self.stop()
+        embed = interaction.message.embeds[0] if interaction.message.embeds else None
+        if embed:
+            divider = "──────────────────────────────────────"
+            embed.add_field(name="\u200b", value=f"{divider}\n💘 **Đã ghi nhận:** Ghép đôi **{name1}** 💞 **{name2}**", inline=False)
+
+        await interaction.response.edit_message(embed=embed, view=None)
+
+        # Gửi DM thông báo cho 2 người tình nhân
+        for p_target, p_other in [(p1, p2), (p2, p1)]:
+            if p_target and hasattr(self.game, "cog"):
+                user = self.game.cog.bot.get_user(p_target.user_id)
+                if user:
+                    try:
+                        await user.send(
+                            f"> 💘 **BẠN ĐÃ ĐƯỢC THẦN TÌNH YÊU GHÉP ĐÔI!**\n"
+                            f"> Bạn và **{p_other.display_name}** hiện là **CẶP ĐÔI TÌNH NHÂN**.\n"
+                            f"> ⚠️ *Nếu 1 trong 2 người chết, người còn lại sẽ tự sát chết theo!*"
+                        )
+                    except Exception:
+                        pass
+
+
 class NightWitchView(discord.ui.View):
     """View Ephemeral cho Phù Thủy (Cứu & Độc)."""
     def __init__(self, game: MasoiGame, witch_id: int, victim_id: Optional[int]):
@@ -840,28 +906,42 @@ class Masoi(commands.Cog):
     def build_vote_embed(self, game: MasoiGame, is_final: bool = False) -> discord.Embed:
         counts: Dict[int, int] = {}
         white_votes = 0
+        total_votes = len(game.day_votes)
+
         for tid in game.day_votes.values():
             if tid is None:
                 white_votes += 1
             else:
                 counts[tid] = counts.get(tid, 0) + 1
 
+        def make_bar(cnt: int, total: int) -> str:
+            if total <= 0:
+                return "▒▒▒▒▒▒▒▒"
+            filled = int((cnt / total) * 8)
+            filled = min(8, max(0, filled))
+            return "█" * filled + "▒" * (8 - filled)
+
         lines = []
         for p in game.get_alive_players():
             c = counts.get(p.user_id, 0)
-            lines.append(f"• **{p.display_name}**: `{c} phiếu`")
+            bar = make_bar(c, total_votes) if total_votes > 0 else "▒▒▒▒▒▒▒▒"
+            lines.append(f"• ⚖️ **{p.display_name}**: `{bar}` **({c} phiếu)**")
 
-        lines.append(f"• 🏳️ **Phiếu trắng**: `{white_votes} phiếu`")
+        white_bar = make_bar(white_votes, total_votes) if total_votes > 0 else "▒▒▒▒▒▒▒▒"
+        lines.append(f"• 🏳️ **Phiếu trắng**: `{white_bar}` **({white_votes} phiếu)**")
+
+        divider = "──────────────────────────────────────"
 
         if not is_final and game.settings.vote_display == "END_ONLY":
-            desc = "⚖️ **Đang diễn ra bỏ phiếu...**\n_(Số phiếu hiện đang ẩn tới khi kết thúc giờ bỏ phiếu)_"
+            desc = f"⚖️ **Đang diễn ra bỏ phiếu...**\n_(Số phiếu hiện đang ẩn tới khi kết thúc giờ bỏ phiếu)_\n\n{divider}\n📌 *Bấm menu bên dưới để chọn người bạn nghi ngờ.*"
         else:
-            desc = "⚖️ **Kết quả lượt bỏ phiếu treo cổ:**\n\n" + "\n".join(lines)
+            header_str = "⚖️ **KẾT QUẢ BỎ PHIẾU TREO CỔ**" if is_final else "⚖️ **DIỄN BIẾN BỎ PHIẾU REAL-TIME**"
+            desc = f"{header_str}\n\n" + "\n".join(lines) + f"\n\n{divider}\n📌 *Bấm menu bên dưới để bỏ phiếu người nghi ngờ là Sói.*"
 
-        embed = make_embed(
+        embed = discord.Embed(
             title=f"⚖️ Bỏ Phiếu Treo Cổ — Ngày {game.day_count}",
             description=desc,
-            color=discord.Color.gold(),
+            color=discord.Color(0xE0A638)
         )
         return embed
 
@@ -963,6 +1043,7 @@ class Masoi(commands.Cog):
 
     async def start_game(self, game: MasoiGame, message: discord.Message):
         game.phase = GamePhase.ROLE_ASSIGN
+        game.cog = self
         game.assign_roles()
 
         # DM vai trò riêng cho từng người
@@ -977,7 +1058,7 @@ class Masoi(commands.Cog):
                     else:
                         extra_info = " · Bạn là Sói duy nhất ván này"
 
-                faction_name = p.role.faction.value.replace(" 🐺", "").replace(" 👥", "").replace(" 🃏", "")
+                faction_name = p.role.faction.value.replace(" 🐺", "").replace(" 👥", "").replace(" 🃏", "").replace(" 💘", "")
 
                 dm_text = (
                     f"> {p.role.emoji} **Vai trò của bạn: {p.role.value}**\n"
@@ -993,12 +1074,30 @@ class Masoi(commands.Cog):
 
     async def game_loop(self, game: MasoiGame, message: discord.Message):
         key = f"{game.guild_id}-{game.channel_id}"
+        divider = "──────────────────────────────────────"
 
         try:
             while game.phase != GamePhase.GAME_END:
                 # ── BƯỚC 1: ĐÊM ──
                 game.start_night()
                 game.phase = GamePhase.NIGHT_GUARD
+
+                # Gửi DM riêng cho Thần Tình Yêu ở Đêm 1
+                if game.night_count == 1:
+                    cupid_p = game.get_player_by_role(Role.CUPID)
+                    if cupid_p:
+                        c_user = self.bot.get_user(cupid_p.user_id)
+                        if c_user:
+                            embed_cupid = discord.Embed(
+                                title=f"🌙 Đêm 1 — Lượt của Thần Tình Yêu",
+                                description=f"Chọn đúng 2 người để ghép đôi Cặp Đôi Tình Nhân. Còn **{game.settings.night_time} giây** để quyết định.",
+                                color=discord.Color(0xE0A638)
+                            )
+                            view_cupid = NightCupidView(game, cupid_p.user_id)
+                            try:
+                                await c_user.send(embed=embed_cupid, view=view_cupid)
+                            except Exception:
+                                pass
 
                 # Gửi DM riêng cho các vai trò ban đêm
                 # 1. Bảo Vệ
@@ -1067,14 +1166,14 @@ class Masoi(commands.Cog):
                         except Exception:
                             pass
 
-                embed_night = make_embed(
+                embed_night = discord.Embed(
                     title=f"🌙 Ban Đêm — Đêm {game.night_count}",
                     description=(
                         f"Màn đêm đã buông xuống làng...\n"
-                        f"Bot đã gửi tin nhắn riêng (DM) tới các vai trò ban đêm để bỏ phiếu/hành động!\n\n"
-                        f"⏱️ **Thời gian đêm:** `{game.settings.night_time}s`"
+                        f"Bot đã gửi tin nhắn riêng (DM) tới các vai trò ban đêm để hành động!\n\n"
+                        f"{divider}\n⏱️ **Thời gian đêm:** `{game.settings.night_time}s`"
                     ),
-                    color=discord.Color.dark_purple()
+                    color=discord.Color(0xE0A638)
                 )
                 night_msg = await message.channel.send(embed=embed_night)
 
@@ -1099,17 +1198,17 @@ class Masoi(commands.Cog):
                     for uid in night_deaths:
                         p = game.players[uid]
                         if game.settings.reveal_roles_on_death:
-                            death_names.append(f"💀 **{p.display_name}** ({p.role.emoji} {p.role.value})")
+                            death_names.append(f"💀 **{p.display_name}** *({p.role.emoji} {p.role.value})*")
                         else:
                             death_names.append(f"💀 **{p.display_name}**")
                     day_msg_text = "Đêm qua trôi qua đầy đau thương... Các nạn nhân đã ra đi:\n" + "\n".join(death_names)
                 else:
                     day_msg_text = "🌅 Đêm qua trôi qua thật bình yên, không có ai qua đời!"
 
-                embed_announce = make_embed(
-                    title=f"☀️ Ban Ngày — Ngày {game.day_count}",
-                    description=f"{day_msg_text}\n\n💬 Mọi người hãy trao đổi và thảo luận tại kênh này!",
-                    color=discord.Color.gold()
+                embed_announce = discord.Embed(
+                    title=f"🌅 Ban Ngày — Ngày {game.day_count}",
+                    description=f"{day_msg_text}\n\n{divider}\n💬 Mọi người hãy cùng trao đổi và thảo luận tại kênh này!",
+                    color=discord.Color(0xE0A638)
                 )
                 await message.channel.send(embed=embed_announce)
 
@@ -1120,11 +1219,12 @@ class Masoi(commands.Cog):
 
                 # ── BƯỚC 3: THẢO LUẬN BAN NGÀY ──
                 game.phase = GamePhase.DAY_DISCUSSION
-                disc_embed = make_embed(
+                disc_embed = discord.Embed(
                     title=f"💬 Ban Ngày — Thảo Luận (Ngày {game.day_count})",
-                    description=f"Thời gian thảo luận: `{game.settings.discussion_time // 60} phút`.\n"
-                                f"Bấm **Yêu cầu bỏ phiếu sớm** nếu muốn dồn phiếu ngay!",
-                    color=discord.Color.blue()
+                    description=f"⏱️ **Thời gian thảo luận:** `{game.settings.discussion_time // 60} phút`.\n"
+                                f"Bấm **Yêu cầu bỏ phiếu sớm** nếu muốn dồn phiếu ngay!\n\n"
+                                f"{divider}\n💬 Mọi người hãy trao đổi ý kiến để tìm ra bầy Sói!",
+                    color=discord.Color(0xE0A638)
                 )
                 disc_view = DayDiscussionView(game, self)
                 disc_msg = await message.channel.send(embed=disc_embed, view=disc_view)
@@ -1164,13 +1264,18 @@ class Masoi(commands.Cog):
                 if executed_id:
                     p = game.players[executed_id]
                     if game.settings.reveal_roles_on_death:
-                        exec_text = f"⚖️ **{p.display_name}** đã bị dân làng xử tử trên giàn treo cổ! (Vai trò: **{p.role.emoji} {p.role.value}**)"
+                        exec_text = f"⚖️ **{p.display_name}** đã bị dân làng xử tử trên giàn treo cổ! *(Vai trò: **{p.role.emoji} {p.role.value}**)*"
                     else:
                         exec_text = f"⚖️ **{p.display_name}** đã bị dân làng xử tử trên giàn treo cổ!"
                 else:
                     exec_text = "⚖️ Lượt bỏ phiếu kết thúc hòa phiếu, không ai bị xử tử."
 
-                await message.channel.send(embed=make_embed(title="⚖️ Kết Quả Xử Tử", description=exec_text, color=discord.Color.red()))
+                embed_exec = discord.Embed(
+                    title="⚖️ Kết Quả Xử Tử",
+                    description=f"{exec_text}\n\n{divider}",
+                    color=discord.Color(0xE0A638)
+                )
+                await message.channel.send(embed=embed_exec)
 
                 # Kiểm tra thắng sau bỏ phiếu
                 if game.check_win_condition():
