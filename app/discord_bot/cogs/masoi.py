@@ -371,8 +371,8 @@ class NightCupidView(discord.ui.View):
         await interaction.response.defer()
 
     async def confirm_callback(self, interaction: discord.Interaction):
-        if len(self.select.values) < 2:
-            await interaction.response.send_message("❌ Vui lòng chọn đúng 2 người!", ephemeral=True)
+        if not hasattr(self, "select") or not self.select.values or len(self.select.values) < 2:
+            await interaction.response.send_message("❌ Vui lòng chọn đúng 2 người từ danh sách trước!", ephemeral=True)
             return
 
         id1, id2 = int(self.select.values[0]), int(self.select.values[1])
@@ -565,13 +565,22 @@ class NightHunterView(discord.ui.View):
 
         target_id = self.selected_target_id
         target_p = self.game.players.get(target_id)
+        if target_p and target_p.is_alive:
+            target_p.is_alive = False
+            self.game.record_log("HUNTER_SHOOT", actor_id=self.hunter_id, target_id=target_id, result="Thợ Săn kéo theo bắn gục")
+            if target_p.lover_id and target_p.lover_id in self.game.players:
+                lover_p = self.game.players[target_p.lover_id]
+                if lover_p.is_alive:
+                    lover_p.is_alive = False
+                    self.game.record_log("LOVER_DEATH", target_id=lover_p.user_id, result="Chết vì đau thương do tình nhân bị Thợ Săn bắn")
+
         name = target_p.display_name if target_p else "Mục tiêu"
         self.stop()
 
         embed = interaction.message.embeds[0] if interaction.message.embeds else None
         if embed:
             divider = "──────────────────────────────────────"
-            embed.add_field(name="\u200b", value=f"{divider}\n🏹 **Đã ghi nhận:** nhắm bắn **{name}**", inline=False)
+            embed.add_field(name="\u200b", value=f"{divider}\n🏹 **Đã ghi nhận:** kéo theo bắn gục **{name}**", inline=False)
 
         await interaction.response.edit_message(embed=embed, view=None)
 
@@ -884,6 +893,45 @@ class Masoi(commands.Cog):
             color=discord.Color.red()
         )
         await channel.send(embed=embed)
+
+    async def update_lobby_embed(self, game: MasoiGame, message: discord.Message):
+        """Cập nhật real-time embed phòng chờ."""
+        if not message:
+            return
+        embed = self.build_lobby_embed(game)
+        try:
+            await message.edit(embed=embed)
+        except Exception as e:
+            logger.warning("Không thể cập nhật lobby embed: %s", e)
+
+    async def update_vote_embed(self, game: MasoiGame, message: discord.Message):
+        """Cập nhật real-time embed diễn biến bỏ phiếu."""
+        if not message:
+            return
+        embed = self.build_vote_embed(game, is_final=False)
+        try:
+            await message.edit(embed=embed)
+        except Exception as e:
+            logger.warning("Không thể cập nhật vote embed: %s", e)
+
+    async def check_and_trigger_hunter(self, game: MasoiGame, channel: discord.TextChannel):
+        """Kiểm tra và kích hoạt lượt bắn kéo theo của Thợ Săn khi bị loại."""
+        for p in list(game.players.values()):
+            if p.role == Role.HUNTER and not p.is_alive and not getattr(p, "hunter_shot_used", False):
+                p.hunter_shot_used = True
+                h_user = self.bot.get_user(p.user_id)
+                if h_user:
+                    embed_hunter = discord.Embed(
+                        title="🏹 Lượt của Thợ Săn — Kéo theo 1 người",
+                        description=f"Bạn đã bị loại! Hãy chọn 1 người để kéo theo chết cùng. Còn **{game.settings.night_time} giây** để quyết định.",
+                        color=discord.Color(0xE0A638)
+                    )
+                    view = NightHunterView(game, p.user_id)
+                    try:
+                        await h_user.send(embed=embed_hunter, view=view)
+                        await asyncio.sleep(game.settings.night_time)
+                    except Exception:
+                        pass
 
     # ──────────────────────────────────────────────
     #  Embed Builders
@@ -1216,6 +1264,7 @@ class Masoi(commands.Cog):
                 # 1.5 Tính toán đêm
                 game.phase = GamePhase.NIGHT_RESOLVE
                 night_deaths = game.resolve_night()
+                await self.check_and_trigger_hunter(game, message.channel)
 
                 # ── BƯỚC 2: CÔNG BỐ BAN NGÀY ──
                 game.phase = GamePhase.DAY_ANNOUNCE
@@ -1288,6 +1337,7 @@ class Masoi(commands.Cog):
                     pass
 
                 executed_id = game.resolve_day_vote()
+                await self.check_and_trigger_hunter(game, message.channel)
                 await self.sync_channel_permissions(game, message.channel)
 
                 if executed_id:
