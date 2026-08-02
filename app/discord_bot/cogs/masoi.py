@@ -742,7 +742,7 @@ class ReplayView(discord.ui.View):
 SETTINGS_FILE = Path(__file__).resolve().parent.parent.parent / "data" / "masoi_settings.json"
 
 
-MASOI_CREATE_FEE = 1_000_000  # 1M VND
+MASOI_CREATE_FEE = 1  # 1 Thỏi vàng (Credits)
 
 
 class Masoi(commands.Cog):
@@ -800,7 +800,7 @@ class Masoi(commands.Cog):
     @commands.command(
         name="masoi",
         aliases=["werewolf", "ma-soi"],
-        brief="Tạo phòng chờ chơi game Ma Sói (Werewolf). Phí tạo phòng: 1,000,000 VND.",
+        brief="Tạo phòng chờ chơi game Ma Sói (Werewolf). Phí tạo phòng: 1 thỏi vàng.",
         usage="masoi",
     )
     async def masoi_cmd(self, ctx: commands.Context):
@@ -811,15 +811,15 @@ class Masoi(commands.Cog):
 
         eco = self.get_economy()
         if eco:
-            balance = eco.get_entry(ctx.author.id)[1]
+            balance = eco.get_entry(ctx.author.id)[2]  # Index 2 là số thỏi Vàng
             if balance < MASOI_CREATE_FEE:
                 await ctx.send(
-                    f"❌ **{ctx.author.display_name}**, bạn cần tối thiểu **1,000,000 VND** để tạo phòng chờ Ma Sói!\n"
-                    f"💳 Số dư hiện tại của bạn: **{balance:,} VND**"
+                    f"❌ **{ctx.author.display_name}**, bạn cần tối thiểu **1 thỏi vàng** để tạo phòng chờ Ma Sói!\n"
+                    f"🏆 Số dư Vàng hiện tại của bạn: **{balance:,} thỏi**"
                 )
                 return
-            # Trừ phí 1M VND khi tạo phòng
-            eco.add_money(ctx.author.id, -MASOI_CREATE_FEE)
+            # Trừ phí 1 thỏi Vàng khi tạo phòng
+            eco.add_credits(ctx.author.id, -MASOI_CREATE_FEE)
 
         game = MasoiGame(ctx.guild.id, ctx.channel.id, ctx.author.id, ctx.author.display_name)
         game.settings = self.get_saved_settings(ctx.guild.id, ctx.channel.id)
@@ -829,7 +829,7 @@ class Masoi(commands.Cog):
         embed = self.build_lobby_embed(game)
         view = LobbyView(game, self)
         msg = await ctx.send(
-            content=f"💸 **{ctx.author.display_name}** đã trả **1,000,000 VND** phí tạo phòng Ma Sói!",
+            content=f"🏆 **{ctx.author.display_name}** đã trả **1 thỏi vàng** phí tạo phòng Ma Sói!",
             embed=embed,
             view=view
         )
@@ -884,8 +884,8 @@ class Masoi(commands.Cog):
         if was_in_lobby:
             eco = self.get_economy()
             if eco:
-                eco.add_money(game.host_id, MASOI_CREATE_FEE)
-                refund_text = f"\n💸 Đã hoàn lại **1,000,000 VND** cho Host **{game.host_name}**."
+                eco.add_credits(game.host_id, MASOI_CREATE_FEE)
+                refund_text = f"\n🏆 Đã hoàn lại **1 thỏi vàng** cho Host **{game.host_name}**."
 
         embed = make_embed(
             title="🛑 ĐÃ HỦY VÁN MA SÓI",
@@ -962,7 +962,7 @@ class Masoi(commands.Cog):
             value=f"{divider}\n<a:muiten:1533428497098473623> *Bấm **Tham gia** để vào ván, chủ phòng bấm **Bắt đầu** khi đủ 5 người trở lên.*",
             inline=False
         )
-        embed.set_footer(text="<:ghim:1526238405061640272> Phí tạo phòng: 1,000,000 VND")
+        embed.set_footer(text="<:ghim:1526238405061640272> Phí tạo phòng: 1 thỏi vàng")
         return embed
 
     def build_settings_embed(self, game: MasoiGame) -> discord.Embed:
