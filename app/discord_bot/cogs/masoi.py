@@ -962,7 +962,7 @@ class Masoi(commands.Cog):
             value=f"{divider}\n<a:muiten:1533428497098473623> *Bấm **Tham gia** để vào ván, chủ phòng bấm **Bắt đầu** khi đủ 5 người trở lên.*",
             inline=False
         )
-        embed.set_footer(text="<:ghim:1526238405061640272> Phí tạo phòng: 1 thỏi vàng")
+        embed.set_footer(text="📌 Phí tạo phòng: 1 thỏi vàng")
         return embed
 
     def build_settings_embed(self, game: MasoiGame) -> discord.Embed:
