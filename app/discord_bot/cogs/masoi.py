@@ -891,18 +891,18 @@ class Masoi(commands.Cog):
 
     def build_lobby_embed(self, game: MasoiGame) -> discord.Embed:
         embed = discord.Embed(
-            title="🐺 Ma Sói — Phòng chờ ván đấu",
+            title="<a:blink:1526231036231680082> Ma Sói — Phòng chờ ván đấu",
             color=discord.Color(0xE0A638)
         )
-        embed.add_field(name="CHỦ PHÒNG", value=f"👑 **{game.host_name}**", inline=True)
+        embed.add_field(name="CHỦ PHÒNG", value=f"<a:key:1526234974150459593> **{game.host_name}**", inline=True)
         embed.add_field(name="SỐ NGƯỜI", value=f"**{len(game.players)} / 20**", inline=True)
 
         player_lines = []
         for p in game.players.values():
             if p.user_id == game.host_id:
-                player_lines.append(f"🐾 **{p.display_name}** *(chủ phòng)*")
+                player_lines.append(f"<a:wing:1526230985987981393> **{p.display_name}** *(chủ phòng)*")
             else:
-                player_lines.append(f"🐾 **{p.display_name}**")
+                player_lines.append(f"<a:wing:1526230985987981393> **{p.display_name}**")
 
         players_str = "\n".join(player_lines) if player_lines else "_Chưa có người chơi nào._"
         divider = "──────────────────────────────────────"
@@ -911,7 +911,7 @@ class Masoi(commands.Cog):
         embed.add_field(name="NGƯỜI CHƠI", value=players_str, inline=False)
         embed.add_field(
             name="\u200b",
-            value=f"{divider}\n📌 *Bấm **Tham gia** để vào ván, chủ phòng bấm **Bắt đầu** khi đủ 5 người trở lên.*",
+            value=f"{divider}\n<:ghim:1526238405061640272> *Bấm **Tham gia** để vào ván, chủ phòng bấm **Bắt đầu** khi đủ 5 người trở lên.*",
             inline=False
         )
         embed.set_footer(text="💸 Phí tạo phòng: 1,000,000 VND")
