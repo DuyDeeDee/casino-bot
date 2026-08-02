@@ -36,7 +36,7 @@ class LobbyView(discord.ui.View):
         self.game = game
         self.cog = cog
 
-    @discord.ui.button(label="Tham Gia", style=discord.ButtonStyle.success, emoji="🧑", custom_id="masoi_join")
+    @discord.ui.button(label="Tham gia", style=discord.ButtonStyle.success, emoji="🐾", custom_id="masoi_join")
     async def join_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         user = interaction.user
         if not self.game.add_player(user.id, user.display_name):
@@ -51,7 +51,7 @@ class LobbyView(discord.ui.View):
         await interaction.response.send_message("✅ Bạn đã tham gia ván Ma Sói!", ephemeral=True)
         await self.cog.update_lobby_embed(self.game, interaction.message)
 
-    @discord.ui.button(label="Rời Đi", style=discord.ButtonStyle.danger, emoji="🚪", custom_id="masoi_leave")
+    @discord.ui.button(label="Rời đi", style=discord.ButtonStyle.secondary, emoji="🚪", custom_id="masoi_leave")
     async def leave_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         user = interaction.user
         if not self.game.remove_player(user.id):
@@ -61,7 +61,7 @@ class LobbyView(discord.ui.View):
         await interaction.response.send_message("👋 Bạn đã rời khỏi phòng chờ.", ephemeral=True)
         await self.cog.update_lobby_embed(self.game, interaction.message)
 
-    @discord.ui.button(label="Bắt Đầu", style=discord.ButtonStyle.primary, emoji="🚀", custom_id="masoi_start")
+    @discord.ui.button(label="Bắt đầu", style=discord.ButtonStyle.primary, emoji="⚔️", custom_id="masoi_start")
     async def start_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user.id != self.game.host_id:
             await interaction.response.send_message("❌ Chỉ Host mới được bấm bắt đầu!", ephemeral=True)
@@ -78,7 +78,7 @@ class LobbyView(discord.ui.View):
         await interaction.response.defer()
         asyncio.create_task(self.cog.start_game(self.game, interaction.message))
 
-    @discord.ui.button(label="Cài Đặt", style=discord.ButtonStyle.secondary, emoji="⚙️", custom_id="masoi_settings")
+    @discord.ui.button(label="Cài đặt", style=discord.ButtonStyle.secondary, emoji="⚙️", custom_id="masoi_settings")
     async def settings_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user.id != self.game.host_id:
             await interaction.response.send_message("❌ Chỉ Host mới có quyền truy cập Cài Đặt!", ephemeral=True)
@@ -88,7 +88,7 @@ class LobbyView(discord.ui.View):
         embed = self.cog.build_settings_embed(self.game)
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
-    @discord.ui.button(label="Hủy Ván", style=discord.ButtonStyle.secondary, emoji="🛑", custom_id="masoi_cancel")
+    @discord.ui.button(label="Hủy ván", style=discord.ButtonStyle.danger, emoji="⭕", custom_id="masoi_cancel")
     async def cancel_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user.id != self.game.host_id:
             await interaction.response.send_message("❌ Chỉ Host mới được bấm hủy ván!", ephemeral=True)
@@ -175,6 +175,7 @@ class NightGuardView(discord.ui.View):
         super().__init__(timeout=game.settings.night_time)
         self.game = game
         self.guard_id = guard_id
+        self.selected_target_id: Optional[int] = None
 
         guard_p = game.players.get(guard_id)
         last_protected = guard_p.protected_last_night if guard_p else None
@@ -186,18 +187,38 @@ class NightGuardView(discord.ui.View):
             options.append(discord.SelectOption(label=p.display_name, value=str(p.user_id), emoji="🛡️"))
 
         if options:
-            select = discord.ui.Select(placeholder="🛡️ Chọn 1 người để bảo vệ...", options=options[:25])
-            select.callback = self.select_callback
-            self.add_item(select)
+            self.select = discord.ui.Select(placeholder="🛡️ Chọn 1 người để bảo vệ...", options=options[:25], row=0)
+            self.select.callback = self.select_callback
+            self.add_item(self.select)
+
+            self.confirm_btn = discord.ui.Button(label="Xác nhận lựa chọn", style=discord.ButtonStyle.primary, row=1)
+            self.confirm_btn.callback = self.confirm_callback
+            self.add_item(self.confirm_btn)
 
     async def select_callback(self, interaction: discord.Interaction):
-        select: discord.ui.Select = interaction.data["values"][0]
-        target_id = int(select)
+        self.selected_target_id = int(self.select.values[0])
+        await interaction.response.defer()
+
+    async def confirm_callback(self, interaction: discord.Interaction):
+        if not self.selected_target_id and hasattr(self, "select") and self.select.values:
+            self.selected_target_id = int(self.select.values[0])
+
+        if not self.selected_target_id:
+            await interaction.response.send_message("❌ Vui lòng chọn 1 người từ danh sách trước!", ephemeral=True)
+            return
+
+        target_id = self.selected_target_id
         self.game.night_guard_target = target_id
         target_p = self.game.players.get(target_id)
         name = target_p.display_name if target_p else "Người đã chọn"
         self.stop()
-        await interaction.response.edit_message(content=f"✅ Bạn đã chọn bảo vệ **{name}** đêm nay.", view=None)
+
+        embed = interaction.message.embeds[0] if interaction.message.embeds else None
+        if embed:
+            divider = "──────────────────────────────────────"
+            embed.add_field(name="\u200b", value=f"{divider}\n✅ **Đã ghi nhận:** bảo vệ **{name}**", inline=False)
+
+        await interaction.response.edit_message(embed=embed, view=None)
 
 
 class NightWolfView(discord.ui.View):
@@ -206,28 +227,45 @@ class NightWolfView(discord.ui.View):
         super().__init__(timeout=game.settings.night_time)
         self.game = game
         self.wolf_id = wolf_id
+        self.selected_target_id: Optional[int] = None
 
         options = []
         for p in game.get_alive_players():
-            # Có thể cắn bất kỳ ai còn sống
-            options.append(discord.SelectOption(label=p.display_name, value=str(p.user_id), emoji="🐺"))
+            options.append(discord.SelectOption(label=p.display_name, value=str(p.user_id), emoji="🎯"))
 
         if options:
-            select = discord.ui.Select(placeholder="🐺 Chọn 1 người để cắn...", options=options[:25])
-            select.callback = self.select_callback
-            self.add_item(select)
+            self.select = discord.ui.Select(placeholder="🎯 Chọn 1 người...", options=options[:25], row=0)
+            self.select.callback = self.select_callback
+            self.add_item(self.select)
+
+            self.confirm_btn = discord.ui.Button(label="Xác nhận lựa chọn", style=discord.ButtonStyle.primary, row=1)
+            self.confirm_btn.callback = self.confirm_callback
+            self.add_item(self.confirm_btn)
 
     async def select_callback(self, interaction: discord.Interaction):
-        select: discord.ui.Select = interaction.data["values"][0]
-        target_id = int(select)
+        self.selected_target_id = int(self.select.values[0])
+        await interaction.response.defer()
+
+    async def confirm_callback(self, interaction: discord.Interaction):
+        if not self.selected_target_id and hasattr(self, "select") and self.select.values:
+            self.selected_target_id = int(self.select.values[0])
+
+        if not self.selected_target_id:
+            await interaction.response.send_message("❌ Vui lòng chọn 1 người từ danh sách trước!", ephemeral=True)
+            return
+
+        target_id = self.selected_target_id
         self.game.night_wolf_votes[self.wolf_id] = target_id
         target_p = self.game.players.get(target_id)
         name = target_p.display_name if target_p else "Mục tiêu"
         self.stop()
-        await interaction.response.edit_message(
-            content=f"✅ Đã ghi nhận lựa chọn của bạn: Cắn **{name}**.\n*(Nếu nhiều Sói chọn khác nhau, bot sẽ chốt theo đa số phiếu)*.",
-            view=None
-        )
+
+        embed = interaction.message.embeds[0] if interaction.message.embeds else None
+        if embed:
+            divider = "──────────────────────────────────────"
+            embed.add_field(name="\u200b", value=f"{divider}\n✅ **Đã ghi nhận:** cắn **{name}**", inline=False)
+
+        await interaction.response.edit_message(embed=embed, view=None)
 
 
 class NightSeerView(discord.ui.View):
@@ -236,6 +274,7 @@ class NightSeerView(discord.ui.View):
         super().__init__(timeout=game.settings.night_time)
         self.game = game
         self.seer_id = seer_id
+        self.selected_target_id: Optional[int] = None
 
         options = []
         for p in game.get_alive_players():
@@ -243,13 +282,27 @@ class NightSeerView(discord.ui.View):
                 options.append(discord.SelectOption(label=p.display_name, value=str(p.user_id), emoji="🔮"))
 
         if options:
-            select = discord.ui.Select(placeholder="🔮 Chọn 1 người để soi phe...", options=options[:25])
-            select.callback = self.select_callback
-            self.add_item(select)
+            self.select = discord.ui.Select(placeholder="🔮 Chọn 1 người để soi phe...", options=options[:25], row=0)
+            self.select.callback = self.select_callback
+            self.add_item(self.select)
+
+            self.confirm_btn = discord.ui.Button(label="Xác nhận lựa chọn", style=discord.ButtonStyle.primary, row=1)
+            self.confirm_btn.callback = self.confirm_callback
+            self.add_item(self.confirm_btn)
 
     async def select_callback(self, interaction: discord.Interaction):
-        select: discord.ui.Select = interaction.data["values"][0]
-        target_id = int(select)
+        self.selected_target_id = int(self.select.values[0])
+        await interaction.response.defer()
+
+    async def confirm_callback(self, interaction: discord.Interaction):
+        if not self.selected_target_id and hasattr(self, "select") and self.select.values:
+            self.selected_target_id = int(self.select.values[0])
+
+        if not self.selected_target_id:
+            await interaction.response.send_message("❌ Vui lòng chọn 1 người từ danh sách trước!", ephemeral=True)
+            return
+
+        target_id = self.selected_target_id
         self.game.night_seer_target = target_id
         target_p = self.game.players.get(target_id)
         
@@ -262,11 +315,19 @@ class NightSeerView(discord.ui.View):
             else:
                 res_str = f"👤 **{target_p.display_name}** là **DÂN LÀNG** (không phải Sói)."
             self.game.night_seer_result = res_str
+            name = target_p.display_name
         else:
             res_str = "Không tìm thấy thông tin."
+            name = "Mục tiêu"
 
         self.stop()
-        await interaction.response.edit_message(content=f"🔮 **Kết quả soi:** {res_str}", view=None)
+
+        embed = interaction.message.embeds[0] if interaction.message.embeds else None
+        if embed:
+            divider = "──────────────────────────────────────"
+            embed.add_field(name="\u200b", value=f"{divider}\n✅ **Đã ghi nhận:** soi **{name}**\n🔮 **Kết quả:** {res_str}", inline=False)
+
+        await interaction.response.edit_message(embed=embed, view=None)
 
 
 class NightWitchView(discord.ui.View):
@@ -279,18 +340,15 @@ class NightWitchView(discord.ui.View):
 
         witch_p = game.players.get(witch_id)
         has_save = witch_p and not witch_p.witch_save_used
-        has_poison = witch_p and not witch_p.witch_poison_used
-
         victim_p = game.players.get(victim_id) if victim_id else None
         victim_name = victim_p.display_name if victim_p else "Không ai"
 
-        # Nếu có nạn nhân & còn bình cứu -> Hiển thị nút cứu
         if victim_p and has_save:
-            btn_save = discord.ui.Button(label=f"🧪 Cứu {victim_name}", style=discord.ButtonStyle.success)
+            btn_save = discord.ui.Button(label=f"🧪 Cứu {victim_name}", style=discord.ButtonStyle.success, row=0)
             btn_save.callback = self.save_callback
             self.add_item(btn_save)
 
-        btn_no_save = discord.ui.Button(label="Không dùng bình cứu", style=discord.ButtonStyle.secondary)
+        btn_no_save = discord.ui.Button(label="👌 Không dùng bình cứu", style=discord.ButtonStyle.secondary, row=0)
         btn_no_save.callback = self.no_save_callback
         self.add_item(btn_no_save)
 
@@ -299,7 +357,9 @@ class NightWitchView(discord.ui.View):
         if witch_p:
             witch_p.witch_save_used = True
         self.game.night_witch_save = True
-        await self.show_poison_step(interaction, "✅ Bạn đã quyết định **CỨU** nạn nhân đêm nay.")
+        victim_p = self.game.players.get(self.victim_id) if self.victim_id else None
+        v_name = victim_p.display_name if victim_p else "nạn nhân"
+        await self.show_poison_step(interaction, f"✅ **Đã ghi nhận:** CỨU **{v_name}**")
 
     async def no_save_callback(self, interaction: discord.Interaction):
         self.game.night_witch_save = False
@@ -309,11 +369,22 @@ class NightWitchView(discord.ui.View):
         witch_p = self.game.players.get(self.witch_id)
         if not witch_p or witch_p.witch_poison_used:
             self.stop()
-            await interaction.response.edit_message(content=f"{prefix_msg}\n*(Bạn không còn bình độc)*.", view=None)
+            embed = interaction.message.embeds[0] if interaction.message.embeds else None
+            if embed:
+                divider = "──────────────────────────────────────"
+                embed.add_field(name="\u200b", value=f"{divider}\n{prefix_msg}\n*(Bạn đã hết bình độc)*", inline=False)
+            await interaction.response.edit_message(embed=embed, view=None)
             return
 
+        embed_poison = discord.Embed(
+            title=f"🌙 Đêm {self.game.night_count} — Lượt của Phù Thủy",
+            description=f"Bạn có muốn dùng **BÌNH ĐỘC** hạ độc ai không?\nCòn **{self.game.settings.night_time} giây** để quyết định.",
+            color=discord.Color(0xE0A638)
+        )
+        embed_poison.add_field(name="\u200b", value=f"──────────────────────────────────────\n{prefix_msg}", inline=False)
+
         view = NightWitchPoisonView(self.game, self.witch_id, prefix_msg)
-        await interaction.response.edit_message(content=f"{prefix_msg}\n☠️ **Bạn có muốn dùng BÌNH ĐỘC đêm nay không?**", view=view)
+        await interaction.response.edit_message(embed=embed_poison, view=view)
 
 
 class NightWitchPoisonView(discord.ui.View):
@@ -322,6 +393,7 @@ class NightWitchPoisonView(discord.ui.View):
         self.game = game
         self.witch_id = witch_id
         self.prefix_msg = prefix_msg
+        self.selected_target_id: Optional[int] = None
 
         options = []
         for p in game.get_alive_players():
@@ -329,17 +401,31 @@ class NightWitchPoisonView(discord.ui.View):
                 options.append(discord.SelectOption(label=p.display_name, value=str(p.user_id), emoji="☠️"))
 
         if options:
-            select = discord.ui.Select(placeholder="☠️ Chọn 1 người để hạ độc...", options=options[:25])
-            select.callback = self.poison_select_callback
-            self.add_item(select)
+            self.select = discord.ui.Select(placeholder="☠️ Chọn 1 người để hạ độc...", options=options[:25], row=0)
+            self.select.callback = self.select_callback
+            self.add_item(self.select)
 
-        btn_skip = discord.ui.Button(label="Bỏ qua không dùng độc", style=discord.ButtonStyle.secondary)
+            self.confirm_btn = discord.ui.Button(label="Xác nhận lựa chọn", style=discord.ButtonStyle.danger, row=1)
+            self.confirm_btn.callback = self.confirm_callback
+            self.add_item(self.confirm_btn)
+
+        btn_skip = discord.ui.Button(label="👌 Bỏ qua không dùng độc", style=discord.ButtonStyle.secondary, row=1)
         btn_skip.callback = self.skip_poison_callback
         self.add_item(btn_skip)
 
-    async def poison_select_callback(self, interaction: discord.Interaction):
-        select: discord.ui.Select = interaction.data["values"][0]
-        target_id = int(select)
+    async def select_callback(self, interaction: discord.Interaction):
+        self.selected_target_id = int(self.select.values[0])
+        await interaction.response.defer()
+
+    async def confirm_callback(self, interaction: discord.Interaction):
+        if not self.selected_target_id and hasattr(self, "select") and self.select.values:
+            self.selected_target_id = int(self.select.values[0])
+
+        if not self.selected_target_id:
+            await interaction.response.send_message("❌ Vui lòng chọn 1 người từ danh sách trước!", ephemeral=True)
+            return
+
+        target_id = self.selected_target_id
         witch_p = self.game.players.get(self.witch_id)
         if witch_p:
             witch_p.witch_poison_used = True
@@ -347,12 +433,70 @@ class NightWitchPoisonView(discord.ui.View):
         target_p = self.game.players.get(target_id)
         name = target_p.display_name if target_p else "Mục tiêu"
         self.stop()
-        await interaction.response.edit_message(content=f"{self.prefix_msg}\n☠️ Bạn đã dùng bình độc lên **{name}**.", view=None)
+
+        embed = interaction.message.embeds[0] if interaction.message.embeds else None
+        if embed:
+            divider = "──────────────────────────────────────"
+            embed.add_field(name="\u200b", value=f"{divider}\n☠️ **Đã ghi nhận:** hạ độc **{name}**", inline=False)
+
+        await interaction.response.edit_message(embed=embed, view=None)
 
     async def skip_poison_callback(self, interaction: discord.Interaction):
         self.game.night_witch_poison = None
         self.stop()
-        await interaction.response.edit_message(content=f"{self.prefix_msg}\n👌 Bạn không dùng bình độc đêm nay.", view=None)
+        embed = interaction.message.embeds[0] if interaction.message.embeds else None
+        if embed:
+            divider = "──────────────────────────────────────"
+            embed.add_field(name="\u200b", value=f"{divider}\n👌 Bạn không dùng bình độc đêm nay.", inline=False)
+
+        await interaction.response.edit_message(embed=embed, view=None)
+
+
+class NightHunterView(discord.ui.View):
+    """View Ephemeral cho Thợ Săn bắn 1 người khi chết."""
+    def __init__(self, game: MasoiGame, hunter_id: int):
+        super().__init__(timeout=game.settings.night_time)
+        self.game = game
+        self.hunter_id = hunter_id
+        self.selected_target_id: Optional[int] = None
+
+        options = []
+        for p in game.get_alive_players():
+            if p.user_id != hunter_id:
+                options.append(discord.SelectOption(label=p.display_name, value=str(p.user_id), emoji="🏹"))
+
+        if options:
+            self.select = discord.ui.Select(placeholder="🏹 Chọn 1 người để bắn...", options=options[:25], row=0)
+            self.select.callback = self.select_callback
+            self.add_item(self.select)
+
+            self.confirm_btn = discord.ui.Button(label="Xác nhận lựa chọn", style=discord.ButtonStyle.primary, row=1)
+            self.confirm_btn.callback = self.confirm_callback
+            self.add_item(self.confirm_btn)
+
+    async def select_callback(self, interaction: discord.Interaction):
+        self.selected_target_id = int(self.select.values[0])
+        await interaction.response.defer()
+
+    async def confirm_callback(self, interaction: discord.Interaction):
+        if not self.selected_target_id and hasattr(self, "select") and self.select.values:
+            self.selected_target_id = int(self.select.values[0])
+
+        if not self.selected_target_id:
+            await interaction.response.send_message("❌ Vui lòng chọn 1 người từ danh sách trước!", ephemeral=True)
+            return
+
+        target_id = self.selected_target_id
+        target_p = self.game.players.get(target_id)
+        name = target_p.display_name if target_p else "Mục tiêu"
+        self.stop()
+
+        embed = interaction.message.embeds[0] if interaction.message.embeds else None
+        if embed:
+            divider = "──────────────────────────────────────"
+            embed.add_field(name="\u200b", value=f"{divider}\n🏹 **Đã ghi nhận:** nhắm bắn **{name}**", inline=False)
+
+        await interaction.response.edit_message(embed=embed, view=None)
 
 
 # ==============================================================================
@@ -599,18 +743,29 @@ class Masoi(commands.Cog):
     # ──────────────────────────────────────────────
 
     def build_lobby_embed(self, game: MasoiGame) -> discord.Embed:
-        players_str = "\n".join([f"• 🧑 **{p.display_name}**" for p in game.players.values()])
-        if not players_str:
-            players_str = "_Chưa có người chơi nào._"
+        embed = discord.Embed(
+            title="🐺 Ma Sói — Phòng chờ ván đấu",
+            color=discord.Color(0xE0A638)
+        )
+        embed.add_field(name="CHỦ PHÒNG", value=f"👑 **{game.host_name}**", inline=True)
+        embed.add_field(name="SỐ NGƯỜI", value=f"**{len(game.players)} / 20**", inline=True)
 
-        embed = make_embed(
-            title="🌕 MA SÓI — Phòng Chờ Ván Đấu",
-            description=(
-                f"Host: **{game.host_name}**\n\n"
-                f"**Danh sách người chơi ({len(game.players)}/20):**\n{players_str}\n\n"
-                "📌 _Bấm **Tham Gia** để vào ván, Host bấm **Bắt Đầu** khi đủ ≥ 5 người._"
-            ),
-            color=discord.Color.dark_purple(),
+        player_lines = []
+        for p in game.players.values():
+            if p.user_id == game.host_id:
+                player_lines.append(f"🐾 **{p.display_name}** *(chủ phòng)*")
+            else:
+                player_lines.append(f"🐾 **{p.display_name}**")
+
+        players_str = "\n".join(player_lines) if player_lines else "_Chưa có người chơi nào._"
+        divider = "──────────────────────────────────────"
+
+        embed.add_field(name="\u200b", value=divider, inline=False)
+        embed.add_field(name="NGƯỜI CHƠI", value=players_str, inline=False)
+        embed.add_field(
+            name="\u200b",
+            value=f"{divider}\n📌 *Bấm **Tham gia** để vào ván, chủ phòng bấm **Bắt đầu** khi đủ 5 người trở lên.*",
+            inline=False
         )
         return embed
 
@@ -761,20 +916,19 @@ class Masoi(commands.Cog):
         for p in game.players.values():
             user = self.bot.get_user(p.user_id)
             if user:
-                extra_wolf_info = ""
+                extra_info = ""
                 if p.is_wolf:
                     wolves = [other.display_name for other in game.players.values() if other.is_wolf and other.user_id != p.user_id]
                     if wolves:
-                        extra_wolf_info = f"\n🐺 **Đồng đội Sói của bạn:** {', '.join(wolves)}"
+                        extra_info = f" · Đồng đội Sói: {', '.join(wolves)}"
                     else:
-                        extra_wolf_info = "\n🐺 Bạn là con Sói duy nhất trong ván này!"
+                        extra_info = " · Bạn là Sói duy nhất ván này"
+
+                faction_name = p.role.faction.value.replace(" 🐺", "").replace(" 👥", "").replace(" 🃏", "")
 
                 dm_text = (
-                    f"🌕 **VÁN MA SÓI BẮT ĐẦU!**\n"
-                    f"Bạn là: **{p.role.emoji} {p.role.value}**\n"
-                    f"Phe: **{p.role.faction.value}**\n"
-                    f"Nhiệm vụ: {p.role.description}"
-                    f"{extra_wolf_info}"
+                    f"> {p.role.emoji} **Vai trò của bạn: {p.role.value}**\n"
+                    f"> {faction_name} · {p.role.description}{extra_info}"
                 )
                 try:
                     await user.send(dm_text)
@@ -799,7 +953,11 @@ class Masoi(commands.Cog):
                 if guard_p:
                     g_user = self.bot.get_user(guard_p.user_id)
                     if g_user:
-                        embed = make_embed(title=f"🛡️ Đêm {game.night_count} — Lượt Bảo Vệ", description="Hãy chọn 1 người chơi để bảo vệ khỏi bị Sói cắn đêm nay!")
+                        embed = discord.Embed(
+                            title=f"🌙 Đêm {game.night_count} — Lượt của Bảo Vệ",
+                            description=f"Chọn 1 người để bảo vệ đêm nay. Còn **{game.settings.night_time} giây** để quyết định.",
+                            color=discord.Color(0xE0A638)
+                        )
                         view = NightGuardView(game, guard_p.user_id)
                         try:
                             await g_user.send(embed=embed, view=view)
@@ -810,7 +968,11 @@ class Masoi(commands.Cog):
                 for w in game.get_alive_wolves():
                     w_user = self.bot.get_user(w.user_id)
                     if w_user:
-                        embed = make_embed(title=f"🐺 Đêm {game.night_count} — Lượt Bầy Sói", description="Hãy chọn 1 người chơi để cắn đêm nay!")
+                        embed = discord.Embed(
+                            title=f"🌙 Đêm {game.night_count} — Lượt của Sói",
+                            description=f"Chọn 1 người để cắn đêm nay. Còn **{game.settings.night_time} giây** để quyết định.",
+                            color=discord.Color(0xE0A638)
+                        )
                         view = NightWolfView(game, w.user_id)
                         try:
                             await w_user.send(embed=embed, view=view)
@@ -822,7 +984,11 @@ class Masoi(commands.Cog):
                 if seer_p:
                     s_user = self.bot.get_user(seer_p.user_id)
                     if s_user:
-                        embed = make_embed(title=f"🔮 Đêm {game.night_count} — Lượt Tiên Tri", description="Hãy chọn 1 người chơi để soi phe!")
+                        embed = discord.Embed(
+                            title=f"🌙 Đêm {game.night_count} — Lượt của Tiên Tri",
+                            description=f"Chọn 1 người để soi phe đêm nay. Còn **{game.settings.night_time} giây** để quyết định.",
+                            color=discord.Color(0xE0A638)
+                        )
                         view = NightSeerView(game, seer_p.user_id)
                         try:
                             await s_user.send(embed=embed, view=view)
@@ -837,7 +1003,11 @@ class Masoi(commands.Cog):
                         victim_id = game.resolve_wolf_target()
                         victim_p = game.players.get(victim_id) if victim_id else None
                         v_name = victim_p.display_name if victim_p else "Không ai"
-                        embed = make_embed(title=f"🧪 Đêm {game.night_count} — Lượt Phù Thủy", description=f"Đêm nay, bầy Sói nhắm cắn: **{v_name}**.\nBạn muốn dùng bình cứu hay bình độc không?")
+                        embed = discord.Embed(
+                            title=f"🌙 Đêm {game.night_count} — Lượt của Phù Thủy",
+                            description=f"Đêm nay, bầy Sói nhắm cắn: **{v_name}**.\nBạn có muốn dùng **BÌNH CỨU** không? Còn **{game.settings.night_time} giây** để quyết định.",
+                            color=discord.Color(0xE0A638)
+                        )
                         view = NightWitchView(game, witch_p.user_id, victim_id)
                         try:
                             await wt_user.send(embed=embed, view=view)

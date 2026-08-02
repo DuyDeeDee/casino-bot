@@ -18,6 +18,7 @@ class Role(Enum):
     SEER = "Tiên Tri"
     GUARD = "Bảo Vệ"
     WITCH = "Phù Thủy"
+    HUNTER = "Thợ Săn"
     TANNER = "Kẻ Ngốc"
 
     @property
@@ -28,6 +29,7 @@ class Role(Enum):
             Role.SEER: "🔮",
             Role.GUARD: "🛡️",
             Role.WITCH: "🧪",
+            Role.HUNTER: "🏹",
             Role.TANNER: "🃏",
         }
         return emojis.get(self, "❓")
@@ -49,6 +51,7 @@ class Role(Enum):
             Role.SEER: "Mỗi đêm chọn 1 người để soi phe (Sói hay Dân).",
             Role.GUARD: "Mỗi đêm chọn 1 người để bảo vệ khỏi bị Sói cắn (không chọn trùng 2 đêm liền).",
             Role.WITCH: "Có 1 bình Cứu (hồi sinh người bị cắn) và 1 bình Độc (giết 1 người), mỗi bình dùng 1 lần/ván.",
+            Role.HUNTER: "Khi bị loại (bị Sói cắn hoặc bị treo cổ), bạn được chọn 1 người chơi để kéo theo cùng.",
             Role.TANNER: "Bạn thuộc phe Độc Lập. Bạn THẮNG NGAY LẬP TỨC nếu bị dân làng treo cổ ban ngày!",
         }
         return descriptions.get(self, "")
@@ -267,7 +270,7 @@ class MasoiGame:
             role_pool.append(Role.TANNER)
 
         # Kỹ năng Dân Làng
-        special_villagers = [Role.SEER, Role.GUARD, Role.WITCH]
+        special_villagers = [Role.SEER, Role.GUARD, Role.WITCH, Role.HUNTER]
         for r in special_villagers:
             if len(role_pool) < n:
                 role_pool.append(r)
