@@ -300,7 +300,7 @@ class MasoiGame:
             role_pool.append(Role.TANNER)
 
         # Kỹ năng Dân Làng
-        special_villagers = [Role.SEER, Role.GUARD, Role.WITCH, Role.HUNTER]
+        special_villagers = [Role.SEER, Role.GUARD, Role.WITCH, Role.CUPID, Role.HUNTER]
         for r in special_villagers:
             if len(role_pool) < n:
                 role_pool.append(r)
