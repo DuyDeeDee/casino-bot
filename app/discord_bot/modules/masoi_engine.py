@@ -115,6 +115,32 @@ class MasoiSettings:
     def cycle_rank(self):
         self.enable_rank = not self.enable_rank
 
+    def to_dict(self) -> dict:
+        return {
+            "reveal_roles_on_death": self.reveal_roles_on_death,
+            "enable_tanner": self.enable_tanner,
+            "vote_display": self.vote_display,
+            "dead_can_chat": self.dead_can_chat,
+            "discussion_time": self.discussion_time,
+            "night_time": self.night_time,
+            "enable_rank": self.enable_rank,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> MasoiSettings:
+        s = cls()
+        s.reveal_roles_on_death = data.get("reveal_roles_on_death", True)
+        s.enable_tanner = data.get("enable_tanner", False)
+        s.vote_display = data.get("vote_display", "REALTIME")
+        s.dead_can_chat = data.get("dead_can_chat", False)
+        s.discussion_time = data.get("discussion_time", 120)
+        s.night_time = data.get("night_time", 45)
+        s.enable_rank = data.get("enable_rank", True)
+        return s
+
+    def copy(self) -> MasoiSettings:
+        return MasoiSettings.from_dict(self.to_dict())
+
 
 class MasoiPlayer:
     """Thông tin người chơi trong ván."""

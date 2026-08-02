@@ -7,7 +7,9 @@ Xử lý toàn bộ UI (Buttons, Embeds, Dropdowns, Ephemeral) và Luồng Ván 
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+from pathlib import Path
 from typing import Dict, Optional
 
 import discord
@@ -19,6 +21,7 @@ from app.discord_bot.modules.masoi_engine import (
     GamePhase,
     MasoiGame,
     MasoiPlayer,
+    MasoiSettings,
     Role,
     get_rank_tier,
 )
@@ -120,47 +123,55 @@ class SettingsView(discord.ui.View):
     @discord.ui.button(style=discord.ButtonStyle.secondary, row=0)
     async def btn_reveal(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.game.settings.cycle_reveal_roles()
+        self.cog.save_game_settings(self.game)
         self.update_button_labels()
         await interaction.response.edit_message(embed=self.cog.build_settings_embed(self.game), view=self)
 
     @discord.ui.button(style=discord.ButtonStyle.secondary, row=0)
     async def btn_tanner(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.game.settings.cycle_tanner()
+        self.cog.save_game_settings(self.game)
         self.update_button_labels()
         await interaction.response.edit_message(embed=self.cog.build_settings_embed(self.game), view=self)
 
     @discord.ui.button(style=discord.ButtonStyle.secondary, row=1)
     async def btn_vote(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.game.settings.cycle_vote_display()
+        self.cog.save_game_settings(self.game)
         self.update_button_labels()
         await interaction.response.edit_message(embed=self.cog.build_settings_embed(self.game), view=self)
 
     @discord.ui.button(style=discord.ButtonStyle.secondary, row=1)
     async def btn_chat(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.game.settings.cycle_dead_chat()
+        self.cog.save_game_settings(self.game)
         self.update_button_labels()
         await interaction.response.edit_message(embed=self.cog.build_settings_embed(self.game), view=self)
 
     @discord.ui.button(style=discord.ButtonStyle.secondary, row=2)
     async def btn_disc_time(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.game.settings.cycle_discussion_time()
+        self.cog.save_game_settings(self.game)
         self.update_button_labels()
         await interaction.response.edit_message(embed=self.cog.build_settings_embed(self.game), view=self)
 
     @discord.ui.button(style=discord.ButtonStyle.secondary, row=2)
     async def btn_night_time(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.game.settings.cycle_night_time()
+        self.cog.save_game_settings(self.game)
         self.update_button_labels()
         await interaction.response.edit_message(embed=self.cog.build_settings_embed(self.game), view=self)
 
     @discord.ui.button(style=discord.ButtonStyle.secondary, row=3)
     async def btn_rank(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.game.settings.cycle_rank()
+        self.cog.save_game_settings(self.game)
         self.update_button_labels()
         await interaction.response.edit_message(embed=self.cog.build_settings_embed(self.game), view=self)
 
     @discord.ui.button(label="Lưu & Quay Lại Lobby", style=discord.ButtonStyle.success, emoji="💾", row=3)
     async def btn_save(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.cog.save_game_settings(self.game)
         await interaction.response.edit_message(content="✅ Đã lưu cài đặt!", embed=None, view=None)
         await self.cog.update_lobby_embed(self.game, self.lobby_message)
 
@@ -653,12 +664,53 @@ class ReplayView(discord.ui.View):
 #  Main Cog Implementation
 # ==============================================================================
 
+SETTINGS_FILE = Path(__file__).resolve().parent.parent.parent / "data" / "masoi_settings.json"
+
+
 class Masoi(commands.Cog):
     """Cog Ma Sói (Werewolf) cho Discord Bot."""
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.active_games: Dict[str, MasoiGame] = {}  # key: f"{guild_id}-{channel_id}"
+        self.saved_settings: Dict[str, MasoiSettings] = {}
+        self.load_all_saved_settings()
+
+    def load_all_saved_settings(self):
+        try:
+            if SETTINGS_FILE.exists():
+                with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    for key, val in data.items():
+                        self.saved_settings[key] = MasoiSettings.from_dict(val)
+        except Exception as e:
+            logger.warning("Không thể đọc file masoi_settings.json: %s", e)
+
+    def save_settings_to_file(self):
+        try:
+            SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
+            data = {key: s.to_dict() for key, s in self.saved_settings.items()}
+            with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            logger.warning("Không thể lưu file masoi_settings.json: %s", e)
+
+    def save_game_settings(self, game: MasoiGame):
+        key_channel = f"{game.guild_id}-{game.channel_id}"
+        key_guild = str(game.guild_id)
+        saved = game.settings.copy()
+        self.saved_settings[key_channel] = saved
+        self.saved_settings[key_guild] = saved
+        self.save_settings_to_file()
+
+    def get_saved_settings(self, guild_id: int, channel_id: int) -> MasoiSettings:
+        key_channel = f"{guild_id}-{channel_id}"
+        key_guild = str(guild_id)
+        if key_channel in self.saved_settings:
+            return self.saved_settings[key_channel].copy()
+        if key_guild in self.saved_settings:
+            return self.saved_settings[key_guild].copy()
+        return MasoiSettings()
 
     def get_economy(self):
         return getattr(self.bot, "economy", None)
@@ -680,6 +732,7 @@ class Masoi(commands.Cog):
             return
 
         game = MasoiGame(ctx.guild.id, ctx.channel.id, ctx.author.id, ctx.author.display_name)
+        game.settings = self.get_saved_settings(ctx.guild.id, ctx.channel.id)
         game.add_player(ctx.author.id, ctx.author.display_name)
         self.active_games[key] = game
 
