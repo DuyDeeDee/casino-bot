@@ -911,10 +911,10 @@ class Masoi(commands.Cog):
         embed.add_field(name="NGƯỜI CHƠI", value=players_str, inline=False)
         embed.add_field(
             name="\u200b",
-            value=f"{divider}\n<:ghim:1526238405061640272> *Bấm **Tham gia** để vào ván, chủ phòng bấm **Bắt đầu** khi đủ 5 người trở lên.*",
+            value=f"{divider}\n<a:muiten:1533428497098473623> *Bấm **Tham gia** để vào ván, chủ phòng bấm **Bắt đầu** khi đủ 5 người trở lên.*",
             inline=False
         )
-        embed.set_footer(text="💸 Phí tạo phòng: 1,000,000 VND")
+        embed.set_footer(text="<:ghim:1526238405061640272> Phí tạo phòng: 1,000,000 VND")
         return embed
 
     def build_settings_embed(self, game: MasoiGame) -> discord.Embed:
@@ -962,10 +962,10 @@ class Masoi(commands.Cog):
         divider = "──────────────────────────────────────"
 
         if not is_final and game.settings.vote_display == "END_ONLY":
-            desc = f"⚖️ **Đang diễn ra bỏ phiếu...**\n_(Số phiếu hiện đang ẩn tới khi kết thúc giờ bỏ phiếu)_\n\n{divider}\n📌 *Bấm menu bên dưới để chọn người bạn nghi ngờ.*"
+            desc = f"⚖️ **Đang diễn ra bỏ phiếu...**\n_(Số phiếu hiện đang ẩn tới khi kết thúc giờ bỏ phiếu)_\n\n{divider}\n<:ghim:1526238405061640272> *Bấm menu bên dưới để chọn người bạn nghi ngờ.*"
         else:
             header_str = "⚖️ **KẾT QUẢ BỎ PHIẾU TREO CỔ**" if is_final else "⚖️ **DIỄN BIẾN BỎ PHIẾU REAL-TIME**"
-            desc = f"{header_str}\n\n" + "\n".join(lines) + f"\n\n{divider}\n📌 *Bấm menu bên dưới để bỏ phiếu người nghi ngờ là Sói.*"
+            desc = f"{header_str}\n\n" + "\n".join(lines) + f"\n\n{divider}\n<:ghim:1526238405061640272> *Bấm menu bên dưới để bỏ phiếu người nghi ngờ là Sói.*"
 
         embed = discord.Embed(
             title=f"⚖️ Bỏ Phiếu Treo Cổ — Ngày {game.day_count}",
@@ -1031,7 +1031,7 @@ class Masoi(commands.Cog):
                 try:
                     await message.delete()
                     await message.channel.send(
-                        f"💀 {message.author.mention}, bạn đã qua đời nên không thể chat trong ván Ma Sói!",
+                        f"<a:luuy:1533429265293508888> {message.author.mention}, bạn đã qua đời nên không thể chat trong ván Ma Sói!",
                         delete_after=4
                     )
                 except Exception:
@@ -1135,7 +1135,7 @@ class Masoi(commands.Cog):
                     g_user = self.bot.get_user(guard_p.user_id)
                     if g_user:
                         embed = discord.Embed(
-                            title=f"🌙 Đêm {game.night_count} — Lượt của Bảo Vệ",
+                            title=f"<a:moon:1533444241596874792> Đêm {game.night_count} — Lượt của Bảo Vệ",
                             description=f"Chọn 1 người để bảo vệ đêm nay. Còn **{game.settings.night_time} giây** để quyết định.",
                             color=discord.Color(0xE0A638)
                         )
@@ -1150,7 +1150,7 @@ class Masoi(commands.Cog):
                     w_user = self.bot.get_user(w.user_id)
                     if w_user:
                         embed = discord.Embed(
-                            title=f"🌙 Đêm {game.night_count} — Lượt của Sói",
+                            title=f"<a:moon:1533444241596874792> Đêm {game.night_count} — Lượt của Sói",
                             description=f"Chọn 1 người để cắn đêm nay. Còn **{game.settings.night_time} giây** để quyết định.",
                             color=discord.Color(0xE0A638)
                         )
@@ -1166,7 +1166,7 @@ class Masoi(commands.Cog):
                     s_user = self.bot.get_user(seer_p.user_id)
                     if s_user:
                         embed = discord.Embed(
-                            title=f"🌙 Đêm {game.night_count} — Lượt của Tiên Tri",
+                            title=f"<a:moon:1533444241596874792> Đêm {game.night_count} — Lượt của Tiên Tri",
                             description=f"Chọn 1 người để soi phe đêm nay. Còn **{game.settings.night_time} giây** để quyết định.",
                             color=discord.Color(0xE0A638)
                         )
@@ -1185,7 +1185,7 @@ class Masoi(commands.Cog):
                         victim_p = game.players.get(victim_id) if victim_id else None
                         v_name = victim_p.display_name if victim_p else "Không ai"
                         embed = discord.Embed(
-                            title=f"🌙 Đêm {game.night_count} — Lượt của Phù Thủy",
+                            title=f"<a:moon:1533444241596874792> Đêm {game.night_count} — Lượt của Phù Thủy",
                             description=f"Đêm nay, bầy Sói nhắm cắn: **{v_name}**.\nBạn có muốn dùng **BÌNH CỨU** không? Còn **{game.settings.night_time} giây** để quyết định.",
                             color=discord.Color(0xE0A638)
                         )
@@ -1196,7 +1196,7 @@ class Masoi(commands.Cog):
                             pass
 
                 embed_night = discord.Embed(
-                    title=f"🌙 Ban Đêm — Đêm {game.night_count}",
+                    title=f"<a:moon:1533444241596874792> Ban Đêm — Đêm {game.night_count}",
                     description=(
                         f"Màn đêm đã buông xuống làng...\n"
                         f"Bot đã gửi tin nhắn riêng (DM) tới các vai trò ban đêm để hành động!\n\n"
@@ -1227,15 +1227,15 @@ class Masoi(commands.Cog):
                     for uid in night_deaths:
                         p = game.players[uid]
                         if game.settings.reveal_roles_on_death:
-                            death_names.append(f"💀 **{p.display_name}** *({p.role.emoji} {p.role.value})*")
+                            death_names.append(f"<:die:1533444731000848415> **{p.display_name}** *({p.role.emoji} {p.role.value})*")
                         else:
-                            death_names.append(f"💀 **{p.display_name}**")
+                            death_names.append(f"<:die:1533444731000848415> **{p.display_name}**")
                     day_msg_text = "Đêm qua trôi qua đầy đau thương... Các nạn nhân đã ra đi:\n" + "\n".join(death_names)
                 else:
-                    day_msg_text = "🌅 Đêm qua trôi qua thật bình yên, không có ai qua đời!"
+                    day_msg_text = "<a:yay:1533444499827851505> Đêm qua trôi qua thật bình yên, không có ai qua đời!"
 
                 embed_announce = discord.Embed(
-                    title=f"🌅 Ban Ngày — Ngày {game.day_count}",
+                    title=f"<a:yay:1533444499827851505> Ban Ngày — Ngày {game.day_count}",
                     description=f"{day_msg_text}\n\n{divider}\n💬 Mọi người hãy cùng trao đổi và thảo luận tại kênh này!",
                     color=discord.Color(0xE0A638)
                 )
@@ -1250,7 +1250,7 @@ class Masoi(commands.Cog):
                 game.phase = GamePhase.DAY_DISCUSSION
                 disc_embed = discord.Embed(
                     title=f"💬 Ban Ngày — Thảo Luận (Ngày {game.day_count})",
-                    description=f"⏱️ **Thời gian thảo luận:** `{game.settings.discussion_time // 60} phút`.\n"
+                    description=f"<a:time:1533445134522384536> **Thời gian thảo luận:** `{game.settings.discussion_time // 60} phút`.\n"
                                 f"Bấm **Yêu cầu bỏ phiếu sớm** nếu muốn dồn phiếu ngay!\n\n"
                                 f"{divider}\n💬 Mọi người hãy trao đổi ý kiến để tìm ra bầy Sói!",
                     color=discord.Color(0xE0A638)
@@ -1293,14 +1293,14 @@ class Masoi(commands.Cog):
                 if executed_id:
                     p = game.players[executed_id]
                     if game.settings.reveal_roles_on_death:
-                        exec_text = f"⚖️ **{p.display_name}** đã bị dân làng xử tử trên giàn treo cổ! *(Vai trò: **{p.role.emoji} {p.role.value}**)*"
+                        exec_text = f"<a:huyay:1533445376563089448> **{p.display_name}** đã bị dân làng xử tử trên giàn treo cổ! *(Vai trò: **{p.role.emoji} {p.role.value}**)*"
                     else:
-                        exec_text = f"⚖️ **{p.display_name}** đã bị dân làng xử tử trên giàn treo cổ!"
+                        exec_text = f"<a:huyay:1533445376563089448> **{p.display_name}** đã bị dân làng xử tử trên giàn treo cổ!"
                 else:
-                    exec_text = "⚖️ Lượt bỏ phiếu kết thúc hòa phiếu, không ai bị xử tử."
+                    exec_text = "<a:huyay:1533445376563089448> Lượt bỏ phiếu kết thúc hòa phiếu, không ai bị xử tử."
 
                 embed_exec = discord.Embed(
-                    title="⚖️ Kết Quả Xử Tử",
+                    title="<a:huyay:1533445376563089448> Kết Quả Xử Tử",
                     description=f"{exec_text}\n\n{divider}",
                     color=discord.Color(0xE0A638)
                 )
@@ -1335,18 +1335,18 @@ class Masoi(commands.Cog):
         # Tổng kết vai trò
         role_lines = []
         for p in game.players.values():
-            status = "❤️ Sống" if p.is_alive else "💀 Chết"
+            status = "<a:key:1526234974150459593> Sống" if p.is_alive else "<:die:1533444731000848415> Chết"
             pts_str = f" (+{rank_pts.get(p.user_id, 0)} pts)" if game.settings.enable_rank else ""
             role_lines.append(f"• **{p.display_name}** — {p.role.emoji} **{p.role.value}** [{status}]{pts_str}")
 
         winner_str = game.winner_faction.value if game.winner_faction else "Không có"
 
         end_embed = make_embed(
-            title=f"🏆 VÁN BÀN CỜ MA SÓI KẾT THÚC — {winner_str}!",
+            title=f"<a:w1:1526231439425667093> VÁN BÀN CỜ MA SÓI KẾT THÚC <a:w1:1526231439425667093> {winner_str}",
             description=(
-                f"🎉 **{winner_str} đã giành chiến thắng!**\n\n"
+                f"<a:w1:1526231439425667093> **{winner_str} đã giành chiến thắng!**<a:w1:1526231439425667093>\n\n"
                 f"**Vai trò tất cả người chơi:**\n" + "\n".join(role_lines) + "\n\n"
-                f"⏱️ **Tổng thời gian ván:** {game.night_count} Đêm, {game.day_count} Ngày"
+                f" **Tổng thời gian ván:** {game.night_count} Đêm, {game.day_count} Ngày"
             ),
             color=discord.Color.green(),
         )
