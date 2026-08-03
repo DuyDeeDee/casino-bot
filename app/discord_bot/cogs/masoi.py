@@ -568,7 +568,7 @@ class NightHunterView(discord.ui.View):
         if target_p and target_p.is_alive:
             target_p.is_alive = False
             self.game.record_log("HUNTER_SHOOT", actor_id=self.hunter_id, target_id=target_id, result="Thợ Săn kéo theo bắn gục")
-            if target_p.lover_id and target_p.lover_id in self.game.players:
+            if getattr(target_p, "lover_id", None) and target_p.lover_id in self.game.players:
                 lover_p = self.game.players[target_p.lover_id]
                 if lover_p.is_alive:
                     lover_p.is_alive = False
@@ -1364,6 +1364,17 @@ class Masoi(commands.Cog):
             # ── BƯỚC 6: KẾT THÚC GAME ──
             await self.end_game(game, message)
 
+        except Exception as e:
+            logger.exception("Lỗi ván Ma Sói (Guild %s, Channel %s):", game.guild_id, game.channel_id)
+            try:
+                embed_err = make_embed(
+                    title="<a:luuy:1533429265293508888> ĐÃ XẢY RA LỖI HỆ THỐNG",
+                    description=f"Ván Ma Sói gặp sự cố không mong muốn và đã bị hủy!\n`Chi tiết lỗi: {e}`",
+                    color=discord.Color.red()
+                )
+                await message.channel.send(embed=embed_err)
+            except Exception:
+                pass
         finally:
             if key in self.active_games:
                 del self.active_games[key]

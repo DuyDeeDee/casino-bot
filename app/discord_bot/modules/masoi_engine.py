@@ -158,6 +158,8 @@ class MasoiPlayer:
         self.witch_save_used: bool = False
         self.witch_poison_used: bool = False
         self.protected_last_night: Optional[int] = None  # user_id người được bảo vệ đêm trước
+        self.lover_id: Optional[int] = None  # user_id tình nhân (Thần tình yêu ghép đôi)
+        self.hunter_shot_used: bool = False  # Thợ săn đã dùng phát bắn kéo theo chưa
 
         # Metrics cho rank bonus
         self.seer_found_wolf: bool = False
@@ -300,9 +302,9 @@ class MasoiGame:
             role_pool.append(Role.TANNER)
 
         # Kỹ năng Dân Làng
-        special_villagers = [Role.SEER, Role.GUARD, Role.WITCH, Role.CUPID, Role.HUNTER]
+        special_villagers = [Role.SEER, Role.GUARD, Role.WITCH, Role.HUNTER, Role.CUPID]
         for r in special_villagers:
-            if len(role_pool) < n:
+            if len(role_pool) < n - 1:
                 role_pool.append(r)
 
         # Dân thường cho phần còn lại
@@ -397,7 +399,7 @@ class MasoiGame:
         lover_deaths = set()
         for uid in list(deaths):
             p = self.players.get(uid)
-            if p and p.lover_id and p.lover_id in self.players:
+            if p and getattr(p, "lover_id", None) and getattr(p, "lover_id", None) in self.players:
                 lover_p = self.players[p.lover_id]
                 if lover_p.is_alive and lover_p.user_id not in deaths:
                     lover_deaths.add(lover_p.user_id)
@@ -460,7 +462,7 @@ class MasoiGame:
 
         # Cập nhật Lover chết theo khi bị treo cổ
         ex_p = self.players[executed_id]
-        if ex_p.lover_id and ex_p.lover_id in self.players:
+        if getattr(ex_p, "lover_id", None) and ex_p.lover_id in self.players:
             lover_p = self.players[ex_p.lover_id]
             if lover_p.is_alive:
                 lover_p.is_alive = False
@@ -476,7 +478,7 @@ class MasoiGame:
         alive_players = self.get_alive_players()
         if len(alive_players) == 2:
             p1, p2 = alive_players[0], alive_players[1]
-            if p1.lover_id == p2.user_id and p1.role.faction != p2.role.faction:
+            if getattr(p1, "lover_id", None) == p2.user_id and p1.role.faction != p2.role.faction:
                 self.winner_faction = Faction.LOVERS
                 self.record_log("GAME_WIN", result="Phe Tình Nhân chiến thắng (cặp đôi sống sót cuối cùng)!")
                 return Faction.LOVERS
