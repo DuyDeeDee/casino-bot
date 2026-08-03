@@ -653,6 +653,10 @@ class DayVoteView(discord.ui.View):
         if self.game.settings.vote_display == "REALTIME":
             await self.cog.update_vote_embed(self.game, interaction.message)
 
+        alive_count = len(self.game.get_alive_players())
+        if len(self.game.day_votes) >= alive_count:
+            self.stop()
+
 
 # ==============================================================================
 #  End Game & Replay Views
@@ -1349,7 +1353,13 @@ class Masoi(commands.Cog):
                 vote_view = DayVoteView(game, self)
                 vote_msg = await message.channel.send(embed=vote_embed, view=vote_view)
 
-                await asyncio.sleep(game.settings.night_time)
+                # Chờ tất cả mọi người bỏ phiếu xong hoặc hết thời gian đếm ngược
+                elapsed = 0
+                while elapsed < game.settings.night_time:
+                    if vote_view.is_finished() or len(game.day_votes) >= len(game.get_alive_players()):
+                        break
+                    await asyncio.sleep(1)
+                    elapsed += 1
 
                 # ── BƯỚC 5: XỬ LÝ BỎ PHIẾU ──
                 game.phase = GamePhase.DAY_RESOLVE
