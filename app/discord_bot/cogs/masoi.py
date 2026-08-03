@@ -91,6 +91,23 @@ class LobbyView(discord.ui.View):
         embed = self.cog.build_settings_embed(self.game)
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
+    @discord.ui.button(label="Vai Trò", style=discord.ButtonStyle.secondary, emoji="🎭", custom_id="masoi_roles_info")
+    async def roles_info_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        desc = (
+            "🎭 **HƯỚNG DẪN CHI TIẾT CÁC VAI TRÒ TRONG MA SÓI**\n\n"
+            "🐺 **Sói Thường** *(Phe Sói)*: Mỗi đêm bỏ phiếu cắn 1 người. Đừng để lộ thân phận ban ngày!\n"
+            "👤 **Dân Thường** *(Phe Dân)*: Dùng trí tuệ và tranh luận ban ngày để tìm ra bầy Sói.\n"
+            "🔮 **Tiên Tri** *(Phe Dân)*: Mỗi đêm chọn 1 người để soi phe (Sói hay Dân).\n"
+            "🛡️ **Bảo Vệ** *(Phe Dân)*: Mỗi đêm chọn 1 người để bảo vệ khỏi bị Sói cắn (không chọn trùng 2 đêm liền).\n"
+            "🧪 **Phù Thủy** *(Phe Dân)*: Có 1 bình Cứu (hồi sinh) và 1 bình Độc (giết người), mỗi bình dùng 1 lần/ván.\n"
+            "🏹 **Thợ Săn** *(Phe Dân)*: Khi bị loại (bị cắn hoặc treo cổ), được chọn kéo theo 1 người bắn gục.\n"
+            "💘 **Thần Tình Yêu** *(Phe Dân)*: Đêm 1 ghép 2 Tình Nhân (1 người chết, người kia chết theo).\n"
+            "🃏 **Kẻ Ngốc** *(Phe Độc Lập)*: Thắng ngay lập tức nếu bị dân làng treo cổ ban ngày!\n\n"
+            "_Danh sách vai trò dự kiến sẽ tự động thay đổi theo số lượng người tham gia phòng chờ._"
+        )
+        embed = make_embed(title="🎭 Các Vai Trò Ma Sói", description=desc, color=discord.Color.purple())
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
     @discord.ui.button(label="Hủy ván", style=discord.ButtonStyle.danger, emoji="⭕", custom_id="masoi_cancel")
     async def cancel_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user.id != self.game.host_id:
@@ -962,8 +979,24 @@ class Masoi(commands.Cog):
         players_str = "\n".join(player_lines) if player_lines else "_Chưa có người chơi nào._"
         divider = "──────────────────────────────────────"
 
+        # Thống kê danh sách vai trò dự kiến
+        roles_preview = game.preview_roles()
+        role_counts: Dict[Role, int] = {}
+        for r in roles_preview:
+            role_counts[r] = role_counts.get(r, 0) + 1
+
+        role_items = []
+        for r, cnt in role_counts.items():
+            cnt_str = f" (x{cnt})" if cnt > 1 else ""
+            role_items.append(f"{r.emoji} **{r.value}**{cnt_str}")
+        roles_str = " • ".join(role_items)
+
+        n_players = len(game.players)
+        role_header = f"🎭 VAI TRÒ DỰ KIẾN ({n_players} người)" if n_players >= 5 else f"🎭 VAI TRÒ DỰ KIẾN (Tính mẫu 5 người)"
+
         embed.add_field(name="\u200b", value=divider, inline=False)
         embed.add_field(name="NGƯỜI CHƠI", value=players_str, inline=False)
+        embed.add_field(name=role_header, value=roles_str, inline=False)
         embed.add_field(
             name="\u200b",
             value=f"{divider}\n<a:muiten:1533428497098473623> *Bấm **Tham gia** để vào ván, chủ phòng bấm **Bắt đầu** khi đủ 5 người trở lên.*",

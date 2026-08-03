@@ -318,6 +318,33 @@ class MasoiGame:
         for uid, role in zip(user_ids, role_pool):
             self.players[uid].role = role
 
+    def preview_roles(self) -> List[Role]:
+        """Xem trước các vai trò xuất hiện theo số lượng người chơi hiện tại."""
+        n = max(5, len(self.players))
+        if n <= 6:
+            wolf_count = 1
+        elif n <= 10:
+            wolf_count = 2
+        elif n <= 14:
+            wolf_count = 3
+        else:
+            wolf_count = 4
+
+        role_pool: List[Role] = [Role.WOLF] * wolf_count
+
+        if self.settings.enable_tanner:
+            role_pool.append(Role.TANNER)
+
+        special_villagers = [Role.SEER, Role.GUARD, Role.WITCH, Role.HUNTER, Role.CUPID]
+        for r in special_villagers:
+            if len(role_pool) < n - 1:
+                role_pool.append(r)
+
+        while len(role_pool) < n:
+            role_pool.append(Role.VILLAGER)
+
+        return role_pool
+
     def start_night(self):
         """Reset dữ liệu chuẩn bị vào Đêm mới."""
         self.night_count += 1
