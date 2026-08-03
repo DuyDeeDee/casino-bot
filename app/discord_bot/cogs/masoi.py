@@ -1085,6 +1085,15 @@ class Masoi(commands.Cog):
                 except Exception:
                     pass
 
+    async def get_or_fetch_user(self, user_id: int) -> Optional[discord.User]:
+        user = self.bot.get_user(user_id)
+        if not user:
+            try:
+                user = await self.bot.fetch_user(user_id)
+            except Exception:
+                user = None
+        return user
+
     async def sync_channel_permissions(self, game: MasoiGame, channel: discord.TextChannel):
         """Cập nhật quyền cấm chat ở kênh chính cho người đã chết."""
         if game.settings.dead_can_chat or not isinstance(channel, discord.TextChannel):
@@ -1094,6 +1103,11 @@ class Masoi(commands.Cog):
         for p in game.players.values():
             if not p.is_alive:
                 member = guild.get_member(p.user_id)
+                if not member:
+                    try:
+                        member = await guild.fetch_member(p.user_id)
+                    except Exception:
+                        member = None
                 if member:
                     try:
                         await channel.set_permissions(member, send_messages=False)
@@ -1108,6 +1122,11 @@ class Masoi(commands.Cog):
         guild = channel.guild
         for p in game.players.values():
             member = guild.get_member(p.user_id)
+            if not member:
+                try:
+                    member = await guild.fetch_member(p.user_id)
+                except Exception:
+                    member = None
             if member:
                 try:
                     await channel.set_permissions(member, overwrite=None)
@@ -1180,7 +1199,7 @@ class Masoi(commands.Cog):
                 # 1. Bảo Vệ
                 guard_p = game.get_player_by_role(Role.GUARD)
                 if guard_p:
-                    g_user = self.bot.get_user(guard_p.user_id)
+                    g_user = await self.get_or_fetch_user(guard_p.user_id)
                     if g_user:
                         embed = discord.Embed(
                             title=f"<a:moon:1533444241596874792> Đêm {game.night_count} — Lượt của Bảo Vệ",
@@ -1195,7 +1214,7 @@ class Masoi(commands.Cog):
 
                 # 2. Bầy Sói
                 for w in game.get_alive_wolves():
-                    w_user = self.bot.get_user(w.user_id)
+                    w_user = await self.get_or_fetch_user(w.user_id)
                     if w_user:
                         embed = discord.Embed(
                             title=f"<a:moon:1533444241596874792> Đêm {game.night_count} — Lượt của Sói",
@@ -1211,7 +1230,7 @@ class Masoi(commands.Cog):
                 # 3. Tiên Tri
                 seer_p = game.get_player_by_role(Role.SEER)
                 if seer_p:
-                    s_user = self.bot.get_user(seer_p.user_id)
+                    s_user = await self.get_or_fetch_user(seer_p.user_id)
                     if s_user:
                         embed = discord.Embed(
                             title=f"<a:moon:1533444241596874792> Đêm {game.night_count} — Lượt của Tiên Tri",
@@ -1227,7 +1246,7 @@ class Masoi(commands.Cog):
                 # 4. Phù Thủy
                 witch_p = game.get_player_by_role(Role.WITCH)
                 if witch_p:
-                    wt_user = self.bot.get_user(witch_p.user_id)
+                    wt_user = await self.get_or_fetch_user(witch_p.user_id)
                     if wt_user:
                         victim_id = game.resolve_wolf_target()
                         victim_p = game.players.get(victim_id) if victim_id else None
