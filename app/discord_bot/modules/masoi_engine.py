@@ -234,6 +234,8 @@ class MasoiGame:
         self.night_seer_result: Optional[str] = None
         self.night_witch_save: Optional[bool] = None
         self.night_witch_poison: Optional[int] = None
+        self.witch_dm_message: Optional[any] = None
+        self.witch_view: Optional[any] = None
 
         # Dữ liệu ban ngày
         self.day_votes: Dict[int, Optional[int]] = {}  # voter_id -> target_id (None = White vote)
@@ -325,6 +327,8 @@ class MasoiGame:
         self.night_seer_result = None
         self.night_witch_save = None
         self.night_witch_poison = None
+        self.witch_dm_message = None
+        self.witch_view = None
 
     def record_log(
         self,

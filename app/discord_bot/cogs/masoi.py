@@ -278,6 +278,9 @@ class NightWolfView(discord.ui.View):
 
         await interaction.response.edit_message(embed=embed, view=None)
 
+        if hasattr(self.game, "cog") and self.game.cog:
+            await self.game.cog.update_witch_dm(self.game)
+
 
 class NightSeerView(discord.ui.View):
     """View Ephemeral chọn người để soi phe cho Tiên Tri."""
@@ -1067,6 +1070,31 @@ class Masoi(commands.Cog):
         except Exception as e:
             logger.warning("Không thể edit vote embed: %s", e)
 
+    async def update_witch_dm(self, game: MasoiGame):
+        """Cập nhật real-time tin nhắn DM của Phù Thủy khi Sói chọn mục tiêu cắn."""
+        if not game.witch_dm_message or (game.witch_view and game.witch_view.is_finished()):
+            return
+
+        witch_p = game.get_player_by_role(Role.WITCH)
+        if not witch_p or witch_p.witch_save_used:
+            return
+
+        victim_id = game.resolve_wolf_target()
+        victim_p = game.players.get(victim_id) if victim_id else None
+        v_name = victim_p.display_name if victim_p else "Không ai"
+
+        embed = discord.Embed(
+            title=f"<a:moon:1533444241596874792> Đêm {game.night_count} — Lượt của Phù Thủy",
+            description=f"Đêm nay, bầy Sói nhắm cắn: **{v_name}**.\nBạn có muốn dùng **BÌNH CỨU** không? Còn **{game.settings.night_time} giây** để quyết định.",
+            color=discord.Color(0xE0A638)
+        )
+        view = NightWitchView(game, witch_p.user_id, victim_id)
+        game.witch_view = view
+        try:
+            await game.witch_dm_message.edit(embed=embed, view=view)
+        except Exception as e:
+            logger.warning("Không thể cập nhật Witch DM: %s", e)
+
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
         """Tự động xoá tin nhắn của người chơi đã chết nếu cài đặt cấm chat."""
@@ -1265,8 +1293,10 @@ class Masoi(commands.Cog):
                             color=discord.Color(0xE0A638)
                         )
                         view = NightWitchView(game, witch_p.user_id, victim_id)
+                        game.witch_view = view
                         try:
-                            await wt_user.send(embed=embed, view=view)
+                            msg = await wt_user.send(embed=embed, view=view)
+                            game.witch_dm_message = msg
                         except Exception:
                             pass
 
