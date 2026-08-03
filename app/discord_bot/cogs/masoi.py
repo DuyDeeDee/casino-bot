@@ -1082,8 +1082,10 @@ class Masoi(commands.Cog):
                         f"<a:luuy:1533429265293508888> {message.author.mention}, bạn đã qua đời nên không thể chat trong ván Ma Sói!",
                         delete_after=4
                     )
-                except Exception:
-                    pass
+                except discord.Forbidden:
+                    logger.warning("Bot thiếu quyền 'Manage Messages' để xoá tin nhắn của người chết!")
+                except Exception as e:
+                    logger.warning("Không thể xoá tin nhắn người chết: %s", e)
 
     async def get_or_fetch_user(self, user_id: int) -> Optional[discord.User]:
         user = self.bot.get_user(user_id)
@@ -1111,8 +1113,10 @@ class Masoi(commands.Cog):
                 if member:
                     try:
                         await channel.set_permissions(member, send_messages=False)
-                    except Exception:
-                        pass
+                    except discord.Forbidden:
+                        logger.warning("Bot thiếu quyền 'Manage Permissions' để cấm chat người chết!")
+                    except Exception as e:
+                        logger.warning("Không thể set_permissions cho người chết: %s", e)
 
     async def restore_channel_permissions(self, game: MasoiGame, channel: discord.TextChannel):
         """Khôi phục lại quyền chat bình thường khi ván đấu kết thúc."""
