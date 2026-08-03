@@ -1732,34 +1732,27 @@ class Simulator(commands.Cog):
                             self.economy.set_portfolio_shares(user_id, symbol, 0.0)
                             liquidated_users.append((user_id, shares, payout))
                             
-                        # Send public/channel announcement instead of DM
-                        channel_id_str = self.economy.get_setting("last_invest_channel_id")
-                        if channel_id_str:
+                        # Send DM notification to players who owned the bankrupt stock
+                        for user_id, shares, payout in liquidated_users:
                             try:
-                                channel_id = int(channel_id_str)
-                                channel = self.client.get_channel(channel_id)
-                                if channel is None:
-                                    channel = await self.client.fetch_channel(channel_id)
-                                if channel:
-                                    desc_lines = [
-                                        f"Mã đầu tư `{symbol}` đã chính thức phá sản sau thời gian cảnh báo!\n\n",
-                                        f"💥 **Giá thanh lý tài sản:** `{bankruptcy_price:,} VND` / cổ\n",
-                                        f"💡 Toàn bộ cổ phiếu `{symbol}` của các cổ đông đã bị cưỡng chế tự động bán để thu hồi tài sản:\n\n"
-                                    ]
-                                    for user_id, shares, payout in liquidated_users:
-                                        desc_lines.append(f"• <@{user_id}>: Nhận lại `+{payout:,} VND` (cho `{shares:.2f} {symbol}`, phí thanh lý 5%)\n")
-                                    
-                                    if not liquidated_users:
-                                        desc_lines.append("• Không có cổ đông nào đang nắm giữ mã này.")
-                                        
+                                user = self.client.get_user(user_id)
+                                if user is None:
+                                    user = await self.client.fetch_user(user_id)
+                                if user:
                                     embed = make_embed(
                                         title=f"🚨 BÁO CÁO PHÁ SẢN & THANH LÝ CƯỠNG CHẾ: {symbol} 🚨",
-                                        description="".join(desc_lines),
+                                        description=(
+                                            f"Mã đầu tư `{symbol}` mà bạn đang nắm giữ đã chính thức **phá sản**!\n\n"
+                                            f"💥 **Giá thanh lý tài sản:** `{bankruptcy_price:,} VND` / cổ\n"
+                                            f"📊 **Số lượng bị thanh lý:** `{shares:.2f} {symbol}`\n"
+                                            f"💰 **Số tiền thu hồi (sau phí 5%):** `+{payout:,} VND`\n\n"
+                                            f"💡 Số tiền thanh lý đã được tự động cộng vào tài khoản của bạn."
+                                        ),
                                         color=discord.Color.red()
                                     )
-                                    await channel.send(embed=embed)
-                            except Exception as chan_err:
-                                logger.error(f"Error sending bankruptcy announcement: {chan_err}")
+                                    await user.send(embed=embed)
+                            except Exception as dm_err:
+                                logger.error(f"Error sending bankruptcy DM to user {user_id}: {dm_err}")
                     except Exception as err:
                         logger.error(f"Error liquidating portfolio for bankrupt stock {symbol}: {err}")
                         
