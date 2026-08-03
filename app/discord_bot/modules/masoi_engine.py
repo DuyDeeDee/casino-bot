@@ -286,7 +286,7 @@ class MasoiGame:
         n = len(user_ids)
 
         # Số lượng Sói
-        if n <= 7:
+        if n <= 6:
             wolf_count = 1
         elif n <= 10:
             wolf_count = 2
