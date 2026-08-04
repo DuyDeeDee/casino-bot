@@ -12,7 +12,7 @@ from app.config import config
 Entry = Tuple[int, int, int]
 DATABASE_PATH = Path(config.storage.database_path)
 LEGACY_DATABASE_PATH = Path(__file__).resolve().parents[3] / "economy.db"
-SCHEMA_VERSION = 40
+SCHEMA_VERSION = 41
 
 
 logger = logging.getLogger(__name__)
@@ -713,6 +713,19 @@ def _migration_39_add_user_topups_table(cur: sqlite3.Cursor) -> None:
         pass
 
 
+def _migration_41_add_masoi_vip_table(cur: sqlite3.Cursor) -> None:
+    try:
+        cur.execute(
+            """CREATE TABLE IF NOT EXISTS masoi_vip (
+            user_id INTEGER NOT NULL PRIMARY KEY,
+            expires_at INTEGER NOT NULL DEFAULT 0,
+            last_words TEXT DEFAULT ''
+        )"""
+        )
+    except sqlite3.OperationalError:
+        pass
+
+
 def _migration_40_add_masoi_tables(cur: sqlite3.Cursor) -> None:
     try:
         cur.execute(
@@ -772,6 +785,7 @@ MIGRATIONS: dict[int, Callable[[sqlite3.Cursor], None]] = {
     38: _migration_38_reset_gold_price_prev_to_30m,
     39: _migration_39_add_user_topups_table,
     40: _migration_40_add_masoi_tables,
+    41: _migration_41_add_masoi_vip_table,
 }
 
 
@@ -2998,6 +3012,57 @@ class Economy:
             (limit,)
         )
         return self.cur.fetchall()
+
+    def is_masoi_vip(self, user_id: int) -> bool:
+        """Kiểm tra người chơi có đang sở hữu gói VIP Ma Sói hay không."""
+        now = int(time.time())
+        self.cur.execute("SELECT expires_at FROM masoi_vip WHERE user_id = ?", (user_id,))
+        row = self.cur.fetchone()
+        return bool(row and row[0] > now)
+
+    def add_masoi_vip(self, user_id: int, days: int) -> int:
+        """Cấp hoặc gia hạn thêm số ngày VIP Ma Sói cho người chơi."""
+        now = int(time.time())
+        seconds = days * 86400
+        self.cur.execute("SELECT expires_at FROM masoi_vip WHERE user_id = ?", (user_id,))
+        row = self.cur.fetchone()
+        if row and row[0] > now:
+            new_expires = row[0] + seconds
+        else:
+            new_expires = now + seconds
+
+        self.cur.execute(
+            """INSERT INTO masoi_vip (user_id, expires_at) VALUES (?, ?)
+               ON CONFLICT(user_id) DO UPDATE SET expires_at = EXCLUDED.expires_at""",
+            (user_id, new_expires)
+        )
+        self.conn.commit()
+        return new_expires
+
+    def set_masoi_last_words(self, user_id: int, text: str) -> bool:
+        """Cập nhật Lời trăn trối cá nhân cho người chơi VIP."""
+        text = text.strip()[:150]
+        now = int(time.time())
+        self.cur.execute("SELECT expires_at FROM masoi_vip WHERE user_id = ?", (user_id,))
+        row = self.cur.fetchone()
+        expires = row[0] if (row and row[0] > now) else (now + 86400 * 30)
+        self.cur.execute(
+            """INSERT INTO masoi_vip (user_id, expires_at, last_words) VALUES (?, ?, ?)
+               ON CONFLICT(user_id) DO UPDATE SET last_words = EXCLUDED.last_words""",
+            (user_id, expires, text)
+        )
+        self.conn.commit()
+        return True
+
+    def get_masoi_vip_info(self, user_id: int) -> dict:
+        """Lấy đầy đủ thông tin VIP của người chơi."""
+        now = int(time.time())
+        self.cur.execute("SELECT expires_at, last_words FROM masoi_vip WHERE user_id = ?", (user_id,))
+        row = self.cur.fetchone()
+        if not row:
+            return {"is_vip": False, "expires_at": 0, "last_words": ""}
+        is_vip = bool(row[0] > now)
+        return {"is_vip": is_vip, "expires_at": row[0], "last_words": row[1] or ""}
 
 
 
