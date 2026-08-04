@@ -3070,6 +3070,16 @@ class Economy:
         self.conn.commit()
         return True
 
+    def get_all_masoi_vip(self) -> list:
+        """Lấy danh sách tất cả tài khoản VIP Ma Sói còn hạn, sắp xếp theo ngày hết hạn."""
+        now = int(time.time())
+        self.cur.execute(
+            "SELECT user_id, expires_at, last_words FROM masoi_vip WHERE expires_at > ? ORDER BY expires_at ASC",
+            (now,)
+        )
+        return self.cur.fetchall()
+
+
 
 
 

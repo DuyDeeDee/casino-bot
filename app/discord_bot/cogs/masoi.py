@@ -1307,6 +1307,51 @@ class Masoi(commands.Cog):
         await ctx.send(f"⭕ **Đã hủy gói VIP Ma Sói của {member.mention} thành công!**")
 
     @commands.command(
+        name="masoiviplist",
+        aliases=["listvipmasoi", "vipmasoilist"],
+        brief="[Admin/Owner] Xem danh sách tất cả VIP Ma Sói đang hoạt động.",
+        usage="masoiviplist",
+        hidden=True,
+    )
+    async def masoiviplist_cmd(self, ctx: commands.Context):
+        is_admin = False
+        if hasattr(ctx.author, "guild_permissions"):
+            perms = ctx.author.guild_permissions
+            is_admin = perms.administrator or perms.manage_guild
+        is_owner = await self.bot.is_owner(ctx.author)
+
+        if not (is_admin or is_owner):
+            await ctx.send("❌ Chỉ Quản trị viên hoặc Bot Owner mới có quyền dùng lệnh này!")
+            return
+
+        eco = self.get_economy()
+        if not eco:
+            await ctx.send("❌ Không kết nối được Database!")
+            return
+
+        vip_rows = eco.get_all_masoi_vip()
+
+        if not vip_rows:
+            await ctx.send("📋 **Hiện không có tài khoản VIP Ma Sói nào đang hoạt động.**")
+            return
+
+        lines = []
+        for i, (uid, expires_at, last_words) in enumerate(vip_rows, start=1):
+            user = self.bot.get_user(uid)
+            name = f"{user.name} ({user.id})" if user else f"User ID: {uid}"
+            exp_str = time.strftime("%H:%M %d/%m/%Y", time.localtime(expires_at))
+            lw = f'💬 *"{last_words[:40]}..."*' if last_words else "_Chưa có lời trăn trối_"
+            lines.append(f"`{i}.` 👑 **{name}**\n    📅 Hết hạn: `{exp_str}` | {lw}")
+
+        desc = "\n\n".join(lines)
+        embed = make_embed(
+            title=f"👑 Danh Sách VIP Ma Sói ({len(vip_rows)} tài khoản)",
+            description=desc,
+            color=discord.Color.gold()
+        )
+        await ctx.send(embed=embed)
+
+    @commands.command(
         name="masoirank",
         aliases=["masoirankboard", "masoi-rank"],
         brief="Xem Bảng Xếp Hạng Rank Ma Sói.",
