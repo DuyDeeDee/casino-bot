@@ -951,37 +951,6 @@ class VipDashboardView(discord.ui.View):
         self.cog = cog
         self.user_id = user_id
 
-    @discord.ui.button(label="Mua Gói VIP (30 Thỏi Vàng / 30 Ngày)", style=discord.ButtonStyle.success, emoji="👑", row=0)
-    async def btn_buy_vip(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.user.id != self.user_id:
-            await interaction.response.send_message("❌ Đây không phải menu của bạn!", ephemeral=True)
-            return
-
-        eco = self.cog.get_economy()
-        if not eco:
-            await interaction.response.send_message("❌ Không kết nối được Database!", ephemeral=True)
-            return
-
-        cost = 30  # 30 Thỏi Vàng
-        balance = eco.get_entry(interaction.user.id)[2]
-        if balance < cost:
-            await interaction.response.send_message(
-                f"❌ Bạn không đủ Thỏi Vàng! Giá gói VIP: **{cost} thỏi**, số dư hiện tại của bạn: **{balance} thỏi**.",
-                ephemeral=True
-            )
-            return
-
-        eco.add_credits(interaction.user.id, -cost)
-        new_expires = eco.add_masoi_vip(interaction.user.id, days=30)
-        exp_str = time.strftime("%H:%M %d/%m/%Y", time.localtime(new_expires))
-
-        embed = self.cog.build_vip_embed(interaction.user.id)
-        await interaction.response.edit_message(
-            content=f"🎉 **Chúc mừng! Bạn đã kích hoạt thành công Gói VIP Ma Sói 30 ngày!** (Hạn dùng: `{exp_str}`)",
-            embed=embed,
-            view=self
-        )
-
     @discord.ui.button(label="Sửa Lời Trăn Trối VIP", style=discord.ButtonStyle.primary, emoji="💬", row=0)
     async def btn_set_quote(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user.id != self.user_id:
@@ -1565,7 +1534,7 @@ class Masoi(commands.Cog):
             f"2. 🎭 **Đặc quyền Phân Vai Tùy Chỉnh** (Mở khóa menu Custom Roles trong Cài Đặt).\n"
             f"3. 👑 **Huy hiệu VIP [👑 VIP]** hiển thị lộng lẫy bên cạnh tên.\n"
             f"4. 💬 **Lời trăn trối cá nhân** tự động phát khi qua đời.\n\n"
-            f"💰 **Giá gói VIP:** `30 Thỏi Vàng / 30 Ngày`"
+            f"📌 *Liên hệ Ban Quản Trị để đăng ký kích hoạt gói VIP Ma Sói.*"
         )
         return make_embed(title="👑 Thẻ VIP Ma Sói", description=desc, color=discord.Color.gold())
 
