@@ -3064,6 +3064,12 @@ class Economy:
         is_vip = bool(row[0] > now)
         return {"is_vip": is_vip, "expires_at": row[0], "last_words": row[1] or ""}
 
+    def remove_masoi_vip(self, user_id: int) -> bool:
+        """Hủy gói VIP Ma Sói của người chơi ngay lập tức."""
+        self.cur.execute("UPDATE masoi_vip SET expires_at = 0 WHERE user_id = ?", (user_id,))
+        self.conn.commit()
+        return True
+
 
 
 

@@ -1280,6 +1280,31 @@ class Masoi(commands.Cog):
         await ctx.send(f"👑 **Đã cấp thành công {days} ngày VIP Ma Sói cho {member.mention}!**\n📅 Hạn dùng mới: `{exp_str}`")
 
     @commands.command(
+        name="removemasoivip",
+        aliases=["delmasoivip", "cancelmasoivip", "huyvipmasoi", "removevipmasoi"],
+        brief="[Admin/Owner] Hủy gói VIP Ma Sói của người chơi.",
+        usage="removemasoivip @user",
+    )
+    async def removemasoivip_cmd(self, ctx: commands.Context, member: discord.Member):
+        is_admin = False
+        if hasattr(ctx.author, "guild_permissions"):
+            perms = ctx.author.guild_permissions
+            is_admin = perms.administrator or perms.manage_guild
+        is_owner = await self.bot.is_owner(ctx.author)
+
+        if not (is_admin or is_owner):
+            await ctx.send("❌ Chỉ Quản trị viên hoặc Bot Owner mới có quyền dùng lệnh này!")
+            return
+
+        eco = self.get_economy()
+        if not eco:
+            await ctx.send("❌ Không kết nối được Database!")
+            return
+
+        eco.remove_masoi_vip(member.id)
+        await ctx.send(f"⭕ **Đã hủy gói VIP Ma Sói của {member.mention} thành công!**")
+
+    @commands.command(
         name="masoirank",
         aliases=["masoirankboard", "masoi-rank"],
         brief="Xem Bảng Xếp Hạng Rank Ma Sói.",
