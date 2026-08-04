@@ -1258,6 +1258,7 @@ class Masoi(commands.Cog):
         aliases=["setvipmasoi", "addmasoivip"],
         brief="[Admin/Owner] Cấp gói VIP Ma Sói cho người chơi.",
         usage="setmasoivip @user <số_ngày>",
+        hidden=True,
     )
     async def setmasoivip_cmd(self, ctx: commands.Context, member: discord.Member, days: int = 30):
         is_admin = False
@@ -1284,6 +1285,7 @@ class Masoi(commands.Cog):
         aliases=["delmasoivip", "cancelmasoivip", "huyvipmasoi", "removevipmasoi"],
         brief="[Admin/Owner] Hủy gói VIP Ma Sói của người chơi.",
         usage="removemasoivip @user",
+        hidden=True,
     )
     async def removemasoivip_cmd(self, ctx: commands.Context, member: discord.Member):
         is_admin = False
