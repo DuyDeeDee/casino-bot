@@ -1418,7 +1418,7 @@ class Masoi(commands.Cog):
             eco.add_credits(ctx.author.id, -MASOI_CREATE_FEE)
             msg_text = f"<a:yay:1533444499827851505> **{ctx.author.display_name}** đã trả **1 thỏi vàng** phí tạo phòng Ma Sói!"
         elif is_vip:
-            msg_text = f"👑 **{ctx.author.display_name}** *(👑 VIP Ma Sói)* được **miễn phí tạo phòng**!"
+            msg_text = f"<a:2336vipgif:1534596901834592286> **{ctx.author.display_name}** *(<a:2336vipgif:1534596901834592286> VIP Ma Sói)* được **miễn phí tạo phòng**!"
         else:
             msg_text = f"<a:yay:1533444499827851505> **{ctx.author.display_name}** đã tạo phòng Ma Sói!"
 
@@ -1495,7 +1495,7 @@ class Masoi(commands.Cog):
 
         new_expires = eco.add_masoi_vip(member.id, days)
         exp_str = time.strftime("%H:%M %d/%m/%Y", time.localtime(new_expires))
-        await ctx.send(f"👑 **Đã cấp thành công {days} ngày VIP Ma Sói cho {member.mention}!**\n📅 Hạn dùng mới: `{exp_str}`")
+        await ctx.send(f"<a:2336vipgif:1534596901834592286> **Đã cấp thành công {days} ngày VIP Ma Sói cho {member.mention}!**\n📅 Hạn dùng mới: `{exp_str}`")
 
     @commands.command(
         name="removemasoivip",
@@ -1558,11 +1558,11 @@ class Masoi(commands.Cog):
             name = f"{user.name} ({user.id})" if user else f"User ID: {uid}"
             exp_str = time.strftime("%H:%M %d/%m/%Y", time.localtime(expires_at))
             lw = f'💬 *"{last_words[:40]}..."*' if last_words else "_Chưa có lời trăn trối_"
-            lines.append(f"`{i}.` 👑 **{name}**\n    📅 Hết hạn: `{exp_str}` | {lw}")
+            lines.append(f"`{i}.` <a:2336vipgif:1534596901834592286> **{name}**\n    📅 Hết hạn: `{exp_str}` | {lw}")
 
         desc = "\n\n".join(lines)
         embed = make_embed(
-            title=f"👑 Danh Sách VIP Ma Sói ({len(vip_rows)} tài khoản)",
+            title=f"<a:2336vipgif:1534596901834592286> Danh Sách VIP Ma Sói ({len(vip_rows)} tài khoản)",
             description=desc,
             color=discord.Color.gold()
         )
@@ -1692,7 +1692,7 @@ class Masoi(commands.Cog):
         player_lines = []
         eco = self.get_economy()
         for p in game.players.values():
-            vip_tag = "👑 " if (eco and eco.is_masoi_vip(p.user_id)) else ""
+            vip_tag = "<a:2336vipgif:1534596901834592286> " if (eco and eco.is_masoi_vip(p.user_id)) else ""
             if p.user_id == game.host_id:
                 player_lines.append(f"<a:wing:1526230985987981393> {vip_tag}**{p.display_name}** *(chủ phòng)*")
             else:
@@ -1733,12 +1733,12 @@ class Masoi(commands.Cog):
         desc = (
             f"⚙️ **Cấu Hình Ván Ma Sói**\n\n"
             f"• **Phân chia vai trò:** `{mode_text}`\n"
-            f"• **Hiện vai trò người chết (👑 VIP):** `{'Hiện ngay' if s.reveal_roles_on_death else 'Ẩn tới cuối ván'}`\n"
+            f"• **Hiện vai trò người chết (<a:2336vipgif:1534596901834592286> VIP):** `{'Hiện ngay' if s.reveal_roles_on_death else 'Ẩn tới cuối ván'}`\n"
             f"• **Kẻ Ngốc (Tanner):** `{'Bật' if s.enable_tanner else 'Tắt'}`\n"
             f"• **Hiển thị số phiếu:** `{'Real-time' if s.vote_display == 'REALTIME' else 'Ẩn tới hết giờ'}`\n"
             f"• **Người chết chat ở thread:** `{'Cho phép' if s.dead_can_chat else 'Bị cấm chat'}`\n"
-            f"• **Thời gian thảo luận (👑 VIP):** `{s.discussion_time // 60} phút`\n"
-            f"• **Thời gian hành động đêm (👑 VIP):** `{s.night_time} giây`\n"
+            f"• **Thời gian thảo luận (<a:2336vipgif:1534596901834592286> VIP):** `{s.discussion_time // 60} phút`\n"
+            f"• **Thời gian hành động đêm (<a:2336vipgif:1534596901834592286> VIP):** `{s.night_time} giây`\n"
             f"• **Tính điểm rank:** `{'Có' if s.enable_rank else 'Không'}`\n\n"
             "_Bấm các nút dưới đây để thay đổi giá trị cấu hình._"
         )
@@ -1769,7 +1769,7 @@ class Masoi(commands.Cog):
         for p in game.get_alive_players():
             c = counts.get(p.user_id, 0)
             bar = make_bar(c, total_votes) if total_votes > 0 else "▒▒▒▒▒▒▒▒"
-            vip_tag = "👑 " if (eco and eco.is_masoi_vip(p.user_id)) else ""
+            vip_tag = "<a:2336vipgif:1534596901834592286> " if (eco and eco.is_masoi_vip(p.user_id)) else ""
             lines.append(f"• ⚖️ {vip_tag}**{p.display_name}**: `{bar}` **({c} phiếu)**")
 
         white_bar = make_bar(white_votes, total_votes) if total_votes > 0 else "▒▒▒▒▒▒▒▒"
@@ -1794,7 +1794,7 @@ class Masoi(commands.Cog):
         eco = self.get_economy()
         vip_info = eco.get_masoi_vip_info(user_id) if eco else {"is_vip": False, "expires_at": 0, "last_words": ""}
         
-        status_str = "👑 **ĐANG KÍCH HOẠT**" if vip_info["is_vip"] else "❌ **CHƯA ĐĂNG KÝ**"
+        status_str = "<a:2336vipgif:1534596901834592286> **ĐANG KÍCH HOẠT**" if vip_info["is_vip"] else "❌ **CHƯA ĐĂNG KÝ**"
         if vip_info["expires_at"] > 0:
             exp_str = time.strftime("%H:%M %d/%m/%Y", time.localtime(vip_info["expires_at"]))
         else:
@@ -1803,7 +1803,7 @@ class Masoi(commands.Cog):
         last_words = vip_info["last_words"] if vip_info["last_words"] else "_Chưa thiết lập (Bấm nút bên dưới để cài đặt)_"
 
         desc = (
-            f"👑 **BẢNG ĐIỀU KHIỂN VIP MA SÓI**\n\n"
+            f"<a:2336vipgif:1534596901834592286> **BẢNG ĐIỀU KHIỂN VIP MA SÓI**\n\n"
             f"• **Trạng thái VIP:** {status_str}\n"
             f"• **Hạn sử dụng:** `{exp_str}`\n"
             f"• **Lời trăn trối VIP:** {last_words}\n\n"
@@ -1812,11 +1812,11 @@ class Masoi(commands.Cog):
             f"1. 🆓 **Miễn phí 100% Phí Tạo Phòng** (Không tốn 1 Thỏi Vàng khi mở bàn).\n"
             f"2. ⚙️ **Tùy chỉnh Cài Đặt Ván Premium** (Thời gian Thảo Luận, Thời gian Đêm & Hiện vai trò người chết).\n"
             f"3. 🎭 **Đặc quyền Phân Vai Tùy Chỉnh** (Mở khóa menu Custom Roles trong Cài Đặt).\n"
-            f"4. 👑 **Huy hiệu VIP [👑 VIP]** hiển thị lộng lẫy bên cạnh tên.\n"
+            f"4. <a:2336vipgif:1534596901834592286> **Huy hiệu VIP [<a:2336vipgif:1534596901834592286> VIP]** hiển thị lộng lẫy bên cạnh tên.\n"
             f"5. 💬 **Lời trăn trối cá nhân** tự động phát khi qua đời.\n\n"
             f"📌 *Liên hệ Ban Quản Trị để đăng ký kích hoạt gói VIP Ma Sói.*"
         )
-        return make_embed(title="👑 Thẻ VIP Ma Sói", description=desc, color=discord.Color.gold())
+        return make_embed(title="<a:2336vipgif:1534596901834592286> Thẻ VIP Ma Sói", description=desc, color=discord.Color.gold())
 
         white_bar = make_bar(white_votes, total_votes) if total_votes > 0 else "▒▒▒▒▒▒▒▒"
         lines.append(f"• 🏳️ **Phiếu trắng**: `{white_bar}` **({white_votes} phiếu)**")
@@ -2250,7 +2250,7 @@ class Masoi(commands.Cog):
                         if eco:
                             vip_info = eco.get_masoi_vip_info(p.user_id)
                             if vip_info["is_vip"] and vip_info["last_words"]:
-                                quotes.append(f"💬 *Lời trăn trối của 👑 **{p.display_name}**: \"{vip_info['last_words']}\"*")
+                                quotes.append(f"💬 *Lời trăn trối của <a:2336vipgif:1534596901834592286> **{p.display_name}**: \"{vip_info['last_words']}\"*")
 
                     quote_str = ("\n\n" + "\n".join(quotes)) if quotes else ""
                     day_msg_text = "Đêm qua trôi qua đầy đau thương... Các nạn nhân đã ra đi:\n" + "\n".join(death_names) + quote_str
@@ -2338,7 +2338,7 @@ class Masoi(commands.Cog):
                     if eco:
                         vip_info = eco.get_masoi_vip_info(p.user_id)
                         if vip_info["is_vip"] and vip_info["last_words"]:
-                            exec_text += f"\n\n💬 *Lời trăn trối của 👑 **{p.display_name}**: \"{vip_info['last_words']}\"*"
+                            exec_text += f"\n\n💬 *Lời trăn trối của <a:2336vipgif:1534596901834592286> **{p.display_name}**: \"{vip_info['last_words']}\"*"
                 else:
                     last_log = game.replay_logs[-1] if game.replay_logs else None
                     if last_log and last_log.event_type == "VOTE_RESULT":
