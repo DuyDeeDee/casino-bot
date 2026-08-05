@@ -1336,7 +1336,7 @@ class ReplayView(discord.ui.View):
 SETTINGS_FILE = Path(__file__).resolve().parent.parent.parent / "data" / "masoi_settings.json"
 
 
-MASOI_CREATE_FEE = 1  # 1 Thỏi vàng (Credits)
+MASOI_CREATE_FEE = 2  # 2 Thỏi vàng (Credits)
 
 
 class Masoi(commands.Cog):
@@ -1394,7 +1394,7 @@ class Masoi(commands.Cog):
     @commands.command(
         name="masoi",
         aliases=["werewolf", "ma-soi"],
-        brief="Tạo phòng chờ chơi game Ma Sói (Werewolf). Phí tạo phòng: 1 thỏi vàng (Miễn phí cho VIP).",
+        brief="Tạo phòng chờ chơi game Ma Sói (Werewolf). Phí tạo phòng: 2 thỏi vàng (Miễn phí cho VIP).",
         usage="masoi",
     )
     async def masoi_cmd(self, ctx: commands.Context):
@@ -1409,14 +1409,14 @@ class Masoi(commands.Cog):
             balance = eco.get_entry(ctx.author.id)[2]  # Index 2 là số thỏi Vàng
             if balance < MASOI_CREATE_FEE:
                 await ctx.send(
-                    f"❌ **{ctx.author.display_name}**, bạn cần tối thiểu **1 thỏi vàng** để tạo phòng chờ Ma Sói!\n"
+                    f"❌ **{ctx.author.display_name}**, bạn cần tối thiểu **2 thỏi vàng** để tạo phòng chờ Ma Sói!\n"
                     f"🏆 Số dư Vàng hiện tại của bạn: **{balance:,} thỏi**\n"
                     f"💡 *Mẹo: Sở hữu gói VIP Ma Sói (`!masoi vip`) để được miễn phí tạo phòng 100%!*"
                 )
                 return
-            # Trừ phí 1 thỏi Vàng khi tạo phòng
+            # Trừ phí 2 thỏi Vàng khi tạo phòng
             eco.add_credits(ctx.author.id, -MASOI_CREATE_FEE)
-            msg_text = f"<a:yay:1533444499827851505> **{ctx.author.display_name}** đã trả **1 thỏi vàng** phí tạo phòng Ma Sói!"
+            msg_text = f"<a:yay:1533444499827851505> **{ctx.author.display_name}** đã trả **2 thỏi vàng** phí tạo phòng Ma Sói!"
         elif is_vip:
             msg_text = f"<a:2336vipgif:1534596901834592286> **{ctx.author.display_name}** *(<a:2336vipgif:1534596901834592286> VIP Ma Sói)* được **miễn phí tạo phòng**!"
         else:
@@ -1618,7 +1618,7 @@ class Masoi(commands.Cog):
             eco = self.get_economy()
             if eco:
                 eco.add_credits(game.host_id, MASOI_CREATE_FEE)
-                refund_text = f"\n<a:muiten:1533428497098473623> Đã hoàn lại **1 thỏi vàng** cho Host **{game.host_name}**."
+                refund_text = f"\n<a:muiten:1533428497098473623> Đã hoàn lại **2 thỏi vàng** cho Host **{game.host_name}**."
 
         embed = make_embed(
             title="<a:luuy:1533429265293508888> ĐÃ HỦY VÁN MA SÓI",
@@ -1724,7 +1724,7 @@ class Masoi(commands.Cog):
             value=f"{divider}\n<a:muiten:1533428497098473623> *Bấm **Tham gia** để vào ván, chủ phòng bấm **Bắt đầu** khi đủ 5 người trở lên.*",
             inline=False
         )
-        embed.set_footer(text=" Phí tạo phòng: 1 thỏi vàng (Miễn phí cho VIP)")
+        embed.set_footer(text=" Phí tạo phòng: 2 thỏi vàng (Miễn phí cho VIP)")
         return embed
 
     def build_settings_embed(self, game: MasoiGame) -> discord.Embed:
@@ -1809,7 +1809,7 @@ class Masoi(commands.Cog):
             f"• **Lời trăn trối VIP:** {last_words}\n\n"
             f"──────────────────────────────────────\n"
             f"🎁 **ĐẶC QUYỀN VIP MA SÓI:**\n"
-            f"1. 🆓 **Miễn phí 100% Phí Tạo Phòng** (Không tốn 1 Thỏi Vàng khi mở bàn).\n"
+            f"1. 🆓 **Miễn phí 100% Phí Tạo Phòng** (Không tốn 2 Thỏi Vàng khi mở bàn).\n"
             f"2. ⚙️ **Tùy chỉnh Cài Đặt Ván Premium** (Thời gian Thảo Luận, Thời gian Đêm & Hiện vai trò người chết).\n"
             f"3. 🎭 **Đặc quyền Phân Vai Tùy Chỉnh** (Mở khóa menu Custom Roles trong Cài Đặt).\n"
             f"4. <a:2336vipgif:1534596901834592286> **Huy hiệu VIP [<a:2336vipgif:1534596901834592286> VIP]** hiển thị lộng lẫy bên cạnh tên.\n"
