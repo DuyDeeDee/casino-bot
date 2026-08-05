@@ -1424,6 +1424,10 @@ class Masoi(commands.Cog):
 
         game = MasoiGame(ctx.guild.id, ctx.channel.id, ctx.author.id, ctx.author.display_name)
         game.settings = self.get_saved_settings(ctx.guild.id, ctx.channel.id)
+        if not is_vip:
+            game.settings.reveal_roles_on_death = False
+            game.settings.discussion_time = 120
+            game.settings.night_time = 60
         game.add_player(ctx.author.id, ctx.author.display_name)
         self.active_games[key] = game
 
