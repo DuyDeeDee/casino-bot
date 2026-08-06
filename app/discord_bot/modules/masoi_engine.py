@@ -462,11 +462,18 @@ class MasoiGame:
         self.replay_logs.append(log)
 
     def resolve_wolf_targets(self) -> List[int]:
-        """Tính phiếu cắn của bầy Sói (1 hoặc 2 mục tiêu nếu wolf_fury_active)."""
+        """Tính phiếu cắn của bầy Sói (1 hoặc 2 mục tiêu nếu wolf_fury_active).
+        Bỏ qua phiếu của Sói bị Gái Điếm phong tỏa (is_roleblocked).
+        """
         if not self.night_wolf_votes:
             return []
         counts: Dict[int, int] = {}
-        for target in self.night_wolf_votes.values():
+        for wolf_id, target in self.night_wolf_votes.items():
+            wolf_p = self.players.get(wolf_id)
+            if wolf_p and wolf_p.is_roleblocked:
+                # Sói bị Gái Điếm phong tỏa -> phiếu không có hiệu lực
+                self.record_log("WOLF_ROLEBLOCKED", actor_id=wolf_id, result="Sói bị Gái Điếm phong tỏa, không thể cắn đêm nay")
+                continue
             counts[target] = counts.get(target, 0) + 1
         sorted_targets = sorted(counts.items(), key=lambda x: x[1], reverse=True)
         if not sorted_targets:
@@ -698,12 +705,17 @@ class MasoiGame:
         for uid, player in self.players.items():
             pts = 0
             # Điểm thắng/thua theo phe
+            # Kẻ Bị Nguyền đã convert thành Sói -> tính là thắng cùng phe Sói
+            is_cursed_wolf_win = (
+                player.is_cursed_converted
+                and self.winner_faction == Faction.WEREWOLF
+            )
             if self.winner_faction == Faction.INDEPENDENT:
                 if uid == self.tanner_winner_id:
                     pts += 25
                 else:
                     pts += 2
-            elif player.role.faction == self.winner_faction:
+            elif player.role.faction == self.winner_faction or is_cursed_wolf_win:
                 pts += 10
             else:
                 pts += 2

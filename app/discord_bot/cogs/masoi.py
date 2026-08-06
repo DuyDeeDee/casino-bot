@@ -1822,24 +1822,6 @@ class Masoi(commands.Cog):
         )
         return make_embed(title="<a:2336vipgif:1534596901834592286> Thẻ VIP Ma Sói", description=desc, color=discord.Color.gold())
 
-        white_bar = make_bar(white_votes, total_votes) if total_votes > 0 else "▒▒▒▒▒▒▒▒"
-        lines.append(f"• 🏳️ **Phiếu trắng**: `{white_bar}` **({white_votes} phiếu)**")
-
-        divider = "──────────────────────────────────────"
-
-        if not is_final and game.settings.vote_display == "END_ONLY":
-            desc = f"⚖️ **Đang diễn ra bỏ phiếu...**\n_(Số phiếu hiện đang ẩn tới khi kết thúc giờ bỏ phiếu)_\n\n{divider}\n<:ghim:1526238405061640272> *Bấm menu bên dưới để chọn người bạn nghi ngờ.*"
-        else:
-            header_str = "⚖️ **KẾT QUẢ BỎ PHIẾU TREO CỔ**" if is_final else "⚖️ **DIỄN BIẾN BỎ PHIẾU REAL-TIME**"
-            desc = f"{header_str}\n\n" + "\n".join(lines) + f"\n\n{divider}\n<:ghim:1526238405061640272> *Bấm menu bên dưới để bỏ phiếu người nghi ngờ là Sói.*"
-
-        embed = discord.Embed(
-            title=f"⚖️ Bỏ Phiếu Treo Cổ — Ngày {game.day_count}",
-            description=desc,
-            color=discord.Color(0xE0A638)
-        )
-        return embed
-
     def build_rankboard_embed(self) -> discord.Embed:
         eco = self.get_economy()
         if not eco:
@@ -2443,7 +2425,11 @@ class Masoi(commands.Cog):
         if eco and game.settings.enable_rank:
             for uid, pts in rank_pts.items():
                 p = game.players[uid]
-                is_win = (p.role.faction == game.winner_faction) or (uid == game.tanner_winner_id)
+                is_win = (
+                    (p.role.faction == game.winner_faction)
+                    or (uid == game.tanner_winner_id)
+                    or (p.is_cursed_converted and game.winner_faction == Faction.WEREWOLF)
+                )
                 faction_str = p.role.faction.name
                 eco.add_masoi_points(uid, pts, is_win, faction_str)
 
