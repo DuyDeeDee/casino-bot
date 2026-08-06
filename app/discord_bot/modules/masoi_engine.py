@@ -676,6 +676,9 @@ class MasoiGame:
             if lover_p.is_alive:
                 lover_p.is_alive = False
                 self.record_log("LOVER_DEATH", target_id=lover_p.user_id, result="Chết vì đau thương do tình nhân bị treo cổ")
+                if lover_p.role == Role.WOLF_CUB:
+                    self.wolf_fury_pending = True
+                    self.record_log("WOLF_CUB_RAGE", actor_id=lover_p.user_id, result="Sói Cuồng Sát qua đời do tình nhân bị treo cổ, bầy Sói sục sôi cuồng nộ cho đêm sau!")
 
         return executed_id
 

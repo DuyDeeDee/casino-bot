@@ -700,7 +700,10 @@ class NightInvestigatorView(discord.ui.View):
             name1 = p1.display_name if p1 else "Người 1"
             name2 = p2.display_name if p2 else "Người 2"
 
-            has_wolf = bool((p1 and p1.is_wolf) or (p2 and p2.is_wolf))
+            has_wolf = bool(
+                (p1 and (p1.is_wolf or p1.role == Role.LYCAN))
+                or (p2 and (p2.is_wolf or p2.role == Role.LYCAN))
+            )
             if has_wolf:
                 res_str = f"⚠️ Trong **{name1}** và **{name2}** — **CÓ ÍT NHẤT 1 SÓI**!"
             else:
@@ -754,8 +757,12 @@ class NightWolfSeerView(discord.ui.View):
         target_id = self.selected_target_id
         self.game.night_wolf_seer_target = target_id
         target_p = self.game.players.get(target_id)
-        
-        if target_p:
+        ws_p = self.game.players.get(self.wolf_seer_id)
+
+        if ws_p and ws_p.is_roleblocked:
+            res_str = "❌ **Kỹ năng của bạn đã bị phong tỏa đêm nay!** (Do bị Gái Điếm ghé thăm)"
+            name = target_p.display_name if target_p else "Mục tiêu"
+        elif target_p:
             res_str = f"🔮 **{target_p.display_name}** có vai trò: {target_p.role.emoji} **{target_p.role.value}**"
             self.game.night_wolf_seer_result = res_str
             name = target_p.display_name
@@ -1097,11 +1104,17 @@ class NightHunterView(discord.ui.View):
         if target_p and target_p.is_alive:
             target_p.is_alive = False
             self.game.record_log("HUNTER_SHOOT", actor_id=self.hunter_id, target_id=target_id, result="Thợ Săn kéo theo bắn gục")
+            if target_p.role == Role.WOLF_CUB:
+                self.game.wolf_fury_pending = True
+                self.game.record_log("WOLF_CUB_RAGE", actor_id=target_p.user_id, result="Sói Cuồng Sát bị Thợ Săn bắn gục, bầy Sói sục sôi cuồng nộ cho đêm sau!")
             if getattr(target_p, "lover_id", None) and target_p.lover_id in self.game.players:
                 lover_p = self.game.players[target_p.lover_id]
                 if lover_p.is_alive:
                     lover_p.is_alive = False
                     self.game.record_log("LOVER_DEATH", target_id=lover_p.user_id, result="Chết vì đau thương do tình nhân bị Thợ Săn bắn")
+                    if lover_p.role == Role.WOLF_CUB:
+                        self.game.wolf_fury_pending = True
+                        self.game.record_log("WOLF_CUB_RAGE", actor_id=lover_p.user_id, result="Sói Cuồng Sát qua đời do tình nhân bị Thợ Săn bắn, bầy Sói sục sôi cuồng nộ cho đêm sau!")
 
         name = target_p.display_name if target_p else "Mục tiêu"
         self.stop()
@@ -1633,9 +1646,16 @@ class Masoi(commands.Cog):
 
 
     async def check_and_trigger_hunter(self, game: MasoiGame, channel: discord.TextChannel):
-        """Kiểm tra và kích hoạt lượt bắn kéo theo của Thợ Săn khi bị loại."""
-        for p in list(game.players.values()):
-            if p.role == Role.HUNTER and not p.is_alive and not getattr(p, "hunter_shot_used", False):
+        """Kiểm tra và kích hoạt lượt bắn kéo theo của Thợ Săn khi bị loại (hỗ trợ bắn dây chuyền)."""
+        while True:
+            pending_hunters = [
+                p for p in game.players.values()
+                if p.role == Role.HUNTER and not p.is_alive and not getattr(p, "hunter_shot_used", False)
+            ]
+            if not pending_hunters:
+                break
+
+            for p in pending_hunters:
                 p.hunter_shot_used = True
                 h_user = self.bot.get_user(p.user_id)
                 view = NightHunterView(game, p.user_id)
