@@ -213,7 +213,7 @@ class SettingsView(discord.ui.View):
             await interaction.response.send_message(
                 f"❌ **TÍNH NĂNG CHỈ DÀNH CHO VIP HOST!**\n"
                 f"Thay đổi **{feature_name}** chỉ dành cho Host có gói VIP Ma Sói.\n"
-                f"👉 Dùng lệnh **`!masoi vip`** để nâng cấp gói VIP!",
+                f"👉 Dùng lệnh **`!masoivip`** để nâng cấp gói VIP!",
                 ephemeral=True
             )
             return False
@@ -1663,7 +1663,10 @@ class Masoi(commands.Cog):
         brief="Tạo phòng chờ chơi game Ma Sói (Werewolf). Phí tạo phòng: 2 thỏi vàng (Miễn phí cho VIP).",
         usage="masoi",
     )
-    async def masoi_cmd(self, ctx: commands.Context):
+    async def masoi_cmd(self, ctx: commands.Context, *, sub_command: str = ""):
+        if sub_command.strip().lower() in ("vip", "v"):
+            return await self.masoivip_cmd(ctx)
+
         key = f"{ctx.guild.id}-{ctx.channel.id}"
         if key in self.active_games:
             await ctx.send("❌ Đã có một ván Ma Sói đang diễn ra hoặc trong phòng chờ ở kênh này!")
@@ -1677,7 +1680,7 @@ class Masoi(commands.Cog):
                 await ctx.send(
                     f"❌ **{ctx.author.display_name}**, bạn cần tối thiểu **2 thỏi vàng** để tạo phòng chờ Ma Sói!\n"
                     f"🏆 Số dư Vàng hiện tại của bạn: **{balance:,} thỏi**\n"
-                    f"💡 *Mẹo: Sở hữu gói VIP Ma Sói (`!masoi vip`) để được miễn phí tạo phòng 100%!*"
+                    f"💡 *Mẹo: Sở hữu gói VIP Ma Sói (`!masoivip`) để được miễn phí tạo phòng 100%!*"
                 )
                 return
             # Trừ phí 2 thỏi Vàng khi tạo phòng
@@ -1726,7 +1729,7 @@ class Masoi(commands.Cog):
     async def setquote_cmd(self, ctx: commands.Context, *, text: str = ""):
         eco = self.get_economy()
         if not eco or not eco.is_masoi_vip(ctx.author.id):
-            await ctx.send("❌ **Tính năng Lời trăn trối chỉ dành cho VIP Ma Sói!**\nHãy dùng lệnh `!masoi vip` để nâng cấp gói VIP.")
+            await ctx.send("❌ **Tính năng Lời trăn trối chỉ dành cho VIP Ma Sói!**\nHãy dùng lệnh `!masoivip` để nâng cấp gói VIP.")
             return
 
         if not text:
