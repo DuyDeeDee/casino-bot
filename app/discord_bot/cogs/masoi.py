@@ -213,7 +213,7 @@ class SettingsView(discord.ui.View):
             await interaction.response.send_message(
                 f"❌ **TÍNH NĂNG CHỈ DÀNH CHO VIP HOST!**\n"
                 f"Thay đổi **{feature_name}** chỉ dành cho Host có gói VIP Ma Sói.\n"
-                f"👉 Dùng lệnh **`!masoivip`** để nâng cấp gói VIP!",
+                f"👉 Dùng lệnh **`i?masoivip`** để nâng cấp gói VIP!",
                 ephemeral=True
             )
             return False
@@ -410,7 +410,7 @@ class CustomRolesConfigView(discord.ui.View):
             await interaction.response.send_message(
                 "❌ **TÍNH NĂNG CHỈ DÀNH CHO VIP HOST!**\n"
                 "Tính năng **Tùy Chỉnh Vai Trò (`CUSTOM`)** chỉ dành cho Host có gói VIP Ma Sói.\n"
-                "👉 Dùng lệnh **`!masoi vip`** để nâng cấp gói VIP!",
+                "👉 Dùng lệnh **`i?masoivip`** để nâng cấp gói VIP!",
                 ephemeral=True
             )
             self.game.settings.role_setup_mode = "AUTO"
@@ -1680,7 +1680,7 @@ class Masoi(commands.Cog):
                 await ctx.send(
                     f"❌ **{ctx.author.display_name}**, bạn cần tối thiểu **2 thỏi vàng** để tạo phòng chờ Ma Sói!\n"
                     f"🏆 Số dư Vàng hiện tại của bạn: **{balance:,} thỏi**\n"
-                    f"💡 *Mẹo: Sở hữu gói VIP Ma Sói (`!masoivip`) để được miễn phí tạo phòng 100%!*"
+                    f"💡 *Mẹo: Sở hữu gói VIP Ma Sói (`{ctx.prefix}masoivip`) để được miễn phí tạo phòng 100%!*"
                 )
                 return
             # Trừ phí 2 thỏi Vàng khi tạo phòng
@@ -1729,11 +1729,11 @@ class Masoi(commands.Cog):
     async def setquote_cmd(self, ctx: commands.Context, *, text: str = ""):
         eco = self.get_economy()
         if not eco or not eco.is_masoi_vip(ctx.author.id):
-            await ctx.send("❌ **Tính năng Lời trăn trối chỉ dành cho VIP Ma Sói!**\nHãy dùng lệnh `!masoivip` để nâng cấp gói VIP.")
+            await ctx.send(f"❌ **Tính năng Lời trăn trối chỉ dành cho VIP Ma Sói!**\nHãy dùng lệnh `{ctx.prefix}masoivip` để nâng cấp gói VIP.")
             return
 
         if not text:
-            await ctx.send("❌ Vui lòng nhập nội dung lời trăn trối! VD: `!setquote Vĩnh biệt dân làng!`")
+            await ctx.send(f"❌ Vui lòng nhập nội dung lời trăn trối! VD: `{ctx.prefix}setquote Vĩnh biệt dân làng!`")
             return
 
         eco.set_masoi_last_words(ctx.author.id, text)
