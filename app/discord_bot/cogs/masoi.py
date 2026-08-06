@@ -1638,13 +1638,15 @@ class Masoi(commands.Cog):
             if p.role == Role.HUNTER and not p.is_alive and not getattr(p, "hunter_shot_used", False):
                 p.hunter_shot_used = True
                 h_user = self.bot.get_user(p.user_id)
+                view = NightHunterView(game, p.user_id)
+                hunter_shot_target_id = None
+
                 if h_user:
                     embed_hunter = discord.Embed(
                         title="🏹 Lượt của Thợ Săn — Kéo theo 1 người",
                         description=f"Bạn đã bị loại! Hãy chọn 1 người để kéo theo chết cùng. Còn **{game.settings.night_time} giây** để quyết định.",
                         color=discord.Color(0xE0A638)
                     )
-                    view = NightHunterView(game, p.user_id)
                     try:
                         await h_user.send(embed=embed_hunter, view=view)
                         elapsed = 0
@@ -1653,8 +1655,33 @@ class Masoi(commands.Cog):
                                 break
                             await asyncio.sleep(1)
                             elapsed += 1
+                        if view.is_finished():
+                            hunter_shot_target_id = view.selected_target_id
                     except Exception:
                         pass
+
+                # Thông báo kết quả ra channel chính
+                if hunter_shot_target_id:
+                    shot_p = game.players.get(hunter_shot_target_id)
+                    if shot_p:
+                        role_str = f" *({shot_p.role.emoji} {shot_p.role.value})*" if game.settings.reveal_roles_on_death else ""
+                        embed_announce = discord.Embed(
+                            title="🏹 Thợ Săn Kéo Theo!",
+                            description=(
+                                f"🏹 **{p.display_name}** dùng phát bắn cuối cùng kéo theo "
+                                f"**{shot_p.display_name}**{role_str} cùng ra đi!"
+                            ),
+                            color=discord.Color(0xE0A638)
+                        )
+                        await _safe_send(channel, embed=embed_announce)
+                else:
+                    embed_announce = discord.Embed(
+                        title="🏹 Thợ Săn",
+                        description=f"🏹 **{p.display_name}** đã không dùng phát bắn cuối cùng.",
+                        color=discord.Color(0xE0A638)
+                    )
+                    await _safe_send(channel, embed=embed_announce)
+
 
     async def check_and_trigger_mayor_succession(self, game: MasoiGame, channel: discord.TextChannel):
         """Kiểm tra nếu Thị Trưởng vừa qua đời -> Gửi DM cho Thị Trưởng chọn người kế nhiệm."""

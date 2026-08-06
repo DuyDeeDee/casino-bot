@@ -478,8 +478,26 @@ class MasoiGame:
         sorted_targets = sorted(counts.items(), key=lambda x: x[1], reverse=True)
         if not sorted_targets:
             return []
-        if self.wolf_fury_active and len(sorted_targets) >= 2:
-            return [sorted_targets[0][0], sorted_targets[1][0]]
+        if self.wolf_fury_active:
+            if len(sorted_targets) >= 2:
+                # Hai mục tiêu khác nhau -> cắn cả 2
+                return [sorted_targets[0][0], sorted_targets[1][0]]
+            else:
+                # Cả bầy đồng thuận 1 người -> chọn ngẫu nhiên nạn nhân thứ 2
+                first_target = sorted_targets[0][0]
+                possible_second = [
+                    p.user_id for p in self.players.values()
+                    if p.is_alive and not p.is_wolf and p.user_id != first_target
+                ]
+                if possible_second:
+                    second_target = random.choice(possible_second)
+                    self.record_log(
+                        "WOLF_FURY_RANDOM",
+                        target_id=second_target,
+                        result="Sói Cuồng Sát: bầy sói chọn ngẫu nhiên mục tiêu thứ 2 do đồng thuận"
+                    )
+                    return [first_target, second_target]
+                return [first_target]
         return [sorted_targets[0][0]]
 
     def resolve_wolf_target(self) -> Optional[int]:
