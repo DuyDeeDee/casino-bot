@@ -1866,11 +1866,26 @@ class Masoi(commands.Cog):
             await ctx.send(f"❌ Vui lòng nhập huy hiệu/emoji cần đặt! VD: `{ctx.prefix}setmasoibadge @user 🔥`")
             return
 
-        # Tự động tìm Emoji từ tên (không phân biệt hoa/thường)
-        clean_name = badge.strip(":").strip().lower()
-        matched_emoji = next((e for e in self.bot.emojis if e.name.lower() == clean_name), None)
+        # 1. Tìm Emoji trong danh sách của Bot theo ID hoặc theo Tên (không phân biệt hoa/thường)
+        matched_emoji = None
+        if badge.isdigit():
+            matched_emoji = discord.utils.get(self.bot.emojis, id=int(badge))
+        elif badge.startswith("<") and badge.endswith(">"):
+            parts = badge.strip("<>").split(":")
+            if len(parts) == 3 and parts[2].isdigit():
+                matched_emoji = discord.utils.get(self.bot.emojis, id=int(parts[2]))
+
+        if not matched_emoji:
+            clean_name = badge.strip(":").strip().lower()
+            matched_emoji = next((e for e in self.bot.emojis if e.name.lower() == clean_name), None)
+
         if matched_emoji:
             badge = str(matched_emoji)
+        elif badge.startswith("<:") and badge.endswith(">"):
+            # Nếu người dùng truyền nhầm nhãn tĩnh <:name:id> cho emoji động GIF, tự sửa thành <a:name:id>
+            parts = badge.strip("<>").split(":")
+            if len(parts) == 3:
+                badge = f"<a:{parts[1]}:{parts[2]}>"
 
         eco.set_masoi_custom_badge(member.id, badge)
         await ctx.send(f"🎖️ **Đã cài đặt huy hiệu tự chọn thành công cho {member.mention}!**\n> Hiển thị: {badge} **{member.display_name}**")
