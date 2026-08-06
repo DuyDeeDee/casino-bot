@@ -1866,9 +1866,9 @@ class Masoi(commands.Cog):
             await ctx.send(f"❌ Vui lòng nhập huy hiệu/emoji cần đặt! VD: `{ctx.prefix}setmasoibadge @user 🔥`")
             return
 
-        # Tự động tìm Emoji từ tên (nếu người dùng nhập tên emoji của Bot)
-        clean_name = badge.strip(":").strip()
-        matched_emoji = discord.utils.get(self.bot.emojis, name=clean_name)
+        # Tự động tìm Emoji từ tên (không phân biệt hoa/thường)
+        clean_name = badge.strip(":").strip().lower()
+        matched_emoji = next((e for e in self.bot.emojis if e.name.lower() == clean_name), None)
         if matched_emoji:
             badge = str(matched_emoji)
 
