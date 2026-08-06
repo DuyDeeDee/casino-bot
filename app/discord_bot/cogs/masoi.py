@@ -2235,6 +2235,35 @@ class Masoi(commands.Cog):
                 await self.check_and_trigger_hunter(game, message.channel)
                 await self.check_and_trigger_mayor_succession(game, message.channel)
 
+                # Thông báo DM cho Kẻ Bị Nguyền vừa biến thành Sói đêm này
+                for p in game.players.values():
+                    if (
+                        p.is_alive
+                        and p.role == Role.CURSED
+                        and p.is_cursed_converted
+                        and not p.cursed_notified
+                    ):
+                        p.cursed_notified = True
+                        cursed_user = await self.get_or_fetch_user(p.user_id)
+                        if cursed_user:
+                            wolf_teammates = [
+                                w.display_name
+                                for w in game.get_alive_wolves()
+                                if w.user_id != p.user_id
+                            ]
+                            teammates_str = (
+                                ", ".join(f"**{n}**" for n in wolf_teammates)
+                                if wolf_teammates else "*Bạn là Sói duy nhất còn sống!*"
+                            )
+                            try:
+                                await cursed_user.send(
+                                    f"🌕🐺 **Bạn đã bị Nguyền và biến thành SÓI!**\n"
+                                    f"> Bầy Sói đã cắn bạn đêm qua \u2014 từ đêm sau bạn là **SÓI** rồi!\n"
+                                    f"> 👥 Đồng đội Sói: {teammates_str}"
+                                )
+                            except Exception:
+                                pass
+
                 # ── BƯỚC 2: CÔNG BỐ BAN NGÀY ──
                 game.phase = GamePhase.DAY_ANNOUNCE
                 game.start_day()

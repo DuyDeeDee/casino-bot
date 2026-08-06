@@ -203,6 +203,7 @@ class MasoiPlayer:
         self.lover_id: Optional[int] = None  # user_id tình nhân (Thần tình yêu ghép đôi)
         self.hunter_shot_used: bool = False  # Thợ săn đã dùng phát bắn kéo theo chưa
         self.is_cursed_converted: bool = False  # Kẻ Bị Nguyền đã biến thành Sói chưa
+        self.cursed_notified: bool = False  # Đã gửi DM thông báo biến thành Sói chưa
         self.elder_lives: int = 2  # Già Làng có 2 mạng trước đòn cắn của Sói
         self.is_roleblocked: bool = False  # Bị Gái Điếm phong tỏa kỹ năng đêm
         self.apprentice_promoted: bool = False  # Tiên Tri Tập Sự đã kế thừa vị trí Tiên Tri
