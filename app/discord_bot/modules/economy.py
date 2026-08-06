@@ -12,7 +12,7 @@ from app.config import config
 Entry = Tuple[int, int, int]
 DATABASE_PATH = Path(config.storage.database_path)
 LEGACY_DATABASE_PATH = Path(__file__).resolve().parents[3] / "economy.db"
-SCHEMA_VERSION = 41
+SCHEMA_VERSION = 42
 
 
 logger = logging.getLogger(__name__)
@@ -3088,8 +3088,16 @@ class Economy:
         )
         return self.cur.fetchall()
 
+    def _ensure_custom_badge_column(self):
+        try:
+            self.cur.execute("ALTER TABLE user_masoi_stats ADD COLUMN custom_badge TEXT DEFAULT ''")
+            self.conn.commit()
+        except sqlite3.OperationalError:
+            pass
+
     def set_masoi_custom_badge(self, user_id: int, badge: str) -> bool:
         """Cài đặt huy hiệu tự chọn hiển thị cho người chơi trong game Ma Sói."""
+        self._ensure_custom_badge_column()
         self.cur.execute("SELECT points FROM user_masoi_stats WHERE user_id = ?", (user_id,))
         if not self.cur.fetchone():
             self.cur.execute("INSERT INTO user_masoi_stats (user_id, custom_badge) VALUES (?, ?)", (user_id, badge))
@@ -3105,10 +3113,12 @@ class Economy:
             row = self.cur.fetchone()
             return row[0] if row and row[0] else ""
         except sqlite3.OperationalError:
+            self._ensure_custom_badge_column()
             return ""
 
     def remove_masoi_custom_badge(self, user_id: int) -> bool:
         """Xóa huy hiệu tự chọn của người chơi trong game Ma Sói."""
+        self._ensure_custom_badge_column()
         try:
             self.cur.execute("UPDATE user_masoi_stats SET custom_badge = '' WHERE user_id = ?", (user_id,))
             self.conn.commit()
