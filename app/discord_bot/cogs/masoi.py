@@ -1839,6 +1839,62 @@ class Masoi(commands.Cog):
         await ctx.send(embed=embed)
 
     @commands.command(
+        name="setmasoibadge",
+        aliases=["setbadge", "setmasoihuyhieu", "sethuyhieu"],
+        brief="[Admin/Owner] Đặt huy hiệu tự chọn hiển thị cho người chơi trong Ma Sói (Không cấp quyền VIP).",
+        usage="setmasoibadge @user <huy_hiệu/emoji>",
+        hidden=True,
+    )
+    async def setmasoibadge_cmd(self, ctx: commands.Context, member: discord.Member, *, badge: str = ""):
+        is_admin = False
+        if hasattr(ctx.author, "guild_permissions"):
+            perms = ctx.author.guild_permissions
+            is_admin = perms.administrator or perms.manage_guild
+        is_owner = await self.bot.is_owner(ctx.author)
+
+        if not (is_admin or is_owner):
+            await ctx.send("❌ Chỉ Quản trị viên hoặc Bot Owner mới có quyền dùng lệnh này!")
+            return
+
+        eco = self.get_economy()
+        if not eco:
+            await ctx.send("❌ Không kết nối được Database!")
+            return
+
+        if not badge:
+            await ctx.send(f"❌ Vui lòng nhập huy hiệu/emoji cần đặt! VD: `{ctx.prefix}setmasoibadge @user 🔥`")
+            return
+
+        eco.set_masoi_custom_badge(member.id, badge)
+        await ctx.send(f"🎖️ **Đã cài đặt huy hiệu tự chọn thành công cho {member.mention}!**\n> Displays: {badge} **{member.display_name}**")
+
+    @commands.command(
+        name="removemasoibadge",
+        aliases=["delbadge", "delmasoibadge", "removebadge", "huyhuyhieu"],
+        brief="[Admin/Owner] Xóa huy hiệu tự chọn của người chơi trong Ma Sói.",
+        usage="removemasoibadge @user",
+        hidden=True,
+    )
+    async def removemasoibadge_cmd(self, ctx: commands.Context, member: discord.Member):
+        is_admin = False
+        if hasattr(ctx.author, "guild_permissions"):
+            perms = ctx.author.guild_permissions
+            is_admin = perms.administrator or perms.manage_guild
+        is_owner = await self.bot.is_owner(ctx.author)
+
+        if not (is_admin or is_owner):
+            await ctx.send("❌ Chỉ Quản trị viên hoặc Bot Owner mới có quyền dùng lệnh này!")
+            return
+
+        eco = self.get_economy()
+        if not eco:
+            await ctx.send("❌ Không kết nối được Database!")
+            return
+
+        eco.remove_masoi_custom_badge(member.id)
+        await ctx.send(f"⭕ **Đã xóa huy hiệu tự chọn của {member.mention} thành công!**")
+
+    @commands.command(
         name="masoirank",
         aliases=["masoirankboard", "masoi-rank"],
         brief="Xem Bảng Xếp Hạng Rank Ma Sói.",
@@ -1996,11 +2052,13 @@ class Masoi(commands.Cog):
         player_lines = []
         eco = self.get_economy()
         for p in game.players.values():
+            custom_badge = eco.get_masoi_custom_badge(p.user_id) if eco else ""
             vip_tag = "<a:2336vipgif:1534596901834592286> " if (eco and eco.is_masoi_vip(p.user_id)) else ""
+            badge_str = f"{custom_badge} " if custom_badge else vip_tag
             if p.user_id == game.host_id:
-                player_lines.append(f"<a:wing:1526230985987981393> {vip_tag}**{p.display_name}** *(chủ phòng)*")
+                player_lines.append(f"<a:wing:1526230985987981393> {badge_str}**{p.display_name}** *(chủ phòng)*")
             else:
-                player_lines.append(f"<a:wing:1526230985987981393> {vip_tag}**{p.display_name}**")
+                player_lines.append(f"<a:wing:1526230985987981393> {badge_str}**{p.display_name}**")
 
         players_str = "\n".join(player_lines) if player_lines else "_Chưa có người chơi nào._"
         divider = "──────────────────────────────────────"

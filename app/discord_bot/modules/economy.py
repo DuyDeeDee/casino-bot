@@ -726,6 +726,13 @@ def _migration_41_add_masoi_vip_table(cur: sqlite3.Cursor) -> None:
         pass
 
 
+def _migration_42_add_masoi_custom_badge(cur: sqlite3.Cursor) -> None:
+    try:
+        cur.execute("ALTER TABLE user_masoi_stats ADD COLUMN custom_badge TEXT DEFAULT ''")
+    except sqlite3.OperationalError:
+        pass
+
+
 def _migration_40_add_masoi_tables(cur: sqlite3.Cursor) -> None:
     try:
         cur.execute(
@@ -737,7 +744,8 @@ def _migration_40_add_masoi_tables(cur: sqlite3.Cursor) -> None:
             losses INTEGER NOT NULL DEFAULT 0,
             wolf_wins INTEGER NOT NULL DEFAULT 0,
             villager_wins INTEGER NOT NULL DEFAULT 0,
-            tanner_wins INTEGER NOT NULL DEFAULT 0
+            tanner_wins INTEGER NOT NULL DEFAULT 0,
+            custom_badge TEXT DEFAULT ''
         )"""
         )
     except sqlite3.OperationalError:
@@ -786,6 +794,7 @@ MIGRATIONS: dict[int, Callable[[sqlite3.Cursor], None]] = {
     39: _migration_39_add_user_topups_table,
     40: _migration_40_add_masoi_tables,
     41: _migration_41_add_masoi_vip_table,
+    42: _migration_42_add_masoi_custom_badge,
 }
 
 
@@ -3078,6 +3087,34 @@ class Economy:
             (now,)
         )
         return self.cur.fetchall()
+
+    def set_masoi_custom_badge(self, user_id: int, badge: str) -> bool:
+        """Cài đặt huy hiệu tự chọn hiển thị cho người chơi trong game Ma Sói."""
+        self.cur.execute("SELECT points FROM user_masoi_stats WHERE user_id = ?", (user_id,))
+        if not self.cur.fetchone():
+            self.cur.execute("INSERT INTO user_masoi_stats (user_id, custom_badge) VALUES (?, ?)", (user_id, badge))
+        else:
+            self.cur.execute("UPDATE user_masoi_stats SET custom_badge = ? WHERE user_id = ?", (badge, user_id))
+        self.conn.commit()
+        return True
+
+    def get_masoi_custom_badge(self, user_id: int) -> str:
+        """Lấy huy hiệu tự chọn của người chơi trong game Ma Sói."""
+        try:
+            self.cur.execute("SELECT custom_badge FROM user_masoi_stats WHERE user_id = ?", (user_id,))
+            row = self.cur.fetchone()
+            return row[0] if row and row[0] else ""
+        except sqlite3.OperationalError:
+            return ""
+
+    def remove_masoi_custom_badge(self, user_id: int) -> bool:
+        """Xóa huy hiệu tự chọn của người chơi trong game Ma Sói."""
+        try:
+            self.cur.execute("UPDATE user_masoi_stats SET custom_badge = '' WHERE user_id = ?", (user_id,))
+            self.conn.commit()
+        except sqlite3.OperationalError:
+            pass
+        return True
 
 
 
