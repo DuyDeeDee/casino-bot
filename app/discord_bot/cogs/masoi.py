@@ -143,7 +143,7 @@ class LobbyView(discord.ui.View):
             "• 🔮✨ **Tiên Tri Tập Sự**: Khi Tiên Tri chính qua đời, kế thừa trở thành Tiên Tri mới từ đêm sau.\n"
             "• 🛡️ **Bảo Vệ**: Mỗi đêm chọn 1 người để bảo vệ khỏi bị Sói cắn (không chọn trùng 2 đêm liền).\n"
             "• 🧪 **Phù Thủy**: Có 1 bình Cứu (hồi sinh) và 1 bình Độc (giết người), mỗi bình dùng 1 lần/ván.\n"
-            "• 💃 **Gái Điếm**: Mỗi đêm 'thăm' 1 người để phong tỏa (roleblock) toàn bộ kỹ năng đêm của người đó.\n"
+            "• 💃 **Vũ Nữ**: Mỗi đêm 'thăm' 1 người để phong tỏa (roleblock) toàn bộ kỹ năng đêm của người đó.\n"
             "• 🏹 **Thợ Săn**: Khi bị loại (bị cắn hoặc treo cổ), được chọn kéo theo 1 người bắn gục.\n"
             "• 👁️ **Thám Tử**: Mỗi đêm chọn 2 người chơi để kiểm tra xem có ít nhất 1 Sói hay không.\n"
             "• 🐺👤 **Bán Nguyệt**: Thuộc phe Dân và thắng cùng Dân, nhưng bị Tiên Tri soi ra là 'SÓI'.\n"
@@ -324,7 +324,7 @@ class CustomRolesConfigView(discord.ui.View):
             (Role.APPRENTICE_SEER, "Tiên Tri Tập Sự"),
             (Role.GUARD, "Bảo Vệ"),
             (Role.WITCH, "Phù Thủy"),
-            (Role.HARLOT, "Gái Điếm"),
+            (Role.HARLOT, "Vũ Nữ"),
             (Role.HUNTER, "Thợ Săn"),
             (Role.CURSED, "Kẻ Bị Nguyền"),
             (Role.ELDER, "Già Làng"),
@@ -584,7 +584,7 @@ class NightSeerView(discord.ui.View):
         if target_p:
             seer_p = self.game.players.get(self.seer_id)
             if seer_p and seer_p.is_roleblocked:
-                res_str = "❌ **Kỹ năng của bạn đã bị phong tỏa đêm nay!** (Do bị Gái Điếm ghé thăm)"
+                res_str = "❌ **Kỹ năng của bạn đã bị phong tỏa đêm nay!** (Do bị Vũ Nữ ghé thăm)"
             elif target_p.is_wolf or target_p.role == Role.LYCAN:
                 res_str = f"🐺 **{target_p.display_name}** là **SÓI**!"
                 if seer_p:
@@ -608,7 +608,7 @@ class NightSeerView(discord.ui.View):
 
 
 class NightHarlotView(discord.ui.View):
-    """View Ephemeral chọn 1 người để phong tỏa kỹ năng cho Gái Điếm."""
+    """View Ephemeral chọn 1 người để phong tỏa kỹ năng cho Vũ Nữ."""
     def __init__(self, game: MasoiGame, harlot_id: int):
         super().__init__(timeout=game.settings.night_time)
         self.game = game
@@ -692,7 +692,7 @@ class NightInvestigatorView(discord.ui.View):
 
         inv_p = self.game.players.get(self.inv_id)
         if inv_p and inv_p.is_roleblocked:
-            res_str = "❌ **Kỹ năng của bạn đã bị phong tỏa đêm nay!** (Do bị Gái Điếm ghé thăm)"
+            res_str = "❌ **Kỹ năng của bạn đã bị phong tỏa đêm nay!** (Do bị Vũ Nữ ghé thăm)"
             name1, name2 = "Người 1", "Người 2"
         else:
             id1, id2 = int(self.select.values[0]), int(self.select.values[1])
@@ -760,7 +760,7 @@ class NightWolfSeerView(discord.ui.View):
         ws_p = self.game.players.get(self.wolf_seer_id)
 
         if ws_p and ws_p.is_roleblocked:
-            res_str = "❌ **Kỹ năng của bạn đã bị phong tỏa đêm nay!** (Do bị Gái Điếm ghé thăm)"
+            res_str = "❌ **Kỹ năng của bạn đã bị phong tỏa đêm nay!** (Do bị Vũ Nữ ghé thăm)"
             name = target_p.display_name if target_p else "Mục tiêu"
         elif target_p:
             res_str = f"🔮 **{target_p.display_name}** có vai trò: {target_p.role.emoji} **{target_p.role.value}**"
@@ -2183,13 +2183,13 @@ class Masoi(commands.Cog):
                         except Exception:
                             pass
 
-                # 7. Gái Điếm
+                # 7. Vũ Nữ
                 harlot_p = game.get_player_by_role(Role.HARLOT)
                 if harlot_p:
                     h_user = await self.get_or_fetch_user(harlot_p.user_id)
                     if h_user:
                         embed = discord.Embed(
-                            title=f"<a:moon:1533444241596874792> Đêm {game.night_count} — Lượt của Gái Điếm",
+                            title=f"<a:moon:1533444241596874792> Đêm {game.night_count} — Lượt của Vũ Nữ",
                             description=f"Chọn 1 người để 'thăm' và phong tỏa kỹ năng đêm. Còn **{game.settings.night_time} giây** để quyết định.",
                             color=discord.Color(0xE0A638)
                         )

@@ -27,7 +27,7 @@ class Role(Enum):
     ELDER = "Già Làng"
     SERIAL_KILLER = "Sát Thủ"
     WOLF_CUB = "Sói Cuồng Sát"
-    HARLOT = "Gái Điếm"
+    HARLOT = "Vũ Nữ"
     APPRENTICE_SEER = "Tiên Tri Tập Sự"
     LYCAN = "Bán Nguyệt"
     INVESTIGATOR = "Thám Tử"
@@ -205,7 +205,7 @@ class MasoiPlayer:
         self.is_cursed_converted: bool = False  # Kẻ Bị Nguyền đã biến thành Sói chưa
         self.cursed_notified: bool = False  # Đã gửi DM thông báo biến thành Sói chưa
         self.elder_lives: int = 2  # Già Làng có 2 mạng trước đòn cắn của Sói
-        self.is_roleblocked: bool = False  # Bị Gái Điếm phong tỏa kỹ năng đêm
+        self.is_roleblocked: bool = False  # Bị Vũ Nữ phong tỏa kỹ năng đêm
         self.apprentice_promoted: bool = False  # Tiên Tri Tập Sự đã kế thừa vị trí Tiên Tri
 
         # Metrics cho rank bonus
@@ -463,7 +463,7 @@ class MasoiGame:
 
     def resolve_wolf_targets(self) -> List[int]:
         """Tính phiếu cắn của bầy Sói (1 hoặc 2 mục tiêu nếu wolf_fury_active).
-        Bỏ qua phiếu của Sói bị Gái Điếm phong tỏa (is_roleblocked).
+        Bỏ qua phiếu của Sói bị Vũ Nữ phong tỏa (is_roleblocked).
         """
         if not self.night_wolf_votes:
             return []
@@ -471,8 +471,8 @@ class MasoiGame:
         for wolf_id, target in self.night_wolf_votes.items():
             wolf_p = self.players.get(wolf_id)
             if wolf_p and wolf_p.is_roleblocked:
-                # Sói bị Gái Điếm phong tỏa -> phiếu không có hiệu lực
-                self.record_log("WOLF_ROLEBLOCKED", actor_id=wolf_id, result="Sói bị Gái Điếm phong tỏa, không thể cắn đêm nay")
+                # Sói bị Vũ Nữ phong tỏa -> phiếu không có hiệu lực
+                self.record_log("WOLF_ROLEBLOCKED", actor_id=wolf_id, result="Sói bị Vũ Nữ phong tỏa, không thể cắn đêm nay")
                 continue
             counts[target] = counts.get(target, 0) + 1
         sorted_targets = sorted(counts.items(), key=lambda x: x[1], reverse=True)
@@ -508,14 +508,14 @@ class MasoiGame:
         """Tính toán ai chết ban đêm và cập nhật trạng thái."""
         deaths: Set[int] = set()
 
-        # 1. Gái Điếm "thăm" mục tiêu -> Phong tỏa kỹ năng
+        # 1. Vũ Nữ "thăm" mục tiêu -> Phong tỏa kỹ năng
         if self.night_harlot_target:
             harlot_p = self.get_player_by_role(Role.HARLOT)
             if harlot_p and not harlot_p.is_roleblocked:
                 target_p = self.players.get(self.night_harlot_target)
                 if target_p:
                     target_p.is_roleblocked = True
-                    self.record_log("HARLOT_VISIT", actor_id=harlot_p.user_id, target_id=target_p.user_id, result="Gái Điếm phong tỏa kỹ năng đêm")
+                    self.record_log("HARLOT_VISIT", actor_id=harlot_p.user_id, target_id=target_p.user_id, result="Vũ Nữ phong tỏa kỹ năng đêm")
 
         wolf_targets = self.resolve_wolf_targets()
 
