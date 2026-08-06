@@ -1861,12 +1861,19 @@ class Masoi(commands.Cog):
             await ctx.send("❌ Không kết nối được Database!")
             return
 
+        badge = badge.strip()
         if not badge:
             await ctx.send(f"❌ Vui lòng nhập huy hiệu/emoji cần đặt! VD: `{ctx.prefix}setmasoibadge @user 🔥`")
             return
 
+        # Tự động tìm Emoji từ tên (nếu người dùng nhập tên emoji của Bot)
+        clean_name = badge.strip(":").strip()
+        matched_emoji = discord.utils.get(self.bot.emojis, name=clean_name)
+        if matched_emoji:
+            badge = str(matched_emoji)
+
         eco.set_masoi_custom_badge(member.id, badge)
-        await ctx.send(f"🎖️ **Đã cài đặt huy hiệu tự chọn thành công cho {member.mention}!**\n> Displays: {badge} **{member.display_name}**")
+        await ctx.send(f"🎖️ **Đã cài đặt huy hiệu tự chọn thành công cho {member.mention}!**\n> Hiển thị: {badge} **{member.display_name}**")
 
     @commands.command(
         name="removemasoibadge",
