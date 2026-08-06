@@ -1866,26 +1866,51 @@ class Masoi(commands.Cog):
             await ctx.send(f"❌ Vui lòng nhập huy hiệu/emoji cần đặt! VD: `{ctx.prefix}setmasoibadge @user 🔥`")
             return
 
-        # 1. Tìm Emoji trong danh sách của Bot theo ID hoặc theo Tên (không phân biệt hoa/thường)
         matched_emoji = None
+
+        # 1. Nếu người dùng nhập ID số (Ví dụ: 1534984465657364651)
         if badge.isdigit():
-            matched_emoji = discord.utils.get(self.bot.emojis, id=int(badge))
+            emoji_id = int(badge)
+            matched_emoji = self.bot.get_emoji(emoji_id)
+            if not matched_emoji:
+                try:
+                    matched_emoji = await self.bot.fetch_emoji(emoji_id)
+                except Exception:
+                    pass
+            if matched_emoji:
+                badge = str(matched_emoji)
+            else:
+                # Fallback: Tự đóng gói thành mã Animated Emoji của Discord
+                badge = f"<a:emoji:{emoji_id}>"
+
+        # 2. Nếu người dùng truyền mã nguyên bản dạng <...:...:...>
         elif badge.startswith("<") and badge.endswith(">"):
             parts = badge.strip("<>").split(":")
             if len(parts) == 3 and parts[2].isdigit():
-                matched_emoji = discord.utils.get(self.bot.emojis, id=int(parts[2]))
+                emoji_id = int(parts[2])
+                matched_emoji = self.bot.get_emoji(emoji_id)
+                if not matched_emoji:
+                    try:
+                        matched_emoji = await self.bot.fetch_emoji(emoji_id)
+                    except Exception:
+                        pass
+                if matched_emoji:
+                    badge = str(matched_emoji)
+                elif badge.startswith("<:"):
+                    badge = f"<a:{parts[1]}:{parts[2]}>"
 
-        if not matched_emoji:
+        # 3. Nếu người dùng nhập tên Emoji (Ví dụ: lacdit hoặc :lacdit:)
+        else:
             clean_name = badge.strip(":").strip().lower()
-            matched_emoji = next((e for e in self.bot.emojis if e.name.lower() == clean_name), None)
-
-        if matched_emoji:
-            badge = str(matched_emoji)
-        elif badge.startswith("<:") and badge.endswith(">"):
-            # Nếu người dùng truyền nhầm nhãn tĩnh <:name:id> cho emoji động GIF, tự sửa thành <a:name:id>
-            parts = badge.strip("<>").split(":")
-            if len(parts) == 3:
-                badge = f"<a:{parts[1]}:{parts[2]}>"
+            all_emojis = list(self.bot.emojis)
+            matched_emoji = next((e for e in all_emojis if e.name.lower() == clean_name), None)
+            if not matched_emoji:
+                for guild in self.bot.guilds:
+                    matched_emoji = next((e for e in guild.emojis if e.name.lower() == clean_name), None)
+                    if matched_emoji:
+                        break
+            if matched_emoji:
+                badge = str(matched_emoji)
 
         eco.set_masoi_custom_badge(member.id, badge)
         await ctx.send(f"🎖️ **Đã cài đặt huy hiệu tự chọn thành công cho {member.mention}!**\n> Hiển thị: {badge} **{member.display_name}**")
