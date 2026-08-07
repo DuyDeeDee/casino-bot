@@ -1079,6 +1079,7 @@ class NightPiperView(discord.ui.View):
         await interaction.response.edit_message(embed=embed, view=None)
 
 
+class MayorSuccessionView(discord.ui.View):
     """View Ephemeral cho Thị Trưởng qua đời chọn người kế nhiệm."""
     def __init__(self, game: MasoiGame, mayor_id: int):
         super().__init__(timeout=game.settings.night_time)

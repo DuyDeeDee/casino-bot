@@ -38,6 +38,126 @@ DEFAULT_PRICES = {
     "DOGE": 5_000
 }
 
+ORES_CONFIG = {
+    "coal": {
+        "name": "Quặng Than",
+        "emoji": "<:20557coal:1535309207736426536>",
+        "min_money": 40_000,
+        "max_money": 100_000,
+        "min_gold": 0.0,
+        "max_gold": 0.0,
+        "rarity": "Phổ Biến",
+        "weights": {0: 50, 1: 35, 2: 25, 3: 18, 4: 12, 5: 6, 6: 3}
+    },
+    "copper": {
+        "name": "Quặng Đồng",
+        "emoji": "<:61179copper:1535309227940388884>",
+        "min_money": 120_000,
+        "max_money": 300_000,
+        "min_gold": 0.0,
+        "max_gold": 0.0,
+        "rarity": "Thường",
+        "weights": {0: 35, 1: 30, 2: 25, 3: 20, 4: 15, 5: 8, 6: 4}
+    },
+    "iron": {
+        "name": "Quặng Sắt",
+        "emoji": "<:6292iron:1535309251205926922>",
+        "min_money": 250_000,
+        "max_money": 550_000,
+        "min_gold": 0.0,
+        "max_gold": 0.0,
+        "rarity": "Thường",
+        "weights": {0: 12, 1: 22, 2: 25, 3: 22, 4: 18, 5: 12, 6: 6}
+    },
+    "redstone": {
+        "name": "Đá Đỏ (Redstone)",
+        "emoji": "<:23397red:1535309273750315038>",
+        "min_money": 600_000,
+        "max_money": 1_400_000,
+        "min_gold": 0.0,
+        "max_gold": 0.0,
+        "rarity": "Hiếm",
+        "weights": {0: 3, 1: 10, 2: 18, 3: 20, 4: 20, 5: 14, 6: 8}
+    },
+    "lapis": {
+        "name": "Đá Lam (Lapis Lazuli)",
+        "emoji": "<:80357lapis:1535309287004311582>",
+        "min_money": 1_200_000,
+        "max_money": 2_800_000,
+        "min_gold": 0.10,
+        "max_gold": 0.30,
+        "rarity": "Hiếm",
+        "weights": {0: 0, 1: 3, 2: 6, 3: 12, 4: 16, 5: 16, 6: 10}
+    },
+    "gold": {
+        "name": "Quặng Vàng",
+        "emoji": "<:90463gold:1535309308944982018>",
+        "min_money": 2_500_000,
+        "max_money": 6_000_000,
+        "min_gold": 0.30,
+        "max_gold": 0.80,
+        "rarity": "Cực Hiếm",
+        "weights": {0: 0, 1: 0, 2: 1, 3: 6, 4: 12, 5: 18, 6: 15}
+    },
+    "diamond": {
+        "name": "Quặng Kim Cương",
+        "emoji": "<:31347diamond:1535309327429013585>",
+        "min_money": 8_000_000,
+        "max_money": 18_000_000,
+        "min_gold": 0.80,
+        "max_gold": 2.20,
+        "rarity": "Huyền Thoại",
+        "weights": {0: 0, 1: 0, 2: 0, 3: 2, 4: 6, 5: 16, 6: 22}
+    },
+    "emerald": {
+        "name": "Ngọc Lục Bảo (Emerald)",
+        "emoji": "<:71597emerald:1535309338871070770>",
+        "min_money": 22_000_000,
+        "max_money": 45_000_000,
+        "min_gold": 2.20,
+        "max_gold": 5.50,
+        "rarity": "Thần Thoại",
+        "weights": {0: 0, 1: 0, 2: 0, 3: 0, 4: 1, 5: 7, 6: 18}
+    },
+    "ancient_debris": {
+        "name": "Mảnh Cổ Đại (Netherite)",
+        "emoji": "<:87138netherite:1535309362023759972>",
+        "min_money": 60_000_000,
+        "max_money": 120_000_000,
+        "min_gold": 6.00,
+        "max_gold": 15.00,
+        "rarity": "Bảo Vật Nether",
+        "weights": {0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 3, 6: 12}
+    },
+    "nether_star": {
+        "name": "Sao Nether (Nether Star)",
+        "emoji": "<:1989netherstar:1535309373713416192>",
+        "min_money": 150_000_000,
+        "max_money": 350_000_000,
+        "min_gold": 15.00,
+        "max_gold": 40.00,
+        "rarity": "Vũ Trụ Vô Giá",
+        "weights": {0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 6}
+    }
+}
+
+PICKAXE_CONFIG = {
+    0: {"name": "Cuốc Gỗ <:548130woodenpickaxe:1535304322416508970>", "cooldown_hours": 5.0, "vein_count": 3, "multiplier": 1.0},
+    1: {"name": "Cuốc Đá <:514931stonepickaxe:1535304335381106788>", "cooldown_hours": 4.5, "vein_count": 4, "multiplier": 1.15},
+    2: {"name": "Cuốc Sắt <:708066ironpickaxe:1535304347322294354>", "cooldown_hours": 4.0, "vein_count": 5, "multiplier": 1.35},
+    3: {"name": "Cuốc Vàng <:1153goldpickaxe:1535304359141965964>", "cooldown_hours": 3.5, "vein_count": 6, "multiplier": 1.65},
+    4: {"name": "Cuốc Kim Cương <:4441_MCDiamondpickaxe:1535304371481612432>", "cooldown_hours": 3.0, "vein_count": 7, "multiplier": 2.10},
+    5: {"name": "Cuốc Netherite <:4672_Netherite_pickaxe:1535304385221894195>", "cooldown_hours": 2.0, "vein_count": 8, "multiplier": 3.00},
+    6: {"name": "Cuốc Sao Vũ Trụ <a:6432_Enchanted_netherite_pickaxe:1535306967428370584>", "cooldown_hours": 1.5, "vein_count": 10, "multiplier": 5.00}
+}
+
+
+def sample_ore_for_pickaxe(pickaxe_level: int) -> str:
+    keys = list(ORES_CONFIG.keys())
+    weights = [ORES_CONFIG[k]["weights"].get(pickaxe_level, 0) for k in keys]
+    return random.choices(keys, weights=weights, k=1)[0]
+
+
 def get_limit_buy_cost(shares: float, target_price: int, symbol: str) -> int:
     liquidity = LIQUIDITY_VOLUME.get(symbol.upper(), 10000.0)
     slippage_pct = (shares / liquidity) * 0.01
@@ -185,7 +305,7 @@ SHOP_ITEMS = {
         "name": "Nghề Khai Thác Vàng ⛏️",
         "cost": 30,
         "currency": "gold",
-        "description": "Mở khóa lệnh $mine khai thác vàng tự động. Càng sở hữu nhiều vàng, tỷ lệ đào trúng càng khó."
+        "description": "Mở khóa lệnh i?mine đi đào các loại quặng quý hiếm (Than, Sắt, Bạc, Vàng, Kim Cương, Ngọc Tím, Tinh Thể Vũ Trụ) kiếm lượng lớn VND và thỏi Vàng!"
     },
     "the_tho_san": {
         "name": "Chứng Chỉ Thợ Săn Kho Báu 🗺️",
@@ -618,12 +738,10 @@ class ControlPanelView(discord.ui.View):
             last_mine = stats[1]
             now = int(time.time())
             
-            # Fetch pickaxe upgrade level for dynamic cooldown display
             upgrades = self.economy.get_upgrades(self.author.id)
             pickaxe_level = upgrades[3]
-            cooldown_hours = {0: 5, 1: 4, 2: 3, 3: 2}
-            hours_cd = cooldown_hours.get(pickaxe_level, 5)
-            cooldown = hours_cd * 3600
+            p_info = PICKAXE_CONFIG.get(pickaxe_level, PICKAXE_CONFIG[0])
+            cooldown = p_info["cooldown_hours"] * 3600
             
             if now - last_mine < cooldown:
                 time_left = cooldown - (now - last_mine)
@@ -631,20 +749,24 @@ class ControlPanelView(discord.ui.View):
                 minutes = (time_left % 3600) // 60
                 mine_status = f"⏳ Đang hồi sức (Sẵn sàng sau **{hours}h {minutes}m**)"
             else:
-                mine_status = "🟢 Sẵn sàng làm việc!"
+                mine_status = "🟢 Sẵn sàng khai thác mỏ!"
                 
             desc = (
-                f"⛏️ **Khu khai thác mỏ hoàng gia**\n\n"
-                f"• Trạng thái: {mine_status}\n"
-                f"• Yêu cầu: **Thẻ thợ mỏ VIP**\n"
-                f"• Cơ hội đào trúng quặng sắt (kiếm VND) và thỏi vàng lẻ!"
+                f"⛏️ **KHU KHAI THÁC MỎ QUẶNG VIP**\n\n"
+                f"• **Trạng thái:** {mine_status}\n"
+                f"• **Trang bị hiện tại:** **{p_info['name']}**\n"
+                f"• **Số mạch quặng/chuyến:** `{p_info['vein_count']} Mạch` (Thưởng: `{p_info['multiplier']:.2f}x`)\n"
+                f"• **Yêu cầu:** **Nghề khai thác vàng**\n\n"
+                f"💎 **Các loại quặng Minecraft có thể khai thác:**\n"
+                f"<:20557coal:1535309207736426536> Than • <:61179copper:1535309227940388884> Đồng • <:6292iron:1535309251205926922> Sắt • <:23397red:1535309273750315038> Đá Đỏ • <:80357lapis:1535309287004311582> Đá Lam • <:90463gold:1535309308944982018> Vàng • <:31347diamond:1535309327429013585> Kim Cương • <:71597emerald:1535309338871070770> Ngọc Lục Bảo • <:87138netherite:1535309362023759972> Netherite • <:1989netherstar:1535309373713416192> Sao Nether"
             )
             embed = make_embed(
-                title="⛏️ KHU KHAI THÁC MỎ ⛏️",
+                title="⛏️ KHU KHAI THÁC MỎ QUẶNG VIP ⛏️",
                 description=desc,
                 color=discord.Color.dark_green()
             )
             return embed
+
             
         return make_embed(title="Bảng Điều Khiển")
 
@@ -809,14 +931,261 @@ class CollectButton(discord.ui.Button):
         await interaction.response.send_message(embed=embed, ephemeral=False)
         await self.view.update_message(interaction.message)
 
-class MineButton(discord.ui.Button):
-    def __init__(self):
-        super().__init__(label="Đào Mỏ", style=discord.ButtonStyle.success, emoji="⛏️")
+class OreMineVeinButton(discord.ui.Button):
+    def __init__(self, index: int, label: str):
+        super().__init__(
+            label=label,
+            style=discord.ButtonStyle.secondary,
+            emoji="🪨",
+            custom_id=f"ore_vein_{index}_{uuid4().hex[:6]}"
+        )
+        self.index = index
 
     async def callback(self, interaction: discord.Interaction):
-        embed = await self.view.cog.process_mine(interaction.user)
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-        await self.view.update_message(interaction.message)
+        if interaction.user.id != self.view.user_id:
+            await interaction.response.send_message("❌ Đây không phải chuyến khai thác của bạn!", ephemeral=True)
+            return
+        await interaction.response.defer()
+        await self.view.mine_vein(interaction, self.index)
+
+
+class OreMineQuickButton(discord.ui.Button):
+    def __init__(self):
+        super().__init__(
+            label="⚡ Đào Tất Cả",
+            style=discord.ButtonStyle.primary,
+            custom_id=f"ore_mine_quick_all_{uuid4().hex[:6]}"
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.view.user_id:
+            await interaction.response.send_message("❌ Đây không phải chuyến khai thác của bạn!", ephemeral=True)
+            return
+        await interaction.response.defer()
+        await self.view.quick_mine_all(interaction)
+
+
+class OreMineExpeditionView(discord.ui.View):
+    def __init__(self, cog, user: discord.User | discord.Member, pickaxe_level: int, ctx: commands.Context | None = None):
+        super().__init__(timeout=90.0)
+        self.cog = cog
+        self.user = user
+        self.user_id = user.id
+        self.ctx = ctx
+        self.pickaxe_level = pickaxe_level
+        self.message: Optional[discord.Message] = None
+        self.finished = False
+        self.final_embed: Optional[discord.Embed] = None
+
+        self.pickaxe_info = PICKAXE_CONFIG.get(pickaxe_level, PICKAXE_CONFIG[0])
+        self.vein_count = self.pickaxe_info["vein_count"]
+        self.multiplier = self.pickaxe_info["multiplier"]
+
+        self.vein_ores = []
+        for _ in range(self.vein_count):
+            ore_key = sample_ore_for_pickaxe(pickaxe_level)
+            self.vein_ores.append(ORES_CONFIG[ore_key])
+
+        self.mined = [False] * self.vein_count
+
+        self.vein_buttons = []
+        for i in range(self.vein_count):
+            btn = OreMineVeinButton(i, f"Mạch #{i+1}")
+            self.add_item(btn)
+            self.vein_buttons.append(btn)
+
+        self.quick_btn = OreMineQuickButton()
+        self.add_item(self.quick_btn)
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message("❌ Đây không phải chuyến khai thác của bạn!", ephemeral=True)
+            return False
+        return True
+
+    def get_initial_embed(self) -> discord.Embed:
+        desc = (
+            f"👤 **Thợ mỏ:** {self.user.mention}\n"
+            f"🛠️ **Trang bị:** **{self.pickaxe_info['name']}** (Bội số thưởng: `{self.multiplier:.2f}x`)\n"
+            f"⛏️ **Số mạch quặng đã phát hiện:** `{self.vein_count} Mạch`\n\n"
+            f"Hãy bấm chọn từng mạch quặng bên dưới để đào hoặc bấm **⚡ Đào Tất Cả** để thu hoạch nhanh!"
+        )
+        embed = make_embed(
+            title="⛏️ CHUYẾN KHAI THÁC MỎ QUẶNG VIP ⛏️",
+            description=desc,
+            color=discord.Color.dark_green()
+        )
+        embed.set_thumbnail(url=self.user.display_avatar.url)
+        return embed
+
+    async def mine_vein(self, interaction: discord.Interaction, index: int):
+        if self.finished or self.mined[index]:
+            return
+
+        self.mined[index] = True
+        ore = self.vein_ores[index]
+
+        btn = self.vein_buttons[index]
+        btn.disabled = True
+        btn.emoji = ore["emoji"]
+        btn.label = ore["name"]
+        btn.style = discord.ButtonStyle.success
+
+        if all(self.mined):
+            await self.finalize_expedition(interaction)
+        else:
+            mined_count = sum(self.mined)
+            desc = (
+                f"👤 **Thợ mỏ:** {self.user.mention}\n"
+                f"🛠️ **Trang bị:** **{self.pickaxe_info['name']}**\n"
+                f"⛏️ **Tiến độ khai thác:** `{mined_count}/{self.vein_count}` Mạch Quặng\n\n"
+                f"✨ Vừa đào trúng: **{ore['emoji']} {ore['name']}** (`{ore['rarity']}`)!\n"
+                f"Tiếp tục mở các mạch quặng còn lại..."
+            )
+            embed = make_embed(
+                title="⛏️ CHUYẾN KHAI THÁC MỎ QUẶNG VIP ⛏️",
+                description=desc,
+                color=discord.Color.green()
+            )
+            embed.set_thumbnail(url=self.user.display_avatar.url)
+            
+            try:
+                await interaction.message.edit(embed=embed, view=self)
+            except Exception:
+                pass
+
+    async def quick_mine_all(self, interaction: discord.Interaction = None):
+        if self.finished:
+            return
+        for idx in range(self.vein_count):
+            self.mined[idx] = True
+            ore = self.vein_ores[idx]
+            btn = self.vein_buttons[idx]
+            btn.disabled = True
+            btn.emoji = ore["emoji"]
+            btn.label = ore["name"]
+            btn.style = discord.ButtonStyle.success
+
+        await self.finalize_expedition(interaction)
+
+    async def finalize_expedition(self, interaction: discord.Interaction = None):
+        if self.finished:
+            return
+        self.finished = True
+        self.stop()
+
+        self.quick_btn.disabled = True
+
+        total_money = 0
+        total_gold_dropped = 0.0
+        harvest_summary = {}
+
+        for ore in self.vein_ores:
+            m_val = int(random.randint(ore["min_money"], ore["max_money"]) * self.multiplier)
+            g_val = round(random.uniform(ore["min_gold"], ore["max_gold"]), 2) if ore["max_gold"] > 0 else 0.0
+            
+            total_money += m_val
+            total_gold_dropped += g_val
+
+            name_key = f"{ore['emoji']} {ore['name']} (`{ore['rarity']}`)"
+            if name_key not in harvest_summary:
+                harvest_summary[name_key] = {"count": 0, "money": 0, "gold": 0.0}
+            harvest_summary[name_key]["count"] += 1
+            harvest_summary[name_key]["money"] += m_val
+            harvest_summary[name_key]["gold"] += g_val
+
+        self.cog.economy.add_money(self.user_id, total_money)
+
+        stats = self.cog.economy.get_simulator_stats(self.user_id)
+        current_frac = stats[3]
+        new_total_frac = current_frac + total_gold_dropped
+        int_gold = int(new_total_frac)
+        final_frac = round(new_total_frac - int_gold, 4)
+
+        if int_gold > 0:
+            self.cog.economy.add_credits(self.user_id, int_gold)
+
+        now = int(time.time())
+        self.cog.economy.set_simulator_stats(self.user_id, last_mine=now, fractional_gold=final_frac)
+
+        log_wallet_change(
+            logger,
+            event="mine_ores",
+            user_id=self.user_id,
+            money_delta=total_money,
+            credits_delta=int_gold,
+            ctx=self.ctx,
+            total_gold_dropped=total_gold_dropped,
+            vein_count=self.vein_count,
+            pickaxe_level=self.pickaxe_level
+        )
+
+        lines = []
+        for name_key, data in harvest_summary.items():
+            g_info = f" • `+{data['gold']:.2f} Vàng`" if data['gold'] > 0 else ""
+            lines.append(f"• **{name_key}** x{data['count']}: `+{data['money']:,} VND`{g_info}")
+        harvest_str = "\n".join(lines)
+
+        gold_desc = ""
+        if total_gold_dropped > 0:
+            gold_desc = f"\n✨ **Tổng lượng vàng đào được:** `+{total_gold_dropped:.2f} Vàng`"
+            if int_gold > 0:
+                gold_desc += f"\n🪙 **Đã tự động đúc thành:** `+{int_gold} Thỏi Vàng` (vào Két Sắt)"
+            gold_desc += f"\n💳 **Vàng lẻ tích lũy hiện tại:** `{final_frac:.2f} Vàng`"
+
+        cooldown_hours = self.pickaxe_info["cooldown_hours"]
+
+        desc = (
+            f"🎉 **KHAI THÁC MỎ HOÀN TẤT THÀNH CÔNG!**\n"
+            f"👤 **Thợ mỏ:** {self.user.mention}\n"
+            f"🛠️ **Trang bị:** **{self.pickaxe_info['name']}**\n\n"
+            f"📦 **THÀNH QUẢ KHÁM PHÁ {self.vein_count} MẠCH QUẶNG:**\n"
+            f"{harvest_str}\n\n"
+            f"💰 **Tổng doanh thu bán quặng:** `+{total_money:,} VND`"
+            f"{gold_desc}\n\n"
+            f"⏱️ **Hồi sức:** Bạn cần nghỉ ngơi **{cooldown_hours} giờ** trước khi có thể đào tiếp."
+        )
+
+        embed = make_embed(
+            title="⛏️ BÁO CÁO THU HOẠCH MỎ QUẶNG VIP ⛏️",
+            description=desc,
+            color=discord.Color.gold()
+        )
+        embed.set_thumbnail(url=self.user.display_avatar.url)
+        self.final_embed = embed
+
+        if interaction:
+            try:
+                await interaction.message.edit(embed=embed, view=self)
+            except Exception:
+                pass
+        elif self.message:
+            try:
+                await self.message.edit(embed=embed, view=self)
+            except Exception:
+                pass
+
+    async def on_timeout(self):
+        if not self.finished:
+            await self.quick_mine_all(None)
+
+
+class MineButton(discord.ui.Button):
+    def __init__(self):
+        super().__init__(label="Đào Mỏ VIP", style=discord.ButtonStyle.success, emoji="⛏️")
+
+    async def callback(self, interaction: discord.Interaction):
+        embed, view = await self.view.cog.start_mine_session(interaction.user)
+        if view:
+            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+            view.message = await interaction.original_response()
+        else:
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+        try:
+            await self.view.update_message(interaction.message)
+        except Exception:
+            pass
+
 
 class TrainButton(discord.ui.Button):
     def __init__(self):
@@ -1089,7 +1458,7 @@ class Simulator(commands.Cog):
             
         return embed
 
-    async def process_mine(self, user: discord.User | discord.Member, ctx: commands.Context | None = None) -> discord.Embed:
+    async def start_mine_session(self, user: discord.User | discord.Member, ctx: commands.Context | None = None) -> tuple[discord.Embed, Optional[OreMineExpeditionView]]:
         user_id = user.id
         
         # Check Gold Miner Career (the_tho_mo)
@@ -1101,29 +1470,18 @@ class Simulator(commands.Cog):
                 description="Yêu cầu phải sở hữu **Nghề khai thác vàng** để đào mỏ! Hãy gõ `i?shop` để đăng ký nghề nghiệp bằng VND trước.",
                 color=discord.Color.red()
             )
-            return embed
+            return embed, None
 
-        # Check pickaxe upgrades
         upgrades = self.economy.get_upgrades(user_id)
         pickaxe_level = upgrades[3]
-        
-        pickaxe_names = {
-            0: "Cuốc Gỗ 🪵",
-            1: "Cuốc Sắt ⚙️",
-            2: "Cuốc Vàng 🪙",
-            3: "Cuốc Kim Cương 💎"
-        }
-        pickaxe_name = pickaxe_names.get(pickaxe_level, "Cuốc Gỗ 🪵")
+        pickaxe_info = PICKAXE_CONFIG.get(pickaxe_level, PICKAXE_CONFIG[0])
+        pickaxe_name = pickaxe_info["name"]
 
-        # Check cooldown
         stats = self.economy.get_simulator_stats(user_id)
         last_mine = stats[1]
         now = int(time.time())
         
-        cooldown_hours = {0: 5, 1: 4, 2: 3, 3: 2}
-        hours_cd = cooldown_hours.get(pickaxe_level, 5)
-        cooldown = hours_cd * 3600
-        
+        cooldown = pickaxe_info["cooldown_hours"] * 3600
         if now - last_mine < cooldown:
             time_left = cooldown - (now - last_mine)
             hours = time_left // 3600
@@ -1134,92 +1492,19 @@ class Simulator(commands.Cog):
                 description=f"Hãy nghỉ ngơi! Bằng việc sử dụng **{pickaxe_name}**, bạn có thể tiếp tục đào mỏ sau **{hours} giờ {minutes} phút**.",
                 color=discord.Color.red()
             )
-            return embed
+            return embed, None
 
-        # Calculate user's current gold
-        profile = self.economy.get_entry(user_id)
-        current_gold_blocks = profile[2]
-        fractional_gold = stats[3]
-        total_gold = current_gold_blocks + fractional_gold
+        view = OreMineExpeditionView(self, user, pickaxe_level, ctx)
+        embed = view.get_initial_embed()
+        return embed, view
 
-        # Success rate decreases as total_gold increases, but gets pickaxe bonus
-        success_chance = max(5.0, min(80.0, 80.0 - total_gold * 0.5))
-        pickaxe_bonuses = {0: 0.0, 1: 10.0, 2: 20.0, 3: 35.0}
-        success_chance += pickaxe_bonuses.get(pickaxe_level, 0.0)
-        success_chance = min(95.0, success_chance)
-
-        roll = random.random() * 100
-        dropped_gold = 0.0
-        gold_message = ""
-        success = False
-
-        if roll < success_chance:
-            success = True
-            gold_ranges = {
-                0: (0.01, 0.50),
-                1: (0.10, 0.70),
-                2: (0.20, 1.20),
-                3: (0.50, 2.50)
-            }
-            min_g, max_g = gold_ranges.get(pickaxe_level, (0.01, 0.50))
-            dropped_gold = round(random.uniform(min_g, max_g), 2)
-            gold_message = f"\n✨ **ĐẶC BIỆT:** Bạn dùng **{pickaxe_name}** đào trúng mạch vàng và thu về **{dropped_gold}** Vàng!"
-
-        # Base money reward from normal ores (always awarded)
-        ore_money = random.randint(20_000, 100_000)
-        self.economy.add_money(user_id, ore_money)
-        
-        # Process fractional gold reward if success
-        total_gold_frac = stats[3] + dropped_gold
-        int_gold = int(total_gold_frac)
-        new_frac = round(total_gold_frac - int_gold, 4)
-        
-        if int_gold > 0:
-            self.economy.add_credits(user_id, int_gold)
-            gold_message += f" (Đã quy đổi cộng thêm `{int_gold}` thỏi vàng vào két sắt)"
-
-        # Save stats
-        self.economy.set_simulator_stats(user_id, last_mine=now, fractional_gold=new_frac)
-        
-        log_wallet_change(
-            logger,
-            event="mine_ore",
-            user_id=user_id,
-            money_delta=ore_money,
-            credits_delta=int_gold,
-            ctx=ctx,
-            dropped_gold_frac=dropped_gold,
-            success_chance=success_chance,
-            success=success
-        )
-
-        chance_text = f"🎯 **Tỷ lệ trúng vàng của bạn:** `{success_chance:.2f}%` *(Độ khó tăng dần theo số vàng hiện có: {total_gold:.2f} Vàng)*"
-
-        if success:
-            desc = (
-                f"Bạn đã vác cuốc vào hầm mỏ khai thác vàng...\n\n"
-                f"💰 **Bán quặng thường:** `+{ore_money:,} VND`"
-                f"{gold_message}\n"
-                f"💳 **Vàng lẻ đang tích lũy:** `{new_frac} Vàng` (Đủ `1.0` sẽ tự đổi ra thỏi)\n"
-                f"{chance_text}"
-            )
-            color = discord.Color.gold()
-        else:
-            desc = (
-                f"Bạn đã vác cuốc vào hầm mỏ khai thác vàng...\n\n"
-                f"💰 **Bán quặng thường:** `+{ore_money:,} VND`\n"
-                f"💨 Không tìm thấy vàng trong ca làm việc này. Hãy kiên trì!\n"
-                f"{chance_text}"
-            )
-            color = discord.Color.dark_green()
-
-        embed = make_embed(
-            title="⛏️ KHAI THÁC VÀNG TỰ NHIÊN ⛏️",
-            description=desc,
-            color=color
-        )
-        embed.set_thumbnail(url=user.display_avatar.url)
+    async def process_mine(self, user: discord.User | discord.Member, ctx: commands.Context | None = None) -> discord.Embed:
+        embed, view = await self.start_mine_session(user, ctx)
+        if view:
+            await view.finalize_expedition(None)
+            return view.final_embed if view.final_embed else embed
         return embed
+
 
     def get_business_embed(self, user: discord.User | discord.Member) -> discord.Embed:
         user_id = user.id
@@ -2728,8 +3013,6 @@ class Simulator(commands.Cog):
                 if model in CAR_EDITIONS:
                     if random.random() < 0.30:
                         edition = random.choice(CAR_EDITIONS[model][1:])
-                
-                col_name = "Other"
                 for c_name, c_models in COLLECTIONS.items():
                     if model in c_models:
                         col_name = c_name
@@ -2792,45 +3075,53 @@ class Simulator(commands.Cog):
         upgrades = self.economy.get_upgrades(user_id)
         pickaxe_level = upgrades[3]
         
-        pickaxe_names = {
-            0: ("Cuốc Gỗ 🪵", 5, 0),
-            1: ("Cuốc Sắt ⚙️", 4, 10),
-            2: ("Cuốc Vàng 🪙", 3, 20),
-            3: ("Cuốc Kim Cương 💎", 2, 35)
+        pickaxe_info_map = {
+            0: ("Cuốc Gỗ <:548130woodenpickaxe:1535304322416508970>", 5.0, 3, "1.00x"),
+            1: ("Cuốc Đá <:514931stonepickaxe:1535304335381106788>", 4.5, 4, "1.15x"),
+            2: ("Cuốc Sắt <:708066ironpickaxe:1535304347322294354>", 4.0, 5, "1.35x"),
+            3: ("Cuốc Vàng <:1153goldpickaxe:1535304359141965964>", 3.5, 6, "1.65x"),
+            4: ("Cuốc Kim Cương <:4441_MCDiamondpickaxe:1535304371481612432>", 3.0, 7, "2.10x"),
+            5: ("Cuốc Netherite <:4672_Netherite_pickaxe:1535304385221894195>", 2.0, 8, "3.00x"),
+            6: ("Cuốc Sao Vũ Trụ <a:6432_Enchanted_netherite_pickaxe:1535306967428370584>", 1.5, 10, "5.00x")
         }
         
-        curr_name, curr_cd, curr_bonus = pickaxe_names[pickaxe_level]
+        curr_name, curr_cd, curr_veins, curr_mult = pickaxe_info_map.get(pickaxe_level, pickaxe_info_map[0])
         
         upgrade_costs = {
-            0: (10_000_000, "Cuốc Sắt ⚙️"),
-            1: (30_000_000, "Cuốc Vàng 🪙"),
-            2: (100_000_000, "Cuốc Kim Cương 💎")
+            0: (5, "Cuốc Đá <:514931stonepickaxe:1535304335381106788>"),
+            1: (15, "Cuốc Sắt <:708066ironpickaxe:1535304347322294354>"),
+            2: (40, "Cuốc Vàng <:1153goldpickaxe:1535304359141965964>"),
+            3: (100, "Cuốc Kim Cương <:4441_MCDiamondpickaxe:1535304371481612432>"),
+            4: (250, "Cuốc Netherite <:4672_Netherite_pickaxe:1535304385221894195>"),
+            5: (800, "Cuốc Sao Vũ Trụ <a:6432_Enchanted_netherite_pickaxe:1535306967428370584>")
         }
         
         if action and action.lower() in ["upgrade", "up", "nangcap"]:
-            if pickaxe_level >= 3:
-                await ctx.send("❌ Bạn đã đạt cấp độ cuốc tối đa (**Cuốc Kim Cương 💎**)!")
+            if pickaxe_level >= 6:
+                await ctx.send("❌ Bạn đã đạt cấp độ cuốc tối đa thần thoại (**Cuốc Sao Vũ Trụ <a:6432_Enchanted_netherite_pickaxe:1535306967428370584>**)!")
                 return
                 
             cost, next_name = upgrade_costs[pickaxe_level]
             profile = self.economy.get_entry(user_id)
-            money = profile[1]
+            user_gold = profile[2]
             
-            if money < cost:
-                await ctx.send(f"❌ Bạn không đủ tiền mặt! Nâng cấp lên **{next_name}** cần `{cost:,} VND` nhưng bạn chỉ có `{money:,} VND`.")
+            if user_gold < cost:
+                await ctx.send(f"❌ Bạn không đủ Thỏi Vàng! Nâng cấp lên **{next_name}** cần `{cost:,} Vàng` nhưng bạn chỉ có `{user_gold:,} Vàng`.")
                 return
                 
-            # Deduct money
-            self.economy.add_money(user_id, -cost)
+            # Deduct gold credits
+            self.economy.add_credits(user_id, -cost)
             self.economy.set_upgrades(user_id, pickaxe_level=pickaxe_level + 1)
             
+            n_name, n_cd, n_veins, n_mult = pickaxe_info_map[pickaxe_level + 1]
             embed = make_embed(
                 title="🔨 NÂNG CẤP CUỐC THÀNH CÔNG 🔨",
                 description=(
-                    f"Bạn đã nâng cấp thành công lên **{next_name}**!\n\n"
-                    f"💸 **Chi phí:** `-{cost:,} VND`\n"
-                    f"⏱️ **Thời gian chờ đào mỏ:** Giảm còn `{pickaxe_names[pickaxe_level + 1][1]} giờ`!\n"
-                    f"✨ **Tỷ lệ đào trúng vàng:** Tăng thêm `+{pickaxe_names[pickaxe_level + 1][2]}%`!"
+                    f"Bạn đã nâng cấp thành công lên **{n_name}**!\n\n"
+                    f"🪙 **Chi phí:** `-{cost:,} Vàng`\n"
+                    f"⏱️ **Thời gian chờ đào mỏ:** Giảm còn `{n_cd} giờ`!\n"
+                    f"⛏️ **Số mạch quặng:** Tăng lên `{n_veins} Mạch`!\n"
+                    f"💰 **Thưởng giá bán quặng:** Tăng lên `{n_mult}`!"
                 ),
                 color=discord.Color.green()
             )
@@ -2844,27 +3135,36 @@ class Simulator(commands.Cog):
             description=(
                 f"Bạn đang sở hữu: **{curr_name}**\n"
                 f"⏱️ **Thời gian hồi:** `{curr_cd} giờ`\n"
-                f"✨ **Tỷ lệ đào trúng vàng bổ sung:** `+{curr_bonus}%`"
+                f"⛏️ **Số mạch quặng/chuyến:** `{curr_veins} Mạch`\n"
+                f"📈 **Thưởng giá bán quặng:** `{curr_mult}`"
             ),
             color=discord.Color.blue()
         )
         
-        if pickaxe_level < 3:
+        if pickaxe_level < 6:
             cost, next_name = upgrade_costs[pickaxe_level]
-            embed.description += f"\n\n🛠️ **Nâng cấp tiếp theo:** **{next_name}**\n💵 **Chi phí nâng cấp:** `{cost:,} VND`\n💡 *Gõ lệnh `i?pickaxe upgrade` để nâng cấp.*"
+            embed.description += f"\n\n🛠️ **Nâng cấp tiếp theo:** **{next_name}**\n🪙 **Chi phí nâng cấp:** `{cost:,} Vàng`\n💡 *Gõ lệnh `i?pickaxe upgrade` để nâng cấp.*"
         else:
-            embed.description += "\n\n🎉 Bạn đã sở hữu cuốc huyền thoại mạnh nhất!"
+            embed.description += "\n\n🎉 Bạn đã sở hữu cuốc Minecraft huyền thoại mạnh nhất thế giới!"
+
             
         embed.set_thumbnail(url=ctx.author.display_avatar.url)
         await ctx.send(embed=embed)
 
+
     @commands.command(
-        brief="Đào mỏ khai thác khoáng sản (Yêu cầu Thẻ thợ mỏ VIP). Cooldown 5 tiếng.",
-        usage="mine"
+        brief="Khai thác mỏ quặng thu thập các loại khoáng sản quý giá.",
+        usage="mine",
+        aliases=["dao", "daoquang"]
     )
     async def mine(self, ctx: commands.Context):
-        embed = await self.process_mine(ctx.author, ctx)
-        await ctx.send(embed=embed)
+        embed, view = await self.start_mine_session(ctx.author, ctx)
+        if view:
+            msg = await ctx.send(embed=embed, view=view)
+            view.message = msg
+        else:
+            await ctx.send(embed=embed)
+
 
     @commands.command(
         brief="Sử dụng Bản đồ Kho báu để thám hiểm hầm mộ cổ đại nhận cổ vật giá trị cao.",
