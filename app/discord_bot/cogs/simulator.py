@@ -2,6 +2,7 @@ import asyncio
 import logging
 import random
 import time
+from typing import Optional, Union, Dict, List
 from pathlib import Path
 from uuid import uuid4
 import discord
