@@ -153,8 +153,11 @@ PICKAXE_CONFIG = {
 
 
 def sample_ore_for_pickaxe(pickaxe_level: int) -> str:
+    effective_level = min(max(0, pickaxe_level), 6)
     keys = list(ORES_CONFIG.keys())
-    weights = [ORES_CONFIG[k]["weights"].get(pickaxe_level, 0) for k in keys]
+    weights = [ORES_CONFIG[k]["weights"].get(effective_level, 0) for k in keys]
+    if sum(weights) == 0:
+        weights = [1] * len(keys)
     return random.choices(keys, weights=weights, k=1)[0]
 
 
@@ -740,7 +743,8 @@ class ControlPanelView(discord.ui.View):
             
             upgrades = self.economy.get_upgrades(self.author.id)
             pickaxe_level = upgrades[3]
-            p_info = PICKAXE_CONFIG.get(pickaxe_level, PICKAXE_CONFIG[0])
+            eff_lvl = min(max(0, pickaxe_level), 6)
+            p_info = PICKAXE_CONFIG.get(pickaxe_level, PICKAXE_CONFIG[eff_lvl])
             cooldown = p_info["cooldown_hours"] * 3600
             
             if now - last_mine < cooldown:
@@ -977,7 +981,8 @@ class OreMineExpeditionView(discord.ui.View):
         self.finished = False
         self.final_embed: Optional[discord.Embed] = None
 
-        self.pickaxe_info = PICKAXE_CONFIG.get(pickaxe_level, PICKAXE_CONFIG[0])
+        eff_lvl = min(max(0, pickaxe_level), 6)
+        self.pickaxe_info = PICKAXE_CONFIG.get(pickaxe_level, PICKAXE_CONFIG[eff_lvl])
         self.vein_count = self.pickaxe_info["vein_count"]
         self.multiplier = self.pickaxe_info["multiplier"]
 
@@ -1027,7 +1032,10 @@ class OreMineExpeditionView(discord.ui.View):
 
         btn = self.vein_buttons[index]
         btn.disabled = True
-        btn.emoji = ore["emoji"]
+        try:
+            btn.emoji = discord.PartialEmoji.from_str(ore["emoji"])
+        except Exception:
+            btn.emoji = ore["emoji"]
         btn.label = ore["name"]
         btn.style = discord.ButtonStyle.success
 
@@ -1062,7 +1070,10 @@ class OreMineExpeditionView(discord.ui.View):
             ore = self.vein_ores[idx]
             btn = self.vein_buttons[idx]
             btn.disabled = True
-            btn.emoji = ore["emoji"]
+            try:
+                btn.emoji = discord.PartialEmoji.from_str(ore["emoji"])
+            except Exception:
+                btn.emoji = ore["emoji"]
             btn.label = ore["name"]
             btn.style = discord.ButtonStyle.success
 
@@ -1474,7 +1485,8 @@ class Simulator(commands.Cog):
 
         upgrades = self.economy.get_upgrades(user_id)
         pickaxe_level = upgrades[3]
-        pickaxe_info = PICKAXE_CONFIG.get(pickaxe_level, PICKAXE_CONFIG[0])
+        eff_lvl = min(max(0, pickaxe_level), 6)
+        pickaxe_info = PICKAXE_CONFIG.get(pickaxe_level, PICKAXE_CONFIG[eff_lvl])
         pickaxe_name = pickaxe_info["name"]
 
         stats = self.economy.get_simulator_stats(user_id)
@@ -3085,15 +3097,16 @@ class Simulator(commands.Cog):
             6: ("Cuốc Sao Vũ Trụ <a:6432_Enchanted_netherite_pickaxe:1535306967428370584>", 1.5, 10, "5.00x")
         }
         
-        curr_name, curr_cd, curr_veins, curr_mult = pickaxe_info_map.get(pickaxe_level, pickaxe_info_map[0])
+        eff_lvl = min(max(0, pickaxe_level), 6)
+        curr_name, curr_cd, curr_veins, curr_mult = pickaxe_info_map.get(pickaxe_level, pickaxe_info_map[eff_lvl])
         
         upgrade_costs = {
-            0: (5, "Cuốc Đá <:514931stonepickaxe:1535304335381106788>"),
-            1: (15, "Cuốc Sắt <:708066ironpickaxe:1535304347322294354>"),
-            2: (40, "Cuốc Vàng <:1153goldpickaxe:1535304359141965964>"),
-            3: (100, "Cuốc Kim Cương <:4441_MCDiamondpickaxe:1535304371481612432>"),
-            4: (250, "Cuốc Netherite <:4672_Netherite_pickaxe:1535304385221894195>"),
-            5: (800, "Cuốc Sao Vũ Trụ <a:6432_Enchanted_netherite_pickaxe:1535306967428370584>")
+            0: (20, "Cuốc Đá <:514931stonepickaxe:1535304335381106788>"),
+            1: (75, "Cuốc Sắt <:708066ironpickaxe:1535304347322294354>"),
+            2: (200, "Cuốc Vàng <:1153goldpickaxe:1535304359141965964>"),
+            3: (500, "Cuốc Kim Cương <:4441_MCDiamondpickaxe:1535304371481612432>"),
+            4: (1000, "Cuốc Netherite <:4672_Netherite_pickaxe:1535304385221894195>"),
+            5: (2000, "Cuốc Sao Vũ Trụ <a:6432_Enchanted_netherite_pickaxe:1535306967428370584>")
         }
         
         if action and action.lower() in ["upgrade", "up", "nangcap"]:
