@@ -3106,8 +3106,8 @@ class Simulator(commands.Cog):
             1: (75, "Cuốc Sắt <:708066ironpickaxe:1535304347322294354>"),
             2: (200, "Cuốc Vàng <:1153goldpickaxe:1535304359141965964>"),
             3: (500, "Cuốc Kim Cương <:4441_MCDiamondpickaxe:1535304371481612432>"),
-            4: (1000, "Cuốc Netherite <:4672_Netherite_pickaxe:1535304385221894195>"),
-            5: (2000, "Cuốc Sao Vũ Trụ <a:6432_Enchanted_netherite_pickaxe:1535306967428370584>")
+            4: (1500, "Cuốc Netherite <:4672_Netherite_pickaxe:1535304385221894195>"),
+            5: (3000, "Cuốc Sao Vũ Trụ <a:6432_Enchanted_netherite_pickaxe:1535306967428370584>")
         }
         
         if action and action.lower() in ["upgrade", "up", "nangcap"]:
