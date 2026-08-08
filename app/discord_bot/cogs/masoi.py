@@ -170,6 +170,35 @@ class LobbyView(discord.ui.View):
         embed = make_embed(title="🎭 Các Vai Trò Ma Sói", description=desc, color=discord.Color.purple())
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
+    @discord.ui.button(label="Chế độ", style=discord.ButtonStyle.secondary, emoji="📜", custom_id="masoi_mode_info", row=1)
+    async def mode_info_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        desc = (
+            "📜 **HƯỚNG DẪN CHI TIẾT CÁC CHẾ ĐỘ CHƠI MA SÓI**\n\n"
+            "👑🐺 **1. CHẾ ĐỘ TRÙM CUỐI (RAID BOSS MODE)**\n"
+            "• **Cách mở:** Dùng lệnh `!masoiboss` hoặc bật trong Cài Đặt (Host).\n"
+            "• **Cơ chế:** Một người chơi thuộc Bầy Sói sẽ trở thành **Chúa Tể Sói (Raid Boss)**.\n"
+            "• **Đặc quyền Chúa Tể Sói:**\n"
+            "  └ 🩸 **3 Mạng sống (3 HP):** Phải bị hạ gục 3 lần (bị vote treo cổ hoặc dính bình độc) mới thực sự qua đời!\n"
+            "  └ ⚖️ **Quyền lực x3:** Phiếu bầu ban ngày của Chúa Tể Sói tính bằng **3 phiếu**.\n"
+            "  └ 🛡️ **Khiên Vương Giả:** Tự động đỡ & miễn nhiễm với đòn Bình Độc đầu tiên từ Phù Thủy.\n"
+            "• **Mục tiêu:** Bầy Sói tiêu diệt hết Dân, còn Phe Dân Làng + Chức Năng cần phối hợp dồn sức tiêu diệt Chúa Tể Sói!\n\n"
+            "🎴 **2. CHẾ ĐỘ THẺ SỰ KIỆN ĐÊM (NIGHT EVENTS)**\n"
+            "• **Cách mở:** Dùng lệnh `!masoievent` hoặc bật trong Cài Đặt (Host).\n"
+            "• **Cơ chế:** Mỗi đêm ngẫu nhiên kích hoạt **1 Thẻ Sự Kiện bí ẩn** tác động lên toàn thể người chơi.\n"
+            "• **Ví dụ các sự kiện:**\n"
+            "  └ 🌫️ **Sương Mù Dày Đặc:** Tiên Tri & Thám Tử bị mù, không thể soi trong đêm.\n"
+            "  └ 🌕 **Đêm Trăng Tròn:** Sói cuồng bạo được cắn 2 người cùng lúc.\n"
+            "  └ 🌑 **Nhật Thực:** Phong tỏa mọi chức năng đêm của Bảo Vệ & Phù Thủy.\n"
+            "  └ 🍷 **Dạ Hội Bình Yên:** Đêm an lành, không ai bị thương hay bị cắn.\n\n"
+            "🌕 **3. CHẾ ĐỘ TIÊU CHUẨN (STANDARD MODE)**\n"
+            "• **Cách mở:** Dùng lệnh `!masoi` mặc định.\n"
+            "• **Cơ chế:** Ván đấu Ma Sói cổ điển. Sói ẩn nấp đi săn ban đêm, Dân Làng thảo luận và bỏ phiếu treo cổ ban ngày.\n\n"
+            "──────────────────────────────────────\n"
+            "_Chủ phòng có thể chuyển đổi các chế độ bằng nút **⚙️ Cài đặt** trước khi bấm Bắt đầu!_"
+        )
+        embed = make_embed(title="📜 Hướng Dẫn Chế Độ Chơi", description=desc, color=discord.Color.gold())
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
     async def on_error(self, interaction: discord.Interaction, error: Exception, item) -> None:
         logger.error("LobbyView error on %s: %s", item, error, exc_info=error)
         try:
@@ -180,7 +209,7 @@ class LobbyView(discord.ui.View):
         except Exception:
             pass
 
-    @discord.ui.button(label="Hủy ván", style=discord.ButtonStyle.danger, emoji="⭕", custom_id="masoi_cancel")
+    @discord.ui.button(label="Hủy ván", style=discord.ButtonStyle.danger, emoji="⭕", custom_id="masoi_cancel", row=1)
     async def cancel_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user.id != self.game.host_id:
             await interaction.response.send_message("❌ Chỉ Host mới được bấm hủy ván!", ephemeral=True)
@@ -285,6 +314,8 @@ class SettingsView(discord.ui.View):
         self.cog.save_game_settings(self.game)
         self.update_button_labels()
         await interaction.response.edit_message(embed=self.cog.build_settings_embed(self.game), view=self)
+        if self.lobby_message:
+            await self.cog.update_lobby_embed(self.game, self.lobby_message)
 
     @discord.ui.button(style=discord.ButtonStyle.secondary, row=3)
     async def btn_boss(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -292,6 +323,8 @@ class SettingsView(discord.ui.View):
         self.cog.save_game_settings(self.game)
         self.update_button_labels()
         await interaction.response.edit_message(embed=self.cog.build_settings_embed(self.game), view=self)
+        if self.lobby_message:
+            await self.cog.update_lobby_embed(self.game, self.lobby_message)
 
     @discord.ui.button(style=discord.ButtonStyle.primary, emoji="🎭", row=3)
     async def btn_custom_roles(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -2310,6 +2343,28 @@ class Masoi(commands.Cog):
         embed.add_field(name="\u200b", value=divider, inline=False)
         embed.add_field(name="NGƯỜI CHƠI", value=players_str, inline=False)
         embed.add_field(name=role_header, value=roles_str, inline=False)
+
+        # Mô tả chi tiết các chế độ chơi đang kích hoạt
+        active_modes = []
+        if game.settings.enable_boss_mode:
+            active_modes.append(
+                "👑🐺 **Chế độ Trùm Cuối (Raid Boss)**:\n"
+                "└ *Chúa Tể Sói sở hữu **3 HP (3 Mạng)**, quyền vote **x3** ban ngày & **Khiên Vương Giả** hóa giải sát thương! Dân Làng phải dồn lực diệt Boss.*"
+            )
+        if game.settings.enable_events:
+            active_modes.append(
+                "🎴 **Chế độ Thẻ Sự Kiện Đêm (Night Events)**:\n"
+                "└ *Mỗi đêm ngẫu nhiên xuất hiện Thẻ Sự Kiện bí ẩn (Sương Mù, Trăng Tròn,...) gây hiệu ứng bất ngờ tác động toàn bàn chơi.*"
+            )
+        if not active_modes:
+            active_modes.append(
+                "🌕 **Chế độ Tiêu Chuẩn (Standard)**:\n"
+                "└ *Luật Ma Sói cổ điển. Sói ẩn nấp đi săn ban đêm, Dân Làng thảo luận và bỏ phiếu treo cổ ban ngày.*"
+            )
+
+        mode_desc_str = "\n".join(active_modes)
+        embed.add_field(name="📌 CHẾ ĐỘ CHƠI ĐANG BẬT", value=mode_desc_str, inline=False)
+
         embed.add_field(
             name="\u200b",
             value=f"{divider}\n<a:muiten:1533428497098473623> *Bấm **Tham gia** để vào ván, chủ phòng bấm **Bắt đầu** khi đủ 5 người trở lên.*",
@@ -2333,7 +2388,8 @@ class Masoi(commands.Cog):
             f"• **Thời gian thảo luận (<a:2336vipgif:1534596901834592286> VIP):** `{s.discussion_time // 60} phút`\n"
             f"• **Thời gian hành động đêm (<a:2336vipgif:1534596901834592286> VIP):** `{s.night_time} giây`\n"
             f"• **Tính điểm rank:** `{'Có' if s.enable_rank else 'Không'}`\n\n"
-            "_Bấm các nút dưới đây để thay đổi giá trị cấu hình._"
+            f"💡 *Mẹo: Người chơi có thể bấm nút **📜 Chế độ** tại phòng chờ để xem hướng dẫn chi tiết luật chơi!*\n"
+            f"_Bấm các nút dưới đây để thay đổi giá trị cấu hình._"
         )
         return make_embed(title="⚙️ Cài Đặt Ván Ma Sói", description=desc, color=discord.Color.purple())
 
