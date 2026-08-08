@@ -48,7 +48,7 @@ ORES_CONFIG = {
         "min_gold": 0.0,
         "max_gold": 0.0,
         "rarity": "Phổ Biến",
-        "weights": {0: 50, 1: 35, 2: 25, 3: 18, 4: 12, 5: 6, 6: 3}
+        "weights": {0: 50, 1: 35, 2: 25, 3: 18, 4: 12, 5: 6, 6: 10}
     },
     "copper": {
         "name": "Quặng Đồng",
@@ -58,7 +58,7 @@ ORES_CONFIG = {
         "min_gold": 0.0,
         "max_gold": 0.0,
         "rarity": "Thường",
-        "weights": {0: 35, 1: 30, 2: 25, 3: 20, 4: 15, 5: 8, 6: 4}
+        "weights": {0: 35, 1: 30, 2: 25, 3: 20, 4: 15, 5: 8, 6: 12}
     },
     "iron": {
         "name": "Quặng Sắt",
@@ -68,7 +68,7 @@ ORES_CONFIG = {
         "min_gold": 0.0,
         "max_gold": 0.0,
         "rarity": "Thường",
-        "weights": {0: 12, 1: 22, 2: 25, 3: 22, 4: 18, 5: 12, 6: 6}
+        "weights": {0: 12, 1: 22, 2: 25, 3: 22, 4: 18, 5: 12, 6: 15}
     },
     "redstone": {
         "name": "Đá Đỏ (Redstone)",
@@ -78,67 +78,67 @@ ORES_CONFIG = {
         "min_gold": 0.0,
         "max_gold": 0.0,
         "rarity": "Hiếm",
-        "weights": {0: 3, 1: 10, 2: 18, 3: 20, 4: 20, 5: 14, 6: 8}
+        "weights": {0: 3, 1: 10, 2: 18, 3: 20, 4: 20, 5: 14, 6: 16}
     },
     "lapis": {
         "name": "Đá Lam (Lapis Lazuli)",
         "emoji": "<:80357lapis:1535309287004311582>",
         "min_money": 1_200_000,
         "max_money": 2_800_000,
-        "min_gold": 0.10,
-        "max_gold": 0.30,
+        "min_gold": 0.05,
+        "max_gold": 0.20,
         "rarity": "Hiếm",
-        "weights": {0: 0, 1: 3, 2: 6, 3: 12, 4: 16, 5: 16, 6: 10}
+        "weights": {0: 0, 1: 3, 2: 6, 3: 12, 4: 16, 5: 16, 6: 14}
     },
     "gold": {
         "name": "Quặng Vàng",
         "emoji": "<:90463gold:1535309308944982018>",
         "min_money": 2_500_000,
         "max_money": 6_000_000,
-        "min_gold": 0.30,
-        "max_gold": 0.80,
+        "min_gold": 0.20,
+        "max_gold": 0.50,
         "rarity": "Cực Hiếm",
-        "weights": {0: 0, 1: 0, 2: 1, 3: 6, 4: 12, 5: 18, 6: 15}
+        "weights": {0: 0, 1: 0, 2: 1, 3: 6, 4: 12, 5: 18, 6: 12}
     },
     "diamond": {
         "name": "Quặng Kim Cương",
         "emoji": "<:31347diamond:1535309327429013585>",
         "min_money": 8_000_000,
         "max_money": 18_000_000,
-        "min_gold": 0.80,
-        "max_gold": 2.20,
+        "min_gold": 0.50,
+        "max_gold": 1.20,
         "rarity": "Huyền Thoại",
-        "weights": {0: 0, 1: 0, 2: 0, 3: 2, 4: 6, 5: 16, 6: 22}
+        "weights": {0: 0, 1: 0, 2: 0, 3: 2, 4: 6, 5: 16, 6: 14}
     },
     "emerald": {
         "name": "Ngọc Lục Bảo (Emerald)",
         "emoji": "<:71597emerald:1535309338871070770>",
         "min_money": 22_000_000,
         "max_money": 45_000_000,
-        "min_gold": 2.20,
-        "max_gold": 5.50,
+        "min_gold": 1.20,
+        "max_gold": 2.80,
         "rarity": "Thần Thoại",
-        "weights": {0: 0, 1: 0, 2: 0, 3: 0, 4: 1, 5: 7, 6: 18}
+        "weights": {0: 0, 1: 0, 2: 0, 3: 0, 4: 1, 5: 7, 6: 10}
     },
     "ancient_debris": {
         "name": "Mảnh Cổ Đại (Netherite)",
         "emoji": "<:87138netherite:1535309362023759972>",
         "min_money": 60_000_000,
         "max_money": 120_000_000,
-        "min_gold": 6.00,
-        "max_gold": 15.00,
+        "min_gold": 2.50,
+        "max_gold": 6.00,
         "rarity": "Bảo Vật Nether",
-        "weights": {0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 3, 6: 12}
+        "weights": {0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 3, 6: 5}
     },
     "nether_star": {
         "name": "Sao Nether (Nether Star)",
         "emoji": "<:1989netherstar:1535309373713416192>",
-        "min_money": 150_000_000,
-        "max_money": 350_000_000,
-        "min_gold": 15.00,
-        "max_gold": 40.00,
+        "min_money": 100_000_000,
+        "max_money": 220_000_000,
+        "min_gold": 5.00,
+        "max_gold": 12.00,
         "rarity": "Vũ Trụ Vô Giá",
-        "weights": {0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 6}
+        "weights": {0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 2}
     }
 }
 
