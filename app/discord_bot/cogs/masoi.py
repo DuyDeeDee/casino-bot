@@ -24,6 +24,8 @@ from app.discord_bot.modules.masoi_engine import (
     MasoiGame,
     MasoiPlayer,
     MasoiSettings,
+    NightEvent,
+    ReplayLog,
     Role,
     get_rank_tier,
 )
@@ -206,6 +208,8 @@ class SettingsView(discord.ui.View):
         self.btn_disc_time.label = f"Thời gian thảo luận: {s.discussion_time // 60} phút"
         self.btn_night_time.label = f"Thời gian đêm: {s.night_time}s"
         self.btn_rank.label = f"Tính rank: {'Có ✅' if s.enable_rank else 'Không'}"
+        self.btn_events.label = f"Thẻ Sự Kiện: {'Bật ✅' if s.enable_events else 'Tắt'}"
+        self.btn_boss.label = f"Trùm Cuối: {'Bật 👑' if s.enable_boss_mode else 'Tắt'}"
         self.btn_custom_roles.label = f"Phân vai: {'Tự động ✅' if s.role_setup_mode == 'AUTO' else 'Tùy chỉnh ⚙️'}"
 
     async def check_vip_host(self, interaction: discord.Interaction, feature_name: str) -> bool:
@@ -271,6 +275,20 @@ class SettingsView(discord.ui.View):
     @discord.ui.button(style=discord.ButtonStyle.secondary, row=3)
     async def btn_rank(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.game.settings.cycle_rank()
+        self.cog.save_game_settings(self.game)
+        self.update_button_labels()
+        await interaction.response.edit_message(embed=self.cog.build_settings_embed(self.game), view=self)
+
+    @discord.ui.button(style=discord.ButtonStyle.secondary, row=3)
+    async def btn_events(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.game.settings.cycle_events()
+        self.cog.save_game_settings(self.game)
+        self.update_button_labels()
+        await interaction.response.edit_message(embed=self.cog.build_settings_embed(self.game), view=self)
+
+    @discord.ui.button(style=discord.ButtonStyle.secondary, row=3)
+    async def btn_boss(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.game.settings.cycle_boss_mode()
         self.cog.save_game_settings(self.game)
         self.update_button_labels()
         await interaction.response.edit_message(embed=self.cog.build_settings_embed(self.game), view=self)
@@ -1520,6 +1538,88 @@ class DayVoteView(discord.ui.View):
 #  End Game & Replay Views
 # ==============================================================================
 
+def format_replay_story_line(log: ReplayLog) -> str:
+    """Chuyển đổi ReplayLog thành câu chuyện văn học / Nhật ký truyền cảm."""
+    actor = f"**{log.actor_name}**" if log.actor_name else ""
+    target = f"**{log.target_name}**" if log.target_name else ""
+    event = log.event_type
+
+    if event in ("WOLF_VOTE", "WOLF_KILL"):
+        return f"🐺 **Bầy Sói** âm thầm cất bước trong đêm tối và nhắm nanh cắn {target}."
+    elif event == "GUARD_PROTECT":
+        return f"🛡️ **Bảo Vệ** xuất hiện kịp thời, giơ khiên bảo vệ {target} an toàn!"
+    elif event == "WITCH_SAVE":
+        return f"🧪 **Phù Thủy** nhanh tay dùng **Bình Cứu** hồi sinh {target} khỏi tay Bầy Sói!"
+    elif event == "WITCH_POISON":
+        return f"🧪 **Phù Thủy** mở hũ **Bình Độc**, tàn nhẫn hạ sát {target} trong bóng đêm!"
+    elif event in ("SEER_ACTION", "SEER_INSPECT"):
+        return f"🔮 **Tiên Tri** {actor} bói toán thi triển thần thư, soi rọi thân phận của {target}."
+    elif event == "WOLF_SEER_INSPECT":
+        return f"🐺🔮 **Sói Tiên Tri** {actor} âm thầm thấu thị, biết rõ vai trò cá nhân của {target}."
+    elif event == "CURSED_CONVERT":
+        return f"🌕 **Kẻ Bị Nguyền** {target} bị cắn nhưng không chết — vết cắn phát tác biến thành **Sói Mới**!"
+    elif event == "ELDER_SAVED":
+        return f"👴 **Già Làng** {target} ngoan cường chống đỡ thành công đòn cắn thứ 1 của Bầy Sói!"
+    elif event == "SK_IMMUNE":
+        return f"🔪 **Sát Thủ** {target} với cơ thể thép đã đánh bật đòn tấn công của Bầy Sói!"
+    elif event == "SERIAL_KILLER_KILL":
+        return f"🔪 **Sát Thủ Hàng Loạt** {actor} vung dao trong bóng đêm hạ gục {target}!"
+    elif event == "WITCH_SAVE_SK":
+        return f"🧪 **Phù Thủy** dùng **Bình Cứu** giải cứu {target} khỏi tay Sát Thủ!"
+    elif event == "GUARD_PROTECT_SK":
+        return f"🛡️ **Bảo Vệ** cứu sống {target} khỏi lưỡi dao tàn bạo của Sát Thủ!"
+    elif event == "HARLOT_VISIT":
+        return f"💃 **Vũ Nữ** {actor} ghé thăm {target}, phong tỏa toàn bộ kỹ năng đêm!"
+    elif event == "WOLF_ROLEBLOCKED":
+        return f"🔇 {actor} bị Vũ Nữ phong tỏa, đòn cắn đêm nay hoàn toàn bị vô hiệu!"
+    elif event == "WHITE_WOLF_BITE":
+        return f"🐺⭐ **Sói Trắng** {actor} phản bội hạ sát đồng bọn {target} ngay trong bầy!"
+    elif event == "GIRL_CAUGHT":
+        return f"👧 **Cô Bé** {target} lỡ tay phát ra tiếng động khi nhìn trộm và bị Bầy Sói phát hiện hạ sát!"
+    elif event == "PIPER_CHARM":
+        return f"🎵 **Người Thổi Sáo** {actor} cất tiếng đàn mê hoặc {target or log.result}!"
+    elif event == "LOVER_DEATH":
+        return f"💘 **Bi kịch:** {target} u uất tự sát đi theo tình nhân vừa qua đời!"
+    elif event == "RUSTY_KNIGHT_DYING":
+        return f"⚔️ **Hiệp Sĩ Kiếm Gỉ** {target} ngã xuống, để lại lời nguyền giáng đòn 1 Sói vào đêm sau!"
+    elif event == "RUSTY_KNIGHT_CURSE":
+        return f"⚔️ Lời nguyền của **Hiệp Sĩ Kiếm Gỉ** giáng đòn hạ gục Sói {target}!"
+    elif event == "WOLF_CUB_RAGE":
+        return f"🐺🩸 **Sói Cuồng Sát** {actor or target} ngã xuống! Bầy Sói sục sôi cuồng nộ cắn 2 người đêm tiếp theo!"
+    elif event == "APPRENTICE_PROMOTED":
+        return f"🔮✨ **Tiên Tri Tập Sự** {actor} đứng lên kế thừa di chí, trở thành **Tiên Tri Mới**!"
+    elif event == "NIGHT_DEATH":
+        return f"💀 {target} qua đời trong đêm tối lạnh lẽo..."
+    elif event == "MAYOR_SUCCESSION":
+        return f"🎩 **Thị Trưởng** {actor} chỉ định {target} làm Thị Trưởng kế nhiệm!"
+    elif event == "HUNTER_SHOOT":
+        return f"🏹 **Thợ Săn** {actor} trước khi trút hơi thở cuối cùng đã giương nỏ bắn gục {target}!"
+    elif event == "DAY_EXECUTION":
+        return f"⚖️ **Dân Làng xử tử:** {target} bị dồn phiếu bầu và phải bước lên giàn treo cổ!"
+    elif event == "SCAPEGOAT_EXECUTED":
+        return f"🐐 **Hòa phiếu:** **Dê Tế Thần** {target} tự động bị kéo lên giàn treo gánh tội thay!"
+    elif event == "NIGHT_EVENT":
+        return f"🎴 **Thẻ Sự Kiện Đêm:** {log.result}"
+    elif event == "SOLAR_ECLIPSE_SKIP":
+        return f"☀️ **Nhật Thực Bóng Tối:** Ban ngày dân làng bị che mắt, không thể bỏ phiếu treo cổ!"
+    elif event == "HOLY_LIGHT_SAVED":
+        return f"🛡️ **Thánh Quang Bảo Hộ:** Hào quang thần thánh hóa giải đòn cắn của Bầy Sói cho {target}!"
+    elif event == "BOSS_SHIELD_SAVED":
+        return f"👑🐺 **Chúa Tể Sói** dùng Khiên Vương Giả hóa giải Bình Độc thành công!"
+    elif event == "BOSS_DAMAGE":
+        return f"👑🐺 **Chúa Tể Sói** bị giáng đòn tổn hại 1 Mạng! {log.result}"
+    elif event == "BOSS_KILLED":
+        return f"💥👑🐺 **Chúa Tể Sói** đã bị tiêu diệt hoàn toàn!"
+    elif event == "VOTE_RESULT":
+        return f"⚖️ **Bỏ phiếu ban ngày:** {log.result}."
+    elif event == "GAME_WIN":
+        return f"🏆 **KẾT QUẢ CHUNG CUỘC:** {log.result}"
+    else:
+        a_str = f"**{log.actor_name}**: " if log.actor_name else ""
+        t_str = f" -> **{log.target_name}**" if log.target_name else ""
+        return f"• {a_str}{log.result}{t_str}"
+
+
 class GameEndView(discord.ui.View):
     """View ở embed kết thúc ván."""
     def __init__(self, game: MasoiGame, cog: "Masoi"):
@@ -1527,7 +1627,7 @@ class GameEndView(discord.ui.View):
         self.game = game
         self.cog = cog
 
-    @discord.ui.button(label="Xem Lại", style=discord.ButtonStyle.secondary, emoji="📼", custom_id="masoi_replay")
+    @discord.ui.button(label="Nhật Ký Ván Đấu", style=discord.ButtonStyle.secondary, emoji="📜", custom_id="masoi_replay")
     async def replay_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         view = ReplayView(self.game)
         embed = view.get_embed()
@@ -1540,7 +1640,7 @@ class GameEndView(discord.ui.View):
 
 
 class ReplayView(discord.ui.View):
-    """View phân trang xem lại diễn biến từng Đêm/Ngày."""
+    """View phân trang xem lại nhật ký diễn biến Storyline dạng Dòng Thời Gian."""
     def __init__(self, game: MasoiGame):
         super().__init__(timeout=180)
         self.game = game
@@ -1550,46 +1650,95 @@ class ReplayView(discord.ui.View):
 
     def build_pages(self) -> list[dict]:
         pages = []
+        
         # Gom nhóm logs theo Đêm và Ngày
         grouped: Dict[str, list] = {}
         for log in self.game.replay_logs:
             key = f"Ngày {log.day}" if "Ban ngày" in log.phase else f"Đêm {log.day}"
             grouped.setdefault(key, []).append(log)
 
-        for title, logs in grouped.items():
-            lines = []
-            for log in logs:
-                t_str = f" -> **{log.target_name}**" if log.target_name else ""
-                a_str = f"**{log.actor_name}**: " if log.actor_name else ""
-                lines.append(f"• [{log.event_type}] {a_str}{log.result}{t_str}")
-            pages.append({"title": title, "content": "\n".join(lines) if lines else "Không có sự kiện."})
+        # ── TRANG 0: TỔNG QUAN DÒNG THỜI GIAN (STORYLINE RECAP) ──
+        overview_lines = [
+            f"📜 **NHẬT KÝ DÒNG THỜI GIAN VÁN ĐẤU**",
+            f"──────────────────────────────────────",
+        ]
 
-        if not pages:
-            pages.append({"title": "Thông Tin Replay", "content": "Không ghi nhận được diễn biến ván đấu."})
+        if not grouped:
+            overview_lines.append("*Ván đấu kết thúc quá nhanh hoặc không ghi nhận được diễn biến.*")
+        else:
+            for key, logs in grouped.items():
+                is_night = key.startswith("Đêm")
+                icon = "🌙" if is_night else "☀️"
+                overview_lines.append(f"{icon} **{key}:**")
+                
+                for log in logs:
+                    line = format_replay_story_line(log)
+                    overview_lines.append(f"  └ {line}")
+                overview_lines.append("")
+
+        if self.game.winner_faction:
+            overview_lines.append(f"🏆 **CHIẾN THẮNG CHUNG CUỘC:** {self.game.winner_faction.value} đã giành thắng lợi!")
+
+        pages.append({
+            "title": "📜 Tổng Quan Dòng Thời Gian",
+            "content": "\n".join(overview_lines)
+        })
+
+        # ── CÁC TRANG TIẾP THEO: CHI TIẾT TỪNG ĐÊM / NGÀY ──
+        for title, logs in grouped.items():
+            is_night = title.startswith("Đêm")
+            icon = "🌙" if is_night else "☀️"
+            lines = [
+                f"📖 **NHẬT KÝ CHI TIẾT — {icon} {title.upper()}**",
+                "──────────────────────────────────────",
+            ]
+            for log in logs:
+                lines.append(f"• {format_replay_story_line(log)}")
+            
+            pages.append({
+                "title": f"{icon} {title}",
+                "content": "\n".join(lines)
+            })
+
         return pages
 
     def update_buttons(self):
+        self.btn_overview.disabled = (self.current_page == 0)
         self.btn_prev.disabled = (self.current_page == 0)
         self.btn_next.disabled = (self.current_page == len(self.pages) - 1)
 
     def get_embed(self) -> discord.Embed:
         page = self.pages[self.current_page]
+        
+        if self.current_page == 0:
+            color = discord.Color.gold()
+        elif "Đêm" in page['title']:
+            color = discord.Color.dark_purple()
+        else:
+            color = discord.Color.orange()
+
         embed = make_embed(
-            title=f"📼 XEM LẠI — {page['title']} ({self.current_page + 1}/{len(self.pages)})",
+            title=f"📜 REPLAY STORYLINE — {page['title']} ({self.current_page + 1}/{len(self.pages)})",
             description=page["content"],
-            color=discord.Color.dark_purple(),
+            color=color,
         )
-        embed.set_footer(text=f"Ván ID: {self.game.guild_id}-{self.game.channel_id}")
+        embed.set_footer(text=f"Ván ID: {self.game.guild_id}-{self.game.channel_id} · Chuyển trang để xem chi tiết")
         return embed
 
-    @discord.ui.button(label="Trước", style=discord.ButtonStyle.secondary, emoji="⬅️")
+    @discord.ui.button(label="Tổng Quan", style=discord.ButtonStyle.primary, emoji="📜", row=0)
+    async def btn_overview(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.current_page = 0
+        self.update_buttons()
+        await interaction.response.edit_message(embed=self.get_embed(), view=self)
+
+    @discord.ui.button(label="Trang Trước", style=discord.ButtonStyle.secondary, emoji="⬅️", row=0)
     async def btn_prev(self, interaction: discord.Interaction, button: discord.ui.Button):
         if self.current_page > 0:
             self.current_page -= 1
             self.update_buttons()
             await interaction.response.edit_message(embed=self.get_embed(), view=self)
 
-    @discord.ui.button(label="Sau", style=discord.ButtonStyle.secondary, emoji="➡️")
+    @discord.ui.button(label="Trang Sau", style=discord.ButtonStyle.secondary, emoji="➡️", row=0)
     async def btn_next(self, interaction: discord.Interaction, button: discord.ui.Button):
         if self.current_page < len(self.pages) - 1:
             self.current_page += 1
@@ -1663,11 +1812,15 @@ class Masoi(commands.Cog):
         name="masoi",
         aliases=["werewolf", "ma-soi"],
         brief="Tạo phòng chờ chơi game Ma Sói (Werewolf). Phí tạo phòng: 2 thỏi vàng (Miễn phí cho VIP).",
-        usage="masoi",
+        usage="masoi [event/boss]",
     )
     async def masoi_cmd(self, ctx: commands.Context, *, sub_command: str = ""):
         if sub_command.strip().lower() in ("vip", "v"):
             return await self.masoivip_cmd(ctx)
+
+        sub_clean = sub_command.strip().lower()
+        is_event_mode = sub_clean in ("event", "events", "e", "masoievent")
+        is_boss_mode = sub_clean in ("boss", "b", "masoiboss", "raid")
 
         key = f"{ctx.guild.id}-{ctx.channel.id}"
         if key in self.active_games:
@@ -1693,8 +1846,18 @@ class Masoi(commands.Cog):
         else:
             msg_text = f"<a:yay:1533444499827851505> **{ctx.author.display_name}** đã tạo phòng Ma Sói!"
 
+        if is_event_mode:
+            msg_text += "\n🎴 **[CHẾ ĐỘ THẺ SỰ KIỆN ĐÊM - MASOI EVENT IS ACTIVE!]**"
+        elif is_boss_mode:
+            msg_text += "\n👑🐺 **[CHẾ ĐỘ TRÙM CUỐI - RAID BOSS MODE IS ACTIVE!]**"
+
         game = MasoiGame(ctx.guild.id, ctx.channel.id, ctx.author.id, ctx.author.display_name)
         game.settings = self.get_saved_settings(ctx.guild.id, ctx.channel.id)
+        if is_event_mode:
+            game.settings.enable_events = True
+        if is_boss_mode:
+            game.settings.enable_boss_mode = True
+
         if not is_vip:
             game.settings.reveal_roles_on_death = False
             game.settings.discussion_time = 120
@@ -1710,6 +1873,24 @@ class Masoi(commands.Cog):
             view=view
         )
         game.message_id = msg.id
+
+    @commands.command(
+        name="masoievent",
+        aliases=["masoi-event", "werewolfevent", "masoi_event"],
+        brief="Tạo phòng chơi Ma Sói ở Chế Độ Thẻ Sự Kiện Đêm (Night Events).",
+        usage="masoievent",
+    )
+    async def masoievent_cmd(self, ctx: commands.Context):
+        await self.masoi_cmd(ctx, sub_command="event")
+
+    @commands.command(
+        name="masoiboss",
+        aliases=["masoi-boss", "werewolfboss", "masoi_boss"],
+        brief="Tạo phòng chơi Ma Sói ở Chế Độ Trùm Cuối (Raid Boss).",
+        usage="masoiboss",
+    )
+    async def masoiboss_cmd(self, ctx: commands.Context):
+        await self.masoi_cmd(ctx, sub_command="boss")
 
     @commands.command(
         name="masoivip",
@@ -2143,6 +2324,8 @@ class Masoi(commands.Cog):
         desc = (
             f"⚙️ **Cấu Hình Ván Ma Sói**\n\n"
             f"• **Phân chia vai trò:** `{mode_text}`\n"
+            f"• **Chế độ Thẻ Sự Kiện Đêm:** `{'Bật 🎴' if s.enable_events else 'Tắt'}`\n"
+            f"• **Chế độ Trùm Cuối (Raid Boss):** `{'Bật 👑' if s.enable_boss_mode else 'Tắt'}`\n"
             f"• **Hiện vai trò người chết (<a:2336vipgif:1534596901834592286> VIP):** `{'Hiện ngay' if s.reveal_roles_on_death else 'Ẩn tới cuối ván'}`\n"
             f"• **Kẻ Ngốc (Tanner):** `{'Bật' if s.enable_tanner else 'Tắt'}`\n"
             f"• **Hiển thị số phiếu:** `{'Real-time' if s.vote_display == 'REALTIME' else 'Ẩn tới hết giờ'}`\n"
@@ -2439,6 +2622,19 @@ class Masoi(commands.Cog):
                 game.start_night()
                 game.phase = GamePhase.NIGHT_GUARD
 
+                # Thông báo Thẻ Sự Kiện Đêm nếu bật chế độ Thẻ Sự Kiện
+                if game.settings.enable_events and game.current_night_event:
+                    embed_event = discord.Embed(
+                        title=f"🎴 THẺ SỰ KIỆN ĐÊM {game.night_count} — {game.current_night_event.title}",
+                        description=(
+                            f"{game.current_night_event.description}\n\n"
+                            f"{divider}\n"
+                            f"⚠️ *Sự kiện có hiệu lực ngay trong Đêm {game.night_count} và Ban Ngày tiếp theo!*"
+                        ),
+                        color=discord.Color.purple()
+                    )
+                    await _safe_send(message.channel, embed=embed_event)
+
                 # Gửi DM riêng cho Thần Tình Yêu ở Đêm 1
                 if game.night_count == 1:
                     cupid_p = game.get_player_by_role(Role.CUPID)
@@ -2509,21 +2705,32 @@ class Masoi(commands.Cog):
                 if witch_p:
                     wt_user = await self.get_or_fetch_user(witch_p.user_id)
                     if wt_user:
-                        victim_id = game.resolve_wolf_target()
-                        victim_p = game.players.get(victim_id) if victim_id else None
-                        v_name = victim_p.display_name if victim_p else "Không ai"
-                        embed = discord.Embed(
-                            title=f"<a:moon:1533444241596874792> Đêm {game.night_count} — Lượt của Phù Thủy",
-                            description=f"Đêm nay, bầy Sói nhắm cắn: **{v_name}**.\nBạn có muốn dùng **BÌNH CỨU** không? Còn **{game.settings.night_time} giây** để quyết định.",
-                            color=discord.Color(0xE0A638)
-                        )
-                        view = NightWitchView(game, witch_p.user_id, victim_id)
-                        game.witch_view = view
-                        try:
-                            msg = await wt_user.send(embed=embed, view=view)
-                            game.witch_dm_message = msg
-                        except Exception:
-                            pass
+                        if game.current_night_event == NightEvent.SEAL_NIGHT:
+                            embed = discord.Embed(
+                                title=f"🌙 Đêm {game.night_count} — Lượt của Phù Thủy",
+                                description="🧪 **Do ảnh hưởng của Thẻ Sự Kiện Phong Ấn Dược Liệu**, tất cả hũ thuốc của bạn đều bị phong tỏa đêm nay!",
+                                color=discord.Color.red()
+                            )
+                            try:
+                                await wt_user.send(embed=embed)
+                            except Exception:
+                                pass
+                        else:
+                            victim_id = game.resolve_wolf_target()
+                            victim_p = game.players.get(victim_id) if victim_id else None
+                            v_name = victim_p.display_name if victim_p else "Không ai"
+                            embed = discord.Embed(
+                                title=f"<a:moon:1533444241596874792> Đêm {game.night_count} — Lượt của Phù Thủy",
+                                description=f"Đêm nay, bầy Sói nhắm cắn: **{v_name}**.\nBạn có muốn dùng **BÌNH CỨU** không? Còn **{game.settings.night_time} giây** để quyết định.",
+                                color=discord.Color(0xE0A638)
+                            )
+                            view = NightWitchView(game, witch_p.user_id, victim_id)
+                            game.witch_view = view
+                            try:
+                                msg = await wt_user.send(embed=embed, view=view)
+                                game.witch_dm_message = msg
+                            except Exception:
+                                pass
 
                 # 5. Sói Tiên Tri
                 wolf_seer_p = game.get_player_by_role(Role.WOLF_SEER)
@@ -2835,9 +3042,10 @@ class Masoi(commands.Cog):
 
                 # ── BƯỚC 3: THẢO LUẬN BAN NGÀY ──
                 game.phase = GamePhase.DAY_DISCUSSION
+                disc_limit = 30 if game.current_night_event == NightEvent.SILENT_NIGHT else game.settings.discussion_time
                 disc_embed = discord.Embed(
                     title=f"💬 Ban Ngày — Thảo Luận (Ngày {game.day_count})",
-                    description=f"<a:time:1533445134522384536> **Thời gian thảo luận:** `{game.settings.discussion_time // 60} phút`.\n"
+                    description=f"<a:time:1533445134522384536> **Thời gian thảo luận:** `{disc_limit} giây`.\n"
                                 f"Bấm **Yêu cầu bỏ phiếu sớm** nếu muốn dồn phiếu ngay!\n\n"
                                 f"{divider}\n💬 Mọi người hãy trao đổi ý kiến để tìm ra bầy Sói!",
                     color=discord.Color(0xE0A638)
@@ -2847,7 +3055,7 @@ class Masoi(commands.Cog):
 
                 # Chờ thảo luận
                 elapsed = 0
-                while elapsed < game.settings.discussion_time:
+                while elapsed < disc_limit:
                     if disc_view.is_finished() or key not in self.active_games or game.phase == GamePhase.GAME_END:
                         break
                     await asyncio.sleep(1)
@@ -2863,66 +3071,80 @@ class Masoi(commands.Cog):
 
                 # ── BƯỚC 4: BỎ PHIẾU TREO CỔ ──
                 game.phase = GamePhase.DAY_VOTE
-                vote_embed = self.build_vote_embed(game, is_final=False)
-                vote_view = DayVoteView(game, self)
-                vote_msg = await _safe_send(message.channel, embed=vote_embed, view=vote_view)
-
-                # Chờ tất cả mọi người bỏ phiếu xong hoặc hết thời gian đếm ngược
-                elapsed = 0
-                while elapsed < game.settings.night_time:
-                    if vote_view.is_finished() or len(game.day_votes) >= len(game.get_alive_players()) or key not in self.active_games or game.phase == GamePhase.GAME_END:
-                        break
-                    await asyncio.sleep(1)
-                    elapsed += 1
-
-                if key not in self.active_games or game.phase == GamePhase.GAME_END:
-                    break
-
-                # ── BƯỚC 5: XỬ LÝ BỎ PHIẾU ──
-                game.phase = GamePhase.DAY_RESOLVE
-                vote_final_embed = self.build_vote_embed(game, is_final=True)
-                try:
-                    await vote_msg.edit(embed=vote_final_embed, view=None)
-                except Exception:
-                    pass
-
-                executed_id = game.resolve_day_vote()
-                await self.check_and_trigger_hunter(game, message.channel)
-                await self.check_and_trigger_mayor_succession(game, message.channel)
-                await self.sync_channel_permissions(game, message.channel)
-
-                if executed_id:
-                    p = game.players[executed_id]
-                    last_log = game.replay_logs[-1] if game.replay_logs else None
-                    if p.role == Role.SCAPEGOAT and last_log and last_log.event_type == "SCAPEGOAT_EXECUTED":
-                        if game.settings.reveal_roles_on_death:
-                            exec_text = f"🐐 **Do phiếu bầu bị HÒA, Dê Tế Thần {p.display_name}** tự động bị gánh tội và đưa lên giàn treo cổ! *(Vai trò: **{p.role.emoji} {p.role.value}**)*"
-                        else:
-                            exec_text = f"🐐 **Do phiếu bầu bị HÒA, Dê Tế Thần {p.display_name}** tự động bị gánh tội và đưa lên giàn treo cổ!"
-                    else:
-                        if game.settings.reveal_roles_on_death:
-                            exec_text = f"<a:huyay:1533445376563089448> **{p.display_name}** đã bị dân làng xử tử trên giàn treo cổ! *(Vai trò: **{p.role.emoji} {p.role.value}**)*"
-                        else:
-                            exec_text = f"<a:huyay:1533445376563089448> **{p.display_name}** đã bị dân làng xử tử trên giàn treo cổ!"
-
-                    eco = self.get_economy()
-                    if eco:
-                        vip_info = eco.get_masoi_vip_info(p.user_id)
-                        if vip_info["is_vip"] and vip_info["last_words"]:
-                            exec_text += f"\n\n💬 *Lời trăn trối của <a:2336vipgif:1534596901834592286> **{p.display_name}**: \"{vip_info['last_words']}\"*"
+                if game.current_night_event == NightEvent.SOLAR_ECLIPSE:
+                    game.phase = GamePhase.DAY_RESOLVE
+                    eclipse_embed = discord.Embed(
+                        title="☀️ NHẬT THỰC BÓNG TỐI",
+                        description="Do ảnh hưởng của hiện tượng **Nhật Thực Bóng Tối**, ban ngày hôm nay Dân Làng bị bóng tối che mắt và **không thể bỏ phiếu treo cổ**!",
+                        color=discord.Color.dark_red()
+                    )
+                    await _safe_send(message.channel, embed=eclipse_embed)
+                    game.resolve_day_vote()
                 else:
-                    last_log = game.replay_logs[-1] if game.replay_logs else None
-                    if last_log and last_log.event_type == "VOTE_RESULT":
-                        exec_text = f"<a:huyay:1533445376563089448> Lượt bỏ phiếu kết thúc: **{last_log.result}**."
-                    else:
-                        exec_text = "<a:huyay:1533445376563089448> Lượt bỏ phiếu kết thúc, không ai bị xử tử."
+                    vote_embed = self.build_vote_embed(game, is_final=False)
+                    vote_view = DayVoteView(game, self)
+                    vote_msg = await _safe_send(message.channel, embed=vote_embed, view=vote_view)
 
-                embed_exec = discord.Embed(
-                    title="<a:huyay:1533445376563089448> Kết Quả Xử Tử",
-                    description=f"{exec_text}\n\n{divider}",
-                    color=discord.Color(0xE0A638)
-                )
-                await _safe_send(message.channel, embed=embed_exec)
+                    # Chờ tất cả mọi người bỏ phiếu xong hoặc hết thời gian đếm ngược
+                    elapsed = 0
+                    while elapsed < game.settings.night_time:
+                        if vote_view.is_finished() or len(game.day_votes) >= len(game.get_alive_players()) or key not in self.active_games or game.phase == GamePhase.GAME_END:
+                            break
+                        await asyncio.sleep(1)
+                        elapsed += 1
+
+                    if key not in self.active_games or game.phase == GamePhase.GAME_END:
+                        break
+
+                    # ── BƯỚC 5: XỬ LÝ BỎ PHIẾU ──
+                    game.phase = GamePhase.DAY_RESOLVE
+                    vote_final_embed = self.build_vote_embed(game, is_final=True)
+                    try:
+                        await vote_msg.edit(embed=vote_final_embed, view=None)
+                    except Exception:
+                        pass
+
+                    executed_id = game.resolve_day_vote()
+                    await self.check_and_trigger_hunter(game, message.channel)
+                    await self.check_and_trigger_mayor_succession(game, message.channel)
+                    await self.sync_channel_permissions(game, message.channel)
+
+                    if executed_id:
+                        p = game.players[executed_id]
+                        if p.role == Role.ALPHA_WOLF:
+                            if p.boss_lives > 0:
+                                exec_text = f"👑🐺 **Chúa Tể Sói {p.display_name}** đã hứng chịu đòn dồn phiếu của Dân Làng, nhưng nhờ sở hữu 3 Mạng Vương Giả, hắn đã thoát chết! (HP hiện tại: **{p.boss_lives}/3**)"
+                            else:
+                                exec_text = f"💥👑🐺 **CHÚA TỂ SÓI {p.display_name}** ĐÃ CHÍNH THỨC BỊ DÂN LÀNG TIÊU DIỆT HOÀN TOÀN! Phe Dân Làng đã giải phóng vương quốc!"
+                        elif p.role == Role.SCAPEGOAT and last_log and last_log.event_type == "SCAPEGOAT_EXECUTED":
+                            if game.settings.reveal_roles_on_death:
+                                exec_text = f"🐐 **Do phiếu bầu bị HÒA, Dê Tế Thần {p.display_name}** tự động bị gánh tội và đưa lên giàn treo cổ! *(Vai trò: **{p.role.emoji} {p.role.value}**)*"
+                            else:
+                                exec_text = f"🐐 **Do phiếu bầu bị HÒA, Dê Tế Thần {p.display_name}** tự động bị gánh tội và đưa lên giàn treo cổ!"
+                        else:
+                            if game.settings.reveal_roles_on_death:
+                                exec_text = f"<a:huyay:1533445376563089448> **{p.display_name}** đã bị dân làng xử tử trên giàn treo cổ! *(Vai trò: **{p.role.emoji} {p.role.value}**)*"
+                            else:
+                                exec_text = f"<a:huyay:1533445376563089448> **{p.display_name}** đã bị dân làng xử tử trên giàn treo cổ!"
+
+                        eco = self.get_economy()
+                        if eco:
+                            vip_info = eco.get_masoi_vip_info(p.user_id)
+                            if vip_info["is_vip"] and vip_info["last_words"]:
+                                exec_text += f"\n\n💬 *Lời trăn trối của <a:2336vipgif:1534596901834592286> **{p.display_name}**: \"{vip_info['last_words']}\"*"
+                    else:
+                        last_log = game.replay_logs[-1] if game.replay_logs else None
+                        if last_log and last_log.event_type == "VOTE_RESULT":
+                            exec_text = f"<a:huyay:1533445376563089448> Lượt bỏ phiếu kết thúc: **{last_log.result}**."
+                        else:
+                            exec_text = "<a:huyay:1533445376563089448> Lượt bỏ phiếu kết thúc, không ai bị xử tử."
+
+                    embed_exec = discord.Embed(
+                        title="<a:huyay:1533445376563089448> Kết Quả Xử Tử",
+                        description=f"{exec_text}\n\n{divider}",
+                        color=discord.Color(0xE0A638)
+                    )
+                    await _safe_send(message.channel, embed=embed_exec)
 
                 # Kiểm tra thắng sau bỏ phiếu
                 if game.check_win_condition():

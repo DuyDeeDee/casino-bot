@@ -38,6 +38,7 @@ class Role(Enum):
     RUSTY_KNIGHT = "Hiệp Sĩ Kiếm Gỉ"
     PIPER = "Người Thổi Sáo"
     SCAPEGOAT = "Dê Tế Thần"
+    ALPHA_WOLF = "Chúa Tể Sói"
 
     @property
     def emoji(self) -> str:
@@ -67,12 +68,13 @@ class Role(Enum):
             Role.RUSTY_KNIGHT: "⚔️",
             Role.PIPER: "🎵",
             Role.SCAPEGOAT: "🐐",
+            Role.ALPHA_WOLF: "👑🐺",
         }
         return emojis.get(self, "❓")
 
     @property
     def faction(self) -> Faction:
-        if self in (Role.WOLF, Role.WOLF_SEER, Role.WOLF_CUB, Role.WHITE_WOLF, Role.PHANTOM_WOLF, Role.MUTE_WOLF):
+        if self in (Role.WOLF, Role.WOLF_SEER, Role.WOLF_CUB, Role.WHITE_WOLF, Role.PHANTOM_WOLF, Role.MUTE_WOLF, Role.ALPHA_WOLF):
             return Faction.WEREWOLF
         elif self == Role.TANNER:
             return Faction.INDEPENDENT
@@ -111,6 +113,7 @@ class Role(Enum):
             Role.RUSTY_KNIGHT: "Nếu bị Sói cắn chết, đêm kế tiếp 1 con Sói ngẫu nhiên sẽ bị 'lời nguyền' hạ gục. Cái chết có giá trị!",
             Role.PIPER: "Phe Độc Lập. Mỗi đêm mê hoặc 2 người. Thắng khi toàn bộ người chơi còn sống (kể cả Sói) đều đã bị mê hoặc!",
             Role.SCAPEGOAT: "Nếu bỏ phiếu ban ngày bị hòa (tie vote), Dê Tế Thần tự động bị treo cổ thay thế. Không công bằng — đó là số phận!",
+            Role.ALPHA_WOLF: "Trùm Cuối ván đấu Raid Boss! Sở hữu 3 Mạng Vương Giả, kháng 1 Bình Độc, phiếu bầu ban ngày tính x3 và cắn 2 người/đêm!",
         }
         return descriptions.get(self, "")
 
@@ -140,6 +143,45 @@ class GamePhase(Enum):
     GAME_END = "Kết thúc ván đấu"
 
 
+class NightEvent(Enum):
+    BLOOD_MOON = "Trăng Máu 🩸"
+    DENSE_FOG = "Sương Mù Dày Đặc 🌫️"
+    SOLAR_ECLIPSE = "Nhật Thực ☀️"
+    SEAL_NIGHT = "Phong Ấn Dược Liệu 🧪"
+    HOLY_LIGHT = "Thánh Quang Bảo Hộ 🛡️"
+    THUNDERSTORM = "Bão Sấm Sét 🌩️"
+    WANING_MOON = "Trăng Khuyết 🌘"
+    SILENT_NIGHT = "Đêm Câm Lặng 🔇"
+
+    @property
+    def title(self) -> str:
+        names = {
+            NightEvent.BLOOD_MOON: "🩸 TRĂNG MÁU (BLOOD MOON)",
+            NightEvent.DENSE_FOG: "🌫️ SƯƠNG MÙ DÀY ĐẶC (DENSE FOG)",
+            NightEvent.SOLAR_ECLIPSE: "☀️ NHẬT THỰC BÓNG TỐI (SOLAR ECLIPSE)",
+            NightEvent.SEAL_NIGHT: "🧪 PHONG ẤN DƯỢC LIỆU (SEALED POTIONS)",
+            NightEvent.HOLY_LIGHT: "🛡️ THÁNH QUANG BẢO HỘ (HOLY LIGHT)",
+            NightEvent.THUNDERSTORM: "🌩️ BÃO SẤM SÉT (THUNDERSTORM)",
+            NightEvent.WANING_MOON: "🌘 TRĂNG KHUYẾT SUY YẾU (WANING MOON)",
+            NightEvent.SILENT_NIGHT: "🔇 ĐÊM CÂM LẶNG (SILENT NIGHT)",
+        }
+        return names.get(self, self.value)
+
+    @property
+    def description(self) -> str:
+        descs = {
+            NightEvent.BLOOD_MOON: "Sức mạnh bầy Sói bùng nổ! Đêm nay Bầy Sói được cắn liền **2 người**!",
+            NightEvent.DENSE_FOG: "Tầm nhìn bị che khuất! Kết quả bói toán soi phe đêm nay có **50% tỷ lệ bị nhiễu sai lệch**!",
+            NightEvent.SOLAR_ECLIPSE: "Bóng tối bao trùm ban ngày! Ban ngày tiếp theo **không thể bỏ phiếu treo cổ**!",
+            NightEvent.SEAL_NIGHT: "Ma thuật bị phong ấn! Phù Thủy **không thể dùng Bình Cứu hay Bình Độc** đêm nay!",
+            NightEvent.HOLY_LIGHT: "Hào quang thánh bảo vệ ngôi làng! Đêm nay tất cả mọi người được **kháng đòn cắn** của Bầy Sói!",
+            NightEvent.THUNDERSTORM: "Tiếng sấm át tiếng bước chân! Cô Bé đêm nay nhìn trộm **an toàn 100% không bị phát hiện**!",
+            NightEvent.WANING_MOON: "Bầy Sói bị suy yếu! Sói Trắng **không thể cắn đồng bọn** đêm nay!",
+            NightEvent.SILENT_NIGHT: "Thời gian thảo luận ngày tiếp theo bị rút ngắn xuống còn **30 giây**!",
+        }
+        return descs.get(self, "")
+
+
 class MasoiSettings:
     """Cấu hình ván Ma Sói có thể chỉnh ở Lobby."""
     def __init__(self):
@@ -150,6 +192,8 @@ class MasoiSettings:
         self.discussion_time: int = 120  # 120 giây (2 phút)
         self.night_time: int = 60  # 60 giây (1 phút)
         self.enable_rank: bool = True  # Có/Không tính rank
+        self.enable_events: bool = False  # Bật/Tắt Chế độ Thẻ Sự Kiện Đêm
+        self.enable_boss_mode: bool = False  # Bật/Tắt Chế độ Trùm Cuối (Raid Boss)
         self.role_setup_mode: str = "AUTO"  # AUTO / CUSTOM
         self.custom_wolf_count: int = 2
         self.custom_special_roles: List[str] = []
@@ -179,6 +223,12 @@ class MasoiSettings:
     def cycle_rank(self):
         self.enable_rank = not self.enable_rank
 
+    def cycle_events(self):
+        self.enable_events = not self.enable_events
+
+    def cycle_boss_mode(self):
+        self.enable_boss_mode = not self.enable_boss_mode
+
     def to_dict(self) -> dict:
         return {
             "reveal_roles_on_death": self.reveal_roles_on_death,
@@ -188,6 +238,8 @@ class MasoiSettings:
             "discussion_time": self.discussion_time,
             "night_time": self.night_time,
             "enable_rank": self.enable_rank,
+            "enable_events": self.enable_events,
+            "enable_boss_mode": self.enable_boss_mode,
             "role_setup_mode": self.role_setup_mode,
             "custom_wolf_count": self.custom_wolf_count,
             "custom_special_roles": self.custom_special_roles,
@@ -203,6 +255,8 @@ class MasoiSettings:
         s.discussion_time = data.get("discussion_time", 120)
         s.night_time = data.get("night_time", 60)
         s.enable_rank = data.get("enable_rank", True)
+        s.enable_events = data.get("enable_events", False)
+        s.enable_boss_mode = data.get("enable_boss_mode", False)
         s.role_setup_mode = data.get("role_setup_mode", "AUTO")
         s.custom_wolf_count = data.get("custom_wolf_count", 2)
         s.custom_special_roles = data.get("custom_special_roles", [])
@@ -233,6 +287,8 @@ class MasoiPlayer:
         self.apprentice_promoted: bool = False  # Tiên Tri Tập Sự đã kế thừa vị trí Tiên Tri
         self.rusty_knight_curse_triggered: bool = False  # Hiệp Sĩ đã kích hoạt nguyền chưa
         self.piper_charmed: bool = False  # Bị Người Thổi Sáo mê hoặc
+        self.boss_lives: int = 3  # HP Mạng sống của Chúa Tể Sói (Trùm Cuối)
+        self.boss_poison_shield: bool = True  # Khiên kháng 1 lần Bình Độc Phù Thủy của Trùm
 
         # Metrics cho rank bonus
         self.seer_found_wolf: bool = False
@@ -241,7 +297,7 @@ class MasoiPlayer:
 
     @property
     def is_wolf(self) -> bool:
-        return self.role in (Role.WOLF, Role.WOLF_SEER, Role.WOLF_CUB, Role.WHITE_WOLF, Role.PHANTOM_WOLF, Role.MUTE_WOLF) or self.is_cursed_converted
+        return self.role in (Role.WOLF, Role.WOLF_SEER, Role.WOLF_CUB, Role.WHITE_WOLF, Role.PHANTOM_WOLF, Role.MUTE_WOLF, Role.ALPHA_WOLF) or self.is_cursed_converted
 
 
 class ReplayLog:
@@ -328,6 +384,7 @@ class MasoiGame:
         self.witch_dm_message: Optional[any] = None
         self.witch_view: Optional[any] = None
         self.mayor_id: Optional[int] = None
+        self.current_night_event: Optional[NightEvent] = None  # Thẻ sự kiện đêm hiện tại
 
         # Dữ liệu ban ngày
         self.day_votes: Dict[int, Optional[int]] = {}  # voter_id -> target_id (None = White vote)
@@ -379,6 +436,21 @@ class MasoiGame:
         random.shuffle(user_ids)
         n = len(user_ids)
 
+        if self.settings.enable_boss_mode:
+            boss_idx = random.randint(0, n - 1)
+            boss_uid = user_ids[boss_idx]
+            raid_roles = [Role.SEER, Role.GUARD, Role.WITCH, Role.HUNTER, Role.ELDER, Role.RUSTY_KNIGHT, Role.INVESTIGATOR, Role.APPRENTICE_SEER]
+            random.shuffle(raid_roles)
+
+            for uid in user_ids:
+                if uid == boss_uid:
+                    self.players[uid].role = Role.ALPHA_WOLF
+                    self.players[uid].boss_lives = 3
+                else:
+                    role = raid_roles.pop(0) if raid_roles else Role.VILLAGER
+                    self.players[uid].role = role
+            return
+
         if self.settings.role_setup_mode == "CUSTOM":
             role_pool: List[Role] = [Role.WOLF] * max(1, self.settings.custom_wolf_count)
             for role_name in self.settings.custom_special_roles:
@@ -419,6 +491,12 @@ class MasoiGame:
     def preview_roles(self) -> List[Role]:
         """Xem trước các vai trò xuất hiện theo số lượng người chơi hiện tại."""
         n = max(5, len(self.players))
+        if self.settings.enable_boss_mode:
+            role_pool = [Role.ALPHA_WOLF, Role.SEER, Role.GUARD, Role.WITCH, Role.HUNTER, Role.ELDER, Role.RUSTY_KNIGHT, Role.INVESTIGATOR]
+            while len(role_pool) < n:
+                role_pool.append(Role.VILLAGER)
+            return role_pool[:n]
+
         if self.settings.role_setup_mode == "CUSTOM":
             role_pool: List[Role] = [Role.WOLF] * max(1, self.settings.custom_wolf_count)
             for role_name in self.settings.custom_special_roles:
@@ -470,7 +548,17 @@ class MasoiGame:
         self.witch_dm_message = None
         self.witch_view = None
 
-        if self.wolf_fury_pending:
+        # Thẻ sự kiện đêm
+        self.current_night_event = None
+        if self.settings.enable_events:
+            self.current_night_event = random.choice(list(NightEvent))
+            self.record_log("NIGHT_EVENT", result=f"Thẻ Sự Kiện: {self.current_night_event.title}")
+
+        if self.settings.enable_boss_mode:
+            self.wolf_fury_active = True
+        elif self.current_night_event == NightEvent.BLOOD_MOON:
+            self.wolf_fury_active = True
+        elif self.wolf_fury_pending:
             self.wolf_fury_active = True
             self.wolf_fury_pending = False
         else:
@@ -579,6 +667,18 @@ class MasoiGame:
 
         wolf_targets = self.resolve_wolf_targets()
 
+        # Hiệu ứng Thẻ Sự Kiện Đêm
+        if self.current_night_event == NightEvent.HOLY_LIGHT and wolf_targets:
+            for wolf_target_id in wolf_targets:
+                self.record_log("HOLY_LIGHT_SAVED", target_id=wolf_target_id, result="Thánh Quang Bảo Hộ đã hóa giải đòn cắn của Bầy Sói đêm nay!")
+            wolf_targets = []
+
+        if self.current_night_event == NightEvent.WANING_MOON:
+            self.night_white_wolf_target = None
+
+        if self.current_night_event == NightEvent.THUNDERSTORM:
+            self.girl_caught = False
+
         for wolf_target_id in wolf_targets:
             self.record_log("WOLF_KILL", target_id=wolf_target_id, result="Bầy Sói chọn cắn")
 
@@ -618,11 +718,23 @@ class MasoiGame:
         witch_p = self.get_player_by_role(Role.WITCH)
         if self.night_witch_poison and witch_p and not witch_p.is_roleblocked:
             poison_target = self.night_witch_poison
-            deaths.add(poison_target)
             target_p = self.players.get(poison_target)
-            if target_p and target_p.is_wolf:
-                witch_p.witch_useful_use_count += 1
-            self.record_log("WITCH_POISON", target_id=poison_target, result="Phù thủy dùng bình độc")
+            if target_p and target_p.role == Role.ALPHA_WOLF:
+                if target_p.boss_poison_shield:
+                    target_p.boss_poison_shield = False
+                    self.record_log("BOSS_SHIELD_SAVED", target_id=poison_target, result="Chúa Tể Sói dùng Khiên Vương Giả hóa giải Bình Độc của Phù Thủy!")
+                else:
+                    target_p.boss_lives -= 1
+                    if target_p.boss_lives > 0:
+                        self.record_log("BOSS_DAMAGE", target_id=poison_target, result=f"Chúa Tể Sói dính Bình Độc tổn hại 1 Mạng! (Còn {target_p.boss_lives}/3 HP)")
+                    else:
+                        deaths.add(poison_target)
+                        self.record_log("BOSS_KILLED", target_id=poison_target, result="Chúa Tể Sói đã bị Bình Độc kết liễu!")
+            else:
+                deaths.add(poison_target)
+                if target_p and target_p.is_wolf:
+                    witch_p.witch_useful_use_count += 1
+                self.record_log("WITCH_POISON", target_id=poison_target, result="Phù thủy dùng bình độc")
 
         # Xử lý Sát Thủ Hàng Loạt giết người
         sk_p = self.get_player_by_role(Role.SERIAL_KILLER)
@@ -706,6 +818,8 @@ class MasoiGame:
             if t_p:
                 if active_seer_p and active_seer_p.is_roleblocked:
                     self.night_seer_result = "❌ **Kỹ năng của bạn đã bị phong tỏa đêm nay!** (Do bị Vũ Nữ ghé thăm)"
+                elif self.current_night_event == NightEvent.DENSE_FOG and random.random() < 0.5:
+                    self.night_seer_result = f"🌫️ **Do Sương Mù Dày Đặc**, kết quả bói toán bị nhiễu! Không thể soi chính xác phe của {t_p.display_name}!"
                 elif t_p.is_wolf or t_p.role == Role.LYCAN:
                     self.night_seer_result = f"🐺 **{t_p.display_name}** là **SÓI**!"
                     if active_seer_p:
@@ -739,10 +853,20 @@ class MasoiGame:
         self.executed_player_id = None
 
     def resolve_day_vote(self) -> Optional[int]:
-        """Tính phiếu bầu treo cổ ban ngày (Thị Trưởng vote x2). Trả về user_id bị xử tử (hoặc None nếu hòa phiếu)."""
+        """Tính phiếu bầu treo cổ ban ngày (Thị Trưởng vote x2, Chúa Tể Sói vote x3). Trả về user_id bị xử tử (hoặc None nếu hòa phiếu)."""
+        if self.current_night_event == NightEvent.SOLAR_ECLIPSE:
+            self.record_log("SOLAR_ECLIPSE_SKIP", result="Do ảnh hưởng của Nhật Thực Bóng Tối, ban ngày không thể bỏ phiếu treo cổ!")
+            return None
+
         counts: Dict[Optional[int], int] = {}
         for voter_id, target_id in self.day_votes.items():
-            weight = 2 if (self.mayor_id and voter_id == self.mayor_id) else 1
+            voter_p = self.players.get(voter_id)
+            if voter_p and voter_p.role == Role.ALPHA_WOLF:
+                weight = 3
+            elif self.mayor_id and voter_id == self.mayor_id:
+                weight = 2
+            else:
+                weight = 1
             counts[target_id] = counts.get(target_id, 0) + weight
 
         if not counts:
@@ -769,6 +893,13 @@ class MasoiGame:
             executed_id = top_candidates[0]
 
         ex_p = self.players[executed_id]
+        if ex_p.role == Role.ALPHA_WOLF:
+            ex_p.boss_lives -= 1
+            if ex_p.boss_lives > 0:
+                ex_p.is_alive = True
+                self.record_log("BOSS_DAMAGE", target_id=executed_id, result=f"Chúa Tể Sói chịu đòn treo cổ nhưng còn {ex_p.boss_lives}/3 Mạng!")
+                return executed_id
+
         ex_p.is_alive = False
         self.executed_player_id = executed_id
 
