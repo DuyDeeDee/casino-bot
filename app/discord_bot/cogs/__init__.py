@@ -27,6 +27,7 @@ from .tower import Tower
 from .giveaway import Giveaway
 from .giaima import GiaiMa
 from .masoi import Masoi
+from .jail import Jail
 
 
 

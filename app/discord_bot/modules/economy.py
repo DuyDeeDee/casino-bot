@@ -12,7 +12,7 @@ from app.config import config
 Entry = Tuple[int, int, int]
 DATABASE_PATH = Path(config.storage.database_path)
 LEGACY_DATABASE_PATH = Path(__file__).resolve().parents[3] / "economy.db"
-SCHEMA_VERSION = 42
+SCHEMA_VERSION = 43
 
 
 logger = logging.getLogger(__name__)
@@ -795,6 +795,78 @@ MIGRATIONS: dict[int, Callable[[sqlite3.Cursor], None]] = {
     40: _migration_40_add_masoi_tables,
     41: _migration_41_add_masoi_vip_table,
     42: _migration_42_add_masoi_custom_badge,
+}
+
+
+def _migration_43_add_jail_table(cur: sqlite3.Cursor) -> None:
+    try:
+        cur.execute("PRAGMA table_info(user_jail)")
+        columns = cur.fetchall()
+        if columns:
+            pk_cols = [col for col in columns if col[5] > 0]
+            if len(pk_cols) < 2:
+                cur.execute("DROP TABLE user_jail")
+
+        cur.execute(
+            """CREATE TABLE IF NOT EXISTS user_jail (
+            user_id INTEGER NOT NULL,
+            guild_id INTEGER NOT NULL DEFAULT 0,
+            jailer_id INTEGER NOT NULL DEFAULT 0,
+            clean_count INTEGER NOT NULL DEFAULT 0,
+            total_clean_count INTEGER NOT NULL DEFAULT 0,
+            reason TEXT DEFAULT 'Không có lý do',
+            jailed_at INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (user_id, guild_id)
+        )"""
+        )
+    except sqlite3.OperationalError:
+        pass
+
+
+MIGRATIONS: dict[int, Callable[[sqlite3.Cursor], None]] = {
+    1: _migration_1_create_economy,
+    2: _migration_2_add_indexes,
+    3: _migration_3_add_claimed_start,
+    4: _migration_4_add_loan_columns,
+    5: _migration_5_add_market_table,
+    6: _migration_6_add_simulator_tables,
+    7: _migration_7_add_daily_columns,
+    8: _migration_8_add_daga_tables,
+    9: _migration_9_add_equipped_banner,
+    10: _migration_10_add_garage_tables,
+    11: _migration_11_update_car_names,
+    12: _migration_12_add_last_work,
+    13: _migration_13_add_cock_stars_and_shards,
+    14: _migration_14_add_roulette_table,
+    15: _migration_15_add_coinflip_table,
+    16: _migration_16_add_showcase_treasure,
+    17: _migration_17_add_bkb_tables,
+    18: _migration_18_add_baito_table,
+    19: _migration_19_add_pve_tables,
+    20: _migration_20_add_banned_users_table,
+    21: _migration_21_add_mines_table,
+    22: _migration_22_add_plinko_table,
+    23: _migration_23_add_highlow_table,
+    24: _migration_24_add_stock_history_table,
+    25: _migration_25_add_limit_orders,
+    26: _migration_26_add_simulator_upgrades,
+    27: _migration_27_initialize_all_cryptos,
+    28: _migration_28_add_marry_tables,
+    29: _migration_29_add_marry_custom_columns,
+    30: _migration_30_add_marry_saying_column,
+    31: _migration_31_add_tower_table,
+    32: _migration_32_add_user_titles_table,
+    33: _migration_33_add_achievements_log_table,
+    34: _migration_34_add_marry_interest_and_wish_columns,
+    35: _migration_35_add_giaima_table,
+    36: _migration_36_add_couple_assets,
+    37: _migration_37_update_gold_price_to_30m,
+    38: _migration_38_reset_gold_price_prev_to_30m,
+    39: _migration_39_add_user_topups_table,
+    40: _migration_40_add_masoi_tables,
+    41: _migration_41_add_masoi_vip_table,
+    42: _migration_42_add_masoi_custom_badge,
+    43: _migration_43_add_jail_table,
 }
 
 
@@ -3125,6 +3197,147 @@ class Economy:
         except sqlite3.OperationalError:
             pass
         return True
+
+    # --- Jail System Methods ---
+    def _ensure_jail_table(self) -> None:
+        try:
+            self.cur.execute("PRAGMA table_info(user_jail)")
+            columns = self.cur.fetchall()
+            if columns:
+                pk_cols = [col for col in columns if col[5] > 0]
+                if len(pk_cols) < 2:
+                    self.cur.execute("DROP TABLE user_jail")
+            self.cur.execute(
+                """CREATE TABLE IF NOT EXISTS user_jail (
+                user_id INTEGER NOT NULL,
+                guild_id INTEGER NOT NULL DEFAULT 0,
+                jailer_id INTEGER NOT NULL DEFAULT 0,
+                clean_count INTEGER NOT NULL DEFAULT 0,
+                total_clean_count INTEGER NOT NULL DEFAULT 0,
+                reason TEXT DEFAULT 'Không có lý do',
+                jailed_at INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (user_id, guild_id)
+            )"""
+            )
+            self.conn.commit()
+        except sqlite3.OperationalError:
+            pass
+
+    def set_jail_channel(self, guild_id: int, channel_id: int) -> None:
+        key = f"jail_channel_{guild_id}"
+        self.set_setting(key, str(channel_id))
+
+    def get_jail_channel(self, guild_id: int) -> int:
+        key = f"jail_channel_{guild_id}"
+        val = self.get_setting(key)
+        return int(val) if val and val.isdigit() else 0
+
+    def set_jail_role(self, guild_id: int, role_id: int) -> None:
+        key = f"jail_role_{guild_id}"
+        self.set_setting(key, str(role_id))
+
+    def get_jail_role(self, guild_id: int) -> int:
+        key = f"jail_role_{guild_id}"
+        val = self.get_setting(key)
+        return int(val) if val and val.isdigit() else 0
+
+    def add_to_jail(
+        self, user_id: int, guild_id: int, jailer_id: int, clean_count: int, reason: str = "Không có lý do"
+    ) -> None:
+        self._ensure_jail_table()
+        now = int(time.time())
+        self.cur.execute(
+            """INSERT OR REPLACE INTO user_jail 
+               (user_id, guild_id, jailer_id, clean_count, total_clean_count, reason, jailed_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (user_id, guild_id, jailer_id, clean_count, clean_count, reason, now),
+        )
+        self.conn.commit()
+
+    def get_jail_info(self, user_id: int, guild_id: int = 0) -> dict | None:
+        self._ensure_jail_table()
+        if guild_id > 0:
+            self.cur.execute(
+                "SELECT user_id, guild_id, jailer_id, clean_count, total_clean_count, reason, jailed_at FROM user_jail WHERE user_id = ? AND guild_id = ?",
+                (user_id, guild_id),
+            )
+        else:
+            self.cur.execute(
+                "SELECT user_id, guild_id, jailer_id, clean_count, total_clean_count, reason, jailed_at FROM user_jail WHERE user_id = ?",
+                (user_id,),
+            )
+        row = self.cur.fetchone()
+        if not row:
+            return None
+        return {
+            "user_id": row[0],
+            "guild_id": row[1],
+            "jailer_id": row[2],
+            "clean_count": row[3],
+            "total_clean_count": row[4],
+            "reason": row[5],
+            "jailed_at": row[6],
+        }
+
+    def update_jail_clean_count(self, user_id: int, guild_id: int = 0, amount: int = 1) -> int:
+        info = self.get_jail_info(user_id, guild_id)
+        if not info:
+            return 0
+        target_guild_id = info["guild_id"] if guild_id == 0 else guild_id
+        new_count = max(0, info["clean_count"] - amount)
+        if new_count <= 0:
+            self.remove_from_jail(user_id, target_guild_id)
+            return 0
+        else:
+            self.cur.execute(
+                "UPDATE user_jail SET clean_count = ? WHERE user_id = ? AND guild_id = ?",
+                (new_count, user_id, target_guild_id),
+            )
+            self.conn.commit()
+            return new_count
+
+    def remove_from_jail(self, user_id: int, guild_id: int = 0) -> None:
+        self._ensure_jail_table()
+        if guild_id > 0:
+            self.cur.execute("DELETE FROM user_jail WHERE user_id = ? AND guild_id = ?", (user_id, guild_id))
+        else:
+            self.cur.execute("DELETE FROM user_jail WHERE user_id = ?", (user_id,))
+        self.conn.commit()
+
+    def is_in_jail(self, user_id: int, guild_id: int = 0) -> bool:
+        self._ensure_jail_table()
+        if guild_id > 0:
+            self.cur.execute("SELECT 1 FROM user_jail WHERE user_id = ? AND guild_id = ?", (user_id, guild_id))
+        else:
+            self.cur.execute("SELECT 1 FROM user_jail WHERE user_id = ?", (user_id,))
+        return self.cur.fetchone() is not None
+
+    def get_all_prisoners(self, guild_id: int = 0) -> list[dict]:
+        self._ensure_jail_table()
+        if guild_id > 0:
+            self.cur.execute(
+                "SELECT user_id, guild_id, jailer_id, clean_count, total_clean_count, reason, jailed_at FROM user_jail WHERE guild_id = ?",
+                (guild_id,),
+            )
+        else:
+            self.cur.execute(
+                "SELECT user_id, guild_id, jailer_id, clean_count, total_clean_count, reason, jailed_at FROM user_jail"
+            )
+        rows = self.cur.fetchall()
+        result = []
+        for r in rows:
+            result.append(
+                {
+                    "user_id": r[0],
+                    "guild_id": r[1],
+                    "jailer_id": r[2],
+                    "clean_count": r[3],
+                    "total_clean_count": r[4],
+                    "reason": r[5],
+                    "jailed_at": r[6],
+                }
+            )
+        return result
 
 
 

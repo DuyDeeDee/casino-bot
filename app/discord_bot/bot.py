@@ -52,6 +52,7 @@ from app.discord_bot.cogs import (
     Giveaway,
     GiaiMa,
     Masoi,
+    Jail,
 )
 
 from app.discord_bot.modules.economy import Economy
@@ -86,6 +87,7 @@ COGS = (
     Giveaway,
     GiaiMa,
     Masoi,
+    Jail,
 )
 
 
