@@ -25,7 +25,7 @@ class Jail(commands.Cog):
         allowed_commands = {
             "lacdit", "laudon", "cleanjail", "caizao",
             "phattu", "jail", "tonggiam",
-            "amxatu", "unjail", "thabong",
+            "anxatu", "amxatu", "unjail", "thabong",
             "setkenhtu", "setjailchannel",
             "setvaitrotu", "setjailrole",
             "danhsachtu", "jailist",
@@ -167,11 +167,17 @@ class Jail(commands.Cog):
         if isinstance(prefix, list):
             prefix = prefix[0]
 
-        # Khởi tạo định dạng tin nhắn phản hồi y hệt ảnh mẫu
+        # Tin nhắn phản hồi kết quả tống giam tại kênh thực hiện lệnh
         sentence_text = (
             f"✅ **PHÁN QUYẾT THÀNH CÔNG!** Đã tống giam __{target.name}__.\n"
             f"> 🧹 **Hình phạt:** `{count}` lần lau dọn.\n"
-            f"> 📄 **Lý do:** {reason}\n\n"
+            f"> 📄 **Lý do:** {reason}"
+        )
+
+        await ctx.send(sentence_text)
+
+        # Thông báo TÙ NHÂN MỚI gửi vào kênh bị phạt tù (Jail Channel)
+        jail_notice = (
             f"🚨 **TÙ NHÂN MỚI** 🚨\n"
             f"{target.mention} vừa bị chuyển vào đây!\n"
             f"> 🧹 **Hình phạt:** `{count}` lần lau dọn.\n"
@@ -179,24 +185,17 @@ class Jail(commands.Cog):
             f"💡 *Cải tạo tốt để sớm được khoan hồng bằng lệnh:* `{prefix}lacdit`"
         )
 
-        await ctx.send(sentence_text)
-
-        # Gửi thông báo đến Kênh Nhà Tù nếu lệnh không được thực hiện trong kênh Nhà Tù
         jail_channel_id = self.bot.economy.get_jail_channel(ctx.guild.id)
-        if jail_channel_id and jail_channel_id != ctx.channel.id:
+        if jail_channel_id:
             jail_channel = ctx.guild.get_channel(jail_channel_id)
             if jail_channel:
                 try:
-                    jail_notice = (
-                        f"🚨 **TÙ NHÂN MỚI** 🚨\n"
-                        f"{target.mention} vừa bị chuyển vào đây!\n"
-                        f"> 🧹 **Hình phạt:** `{count}` lần lau dọn.\n"
-                        f"> 📄 **Lý do:** {reason}\n\n"
-                        f"💡 *Cải tạo tốt để sớm được khoan hồng bằng lệnh:* `{prefix}lacdit`"
-                    )
                     await jail_channel.send(jail_notice)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning(f"Could not send jail notice: {e}")
+        else:
+            # Nếu server chưa cài kênh tù riêng, gửi kèm thông báo tù nhân mới ở kênh hiện tại
+            await ctx.send(jail_notice)
 
     @commands.command(
         name="lacdit",
@@ -244,13 +243,13 @@ class Jail(commands.Cog):
             )
 
     @commands.command(
-        name="amxatu",
-        aliases=["unjail", "thabong"],
+        name="anxatu",
+        aliases=["amxatu", "unjail", "thabong"],
         brief="Tha bổng / Ân xá cho tù nhân trước thời hạn.",
-        usage="amxatu <@user>",
+        usage="anxatu <@user>",
     )
     @commands.has_permissions(manage_messages=True)
-    async def amxatu(self, ctx: commands.Context, target: discord.Member) -> None:
+    async def anxatu(self, ctx: commands.Context, target: discord.Member) -> None:
         """Tha bổng / Ân xá cho tù nhân trước thời hạn."""
         guild_id = ctx.guild.id if ctx.guild else 0
         if not self.bot.economy.is_in_jail(target.id, guild_id):
