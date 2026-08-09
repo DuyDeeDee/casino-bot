@@ -1,4 +1,5 @@
 from collections.abc import Callable
+import json
 import logging
 import random
 import shutil
@@ -3240,6 +3241,65 @@ class Economy:
         key = f"jail_role_{guild_id}"
         val = self.get_setting(key)
         return int(val) if val and val.isdigit() else 0
+
+    # --- Channel Control Settings ---
+    def get_blocked_channels(self, guild_id: int) -> list[int]:
+        key = f"blocked_channels_{guild_id}"
+        val = self.get_setting(key)
+        if not val:
+            return []
+        try:
+            return [int(x) for x in json.loads(val)]
+        except Exception:
+            return []
+
+    def set_blocked_channels(self, guild_id: int, channels: list[int]) -> None:
+        key = f"blocked_channels_{guild_id}"
+        self.set_setting(key, json.dumps(channels))
+
+    def toggle_blocked_channel(self, guild_id: int, channel_id: int) -> bool:
+        current = self.get_blocked_channels(guild_id)
+        if channel_id in current:
+            current.remove(channel_id)
+            is_blocked = False
+        else:
+            current.append(channel_id)
+            is_blocked = True
+        self.set_blocked_channels(guild_id, current)
+        return is_blocked
+
+    def remove_blocked_channel(self, guild_id: int, channel_id: int) -> bool:
+        current = self.get_blocked_channels(guild_id)
+        if channel_id in current:
+            current.remove(channel_id)
+            self.set_blocked_channels(guild_id, current)
+            return True
+        return False
+
+    def get_allowed_channels(self, guild_id: int) -> list[int]:
+        key = f"allowed_channels_{guild_id}"
+        val = self.get_setting(key)
+        if not val:
+            return []
+        try:
+            return [int(x) for x in json.loads(val)]
+        except Exception:
+            return []
+
+    def set_allowed_channels(self, guild_id: int, channels: list[int]) -> None:
+        key = f"allowed_channels_{guild_id}"
+        self.set_setting(key, json.dumps(channels))
+
+    def toggle_allowed_channel(self, guild_id: int, channel_id: int) -> bool:
+        current = self.get_allowed_channels(guild_id)
+        if channel_id in current:
+            current.remove(channel_id)
+            is_allowed = False
+        else:
+            current.append(channel_id)
+            is_allowed = True
+        self.set_allowed_channels(guild_id, current)
+        return is_allowed
 
     def add_to_jail(
         self, user_id: int, guild_id: int, jailer_id: int, clean_count: int, reason: str = "Không có lý do"

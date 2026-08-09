@@ -41,24 +41,39 @@ class Handlers(commands.Cog, name="handlers"):
         if not self.economy or (ctx.author and ctx.author.bot):
             return
             
-        # Kiểm tra giới hạn kênh sử dụng bot (Không ai được phép bypass, kể cả admin/owner)
-        if ctx.guild and config.bot.blocked_channels:
-            if ctx.channel.id in config.bot.blocked_channels:
-                allowed_channels = config.bot.allowed_channels
-                if allowed_channels:
-                    allowed_str = " hoặc ".join(f"<#{cid}>" for cid in allowed_channels)
-                else:
-                    allowed_str = "kênh được chỉ định"
-                
-                msg = (
-                    f"⚠️ Chào **{ctx.author.name}**, các lệnh của Casino Bot không được phép sử dụng tại kênh này ({ctx.channel.mention}).\n"
-                    f"👉 Vui lòng di chuyển sang {allowed_str} để chơi nhé!"
-                )
-                try:
-                    await ctx.send(msg, delete_after=15.0)
-                except Exception:
-                    pass
-                raise commands.CheckFailure("Kênh bị cấm")
+        # Kiểm tra giới hạn kênh sử dụng bot cho từng Server (Database) và Global config
+        if ctx.guild:
+            # Các cog thuộc nhóm "Function" và lệnh help được phép dùng ở mọi kênh
+            exempt_cogs = {"Afk", "afk", "Giveaway", "Jail", "ChannelControl"}
+            is_exempt = False
+            if ctx.command:
+                if ctx.command.name == "help" or (ctx.command.cog and ctx.command.cog.qualified_name in exempt_cogs):
+                    is_exempt = True
+
+            if not is_exempt:
+                db_blocked = self.economy.get_blocked_channels(ctx.guild.id) if self.economy else []
+                global_blocked = config.bot.blocked_channels or []
+                all_blocked = set(db_blocked).union(global_blocked)
+
+                if ctx.channel.id in all_blocked:
+                    db_allowed = self.economy.get_allowed_channels(ctx.guild.id) if self.economy else []
+                    global_allowed = config.bot.allowed_channels or []
+                    all_allowed = set(db_allowed).union(global_allowed)
+
+                    if all_allowed:
+                        allowed_str = " hoặc ".join(f"<#{cid}>" for cid in all_allowed)
+                    else:
+                        allowed_str = "kênh được chỉ định"
+
+                    msg = (
+                        f"⚠️ Chào **{ctx.author.name}**, các lệnh của Casino Bot không được phép sử dụng tại kênh này ({ctx.channel.mention}).\n"
+                        f"👉 Vui lòng di chuyển sang {allowed_str} để chơi nhé!"
+                    )
+                    try:
+                        await ctx.send(msg, delete_after=15.0)
+                    except Exception:
+                        pass
+                    raise commands.CheckFailure("Kênh bị cấm")
 
 
         user_id = ctx.author.id

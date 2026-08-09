@@ -39,6 +39,7 @@ COG_GROUP_MAPPING = {
     "Afk":           ("<:function:1531341821257716025>", "Function"),
     "Giveaway":      ("<:function:1531341821257716025>", "Function"),
     "Jail":          ("<:function:1531341821257716025>", "Function"),
+    "ChannelControl":("<:function:1531341821257716025>", "Function"),
     # Lixi & Marry
     "Lixi":          ("<:lixi:1531333938164007032>", "Lixi"),
     "Marry":         ("<:marry:1531333950234955799>", "Marry"),

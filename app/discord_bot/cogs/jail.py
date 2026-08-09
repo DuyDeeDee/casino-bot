@@ -21,7 +21,7 @@ class Jail(commands.Cog):
         if ctx.author.bot:
             return True
 
-        # Cho phép các lệnh quản lý tù / lau dọn
+        # Cho phép các lệnh quản lý tù / lau dọn / quản lý kênh
         allowed_commands = {
             "lacdit", "laudon", "cleanjail", "caizao",
             "phattu", "jail", "tonggiam",
@@ -29,6 +29,10 @@ class Jail(commands.Cog):
             "setkenhtu", "setjailchannel",
             "setvaitrotu", "setjailrole",
             "danhsachtu", "jailist",
+            "camkenh", "setcamkenh", "blockchannel",
+            "gocamkenh", "unblockchannel",
+            "setkenhchoiduoc", "allowchannel", "setallowedchannel",
+            "danhsachkenhcam", "listcamkenh", "blockedchannels",
         }
         
         if ctx.command and ctx.command.name in allowed_commands:
