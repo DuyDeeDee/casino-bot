@@ -232,14 +232,6 @@ class Giveaway(commands.Cog, name="Giveaway"):
         if required_roles:
             req_lines = [f"<@&{r_id}>" for r_id in required_roles]
             embed.add_field(name="<a:kcden:1526231212887380108> Giới hạn", value="\n".join(req_lines), inline=False)
-        elif bonus_roles:
-            bonus_lines = [f"<@&{r_id}>" for r_id in bonus_roles.keys()]
-            embed.add_field(name="<a:kcden:1526231212887380108>*Boost Role*", value="\n".join(bonus_lines), inline=False)
-        else:
-            env_bonus = self.get_env_bonus_roles()
-            if env_bonus:
-                bonus_lines = [f"<@&{r_id}>" for r_id in env_bonus.keys()]
-                embed.add_field(name="<a:kcden:1526231212887380108>*Boost Role*", value="\n".join(bonus_lines), inline=False)
 
         embed.add_field(name="\u200b", value=f"<:ss:1526230022787043348>*End:* <t:{ends_at}:R>", inline=False)
         embed.set_footer(text="Sylus Meow • Giveaway System")
