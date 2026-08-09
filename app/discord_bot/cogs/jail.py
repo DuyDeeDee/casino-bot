@@ -25,7 +25,7 @@ class Jail(commands.Cog):
         allowed_commands = {
             "lacdit", "laudon", "cleanjail", "caizao",
             "phattu", "jail", "tonggiam",
-            "anxatu", "amxatu", "unjail", "thabong",
+            "anxatu", "unjail", "thabong",
             "setkenhtu", "setjailchannel",
             "setvaitrotu", "setjailrole",
             "danhsachtu", "jailist",
@@ -120,7 +120,7 @@ class Jail(commands.Cog):
     @commands.command(
         name="phattu",
         aliases=["jail", "tonggiam"],
-        brief="Tống giam người chơi với số lần lau dọn/lắc đít chỉ định.",
+        brief="Tống giam người chơi với số lần lắc đít chỉ định.",
         usage="phattu <@user> [số_lần] [lý_do]",
     )
     @commands.has_permissions(manage_messages=True)
@@ -132,13 +132,13 @@ class Jail(commands.Cog):
         *,
         reason: str = "Không có lý do",
     ) -> None:
-        """Tống giam người chơi với số lần lau dọn chỉ định."""
+        """Tống giam người chơi với số lần lắc đít chỉ định."""
         if target.bot:
             await ctx.send("❌ Không thể tống giam bot!")
             return
 
         if count <= 0:
-            await ctx.send("❌ Số lần lau dọn phải lớn hơn 0!")
+            await ctx.send("❌ Số lần lắc đít phải lớn hơn 0!")
             return
 
         # Lưu vào Database
@@ -169,19 +169,19 @@ class Jail(commands.Cog):
 
         # Tin nhắn phản hồi kết quả tống giam tại kênh thực hiện lệnh
         sentence_text = (
-            f"✅ **PHÁN QUYẾT THÀNH CÔNG!** Đã tống giam __{target.name}__.\n"
-            f"> 🧹 **Hình phạt:** `{count}` lần lau dọn.\n"
-            f"> 📄 **Lý do:** {reason}"
+            f"<a:tick:1536052984440553532> **Đã tống giam __{target.name}__ vào tầng hầm để lắc đít <a:nhay:1536053206868557985>**\n"
+            f"> <a:lacdit3:1536053449341276200> **Hình phạt:** `{count}` lần lắc đít \n"
+            f"> <a:blink:1526231036231680082>**Lý do:** {reason}"
         )
 
         await ctx.send(sentence_text)
 
         # Thông báo TÙ NHÂN MỚI gửi vào kênh bị phạt tù (Jail Channel)
         jail_notice = (
-            f"🚨 **TÙ NHÂN MỚI** 🚨\n"
+            f"<a:nhay:1536053206868557985> **TÙ NHÂN MỚI** <a:nhay:1536053206868557985>\n"
             f"{target.mention} vừa bị chuyển vào đây!\n"
-            f"> 🧹 **Hình phạt:** `{count}` lần lau dọn.\n"
-            f"> 📄 **Lý do:** {reason}\n\n"
+            f"> <a:lacdit3:1536053449341276200> **Hình phạt:** `{count}` lần lắc đít\n"
+            f"> <a:blink:1526231036231680082> **Lý do:** {reason}\n\n"
             f"💡 *Cải tạo tốt để sớm được khoan hồng bằng lệnh:* `{prefix}lacdit`"
         )
 
@@ -244,7 +244,7 @@ class Jail(commands.Cog):
 
     @commands.command(
         name="anxatu",
-        aliases=["amxatu", "unjail", "thabong"],
+        aliases=["unjail", "thabong"],
         brief="Tha bổng / Ân xá cho tù nhân trước thời hạn.",
         usage="anxatu <@user>",
     )
