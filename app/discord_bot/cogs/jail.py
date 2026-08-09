@@ -170,11 +170,24 @@ class Jail(commands.Cog):
         # Tin nhắn phản hồi kết quả tống giam tại kênh thực hiện lệnh
         sentence_text = (
             f"<a:tick:1536052984440553532> **Đã tống giam __{target.name}__ vào tầng hầm để lắc đít <a:nhay:1536053206868557985>**\n"
-            f"> <a:lacdit3:1536053449341276200> **Hình phạt:** `{count}` lần lắc đít \n"
-            f"> <a:blink:1526231036231680082>**Lý do:** {reason}"
+            f"> <a:lacdit3:1536053449341276200> **Hình phạt:** `{count}` lần lắc đít\n"
+            f"> <a:blink:1526231036231680082> **Lý do:** {reason}"
         )
 
-        await ctx.send(sentence_text)
+        sentence_text_fallback = (
+            f"✅ **Đã tống giam __{target.name}__ vào tầng hầm để lắc đít 🐕**\n"
+            f"> 🧹 **Hình phạt:** `{count}` lần lắc đít\n"
+            f"> 📄 **Lý do:** {reason}"
+        )
+
+        try:
+            await ctx.send(sentence_text)
+        except Exception as e:
+            logger.warning(f"Could not send sentence_text with custom emojis: {e}")
+            try:
+                await ctx.send(sentence_text_fallback)
+            except Exception as e2:
+                logger.error(f"Failed to send fallback sentence_text: {e2}")
 
         # Thông báo TÙ NHÂN MỚI gửi vào kênh bị phạt tù (Jail Channel)
         jail_notice = (
@@ -185,6 +198,14 @@ class Jail(commands.Cog):
             f"💡 *Cải tạo tốt để sớm được khoan hồng bằng lệnh:* `{prefix}lacdit`"
         )
 
+        jail_notice_fallback = (
+            f"🚨 **TÙ NHÂN MỚI** 🚨\n"
+            f"{target.mention} vừa bị chuyển vào đây!\n"
+            f"> 🧹 **Hình phạt:** `{count}` lần lắc đít\n"
+            f"> 📄 **Lý do:** {reason}\n\n"
+            f"💡 *Cải tạo tốt để sớm được khoan hồng bằng lệnh:* `{prefix}lacdit`"
+        )
+
         jail_channel_id = self.bot.economy.get_jail_channel(ctx.guild.id)
         if jail_channel_id:
             jail_channel = ctx.guild.get_channel(jail_channel_id)
@@ -192,10 +213,21 @@ class Jail(commands.Cog):
                 try:
                     await jail_channel.send(jail_notice)
                 except Exception as e:
-                    logger.warning(f"Could not send jail notice: {e}")
+                    logger.warning(f"Could not send custom jail notice: {e}")
+                    try:
+                        await jail_channel.send(jail_notice_fallback)
+                    except Exception as e2:
+                        logger.error(f"Failed to send fallback jail notice: {e2}")
         else:
             # Nếu server chưa cài kênh tù riêng, gửi kèm thông báo tù nhân mới ở kênh hiện tại
-            await ctx.send(jail_notice)
+            try:
+                await ctx.send(jail_notice)
+            except Exception as e:
+                logger.warning(f"Could not send custom jail notice: {e}")
+                try:
+                    await ctx.send(jail_notice_fallback)
+                except Exception as e2:
+                    logger.error(f"Failed to send fallback jail notice: {e2}")
 
     @commands.command(
         name="lacdit",
