@@ -60,11 +60,7 @@ class Handlers(commands.Cog, name="handlers"):
                     if db_allowed:
                         allowed_str = " hoặc ".join(f"<#{cid}>" for cid in db_allowed)
                     else:
-                        global_allowed = config.bot.allowed_channels or []
-                        if global_allowed:
-                            allowed_str = " hoặc ".join(f"<#{cid}>" for cid in global_allowed)
-                        else:
-                            allowed_str = "kênh được chỉ định"
+                        allowed_str = "kênh được chỉ định"
 
                     msg = (
                         f"⚠️ Chào **{ctx.author.name}**, các lệnh của Casino Bot không được phép sử dụng tại kênh này ({ctx.channel.mention}).\n"
