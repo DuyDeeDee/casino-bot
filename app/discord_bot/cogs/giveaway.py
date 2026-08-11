@@ -551,7 +551,7 @@ class Giveaway(commands.Cog, name="Giveaway"):
         embed = self.build_active_embed(giveaway_temp, 0)
 
         try:
-            msg = await channel.send(content="# <a:w1:1526231439425667093> Giveaway Illys Sylus <a:w2:1526231455422877798>", embed=embed)
+            msg = await channel.send(content=f"# <a:w1:1526231439425667093> Giveaway {ctx.guild.name} <a:w2:1526231455422877798>", embed=embed)
             await msg.add_reaction("<:ghim:1526238405061640272>")
         except discord.Forbidden:
             await ctx.send(f"❌ Bot không có quyền gửi tin nhắn hoặc embed ở kênh {channel.mention}.", delete_after=10)
