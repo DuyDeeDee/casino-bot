@@ -29,6 +29,7 @@ from .giaima import GiaiMa
 from .masoi import Masoi
 from .jail import Jail
 from .channel_control import ChannelControl
+from .tutien_cog import TuTienCog
 
 
 

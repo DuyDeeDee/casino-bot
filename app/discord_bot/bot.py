@@ -54,6 +54,7 @@ from app.discord_bot.cogs import (
     Masoi,
     Jail,
     ChannelControl,
+    TuTienCog,
 )
 
 from app.discord_bot.modules.economy import Economy
@@ -90,6 +91,7 @@ COGS = (
     Masoi,
     Jail,
     ChannelControl,
+    TuTienCog,
 )
 
 
