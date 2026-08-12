@@ -226,14 +226,17 @@ class Giveaway(commands.Cog, name="Giveaway"):
         bonus_roles = json.loads(bonus_roles_str) if bonus_roles_str else {}
 
         embed = discord.Embed(title="<a:thanhgia:1526231085221023845> Giveaway Bắt Đầu <a:thanhgia:1526231085221023845>", color=discord.Color.purple())
-        embed.description = f"## **{prize}**\n\n"
-        embed.add_field(name="\u200b", value=f"<a:timden:1526230943478845450> *host:* <@{host_id}>  •  <:ss:1526230022787043348>*Win:* {winner_count}", inline=False)
+        
+        desc_lines = [
+            f"**{prize}**",
+            f"<a:timden:1526230943478845450> *host:* <@{host_id}>  •  <:ss:1526230022787043348>*Win:* {winner_count}  •  <:ss:1526230022787043348>*End:* <t:{ends_at}:R>"
+        ]
 
         if required_roles:
-            req_lines = [f"<@&{r_id}>" for r_id in required_roles]
-            embed.add_field(name="<a:kcden:1526231212887380108> Giới hạn", value="\n".join(req_lines), inline=False)
+            req_lines = ", ".join(f"<@&{r_id}>" for r_id in required_roles)
+            desc_lines.append(f"<a:kcden:1526231212887380108> *Giới hạn:* {req_lines}")
 
-        embed.add_field(name="\u200b", value=f"<:ss:1526230022787043348>*End:* <t:{ends_at}:R>", inline=False)
+        embed.description = "\n".join(desc_lines)
         embed.set_footer(text="Sylus Meow • Giveaway System")
         self.set_embed_host_thumbnail(embed, host_id)
         return embed
@@ -743,10 +746,13 @@ class Giveaway(commands.Cog, name="Giveaway"):
 
         # Edit embed
         embed = discord.Embed(title="🎉 GIVEAWAY ĐÃ QUAY LẠI KẾT QUẢ 🎉", color=discord.Color.purple())
-        embed.description = f"### {prize}\n\n"
-        embed.add_field(name="\u200b", value=f"<a:timden:1526230943478845450> *host:* <@{host_id}>  •  <:ss:1526230022787043348>*Win:* {len(new_winners)}", inline=False)
-        embed.add_field(name="<a:key:1526234974150459593>*Result:*", value=new_winners_mentions, inline=False)
-        embed.set_footer(text="*Sylus Meow • Giveaway System*")
+        desc_lines = [
+            f"**{prize}**",
+            f"<a:timden:1526230943478845450> *host:* <@{host_id}>  •  <:ss:1526230022787043348>*Win:* {len(new_winners)}",
+            f"<a:key:1526234974150459593>*Result:* {new_winners_mentions}"
+        ]
+        embed.description = "\n".join(desc_lines)
+        embed.set_footer(text="Sylus Meow • Giveaway System")
         self.set_embed_host_thumbnail(embed, host_id)
         await message.edit(embed=embed, view=None)
 
@@ -853,11 +859,14 @@ class Giveaway(commands.Cog, name="Giveaway"):
         winners_mentions = ", ".join(f"<@{w_id}>" for w_id in winners)
 
         # Edit embed
-        embed = discord.Embed(title=" <a:thanhgia:1526231085221023845>**Giveaway Kết Thúc**<a:thanhgia:1526231085221023845>", color=discord.Color.purple())
-        embed.description = f"### {prize}\n\n"
-        embed.add_field(name="\u200b", value=f"<a:timden:1526230943478845450> *host:* <@{host_id}>  •  <:ss:1526230022787043348>*Win:* {winner_count}", inline=False)
-        embed.add_field(name="<a:key:1526234974150459593>*Result:*", value=winners_mentions, inline=False)
-        embed.set_footer(text="*Sylus Meow • Giveaway System*")
+        embed = discord.Embed(title="<a:thanhgia:1526231085221023845> **Giveaway Kết Thúc** <a:thanhgia:1526231085221023845>", color=discord.Color.purple())
+        desc_lines = [
+            f"**{prize}**",
+            f"<a:timden:1526230943478845450> *host:* <@{host_id}>  •  <:ss:1526230022787043348>*Win:* {winner_count}",
+            f"<a:key:1526234974150459593>*Result:* {winners_mentions}"
+        ]
+        embed.description = "\n".join(desc_lines)
+        embed.set_footer(text="Sylus Meow • Giveaway System")
         self.set_embed_host_thumbnail(embed, host_id)
         await message.edit(embed=embed, view=None)
 
