@@ -102,7 +102,12 @@ class TuTienCog(commands.Cog, name="TuTien"):
 
     # --- 🔮 GACHA 3 BANNERS COMMANDS ---
 
-    @commands.command(name="quay-gacha", aliases=["gacha", "quaygacha"])
+    @commands.command(
+        name="quay-gacha",
+        aliases=["gacha", "quaygacha"],
+        brief="Quay Gacha 3 Đại Banners để nhận bảo vật & linh dược.",
+        usage="quay-gacha [tiencac|caimenh|bg] [1x|10x]"
+    )
     async def quay_gacha_cmd(self, ctx: commands.Context, banner: str = "tiencac", rolls: str = "1x"):
         """Quay Gacha Ba Đại Banners (Dùng open_chest.gif animation & Server Flex khi ra Đế Cấp)."""
         player = self.db.get_player(ctx.author.id)
@@ -155,7 +160,12 @@ class TuTienCog(commands.Cog, name="TuTien"):
             flex_msg = f"💥 **[THIÊN ĐẠO DIỆU BIẾN]**: Tu sĩ **{ctx.author.mention}** vừa gặp đại cơ duyên tại Tiên Các rút thành công **{', '.join(ur_items)}**! Toàn thể tu sĩ bái phục!"
             await ctx.send(flex_msg)
 
-    @commands.command(name="xienquach", aliases=["quere", "bocque"])
+    @commands.command(
+        name="xienquach",
+        aliases=["quere", "bocque"],
+        brief="Bốc quẻ Khí Vận hàng ngày nhận Linh Duyên Phù & Tiên Ngọc.",
+        usage="xienquach"
+    )
     async def xienquach_cmd(self, ctx: commands.Context):
         """Bốc quẻ Khí Vận hàng ngày, nhận vé quay chay (Linh Duyên Phù & Tiên Duyên Phù)."""
         player = self.db.get_player(ctx.author.id)
@@ -179,7 +189,12 @@ class TuTienCog(commands.Cog, name="TuTien"):
         embed.add_field(name="🎁 Phần Thưởng", value="`+1` Linh Duyên Phù (Vé quay Gacha F2P) | `+20` Tiên Ngọc", inline=False)
         await ctx.send(embed=embed)
 
-    @commands.command(name="wishlist", aliases=["dinh-huong"])
+    @commands.command(
+        name="wishlist",
+        aliases=["dinh-huong"],
+        brief="Thiết lập Định Hướng Đạo Vận (Wishlist UR) cho Banner Tiên Các.",
+        usage="wishlist [tên_vật_phẩm]"
+    )
     async def wishlist_cmd(self, ctx: commands.Context, *, item_name: str = None):
         """Thiết lập Định Hướng Đạo Vận (Wishlist) cho Banner Tiên Các."""
         player = self.db.get_player(ctx.author.id)
@@ -196,7 +211,12 @@ class TuTienCog(commands.Cog, name="TuTien"):
         self.db.update_player(player)
         await ctx.send(f"🎯 **ĐÃ THIẾT LẬP WISH LIST!** Lượt Đế Cấp (UR) tiếp theo nếu bị lệch rate chắc chắn 100% sẽ ra **[{item_name}]**!")
 
-    @commands.command(name="linhbui-shop", aliases=["doilinhbui", "shard-shop"])
+    @commands.command(
+        name="linhbui-shop",
+        aliases=["doilinhbui", "shard-shop"],
+        brief="Xem & Đổi Linh Bụi Tiên Các lấy vật phẩm UR/SR tự chọn.",
+        usage="linhbui-shop [tên_vật_phẩm]"
+    )
     async def linhbui_shop_cmd(self, ctx: commands.Context, item_name: str = None):
         """Xem & Đổi Linh Bụi Tiên Các lấy vật phẩm UR/SR tự chọn."""
         player = self.db.get_player(ctx.author.id)
@@ -232,7 +252,12 @@ class TuTienCog(commands.Cog, name="TuTien"):
 
     # --- 📂 MONETIZATION & SHOP TIÊN CÁC COMMANDS ---
 
-    @commands.command(name="nap-tien", aliases=["naptutien", "napngoc"])
+    @commands.command(
+        name="nap-tien",
+        aliases=["naptutien", "napngoc"],
+        brief="[Admin/Owner] Nạp Tiên Ngọc & Tích Nạp VIP cho người chơi.",
+        usage="nap-tien @user <số_lượng>"
+    )
     @commands.is_owner()
     async def naptien_cmd(self, ctx: commands.Context, target: discord.Member, amount: int):
         """[Admin/Owner Only] Nạp Tiên Ngọc & Tích Nạp VIP cho người chơi."""
@@ -250,7 +275,12 @@ class TuTienCog(commands.Cog, name="TuTien"):
 
         await ctx.send(msg)
 
-    @commands.command(name="tiencac", aliases=["tiencac-shop", "tiên-các"])
+    @commands.command(
+        name="tiencac",
+        aliases=["tiencac-shop", "tiên-các"],
+        brief="Xem danh mục Shop Tiên Các (mua bằng Tiên Ngọc).",
+        usage="tiencac"
+    )
     async def tiencac_cmd(self, ctx: commands.Context):
         """Xem danh mục Shop Tiên Các (Mua bằng Tiên Ngọc)."""
         player = self.db.get_player(ctx.author.id)
@@ -272,7 +302,12 @@ class TuTienCog(commands.Cog, name="TuTien"):
         embed.set_footer(text="Nạp Tiên Ngọc liên hệ Admin Server! Gõ !gacha để quay bảo vật.")
         await ctx.send(embed=embed)
 
-    @commands.command(name="mua", aliases=["muatiencac", "mua-tiencac"])
+    @commands.command(
+        name="mua",
+        aliases=["muatiencac", "mua-tiencac"],
+        brief="Mua vật phẩm từ Shop Tiên Các bằng Tiên Ngọc.",
+        usage="mua <tên_vật_phẩm>"
+    )
     async def mua_cmd(self, ctx: commands.Context, *, item_name: str):
         """Mua vật phẩm từ Tiên Các Shop bằng Tiên Ngọc."""
         player = self.db.get_player(ctx.author.id)
@@ -285,7 +320,12 @@ class TuTienCog(commands.Cog, name="TuTien"):
             self.db.update_player(updated_player)
         await ctx.send(msg)
 
-    @commands.command(name="vip", aliases=["the-thang", "thethang"])
+    @commands.command(
+        name="vip",
+        aliases=["the-thang", "thethang"],
+        brief="Xem Cấp độ VIP & Trạng thái Thẻ Tháng Đạo Tâm Tôn Giả.",
+        usage="vip"
+    )
     async def vip_cmd(self, ctx: commands.Context):
         """Xem Cấp độ VIP & Trạng thái Thẻ Tháng Đạo Tâm Tôn Giả."""
         player = self.db.get_player(ctx.author.id)
@@ -307,7 +347,12 @@ class TuTienCog(commands.Cog, name="TuTien"):
 
     # --- 📂 NHÓM LỆNH [/nhan-vat] ---
 
-    @commands.command(name="nhapmon", aliases=["taonhanvat", "nhap-mon"])
+    @commands.command(
+        name="nhapmon",
+        aliases=["taonhanvat", "nhap-mon"],
+        brief="Nhập môn Tu Tiên, khởi tạo Linh Căn ngẫu nhiên.",
+        usage="nhapmon [đạo_hiệu]"
+    )
     async def nhapmon_cmd(self, ctx: commands.Context, *, dao_hieu: str = None):
         """Nhập môn Tu Tiên, khởi tạo Linh Căn ngẫu nhiên."""
         player = self.db.get_player(ctx.author.id)
@@ -332,7 +377,12 @@ class TuTienCog(commands.Cog, name="TuTien"):
         embed.set_footer(text="Gõ !tutien-profile để xem hồ sơ PNG hoặc gõ !huongdan để xem cẩm nang tân thủ!")
         await ctx.send(embed=embed)
 
-    @commands.command(name="tutien-huongdan", aliases=["huongdan", "tutienhelp", "tuhds"])
+    @commands.command(
+        name="tutien-huongdan",
+        aliases=["huongdan", "tutienhelp", "tuhds"],
+        brief="Xem Cẩm Nang Hướng Dẫn Tân Thủ Tu Tiên 6 bước.",
+        usage="tutien-huongdan"
+    )
     async def huongdan_cmd(self, ctx: commands.Context):
         """Cẩm Nang Hướng Dẫn Tân Thủ Tu Tiên: «ĐẠI ĐẠO TRANH PHONG»."""
         embed = discord.Embed(
@@ -373,7 +423,12 @@ class TuTienCog(commands.Cog, name="TuTien"):
         embed.set_footer(text="Gõ !tutien-profile để bắt đầu kiểm tra thông tin nhân vật của bạn!")
         await ctx.send(embed=embed)
 
-    @commands.command(name="tutien-profile", aliases=["tutienprofile", "hoso-tutien", "nhanvat-tutien"])
+    @commands.command(
+        name="tutien-profile",
+        aliases=["tutienprofile", "hoso-tutien", "nhanvat-tutien"],
+        brief="Xem 18 thuộc tính nhân vật dạng Thẻ Hình Ảnh PNG Nghệ Thuật.",
+        usage="tutien-profile [@user]"
+    )
     async def profile_cmd(self, ctx: commands.Context, target: discord.Member = None):
         """Xem 18 thuộc tính nhân vật dạng Thẻ Hình Ảnh PNG Nghệ Thuật (Pillow)."""
         target_user = target or ctx.author
@@ -392,7 +447,12 @@ class TuTienCog(commands.Cog, name="TuTien"):
         file = discord.File(fp=img_buf, filename=f"profile_{player.user_id}.png")
         await ctx.send(file=file)
 
-    @commands.command(name="tamcanh", aliases=["can-co", "tam-canh"])
+    @commands.command(
+        name="tamcanh",
+        aliases=["can-co", "tam-canh"],
+        brief="Kiểm tra trạng thái Tâm Cảnh & độ vững chắc Căn Cơ.",
+        usage="tamcanh"
+    )
     async def tamcanh_cmd(self, ctx: commands.Context):
         """Kiểm tra trạng thái Tâm Cảnh & Căn Cơ."""
         player = self.db.get_player(ctx.author.id)
@@ -409,7 +469,12 @@ class TuTienCog(commands.Cog, name="TuTien"):
         embed.add_field(name="⚡ Tỷ Lệ Đột Phá Dự Kiến", value=f"**{chance:.1f}%**", inline=False)
         await ctx.send(embed=embed)
 
-    @commands.command(name="phe-tu-vi", aliases=["phetuvi"])
+    @commands.command(
+        name="phe-tu-vi",
+        aliases=["phetuvi"],
+        brief="Phế bỏ toàn bộ tu vi hiện tại để tu luyện lại từ đầu.",
+        usage="phe-tu-vi"
+    )
     async def phe_tu_vi_cmd(self, ctx: commands.Context):
         """Phế bỏ toàn bộ tu vi hiện tại để tu luyện lại từ đầu."""
         player = self.db.get_player(ctx.author.id)
@@ -427,7 +492,12 @@ class TuTienCog(commands.Cog, name="TuTien"):
 
     # --- 📂 NHÓM LỆNH [/tu-luyen] ---
 
-    @commands.command(name="tu-luyen", aliases=["tuluyen", "train"])
+    @commands.command(
+        name="tu-luyen",
+        aliases=["tuluyen", "train"],
+        brief="Tu luyện chủ động tiêu hao 15 Tinh Lực.",
+        usage="tu-luyen"
+    )
     async def tuluyen_cmd(self, ctx: commands.Context):
         """Tu luyện chủ động (Tiêu hao 15 Tinh Lực)."""
         player = self.db.get_player(ctx.author.id)
@@ -454,7 +524,12 @@ class TuTienCog(commands.Cog, name="TuTien"):
 
         await ctx.send(msg)
 
-    @commands.command(name="nhap-dinh", aliases=["nhapdinh", "bequan"])
+    @commands.command(
+        name="nhap-dinh",
+        aliases=["nhapdinh", "bequan"],
+        brief="Bế quan AFK tích lũy tài nguyên (1h, 4h, 8h, 12h, 24h).",
+        usage="nhap-dinh [số_giờ]"
+    )
     async def nhapdinh_cmd(self, ctx: commands.Context, hours: int = 1):
         """Bế quan AFK tích lũy tài nguyên (1h, 4h, 8h)."""
         player = self.db.get_player(ctx.author.id)
@@ -473,7 +548,12 @@ class TuTienCog(commands.Cog, name="TuTien"):
 
         await ctx.send(f"🧘 Tu sĩ **{player.dao_hieu}** đã bắt đầu nhập định bế quan trong **{hours} Giờ**! Hệ thống sẽ tự động bảo vệ nếu sở hữu Thẻ Tháng VIP.")
 
-    @commands.command(name="luyen-the", aliases=["luyenthe"])
+    @commands.command(
+        name="luyen-the",
+        aliases=["luyenthe"],
+        brief="Rèn luyện Thân Thể tiêu hao Linh Thạch để đột phá Tôi Thể.",
+        usage="luyen-the"
+    )
     async def luyenthe_cmd(self, ctx: commands.Context):
         """Rèn luyện Thân Thể tiêu hao Linh Thạch để đột phá Tôi Thể."""
         player = self.db.get_player(ctx.author.id)
@@ -489,7 +569,12 @@ class TuTienCog(commands.Cog, name="TuTien"):
 
     # --- 📂 NHÓM LỆNH [/dot-pha] ---
 
-    @commands.command(name="dot-pha", aliases=["dotpha", "breakthrough"])
+    @commands.command(
+        name="dot-pha",
+        aliases=["dotpha", "breakthrough"],
+        brief="Xung kích bình cảnh & nghênh đón Lôi Kiếp thời gian thực.",
+        usage="dot-pha"
+    )
     async def dotpha_cmd(self, ctx: commands.Context):
         """Xung kích bình cảnh & Lôi Kiếp (Tự động kích hoạt Thần Phù Bảo Mệnh nếu thất bại)."""
         player = self.db.get_player(ctx.author.id)
@@ -583,7 +668,12 @@ class TuTienCog(commands.Cog, name="TuTien"):
 
     # --- 📂 NHÓM LỆNH [/tu-si-tuong-tac] ---
 
-    @commands.command(name="cuop", aliases=["cuop-dong-phu"])
+    @commands.command(
+        name="cuop",
+        aliases=["cuop-dong-phu"],
+        brief="Đột nhập Động Phủ tu sĩ khác để cướp Linh Thạch.",
+        usage="cuop @user"
+    )
     async def cuop_cmd(self, ctx: commands.Context, target: discord.Member):
         """Đột nhập Động Phủ cướp Linh Thạch (Bị chặn 100% nếu mục tiêu bật Bùa Phòng Thủ)."""
         attacker = self.db.get_player(ctx.author.id)

@@ -43,10 +43,14 @@ COG_GROUP_MAPPING = {
     # Lixi & Marry
     "Lixi":          ("<:lixi:1531333938164007032>", "Lixi"),
     "Marry":         ("<:marry:1531333950234955799>", "Marry"),
+    # Tu Tiên
+    "TuTien":        ("☯️", "Tu Tiên"),
+    "TuTienCog":     ("☯️", "Tu Tiên"),
 }
 
 GROUP_ORDER = [
     "<:gen:1531709110376988743> General",
+    "☯️ Tu Tiên",
     "<:cobac:1531333888931135518> Cờ Bạc",
     "<:trade:1531333907868291132> Giao Dịch",
     "<:AI:1531709092362457292> AI",
