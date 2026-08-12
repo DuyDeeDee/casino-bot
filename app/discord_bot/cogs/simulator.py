@@ -1430,11 +1430,26 @@ class Simulator(commands.Cog):
             color=discord.Color.blue()
         )
         
-        has_items = False
+        valid_items = []
         for item_id, qty in inventory:
             if qty <= 0:
                 continue
-                
+            if item_id in SHOP_ITEMS or item_id in MAP_ITEMS or item_id in TREASURES:
+                valid_items.append((item_id, qty))
+
+        if not valid_items:
+            embed.description = "Túi đồ của bạn hiện đang trống rỗng."
+            return embed
+
+        # Discord Embed limits: Maximum 25 fields per embed
+        if len(valid_items) > 25:
+            displayed_items = valid_items[:24]
+            overflow_items = valid_items[24:]
+        else:
+            displayed_items = valid_items
+            overflow_items = []
+
+        for item_id, qty in displayed_items:
             if item_id in SHOP_ITEMS:
                 item = SHOP_ITEMS[item_id]
                 embed.add_field(
@@ -1442,7 +1457,6 @@ class Simulator(commands.Cog):
                     value=f"• Số lượng: **{qty}**\n• Chức năng: *{item['description']}*",
                     inline=False
                 )
-                has_items = True
             elif item_id in MAP_ITEMS:
                 item = MAP_ITEMS[item_id]
                 embed.add_field(
@@ -1450,7 +1464,6 @@ class Simulator(commands.Cog):
                     value=f"• Số lượng: **{qty}**\n• Mô tả: *{item['description']}*",
                     inline=False
                 )
-                has_items = True
             elif item_id in TREASURES:
                 item = TREASURES[item_id]
                 embed.add_field(
@@ -1463,11 +1476,15 @@ class Simulator(commands.Cog):
                     ),
                     inline=False
                 )
-                has_items = True
-                
-        if not has_items:
-            embed.description = "Túi đồ của bạn hiện đang trống rỗng."
-            
+
+        if overflow_items:
+            total_overflow_qty = sum(q for _, q in overflow_items)
+            embed.add_field(
+                name="📦 Vật phẩm khác",
+                value=f"*(Còn **{len(overflow_items)}** loại vật phẩm khác với tổng **{total_overflow_qty:,}** món trong túi đồ. Hãy dùng hoặc bán bớt để hiển thị...)*",
+                inline=False
+            )
+
         return embed
 
     async def start_mine_session(self, user: discord.User | discord.Member, ctx: commands.Context | None = None) -> tuple[discord.Embed, Optional[OreMineExpeditionView]]:
