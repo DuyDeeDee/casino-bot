@@ -14,16 +14,46 @@ PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..
 FONT_PATH = os.path.join(PROJECT_ROOT, "test.ttf")
 
 
-def get_font(size: int) -> ImageFont.FreeTypeFont:
-    if os.path.exists(FONT_PATH):
+def get_font(size: int, is_bold: bool = False) -> ImageFont.FreeTypeFont:
+    """
+    Attempts to load fonts with full Vietnamese unicode diacritics support.
+    Falls back to Windows fonts (Segoe UI, Arial, Calibri, Tahoma) or Linux fonts (DejaVu Sans).
+    """
+    fallbacks = []
+    if os.name == 'nt':  # Windows
+        if is_bold:
+            fallbacks.extend([
+                "segoeuib.ttf", "arialbd.ttf", "calibrib.ttf", "tahomabd.ttf",
+                "C:/Windows/Fonts/segoeuib.ttf", "C:/Windows/Fonts/arialbd.ttf",
+                "C:/Windows/Fonts/calibrib.ttf"
+            ])
+        else:
+            fallbacks.extend([
+                "segoeui.ttf", "arial.ttf", "calibri.ttf", "tahoma.ttf",
+                "C:/Windows/Fonts/segoeui.ttf", "C:/Windows/Fonts/arial.ttf",
+                "C:/Windows/Fonts/calibri.ttf"
+            ])
+    else:  # Linux/Mac
+        if is_bold:
+            fallbacks.extend([
+                "DejaVuSans-Bold.ttf", "LiberationSans-Bold.ttf", "FreeSansBold.ttf",
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+                "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"
+            ])
+        else:
+            fallbacks.extend([
+                "DejaVuSans.ttf", "LiberationSans-Regular.ttf", "FreeSans.ttf",
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf"
+            ])
+
+    for f in fallbacks:
         try:
-            return ImageFont.truetype(FONT_PATH, size)
+            return ImageFont.truetype(f, size)
         except Exception:
             pass
-    try:
-        return ImageFont.truetype("arial.ttf", size)
-    except Exception:
-        return ImageFont.load_default()
+
+    return ImageFont.load_default()
 
 
 def draw_rounded_rect(draw: ImageDraw.ImageDraw, coords, radius: int, fill, outline=None, width=1):
@@ -78,11 +108,11 @@ def render_tutien_profile_card(player: CultivatorProfile, avatar_bytes: Optional
     draw_rounded_rect(draw, (16, 16, WIDTH - 16, HEIGHT - 16), radius=12, fill=(24, 28, 42, 255), outline=(60, 70, 95, 255), width=1)
 
     # Fonts
-    font_title = get_font(26)
-    font_header = get_font(20)
-    font_bold = get_font(16)
-    font_regular = get_font(14)
-    font_small = get_font(12)
+    font_title = get_font(26, is_bold=True)
+    font_header = get_font(20, is_bold=True)
+    font_bold = get_font(16, is_bold=True)
+    font_regular = get_font(14, is_bold=False)
+    font_small = get_font(12, is_bold=False)
 
     # 2. Header Panel
     title_text = "☯ THÔNG TIN TU SĨ ☯"
