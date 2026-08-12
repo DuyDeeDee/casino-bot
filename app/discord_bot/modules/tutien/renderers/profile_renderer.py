@@ -6,6 +6,7 @@ Renders 18 attributes, spiritual roots, progress bars, cultivator badges, and VI
 import os
 import io
 import math
+import re
 from typing import Optional
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 from app.discord_bot.modules.tutien.models import CultivatorProfile
@@ -75,6 +76,18 @@ def draw_progress_bar(
         draw_rounded_rect(draw, (x + 1, y + 1, x + fill_w - 1, y + height - 1), radius=(height - 2) // 2, fill=fill_color)
 
 
+def clean_pillow_text(text: str) -> str:
+    """
+    Cleans text for Pillow image rendering by stripping SMP color emojis
+    and replacing CJK brackets to prevent missing glyph box artifacts.
+    """
+    if not text:
+        return ""
+    text = str(text).replace("《", "[").replace("》", "]")
+    text = re.sub(r'[\U00010000-\U0010ffff]', '', text)
+    return text.strip()
+
+
 def render_tutien_profile_card(player: CultivatorProfile, avatar_bytes: Optional[bytes] = None) -> io.BytesIO:
     """
     Renders a 900x580 PNG Profile Card featuring 18 Attributes & Xianxia Aesthetic.
@@ -140,12 +153,15 @@ def render_tutien_profile_card(player: CultivatorProfile, avatar_bytes: Optional
 
     # 4. Basic Info
     info_x = av_x + av_size + 25
-    draw.text((info_x, 82), f"Đạo Hiệu : {player.dao_hieu}", font=font_bold, fill=(255, 255, 255, 255))
-    sect_str = player.sect_name if player.sect_name else "Tự Tu (Vô Tông Môn)"
+    clean_dao_hieu = clean_pillow_text(player.dao_hieu)
+    draw.text((info_x, 82), f"Đạo Hiệu : {clean_dao_hieu}", font=font_bold, fill=(255, 255, 255, 255))
+    sect_str = clean_pillow_text(player.sect_name if player.sect_name else "Tự Tu (Vô Tông Môn)")
     draw.text((info_x + 360, 82), f"Tông Môn: {sect_str}", font=font_regular, fill=(180, 200, 220, 255))
 
-    draw.text((info_x, 112), f"Cảnh Giới: ◈ {player.realm_name}", font=font_bold, fill=(100, 200, 255, 255))
-    draw.text((info_x + 360, 112), f"Luyện Thể: ❖ {player.body_realm_name}", font=font_regular, fill=(255, 180, 120, 255))
+    clean_realm = clean_pillow_text(player.realm_name)
+    clean_body = clean_pillow_text(player.body_realm_name)
+    draw.text((info_x, 112), f"Cảnh Giới: ◈ {clean_realm}", font=font_bold, fill=(100, 200, 255, 255))
+    draw.text((info_x + 360, 112), f"Luyện Thể: ❖ {clean_body}", font=font_regular, fill=(255, 180, 120, 255))
 
     # Exp Bar
     exp_percent = player.exp / float(player.required_exp) if player.required_exp > 0 else 1.0
@@ -159,7 +175,8 @@ def render_tutien_profile_card(player: CultivatorProfile, avatar_bytes: Optional
     grid_y = 220
 
     # Column 1
-    draw.text((40, grid_y), f"⚡ Linh Căn: {player.linh_can_element} ({player.linh_can_quality})", font=font_bold, fill=(255, 215, 0, 255))
+    clean_element = clean_pillow_text(player.linh_can_element)
+    draw.text((40, grid_y), f"⚡ Linh Căn: {clean_element} ({player.linh_can_quality})", font=font_bold, fill=(255, 215, 0, 255))
     
     # Căn Cơ
     draw.text((40, grid_y + 35), f"◈ Căn Cơ: {player.can_co:.0f}%", font=font_regular, fill=(220, 220, 220, 255))
@@ -201,9 +218,10 @@ def render_tutien_profile_card(player: CultivatorProfile, avatar_bytes: Optional
 
     # Footer Info (Gongfa, Dongphu)
     draw.line([(40, 520), (WIDTH - 40, 520)], fill=(50, 60, 80, 255), width=1)
-    gongfa_name = player.active_dao_domain if player.active_dao_domain else "《Phàm Nhân Quyết》"
-    draw.text((40, 535), f"📖 Công Pháp Chủ Tu: {gongfa_name}", font=font_small, fill=(220, 220, 180, 255))
-    draw.text((WIDTH - 40, 535), f"⛩ Động Phủ: Cấp {player.dong_phu_level} (Linh Khí +{player.dong_phu_level * 15}%)", font=font_small, fill=(180, 220, 180, 255), anchor="rm")
+    raw_gongfa = player.active_dao_domain if player.active_dao_domain else "[Phàm Nhân Quyết]"
+    clean_gongfa = clean_pillow_text(raw_gongfa)
+    draw.text((40, 535), f"❖ Công Pháp Chủ Tu: {clean_gongfa}", font=font_small, fill=(220, 220, 180, 255))
+    draw.text((WIDTH - 40, 535), f"◈ Động Phủ: Cấp {player.dong_phu_level} (Linh Khí +{player.dong_phu_level * 15}%)", font=font_small, fill=(180, 220, 180, 255), anchor="rm")
 
     output = io.BytesIO()
     img.save(output, format="PNG")
