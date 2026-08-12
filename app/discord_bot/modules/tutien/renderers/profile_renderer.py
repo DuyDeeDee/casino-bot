@@ -117,7 +117,7 @@ def render_tutien_profile_card(player: CultivatorProfile, avatar_bytes: Optional
     # 2. Header Panel
     title_text = "☯ THÔNG TIN TU SĨ ☯"
     if is_vip:
-        vip_tag = f" [ 👑 VIP {player.vip_level} ]" if player.vip_level > 0 else " [ 📜 ĐẠO TÂM TÔN GIẢ ]"
+        vip_tag = f" [ ★ VIP {player.vip_level} ]" if player.vip_level > 0 else " [ ☯ ĐẠO TÂM TÔN GIẢ ]"
         title_text += vip_tag
 
     draw.text((WIDTH // 2, 35), title_text, font=font_title, fill=(255, 215, 0, 255) if is_vip else (235, 195, 95, 255), anchor="mm")
@@ -144,8 +144,8 @@ def render_tutien_profile_card(player: CultivatorProfile, avatar_bytes: Optional
     sect_str = player.sect_name if player.sect_name else "Tự Tu (Vô Tông Môn)"
     draw.text((info_x + 360, 82), f"Tông Môn: {sect_str}", font=font_regular, fill=(180, 200, 220, 255))
 
-    draw.text((info_x, 112), f"Cảnh Giới: 🔵 {player.realm_name}", font=font_bold, fill=(100, 200, 255, 255))
-    draw.text((info_x + 360, 112), f"Luyện Thể: 💪 {player.body_realm_name}", font=font_regular, fill=(255, 180, 120, 255))
+    draw.text((info_x, 112), f"Cảnh Giới: ◈ {player.realm_name}", font=font_bold, fill=(100, 200, 255, 255))
+    draw.text((info_x + 360, 112), f"Luyện Thể: ❖ {player.body_realm_name}", font=font_regular, fill=(255, 180, 120, 255))
 
     # Exp Bar
     exp_percent = player.exp / float(player.required_exp) if player.required_exp > 0 else 1.0
@@ -162,29 +162,29 @@ def render_tutien_profile_card(player: CultivatorProfile, avatar_bytes: Optional
     draw.text((40, grid_y), f"⚡ Linh Căn: {player.linh_can_element} ({player.linh_can_quality})", font=font_bold, fill=(255, 215, 0, 255))
     
     # Căn Cơ
-    draw.text((40, grid_y + 35), f"🛡️ Căn Cơ: {player.can_co:.0f}%", font=font_regular, fill=(220, 220, 220, 255))
+    draw.text((40, grid_y + 35), f"◈ Căn Cơ: {player.can_co:.0f}%", font=font_regular, fill=(220, 220, 220, 255))
     draw_progress_bar(draw, 160, grid_y + 37, 220, 14, player.can_co / 100.0, fill_color=(100, 210, 120, 255))
 
     # Tâm Cảnh
-    draw.text((40, grid_y + 65), f"🧘 Tâm Cảnh: {player.tam_canh:.0f}%", font=font_regular, fill=(220, 220, 220, 255))
+    draw.text((40, grid_y + 65), f"☯ Tâm Cảnh: {player.tam_canh:.0f}%", font=font_regular, fill=(220, 220, 220, 255))
     draw_progress_bar(draw, 160, grid_y + 67, 220, 14, player.tam_canh / 100.0, fill_color=(140, 120, 240, 255))
 
     # Đạo Tâm & Ngộ Tính
-    draw.text((40, grid_y + 95), f"⚔️ Đạo Tâm: {player.dao_tam} điểm", font=font_regular, fill=(240, 140, 100, 255))
-    draw.text((40, grid_y + 125), f"🧠 Ngộ Tính: {player.ngo_tinh} điểm", font=font_regular, fill=(130, 210, 255, 255))
+    draw.text((40, grid_y + 95), f"⚔ Đạo Tâm: {player.dao_tam} điểm", font=font_regular, fill=(240, 140, 100, 255))
+    draw.text((40, grid_y + 125), f"✦ Ngộ Tính: {player.ngo_tinh} điểm", font=font_regular, fill=(130, 210, 255, 255))
 
     # HP / Mana
-    draw.text((40, grid_y + 155), f"❤️ Khí Huyết (HP): {player.hp:,} / {player.max_hp:,}", font=font_regular, fill=(255, 100, 100, 255))
-    draw.text((40, grid_y + 185), f"💧 Chân Nguyên (MP): {player.mana:,} / {player.max_mana:,}", font=font_regular, fill=(100, 180, 255, 255))
+    draw.text((40, grid_y + 155), f"♥ Khí Huyết (HP): {player.hp:,} / {player.max_hp:,}", font=font_regular, fill=(255, 100, 100, 255))
+    draw.text((40, grid_y + 185), f"◆ Chân Nguyên (MP): {player.mana:,} / {player.max_mana:,}", font=font_regular, fill=(100, 180, 255, 255))
 
     # Column 2
     col2_x = 470
 
     # Thần Thức & Tinh Lực
-    draw.text((col2_x, grid_y + 35), f"🧬 Thần Thức: {player.than_thuc} Điểm", font=font_regular, fill=(200, 160, 255, 255))
+    draw.text((col2_x, grid_y + 35), f"❖ Thần Thức: {player.than_thuc} Điểm", font=font_regular, fill=(200, 160, 255, 255))
     
     # Tinh lực (Stamina)
-    draw.text((col2_x, grid_y + 65), f"🔥 Tinh Lực: {player.tinh_luc} / {player.max_tinh_luc}", font=font_regular, fill=(255, 160, 80, 255))
+    draw.text((col2_x, grid_y + 65), f"♨ Tinh Lực: {player.tinh_luc} / {player.max_tinh_luc}", font=font_regular, fill=(255, 160, 80, 255))
     draw_progress_bar(draw, col2_x + 150, grid_y + 67, 200, 14, player.tinh_luc / float(player.max_tinh_luc), fill_color=(255, 140, 50, 255))
 
     # Nghiệp Lực
@@ -193,17 +193,17 @@ def render_tutien_profile_card(player: CultivatorProfile, avatar_bytes: Optional
     draw.text((col2_x, grid_y + 95), f"☯ Nghiệp Lực: {player.nghiep_luc} ({karma_status})", font=font_regular, fill=karma_color)
 
     # Cơ Duyên & Thiên Đạo Điểm
-    draw.text((col2_x, grid_y + 125), f"✨ Cơ Duyên: {player.co_duyen} Điểm", font=font_regular, fill=(255, 225, 120, 255))
-    draw.text((col2_x, grid_y + 155), f"🌌 Thiên Đạo Điểm: {player.thien_dao_diem:,} Điểm", font=font_regular, fill=(180, 220, 255, 255))
+    draw.text((col2_x, grid_y + 125), f"✦ Cơ Duyên: {player.co_duyen} Điểm", font=font_regular, fill=(255, 225, 120, 255))
+    draw.text((col2_x, grid_y + 155), f"✵ Thiên Đạo Điểm: {player.thien_dao_diem:,} Điểm", font=font_regular, fill=(180, 220, 255, 255))
 
     # Two Currencies (Linh Thạch & Tiên Ngọc)
-    draw.text((col2_x, grid_y + 185), f"💎 Linh Thạch: {player.linh_thach:,}  |  🌟 Tiên Ngọc: {player.tien_ngoc:,}", font=font_bold, fill=(255, 215, 0, 255))
+    draw.text((col2_x, grid_y + 185), f"❖ Linh Thạch: {player.linh_thach:,}  |  ★ Tiên Ngọc: {player.tien_ngoc:,}", font=font_bold, fill=(255, 215, 0, 255))
 
     # Footer Info (Gongfa, Dongphu)
     draw.line([(40, 520), (WIDTH - 40, 520)], fill=(50, 60, 80, 255), width=1)
     gongfa_name = player.active_dao_domain if player.active_dao_domain else "《Phàm Nhân Quyết》"
-    draw.text((40, 535), f"📜 Công Pháp Chủ Tu: {gongfa_name}", font=font_small, fill=(220, 220, 180, 255))
-    draw.text((WIDTH - 40, 535), f"🏠 Động Phủ: Cấp {player.dong_phu_level} (Linh Khí +{player.dong_phu_level * 15}%)", font=font_small, fill=(180, 220, 180, 255), anchor="rm")
+    draw.text((40, 535), f"📖 Công Pháp Chủ Tu: {gongfa_name}", font=font_small, fill=(220, 220, 180, 255))
+    draw.text((WIDTH - 40, 535), f"⛩ Động Phủ: Cấp {player.dong_phu_level} (Linh Khí +{player.dong_phu_level * 15}%)", font=font_small, fill=(180, 220, 180, 255), anchor="rm")
 
     output = io.BytesIO()
     img.save(output, format="PNG")
