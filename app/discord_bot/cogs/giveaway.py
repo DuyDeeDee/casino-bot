@@ -229,12 +229,15 @@ class Giveaway(commands.Cog, name="Giveaway"):
         
         desc_lines = [
             f"**{prize}**",
-            f"<a:timden:1526230943478845450> *host:* <@{host_id}>  •  <:ss:1526230022787043348>*Win:* {winner_count}  •  <:ss:1526230022787043348>*End:* <t:{ends_at}:R>"
+            f"<a:timden:1526230943478845450> *host:* <@{host_id}>",
+            f"<:ss:1526230022787043348>*Win:* {winner_count}"
         ]
 
         if required_roles:
             req_lines = ", ".join(f"<@&{r_id}>" for r_id in required_roles)
             desc_lines.append(f"<a:kcden:1526231212887380108> *Giới hạn:* {req_lines}")
+
+        desc_lines.append(f"<:ss:1526230022787043348>*End:* <t:{ends_at}:R>")
 
         embed.description = "\n".join(desc_lines)
         embed.set_footer(text="Sylus Meow • Giveaway System")
@@ -748,7 +751,8 @@ class Giveaway(commands.Cog, name="Giveaway"):
         embed = discord.Embed(title="🎉 GIVEAWAY ĐÃ QUAY LẠI KẾT QUẢ 🎉", color=discord.Color.purple())
         desc_lines = [
             f"**{prize}**",
-            f"<a:timden:1526230943478845450> *host:* <@{host_id}>  •  <:ss:1526230022787043348>*Win:* {len(new_winners)}",
+            f"<a:timden:1526230943478845450> *host:* <@{host_id}>",
+            f"<:ss:1526230022787043348>*Win:* {len(new_winners)}",
             f"<a:key:1526234974150459593>*Result:* {new_winners_mentions}"
         ]
         embed.description = "\n".join(desc_lines)
@@ -862,7 +866,8 @@ class Giveaway(commands.Cog, name="Giveaway"):
         embed = discord.Embed(title="<a:thanhgia:1526231085221023845> **Giveaway Kết Thúc** <a:thanhgia:1526231085221023845>", color=discord.Color.purple())
         desc_lines = [
             f"**{prize}**",
-            f"<a:timden:1526230943478845450> *host:* <@{host_id}>  •  <:ss:1526230022787043348>*Win:* {winner_count}",
+            f"<a:timden:1526230943478845450> *host:* <@{host_id}>",
+            f"<:ss:1526230022787043348>*Win:* {winner_count}",
             f"<a:key:1526234974150459593>*Result:* {winners_mentions}"
         ]
         embed.description = "\n".join(desc_lines)
