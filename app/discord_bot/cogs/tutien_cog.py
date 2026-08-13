@@ -322,6 +322,123 @@ class TuTienCog(commands.Cog, name="TuTien"):
         await ctx.send(msg)
 
     @commands.command(
+        name="tutien-reset",
+        aliases=["ttreset", "reset-tutien", "reset-player"],
+        brief="[Admin/Owner] Reset toàn bộ dữ liệu Tu Tiên của 1 người chơi.",
+        usage="tutien-reset @user"
+    )
+    @commands.is_owner()
+    async def reset_player_cmd(self, ctx: commands.Context, target: discord.Member):
+        """[Owner Admin] Reset toàn bộ hồ sơ Tu Tiên của người chơi."""
+        player = self.db.get_player(target.id)
+        if not player:
+            await ctx.send(f"❌ Tu sĩ **{target.display_name}** chưa từng nhập môn Tu Tiên!")
+            return
+
+        self.db.delete_player(target.id)
+        embed = discord.Embed(
+            title="🧹 [OWNER ADMIN] RESET DỮ LIỆU THÀNH CÔNG!",
+            description=f"Đã phế bỏ và xóa sạch 100% dữ liệu Tu Tiên của tu sĩ **[{player.dao_hieu}]** (`{target.display_name}`).\n"
+                        f"> 📜 Người chơi có thể gõ `!nhapmon` để khởi tạo lại nhân vật từ đầu.",
+            color=discord.Color.red()
+        )
+        await ctx.send(embed=embed)
+
+    @commands.command(
+        name="set-linh-thach",
+        aliases=["setlt", "setlinhthach"],
+        brief="[Admin/Owner] Thay đổi số Linh Thạch của người chơi.",
+        usage="set-linh-thach @user [số_lượng]"
+    )
+    @commands.is_owner()
+    async def set_linh_thach_cmd(self, ctx: commands.Context, target: discord.Member, amount: int):
+        """[Owner Admin] Set Linh Thạch cho người chơi."""
+        player = self.db.get_player(target.id)
+        if not player:
+            await ctx.send(f"❌ Tu sĩ **{target.display_name}** chưa nhập môn!")
+            return
+
+        player.linh_thach = max(0, amount)
+        self.db.update_player(player)
+
+        embed = discord.Embed(
+            title="💰 [OWNER ADMIN] SET LINH THẠCH THÀNH CÔNG!",
+            description=f"Đã đặt Linh Thạch của tu sĩ **[{player.dao_hieu}]** thành **`{player.linh_thach:,}` Linh Thạch**!",
+            color=discord.Color.gold()
+        )
+        await ctx.send(embed=embed)
+
+    @commands.command(
+        name="set-tien-ngoc",
+        aliases=["setngoc", "settienngoc"],
+        brief="[Admin/Owner] Thay đổi số Tiên Ngọc (Nạp) của người chơi.",
+        usage="set-tien-ngoc @user [số_lượng]"
+    )
+    @commands.is_owner()
+    async def set_tien_ngoc_cmd(self, ctx: commands.Context, target: discord.Member, amount: int):
+        """[Owner Admin] Set Tiên Ngọc cho người chơi."""
+        player = self.db.get_player(target.id)
+        if not player:
+            await ctx.send(f"❌ Tu sĩ **{target.display_name}** chưa nhập môn!")
+            return
+
+        player.tien_ngoc = max(0, amount)
+        self.db.update_player(player)
+
+        embed = discord.Embed(
+            title="💎 [OWNER ADMIN] SET TIÊN NGỌC THÀNH CÔNG!",
+            description=f"Đã đặt Tiên Ngọc của tu sĩ **[{player.dao_hieu}]** thành **`{player.tien_ngoc:,}` Tiên Ngọc**!",
+            color=discord.Color.blue()
+        )
+        await ctx.send(embed=embed)
+
+    @commands.command(
+        name="give-item",
+        aliases=["chodo", "chovatpham", "additem"],
+        brief="[Admin/Owner] Ban tặng vật phẩm / bùa cho người chơi.",
+        usage="give-item @user [tên_item] [số_lượng]"
+    )
+    @commands.is_owner()
+    async def give_item_cmd(self, ctx: commands.Context, target: discord.Member, item_name: str, amount: int = 1):
+        """[Owner Admin] Ban tặng vật phẩm cho người chơi."""
+        player = self.db.get_player(target.id)
+        if not player:
+            await ctx.send(f"❌ Tu sĩ **{target.display_name}** chưa nhập môn!")
+            return
+
+        name_lower = item_name.lower()
+        if "van linh" in name_lower or "vanlinh" in name_lower:
+            player.van_linh_dan += amount
+            self.db.update_player(player)
+            item_desc = f"x{amount} Vạn Linh Đan"
+        elif "thanh the" in name_lower or "thanhthe" in name_lower:
+            player.thanh_the_phu += amount
+            self.db.update_player(player)
+            item_desc = f"x{amount} Thánh Thể Phù"
+        elif "cuu chuyen" in name_lower or "cuuchuyen" in name_lower:
+            player.cuu_chuyen_dan += amount
+            self.db.update_player(player)
+            item_desc = f"x{amount} Cửu Chuyển Tái Tạo Đan"
+        elif "linh duyen" in name_lower:
+            player.linh_duyen_phu += amount
+            self.db.update_player(player)
+            item_desc = f"x{amount} Linh Duyên Phù"
+        elif "tien duyen" in name_lower:
+            player.tien_duyen_phu += amount
+            self.db.update_player(player)
+            item_desc = f"x{amount} Tiên Duyên Phù"
+        else:
+            self.db.add_item(target.id, item_name, "Bảo Vật Admin Ban Tặng", amount)
+            item_desc = f"x{amount} {item_name}"
+
+        embed = discord.Embed(
+            title="🎁 [OWNER ADMIN] BAN TẶNG VẬT PHẨM THÀNH CÔNG!",
+            description=f"Đã ban tặng **{item_desc}** cho tu sĩ **[{player.dao_hieu}]**!",
+            color=discord.Color.green()
+        )
+        await ctx.send(embed=embed)
+
+    @commands.command(
         name="tiencac",
         aliases=["tiencac-shop", "tiên-các"],
         brief="Xem danh mục Shop Tiên Các (mua bằng Tiên Ngọc).",

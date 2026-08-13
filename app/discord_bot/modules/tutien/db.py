@@ -226,8 +226,14 @@ class TuTienDB:
                 INSERT INTO tutien_gongfa (user_id, chu_tu)
                 VALUES (?, '《Phàm Nhân Quyết》')
             """, (user_id,))
-
         return self.get_player(user_id)
+
+    def delete_player(self, user_id: int):
+        with self.get_connection() as conn:
+            conn.execute("DELETE FROM tutien_players WHERE user_id = ?", (user_id,))
+            conn.execute("DELETE FROM tutien_gongfa WHERE user_id = ?", (user_id,))
+            conn.execute("DELETE FROM tutien_inventory WHERE user_id = ?", (user_id,))
+            conn.execute("DELETE FROM tutien_pve_progress WHERE user_id = ?", (user_id,))
 
     def update_player(self, player: CultivatorProfile):
         with self.get_connection() as conn:
