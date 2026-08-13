@@ -203,7 +203,8 @@ async def register_cogs(bot: commands.Bot | None = None) -> None:
         return
 
     for cog in COGS:
-        if bot.get_cog(cog.__name__):
+        cog_name = getattr(cog, "__cog_name__", cog.__name__)
+        if bot.get_cog(cog_name) or any(isinstance(c, cog) for c in bot.cogs.values()):
             continue
         await bot.add_cog(cog(bot))
         logger.info("Loaded cog: %s", cog.__name__)

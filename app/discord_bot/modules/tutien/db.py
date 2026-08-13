@@ -5,6 +5,7 @@ Includes Monetization Schema, VIP Progression, Gacha Tickets & Safe Connection C
 
 import os
 import json
+import time
 import sqlite3
 from contextlib import contextmanager
 from typing import Optional, Dict, Any, List
@@ -102,7 +103,12 @@ class TuTienDB:
                 "is_vip_pass": "INTEGER DEFAULT 0",
                 "vip_pass_expires": "REAL",
                 "array_protection_until": "REAL",
-                "gacha_pity_count": "INTEGER DEFAULT 0"
+                "gacha_pity_count": "INTEGER DEFAULT 0",
+                "kinh_mach_doan_tuyet_until": "REAL",
+                "lingering_debuff": "TEXT",
+                "thanh_the_phu": "INTEGER DEFAULT 0",
+                "van_linh_dan": "INTEGER DEFAULT 0",
+                "cuu_chuyen_dan": "INTEGER DEFAULT 0"
             }
             for col_name, col_type in new_cols.items():
                 if col_name not in existing_cols:
@@ -175,6 +181,18 @@ class TuTienDB:
                 )
             """)
 
+            # Table: PVE Progress & Tower
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS tutien_pve_progress (
+                    user_id INTEGER PRIMARY KEY,
+                    tower_floor INTEGER DEFAULT 1,
+                    daily_tower_keys INTEGER DEFAULT 3,
+                    last_tower_reset REAL,
+                    boss_dps_today INTEGER DEFAULT 0,
+                    phu_tai_sinh INTEGER DEFAULT 0
+                )
+            """)
+
     # --- PLAYER METHODS ---
     def get_player(self, user_id: int) -> Optional[CultivatorProfile]:
         with self.get_connection() as conn:
@@ -226,7 +244,9 @@ class TuTienDB:
                     last_daily_fortune = ?, vip_level = ?, vip_exp = ?,
                     is_vip_pass = ?, vip_pass_expires = ?, array_protection_until = ?,
                     gacha_pity_count = ?, is_meditating = ?, meditate_start_time = ?,
-                    meditate_duration_hours = ?, tau_hoa_nhap_ma_until = ?, active_dao_domain = ?
+                    meditate_duration_hours = ?, tau_hoa_nhap_ma_until = ?, active_dao_domain = ?,
+                    kinh_mach_doan_tuyet_until = ?, lingering_debuff = ?, thanh_the_phu = ?,
+                    van_linh_dan = ?, cuu_chuyen_dan = ?
                 WHERE user_id = ?
             """, (
                 player.dao_hieu, player.realm_index, player.exp,
@@ -241,6 +261,8 @@ class TuTienDB:
                 1 if player.is_vip_pass else 0, player.vip_pass_expires, player.array_protection_until,
                 player.gacha_pity_count, 1 if player.is_meditating else 0, player.meditate_start_time,
                 player.meditate_duration_hours, player.tau_hoa_nhap_ma_until, player.active_dao_domain,
+                player.kinh_mach_doan_tuyet_until, player.lingering_debuff, player.thanh_the_phu,
+                player.van_linh_dan, player.cuu_chuyen_dan,
                 player.user_id
             ))
 
@@ -322,6 +344,85 @@ class TuTienDB:
         with self.get_connection() as conn:
             conn.execute("UPDATE tutien_channel_energy SET current_linh_khi = MIN(max_linh_khi, current_linh_khi + ?)", (amount,))
 
-    def recover_all_players_tinh_luc(self, amount: int = 10):
+    def recover_all_players_tinh_luc(self, amount: int = 5):
         with self.get_connection() as conn:
-            conn.execute("UPDATE tutien_players SET tinh_luc = MIN(max_tinh_luc, tinh_luc + ?)", (amount,))
+            conn.execute(
+                "UPDATE tutien_players SET tinh_luc = CASE WHEN (tinh_luc + ?) > max_tinh_luc THEN max_tinh_luc ELSE (tinh_luc + ?) END",
+                (amount, amount)
+            )
+
+    # --- PVE PROGRESS & TOWER METHODS ---
+    def get_pve_progress(self, user_id: int) -> dict:
+        now = time.time()
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM tutien_pve_progress WHERE user_id = ?", (user_id,))
+            row = cursor.fetchone()
+            if not row:
+                conn.execute(
+                    "INSERT INTO tutien_pve_progress (user_id, tower_floor, daily_tower_keys, last_tower_reset, boss_dps_today, phu_tai_sinh) "
+                    "VALUES (?, 1, 3, ?, 0, 0)",
+                    (user_id, now)
+                )
+                return {
+                    "user_id": user_id,
+                    "tower_floor": 1,
+                    "daily_tower_keys": 3,
+                    "last_tower_reset": now,
+                    "boss_dps_today": 0,
+                    "phu_tai_sinh": 0
+                }
+            
+            # Check daily reset for tower keys (24 hours)
+            keys = row["daily_tower_keys"]
+            last_reset = row["last_tower_reset"] or now
+            if now - last_reset > 86400:
+                keys = 3
+                last_reset = now
+                conn.execute("UPDATE tutien_pve_progress SET daily_tower_keys = 3, last_tower_reset = ? WHERE user_id = ?", (now, user_id))
+
+            return {
+                "user_id": row["user_id"],
+                "tower_floor": row["tower_floor"],
+                "daily_tower_keys": keys,
+                "last_tower_reset": last_reset,
+                "boss_dps_today": row["boss_dps_today"],
+                "phu_tai_sinh": row["phu_tai_sinh"]
+            }
+
+    def update_pve_progress(self, user_id: int, tower_floor: int = None, daily_tower_keys: int = None, boss_dps_today: int = None, phu_tai_sinh: int = None):
+        pve = self.get_pve_progress(user_id)
+        new_tf = tower_floor if tower_floor is not None else pve["tower_floor"]
+        new_keys = daily_tower_keys if daily_tower_keys is not None else pve["daily_tower_keys"]
+        new_dps = boss_dps_today if boss_dps_today is not None else pve["boss_dps_today"]
+        new_pts = phu_tai_sinh if phu_tai_sinh is not None else pve["phu_tai_sinh"]
+
+        with self.get_connection() as conn:
+            conn.execute(
+                "UPDATE tutien_pve_progress SET tower_floor = ?, daily_tower_keys = ?, boss_dps_today = ?, phu_tai_sinh = ? WHERE user_id = ?",
+                (new_tf, new_keys, new_dps, new_pts, user_id)
+            )
+
+    def get_tower_leaderboard(self, limit: int = 10):
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT p.user_id, p.dao_hieu, pve.tower_floor FROM tutien_pve_progress pve "
+                "JOIN tutien_players p ON pve.user_id = p.user_id "
+                "ORDER BY pve.tower_floor DESC LIMIT ?", (limit,)
+            )
+            return cursor.fetchall()
+
+    def update_world_boss_dps(self, user_id: int, damage: int):
+        with self.get_connection() as conn:
+            conn.execute("UPDATE tutien_pve_progress SET boss_dps_today = boss_dps_today + ? WHERE user_id = ?", (damage, user_id))
+
+    def get_world_boss_rankings(self, limit: int = 10):
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT p.user_id, p.dao_hieu, pve.boss_dps_today FROM tutien_pve_progress pve "
+                "JOIN tutien_players p ON pve.user_id = p.user_id WHERE pve.boss_dps_today > 0 "
+                "ORDER BY pve.boss_dps_today DESC LIMIT ?", (limit,)
+            )
+            return cursor.fetchall()

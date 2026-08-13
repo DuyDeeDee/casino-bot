@@ -197,6 +197,21 @@ TIEN_CAC_SHOP: Dict[str, Dict[str, Any]] = {
         "price": 200,
         "desc": "Kích hoạt bùa bảo vệ Động Phủ 24h. Chặn 100% lệnh cướp phá từ tu sĩ khác.",
         "category": "An Toàn"
+    },
+    "Vạn Linh Đan": {
+        "price": 50,
+        "desc": "Đan dược cứu chữa đạo hữu bị Kinh Mạch Đoạn Tuyệt khi tử trận PVE (!cuu-thuong).",
+        "category": "Cứu Thương PVE"
+    },
+    "Thánh Thể Phù": {
+        "price": 80,
+        "desc": "Phù bảo vệ. Chống rớt Linh Thạch và hại Căn Cơ khi tử trận trong Cấm Địa.",
+        "category": "Bảo Hiểm PVE"
+    },
+    "Cửu Chuyển Tái Tạo Đan": {
+        "price": 150,
+        "desc": "Hồi sinh ngay lập tức tại chỗ với 100% HP và xóa sạch Độc Tố / Ô Nhiễm Tâm Ma.",
+        "category": "Cứu Thương PVE"
     }
 }
 

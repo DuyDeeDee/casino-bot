@@ -73,6 +73,13 @@ class CultivatorProfile(BaseModel):
     meditate_duration_hours: int = 0
     tau_hoa_nhap_ma_until: Optional[float] = None
     
+    # Hardcore PVE & Rescue schema
+    kinh_mach_doan_tuyet_until: Optional[float] = None
+    lingering_debuff: Optional[str] = None
+    thanh_the_phu: int = 0
+    van_linh_dan: int = 0
+    cuu_chuyen_dan: int = 0
+
     # Dao Domain points
     dao_luan_points: Dict[str, int] = Field(default_factory=dict)
     active_dao_domain: Optional[str] = None

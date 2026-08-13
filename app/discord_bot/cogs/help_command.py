@@ -106,6 +106,62 @@ def _build_groups(client: commands.Bot):
 
 def _group_embed(group_label: str, cmds: list[commands.Command], prefix: str) -> discord.Embed:
     """Tạo embed cho 1 nhóm lệnh."""
+    if "Tu Tiên" in group_label or "TuTien" in group_label:
+        embed = discord.Embed(
+            title="☯️ HỆ THỐNG TU TIÊN: «ĐẠI ĐẠO TRANH PHONG»",
+            description=f"Prefix hiện tại của bot: **`{prefix}`**\nDưới đây là danh sách toàn bộ các lệnh Tu Tiên được phân loại theo mục:",
+            color=discord.Color.purple()
+        )
+
+        categories = {
+            "👤 I. NHÂN VẬT & TÂN THỦ": [
+                ("nhapmon", ["taonhanvat", "nhap-mon"], "Nhập môn Tu Tiên, quay Linh Căn ngẫu nhiên (Phàm Phẩm -> Hỗn Độn) & nhận 500 Linh Thạch."),
+                ("tutien-profile", ["profile", "tt", "hoso-tutien"], "Xem Thẻ Hình Ảnh PNG 18 thuộc tính nghệ thuật nhân vật."),
+                ("tamcanh", ["can-co", "tam-canh"], "Kiểm tra tỷ lệ Đột Phá, trạng thái Tâm Cảnh & độ vững chắc Căn Cơ."),
+                ("tutien-huongdan", ["huongdan", "tutienhelp"], "Xem cẩm nang hướng dẫn Tu Tiên 7 bước chi tiết."),
+                ("phe-tu-vi", ["phetuvi"], "Phế bỏ toàn bộ tu vi hiện tại để tu luyện lại từ Luyện Khí Tầng 1."),
+            ],
+            "🧘 II. TU LUYỆN & ĐỘT PHÁ": [
+                ("tu-luyen", ["tuluyen", "train"], "Tu luyện chủ động (tiêu 15 Tinh Lực, tích lũy EXP Tu Vi)."),
+                ("nhap-dinh", ["nhapdinh", "bequan"], "Bế quan AFK tích lũy tài nguyên (1h, 4h, 8h, 12h, 16h, 24h)."),
+                ("xuat-quan", ["xuatquan", "xuatdinh"], "Thu công xuất quan sớm & nhận quà AFK tích lũy."),
+                ("luyen-the", ["luyenthe"], "Rèn luyện Thân Thể tiêu hao Linh Thạch để đột phá Tôi Thể -> Bất Diệt Thể."),
+                ("dot-pha", ["dotpha", "breakthrough"], "Xung kích bình cảnh & nghênh đón Lôi Kiếp thời gian thực."),
+            ],
+            "⚔️ III. CHINH PHỤC HARDCORE PVE": [
+                ("san-yeu", ["sanyeu", "hunt"], "Săn Yêu Quái lượt (Có 15% quái Biến Dị 3x stats, VIP 2+ gõ !san-yeu quet 10x)."),
+                ("leo-thap", ["leothap", "thap"], "Thử thách Tháp Thiên Cực 100 Tầng (Mỗi 10 tầng gặp Ảo Ảnh Bản Thân)."),
+                ("top-thap", ["topthap"], "Xem Bảng Xếp Hạng Leo Tháp Thiên Cực Top 10 toàn Server."),
+                ("bi-canh", ["bicanh"], "Tổ đội 3-5 Tu Sĩ (Tank, DPS, Healer) đánh Bí Cảnh Cổ Đại."),
+                ("bi-canh-cam-dia", ["camdia", "roguelike"], "Đột phá Mê Cung Sinh Tồn Roguelike Thái Cổ Cấm Địa (5 Phòng)."),
+                ("diet-boss", ["boss-server"], "Xông vào trảm Thái Cổ Ma Vương Giáng Lâm (World Boss Server)."),
+                ("cuu-thuong", ["cuuthuong", "rescue"], "Dùng Vạn Linh Đan hoặc Tiên Ngọc cứu đạo hữu bị Kinh Mạch Đoạn Tuyệt."),
+                ("giai-doc", ["giaidoc", "cleanse"], "Tẩy trừ hiệu ứng Độc Tố Thấu Cốt & Tâm Ma Ô Nhiễm."),
+            ],
+            "🔮 IV. GACHA & SHOP TIÊN CÁC": [
+                ("quay-gacha", ["gacha", "quaygacha"], "Quay Gacha 3 Đại Banners Tiên Các, Cải Mệnh Đài nhận bảo vật UR/SR."),
+                ("wishlist", ["dinh-huong"], "Cấu hình Định Hướng Đạo Vận (Ưu tiên UR 100% khi lệch rate)."),
+                ("xienquach", ["bocque", "quere"], "Bốc quẻ Khí Vận hàng ngày nhận Linh Duyên Phù & Tiên Ngọc."),
+                ("linhbui-shop", ["doilinhbui"], "Xem & Đổi Linh Bụi Tiên Các lấy vật phẩm UR/SR tự chọn."),
+                ("tiencac", ["tiencac-shop"], "Xem danh mục Shop Tiên Các (Bảo hiểm độ kiếp, Bùa cứu thương, VIP)."),
+                ("mua", ["muatiencac"], "Mua vật phẩm từ Shop Tiên Các bằng Tiên Ngọc."),
+                ("vip", ["the-thang"], "Xem Cấp VIP & Trạng thái Thẻ Tháng Đạo Tâm Tôn Giả."),
+            ],
+            "🗡️ V. TƯƠNG TÁC TU SĨ": [
+                ("cuop", ["cuop-dong-phu"], "Đột nhập Động Phủ tu sĩ khác cướp Linh Thạch (Cooldown 12h)."),
+            ]
+        }
+
+        for cat_title, cmd_list in categories.items():
+            cat_text = ""
+            for c_name, aliases, desc in cmd_list:
+                alias_str = f" `({', '.join(aliases)})`" if aliases else ""
+                cat_text += f"> `{prefix}{c_name}`{alias_str}\n> ╰ *{desc}*\n"
+            embed.add_field(name=cat_title, value=cat_text, inline=False)
+
+        embed.set_footer(text=f"Dùng {prefix}help <tên_lệnh> để xem chi tiết  •  Prefix: {prefix}")
+        return embed
+
     sorted_cmds = sorted(cmds, key=lambda c: c.name)
 
     lines = []

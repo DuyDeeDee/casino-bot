@@ -14,7 +14,7 @@ from discord.ext import commands, tasks
 from app.discord_bot.modules.tutien.db import TuTienDB
 from app.discord_bot.modules.tutien.models import CultivatorProfile
 from app.discord_bot.modules.tutien.constants import (
-    REALMS, REALM_REQUIRED_EXP, SPIRITUAL_ROOT_QUALITY_BUFF, ELEMENTS_NGU_HANH, ELEMENTS_DI_LINH_CAN,
+    REALMS, REALM_REQUIRED_EXP, REALM_REQUIRED_TAM_CANH, SPIRITUAL_ROOT_QUALITY_BUFF, ELEMENTS_NGU_HANH, ELEMENTS_DI_LINH_CAN,
     TIEN_CAC_SHOP, VIP_LEVELS, GACHA_BANNERS, LINH_BUI_SHOP
 )
 from app.discord_bot.modules.tutien.engines.cultivation import (
@@ -29,21 +29,34 @@ from app.discord_bot.modules.tutien.engines.monetization import (
     grant_topup_and_vip_exp, buy_tiencac_item, is_array_protected
 )
 from app.discord_bot.modules.tutien.engines.gacha import process_gacha_rolls
+from app.discord_bot.modules.tutien.engines.pve import (
+    generate_pve_monster, process_turn_action, process_quick_sweep_10x, check_elemental_advantage, calculate_player_pve_atk,
+    generate_mirror_phantom_boss, generate_roguelike_dungeon_matrix, process_hardcore_defeat
+)
 from app.discord_bot.modules.tutien.renderers.profile_renderer import render_tutien_profile_card
 from app.discord_bot.modules.tutien.ui.tribulation_ui import TribulationWaveView, HeartDemonQuizView
+from app.discord_bot.modules.tutien.ui.pve_ui import (
+    PveBattleView, PartyLobbyView, RevivePromptView, QteOneShotView, TrapSacrificeView, DungeonMerchantView
+)
 
 GIF_CHEST_PATH = "pictures/open_chest.gif"
 
 
 class TuTienCog(commands.Cog, name="TuTien"):
     """
-    Hệ thống Tu Tiên: «ĐẠI ĐẠO TRANH PHONG» (Prefix Commands + Gacha Engine)
+    Hệ thống Tu Tiên: «ĐẠI ĐẠO TRANH PHONG» (Prefix Commands + Gacha Engine + PVE System)
     """
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.db = TuTienDB()
         self.ho_phap_registry = {}  # {target_user_id: guardian_user_id}
+        self.last_tam_ma_notice = {}  # {user_id: last_notification_timestamp}
+        self.last_cuop_time = {}  # {user_id: last_cuop_timestamp}
+        self.world_boss_max_hp = 10000000
+        self.world_boss_hp = 10000000
+        self.world_boss_name = "👹 Ma Vương Cổ Đại — Vô Cực Thi Cụ"
+        self.active_party_rooms = {}  # {channel_id: PartyLobbyView}
         self.bg_recovery_task.start()
         self.bg_retention_guard.start()
 
@@ -60,41 +73,74 @@ class TuTienCog(commands.Cog, name="TuTien"):
             await ctx.send("❌ Lệnh này chỉ dành cho Chủ Bot!")
 
     # --- BACKGROUND TASKS ---
-    @tasks.loop(minutes=60)
+    @tasks.loop(minutes=5)
     async def bg_recovery_task(self):
-        """Phục hồi Tinh Lực (+10/h) & Linh Khí Kênh (+5000/h) mỗi giờ."""
+        """Phục hồi Tinh Lực (+5/5p = +60/h) & Linh Khí Kênh (+416/5p = +5000/h) định kỳ."""
         await self.bot.wait_until_ready()
         try:
-            self.db.recover_all_players_tinh_luc(10)
-            self.db.recover_all_channels_linh_khi(5000)
+            self.db.recover_all_players_tinh_luc(5)
+            self.db.recover_all_channels_linh_khi(416)
         except Exception as e:
             print(f"[TuTien] Error in recovery task: {e}")
 
-    @tasks.loop(minutes=2)
+    @tasks.loop(minutes=5)
     async def bg_retention_guard(self):
-        """Check AFK meditation retention guard (ảo giác Tâm Ma) & Auto-Định Tâm cho VIP Thẻ Tháng."""
+        """Check AFK meditation completion & retention guard (ảo giác Tâm Ma) cho tu sĩ bế quan."""
         await self.bot.wait_until_ready()
         try:
             now = time.time()
             with self.db.get_connection() as conn:
                 cursor = conn.cursor()
-                cursor.execute("SELECT user_id, meditate_start_time, is_vip_pass FROM tutien_players WHERE is_meditating = 1")
+                cursor.execute("SELECT user_id, meditate_start_time, meditate_duration_hours, is_vip_pass, realm_index FROM tutien_players WHERE is_meditating = 1")
                 meditating_players = cursor.fetchall()
 
                 for row in meditating_players:
                     u_id = row["user_id"]
                     start_t = row["meditate_start_time"]
+                    duration_h = row["meditate_duration_hours"] or 1
                     is_vip_pass = row["is_vip_pass"]
+                    realm_idx = row["realm_index"]
+
+                    # 1. Kiểm tra hoàn thành bế quan AFK khi đủ thời gian
+                    if start_t and (now - start_t >= duration_h * 3600):
+                        exp_gain = int(5000 * duration_h * (1 + realm_idx * 0.1))
+                        linh_thach_gain = int(500 * duration_h)
+                        tam_canh_gain = min(100.0, duration_h * 2.0)
+
+                        conn.execute(
+                            "UPDATE tutien_players SET is_meditating = 0, meditate_start_time = NULL, meditate_duration_hours = 0, "
+                            "exp = exp + ?, linh_thach = linh_thach + ?, tam_canh = MIN(100.0, tam_canh + ?) WHERE user_id = ?",
+                            (exp_gain, linh_thach_gain, tam_canh_gain, u_id)
+                        )
+                        user = self.bot.get_user(u_id)
+                        if user:
+                            try:
+                                await user.send(
+                                    f"🎉 **VIÊN MÃN XUẤT QUAN!** Bạn đã hoàn tất **{duration_h} Giờ** bế quan nhập định!\n"
+                                    f"🎁 Phần thưởng AFK: `+{exp_gain:,}` Tu Vi | `+{linh_thach_gain:,}` Linh Thạch | `+{tam_canh_gain:.1f}%` Tâm Cảnh!"
+                                )
+                            except Exception:
+                                pass
+                        continue
+
+                    # 2. Tu sĩ đang bế quan được thưởng thêm +5 Tinh Lực mỗi 5 phút
+                    conn.execute(
+                        "UPDATE tutien_players SET tinh_luc = CASE WHEN (tinh_luc + 5) > max_tinh_luc THEN max_tinh_luc ELSE (tinh_luc + 5) END WHERE user_id = ?",
+                        (u_id,)
+                    )
 
                     if is_vip_pass:
                         conn.execute("UPDATE tutien_players SET dao_tam = dao_tam + 5 WHERE user_id = ?", (u_id,))
                         continue
 
-                    if start_t and (now - start_t > 900) and random.random() < 0.10:
+                    last_notice = self.last_tam_ma_notice.get(u_id, 0)
+                    # Giới hạn thông báo: Ít nhất 1 tiếng mới gửi 1 lần (nếu dính tỉ lệ 15%)
+                    if start_t and (now - start_t > 900) and (now - last_notice > 3600) and random.random() < 0.15:
                         user = self.bot.get_user(u_id)
                         if user:
                             try:
                                 await user.send("⚠️ **Tâm trí bạn xuất hiện ảo giác Tâm Ma khi bế quan!** Hãy gõ `!tuluyen` để định tâm duy trì nhập định!")
+                                self.last_tam_ma_notice[u_id] = now
                             except Exception:
                                 pass
         except Exception as e:
@@ -416,11 +462,16 @@ class TuTienCog(commands.Cog, name="TuTien"):
             inline=False
         )
         embed.add_field(
-            name="6️⃣ Bước 6: Shop Tiên Các & Giao Dịch",
-            value="> Gõ `!tiencac` xem shop bảo hiểm độ kiếp, bùa chống cướp, Thẻ Tháng VIP. Gõ `!gacha` quay bảo vật Tiên Cấp (có bảo hiểm Pity 80 lượt).",
+            name="6️⃣ Bước 6: Chinh Phục PVE (Săn Yêu, Leo Tháp, Bí Cảnh, Boss)",
+            value="> Gõ `!san-yeu` đánh quái lượt (VIP 2+ `!san-yeu quet` 10x). Gõ `!leo-thap` leo 100 Tầng Tháp. Gõ `!bi-canh` lập đội 3-5 người. Gõ `!diet-boss` đánh Boss Server.",
             inline=False
         )
-        embed.set_footer(text="Gõ !tutien-profile để bắt đầu kiểm tra thông tin nhân vật của bạn!")
+        embed.add_field(
+            name="7️⃣ Bước 7: Shop Tiên Các & Gacha",
+            value="> Gõ `!tiencac` xem shop bảo hiểm độ kiếp, bùa chống cướp, Thẻ VIP. Gõ `!gacha` quay bảo vật Tiên Cấp (có bảo hiểm Pity 80 lượt).",
+            inline=False
+        )
+        embed.set_footer(text="Gõ !tutien-profile để xem hồ sơ nhân vật | Gõ !san-yeu để chiến đấu PVE!")
         await ctx.send(embed=embed)
 
     @commands.command(
@@ -547,6 +598,54 @@ class TuTienCog(commands.Cog, name="TuTien"):
         self.db.update_player(player)
 
         await ctx.send(f"🧘 Tu sĩ **{player.dao_hieu}** đã bắt đầu nhập định bế quan trong **{hours} Giờ**! Hệ thống sẽ tự động bảo vệ nếu sở hữu Thẻ Tháng VIP.")
+
+    @commands.command(
+        name="xuat-quan",
+        aliases=["xuatquan", "xuatdinh"],
+        brief="Thu công xuất quan sớm & nhận thưởng tài nguyên tích lũy.",
+        usage="xuat-quan"
+    )
+    async def xuatquan_cmd(self, ctx: commands.Context):
+        """Thu công xuất quan sớm & nhận thưởng tài nguyên tích lũy."""
+        player = self.db.get_player(ctx.author.id)
+        if not player:
+            await ctx.send("❌ Vui lòng gõ `!nhapmon` trước!")
+            return
+
+        if not player.is_meditating:
+            await ctx.send("❌ Bạn hiện tại không ở trong trạng thái bế quan!")
+            return
+
+        now = time.time()
+        start_t = player.meditate_start_time or now
+        elapsed_hours = (now - start_t) / 3600.0
+        actual_hours = max(0.05, min(elapsed_hours, float(player.meditate_duration_hours or 1)))
+
+        exp_gain = int(5000 * actual_hours * (1 + player.realm_index * 0.1))
+        linh_thach_gain = int(500 * actual_hours)
+        tam_canh_gain = round(actual_hours * 2.0, 1)
+
+        req_exp = REALM_REQUIRED_EXP.get(player.realm_index, 1000000000)
+        player.exp = min(req_exp, player.exp + exp_gain)
+        player.linh_thach += linh_thach_gain
+        player.tam_canh = min(100.0, player.tam_canh + tam_canh_gain)
+        player.is_meditating = False
+        player.meditate_start_time = None
+        player.meditate_duration_hours = 0
+
+        self.db.update_player(player)
+
+        embed = discord.Embed(
+            title=f"🧘 XUẤT QUAN THÀNH CÔNG — {player.dao_hieu}",
+            description=f"Tu sĩ **{player.dao_hieu}** đã thu công xuất quan sau **{actual_hours:.1f} Giờ** nhập định!",
+            color=discord.Color.green()
+        )
+        embed.add_field(
+            name="🎁 Phần Thưởng Tích Lũy",
+            value=f"> ✨ Tu Vi: `+{exp_gain:,}`\n> 💰 Linh Thạch: `+{linh_thach_gain:,}`\n> 🧘 Tâm Cảnh: `+{tam_canh_gain}%`",
+            inline=False
+        )
+        await ctx.send(embed=embed)
 
     @commands.command(
         name="luyen-the",
@@ -683,6 +782,17 @@ class TuTienCog(commands.Cog, name="TuTien"):
             await ctx.send("❌ Cả 2 tu sĩ đều phải nhập môn Tu Tiên!")
             return
 
+        now = time.time()
+        last_c = self.last_cuop_time.get(attacker.user_id, 0)
+        cd_seconds = 43200  # 12 Giờ
+        if now - last_c < cd_seconds:
+            remain_sec = int(cd_seconds - (now - last_c))
+            remain_h = remain_sec // 3600
+            remain_m = (remain_sec % 3600) // 60
+            time_str = f"{remain_h} giờ {remain_m} phút" if remain_h > 0 else f"{remain_m} phút"
+            await ctx.send(f"⏱️ Bạn vừa đột nhập cướp động phủ gần đây! Hãy tĩnh dưỡng `{time_str}` nữa rồi tiếp tục.")
+            return
+
         if is_array_protected(victim):
             await ctx.send(f"🛡️ **TRẬN PHÁP BẤT XÂM PHẠM!** Động Phủ của **{victim.dao_hieu}** đang được bảo vệ bởi Bùa Tiên Các, cướp phá thất bại!")
             return
@@ -690,6 +800,8 @@ class TuTienCog(commands.Cog, name="TuTien"):
         if victim.linh_thach < 100:
             await ctx.send(f"❌ Động phủ của **{victim.dao_hieu}** nghèo xơ xác, không có gì để cướp!")
             return
+
+        self.last_cuop_time[attacker.user_id] = now
 
         if random.random() < 0.50:
             stolen = int(victim.linh_thach * 0.20)
@@ -703,3 +815,429 @@ class TuTienCog(commands.Cog, name="TuTien"):
             attacker.hp = max(1, attacker.hp - 300)
             self.db.update_player(attacker)
             await ctx.send(f"🛡️ **CƯỚP THẤT BẠI!** Trận pháp Động Phủ của **{victim.dao_hieu}** phản phệ, **{attacker.dao_hieu}** bị thương `-300` HP!")
+
+    # --- ⚔️ HỆ THỐNG PVE (SĂN YÊU, THÁP THIÊN CỰC, BÍ CẢNH, BOSS SERVER) ---
+
+    @commands.command(
+        name="san-yeu",
+        aliases=["sanyeu", "hunt"],
+        brief="Săn Yêu Quái theo Cảnh Giới (Tiêu 10 Tinh Lực). VIP 2+: !san-yeu quet (10x).",
+        usage="san-yeu [quet]"
+    )
+    async def sanyeu_cmd(self, ctx: commands.Context, option: str = None):
+        """Săn Yêu Quái theo Cảnh Giới. VIP 2+ mở tính năng Quét Nhanh 10x (!san-yeu quet)."""
+        player = self.db.get_player(ctx.author.id)
+        if not player:
+            await ctx.send("❌ Vui lòng gõ `!nhapmon` trước!")
+            return
+
+        # 1. VIP 2+ Quick Sweep 10x
+        if option and option.lower() in ["quet", "10x", "sweep"]:
+            if player.vip_level < 2:
+                await ctx.send("❌ Tính năng **Quét Nhanh 10x** yêu cầu **[VIP 2]** trở lên! Vui lòng tích nạp hoặc tăng VIP tại `!tiencac`!")
+                return
+
+            res = process_quick_sweep_10x(player, self.db)
+            if not res["success"]:
+                await ctx.send(f"❌ {res['reason']}")
+                return
+
+            embed = discord.Embed(
+                title="⚡⚡ QUÉT NHANH SĂN YÊU 10X (VIP 2+) ⚡⚡",
+                description=f"Tu sĩ **[{player.dao_hieu}]** thi triển thần thông càn quét 10 ổ Yêu Quái!",
+                color=discord.Color.gold()
+            )
+            embed.add_field(name="🎁 Tu Vi Tích Lũy", value=f"`+{res['total_exp']:,}` EXP", inline=True)
+            embed.add_field(name="💰 Linh Thạch Thu Được", value=f"`+{res['total_linh_thach']:,}` Linh Thạch", inline=True)
+            embed.add_field(name="🎟️ Vé Quay Gacha Drop", value=f"`+{res['tickets_dropped']}` Linh Duyên Phù", inline=True)
+            embed.add_field(name="🌿 Thảo Dược Luyện Đan", value=f"`+{res['herbs_dropped']}` Thảo Dược Thô", inline=True)
+            embed.set_footer(text="Tinh Lực còn lại: " + f"{player.tinh_luc}/100")
+            await ctx.send(embed=embed)
+            return
+
+        # 2. Interactive Turn-Based Battle
+        if player.tinh_luc < 10:
+            await ctx.send("❌ Không đủ Tinh Lực! Cần 10 Tinh Lực để đi Săn Yêu.")
+            return
+
+        player.tinh_luc -= 10
+        self.db.update_player(player)
+
+        is_mutant = (random.random() < 0.15)
+        monster = generate_pve_monster(player.realm_index, is_mutant=is_mutant)
+        dmg_m, def_m, adv_desc = check_elemental_advantage(player.linh_can_element, monster["element"])
+
+        embed = discord.Embed(
+            title=f"⚔️ CHIẾN TRƯỜNG PVE HARDCORE: {monster['name']}",
+            description=f"☯ Tu sĩ **[{player.dao_hieu}]** ({player.linh_can_element}) nghênh chiến **{monster['name']}** ({monster['element']})!\n"
+                        f"> 📜 *{adv_desc}*",
+            color=discord.Color.dark_red()
+        )
+        embed.add_field(name=f"🐍 {monster['name']} HP", value=f"`{monster['current_hp']:,} / {monster['max_hp']:,}`", inline=True)
+        embed.add_field(name="🛡️ Giáp Phòng Thủ", value=f"`{monster['current_shield']:,} / {monster['max_shield']:,}`", inline=True)
+        embed.add_field(name=f"👤 {player.dao_hieu} HP", value=f"`{player.hp:,} / {player.max_hp:,}`", inline=False)
+
+        msg_obj = await ctx.send(embed=embed)
+
+        for turn in range(1, 10):
+            view = PveBattleView(ctx.author.id, timeout=30.0)
+            await msg_obj.edit(view=view)
+            await view.wait()
+
+            action = view.chosen_action or "ATTACK"
+            log, monster = process_turn_action(player, monster, action)
+
+            if log["fled"]:
+                await ctx.send(log["message"])
+                return
+
+            # Check 5-Second Real-Time QTE One-Shot Prompt
+            if log.get("trigger_qte"):
+                qte_view = QteOneShotView(ctx.author.id, timeout=5.0)
+                qte_msg = await ctx.send("⚡⚡ **QTE CẢNH BÁO 5 GIÂY!** Yêu Thú tụ khí đòn One-Shot 3,000%! Bấm nút gấp:", view=qte_view)
+                await qte_view.wait()
+
+                if not qte_view.success:
+                    qte_dmg = int(player.max_hp * 0.95)
+                    player.hp = max(0, player.hp - qte_dmg)
+                    await ctx.send(f"💥 **QTE THẤT BẠI!** Bạn chậm chân dính trọn đòn One-Shot bị trừ `{qte_dmg:,}` HP!")
+                try:
+                    await qte_msg.delete()
+                except Exception:
+                    pass
+
+            # Update Battle Status Embed
+            embed.description = f"📜 **LƯỢT {turn}:**\n> {log['message']}\n> *{log['advantage_desc']}*"
+            embed.set_field_at(0, name=f"🐍 {monster['name']} HP", value=f"`{monster['current_hp']:,} / {monster['max_hp']:,}`", inline=True)
+            embed.set_field_at(1, name="🛡️ Giáp Phòng Thủ", value=f"`{monster['current_shield']:,} / {monster['max_shield']:,}`", inline=True)
+            embed.set_field_at(2, name=f"👤 {player.dao_hieu} HP", value=f"`{player.hp:,} / {player.max_hp:,}`", inline=False)
+
+            await msg_obj.edit(embed=embed)
+            self.db.update_player(player)
+
+            # Check Victory
+            if monster["current_hp"] <= 0:
+                mult = 2.5 if is_mutant else 1.0
+                exp_gain = int((1500 + (player.realm_index * 800)) * mult)
+                lt_gain = int((300 + (player.realm_index * 150)) * mult)
+                ticket_drop = 1 if random.random() < 0.08 else 0
+
+                req_exp = REALM_REQUIRED_EXP.get(player.realm_index, 1000000000)
+                player.exp = min(req_exp, player.exp + exp_gain)
+                player.linh_thach += lt_gain
+                player.linh_duyen_phu += ticket_drop
+                self.db.update_player(player)
+
+                win_embed = discord.Embed(
+                    title="🎉 TRẢM YÊU THÀNH CÔNG!",
+                    description=f"Tu sĩ **{player.dao_hieu}** đã kết liễu **{monster['name']}**!\n"
+                                f"🎁 Phần thưởng: `+{exp_gain:,}` EXP | `+{lt_gain:,}` Linh Thạch"
+                                + (f" | `+1` Linh Duyên Phù 🎟️" if ticket_drop else ""),
+                    color=discord.Color.green()
+                )
+                await ctx.send(embed=win_embed)
+                return
+
+            # Check Defeat & Permadeath Injury
+            if player.hp <= 0:
+                hardcore_res = process_hardcore_defeat(player, self.db, "Săn Yêu Thường")
+                fail_embed = discord.Embed(
+                    title="💀 BẠN ĐÃ TỬ TRẬN & KINHMẠCH ĐOẠN TUYỆT!",
+                    description=f"Tu sĩ **{player.dao_hieu}** bị đánh bại! Rơi vào trạng thái **Kinh Mạch Đoạn Tuyệt (10 Phút)**.\n"
+                                f"> ⚠️ Nếu không nhờ đạo hữu dùng `!cuu-thuong @user` trong 10 phút, bạn sẽ bị **giảm 20% Căn Cơ vĩnh viễn**!\n"
+                                f"> 🐍 Độc Tố Thấu Cốt / Ô Nhiễm Tâm Ma đã xâm nhập cơ thể!",
+                    color=discord.Color.dark_purple()
+                )
+                if hardcore_res["stolen_lt"] > 0:
+                    fail_embed.add_field(name="💸 Tổn Thất Linh Thạch", value=f"Bị rơi mất `{hardcore_res['stolen_lt']:,}` Linh Thạch!", inline=False)
+                await ctx.send(embed=fail_embed)
+                return
+
+            await asyncio.sleep(1.0)
+
+            await asyncio.sleep(1.0)
+
+    @commands.command(
+        name="leo-thap",
+        aliases=["leothap", "thap-thien-cuc", "thap"],
+        brief="Thử thách Tháp Thiên Cực (100 Tầng PVE Bảng Xếp Hạng).",
+        usage="leo-thap"
+    )
+    async def leothap_cmd(self, ctx: commands.Context):
+        """Thử thách Tháp Thiên Cực (100 Tầng, 3 lượt miễn phí/ngày)."""
+        player = self.db.get_player(ctx.author.id)
+        if not player:
+            await ctx.send("❌ Vui lòng gõ `!nhapmon` trước!")
+            return
+
+        pve = self.db.get_pve_progress(player.user_id)
+        if pve["daily_tower_keys"] <= 0:
+            await ctx.send("❌ Bạn đã dùng hết `3/3` lượt leo tháp hôm nay! Hãy quay lại vào ngày mai hoặc mua thêm Thiên Cực Lệnh!")
+            return
+
+        # Deduct 1 key
+        self.db.update_pve_progress(player.user_id, daily_tower_keys=pve["daily_tower_keys"] - 1)
+
+        floor = pve["tower_floor"]
+        monster = generate_pve_monster(player.realm_index, floor_offset=floor // 2)
+        monster["name"] = f"🗿 Thủ Vệ Tầng {floor} — {monster['name']}"
+
+        embed = discord.Embed(
+            title=f"🏛️ THÁP THIÊN CỰC — TẦNG [{floor}/100]",
+            description=f"Tu sĩ **[{player.dao_hieu}]** khiêu chiến **{monster['name']}**!\n"
+                        f"> Lượt miễn phí còn lại: `{pve['daily_tower_keys'] - 1}/3`",
+            color=discord.Color.purple()
+        )
+        msg_obj = await ctx.send(embed=embed)
+
+        log, monster = process_turn_action(player, monster, "GONGFA")
+        if monster["current_hp"] <= 0:
+            new_floor = floor + 1
+            self.db.update_pve_progress(player.user_id, tower_floor=new_floor)
+
+            is_milestone = (floor % 5 == 0)
+            bonus_str = ""
+            if is_milestone:
+                player.tien_duyen_phu += 1
+                player.tien_ngoc += 50
+                self.db.update_player(player)
+                bonus_str = "\n🎉 **MỐC TẦNG ĐẶC BIỆT!** Nhận ngay `+1` Tiên Duyên Phù 🎟️ + `50` Tiên Ngọc 🌟!"
+
+            win_embed = discord.Embed(
+                title=f"🎉 VƯỢT THÁP THÀNH CÔNG TẦNG {floor}!",
+                description=f"Chúc mừng tu sĩ **{player.dao_hieu}** đã vượt qua Tầng {floor}, mở khóa **Tầng {new_floor}**!{bonus_str}",
+                color=discord.Color.gold()
+            )
+            await ctx.send(embed=win_embed)
+        else:
+            await ctx.send(f"❌ Khiêu chiến Tầng {floor} thất bại! {monster['name']} quá mạnh mẽ.")
+
+    @commands.command(
+        name="top-thap",
+        aliases=["topthap", "tower-leaderboard"],
+        brief="Xem Bảng Xếp Hạng Leo Tháp Thiên Cực Server.",
+        usage="top-thap"
+    )
+    async def topthap_cmd(self, ctx: commands.Context):
+        """Xem Bảng Xếp Hạng Leo Tháp Thiên Cực Top 10 Server."""
+        top_list = self.db.get_tower_leaderboard(10)
+        embed = discord.Embed(title="🏆 BẢNG XẾP HẠNG LEOT HÁP THIÊN CỰC 🏆", color=discord.Color.gold())
+
+        if not top_list:
+            embed.description = "Chưa có tu sĩ nào leo tháp."
+        else:
+            for rank, row in enumerate(top_list, 1):
+                icon = "🥇" if rank == 1 else "🥈" if rank == 2 else "🥉" if rank == 3 else f"[{rank}]"
+                embed.add_field(name=f"{icon} {row['dao_hieu']}", value=f"> Tầng Tháp: **Tầng {row['tower_floor']}**", inline=False)
+
+        await ctx.send(embed=embed)
+
+    @commands.command(
+        name="bi-canh",
+        aliases=["bicanh", "dungeon"],
+        brief="Tổ đội 3-5 Tu Sĩ chinh phục Bí Cảnh Cổ Đại.",
+        usage="bi-canh [tao-phong|gia-nhap|bat-dau]"
+    )
+    async def bicanh_cmd(self, ctx: commands.Context, action: str = "tao-phong"):
+        """Tổ đội 3-5 Tu Sĩ chinh phục Bí Cảnh Cổ Đại nhận Đan Dược & Công Pháp Cực Phẩm."""
+        player = self.db.get_player(ctx.author.id)
+        if not player:
+            await ctx.send("❌ Vui lòng gõ `!nhapmon` trước!")
+            return
+
+        ch_id = ctx.channel.id
+        if action in ["tao-phong", "create"]:
+            lobby_view = PartyLobbyView(ctx.author.id, "Bí Cảnh Cổ Đại — Ma Long Động")
+            self.active_party_rooms[ch_id] = lobby_view
+            embed = discord.Embed(
+                title="🏰 LẬP ĐỘI BÍ CẢNH CỔ ĐẠI — MA LONG ĐỘNG",
+                description=f"Trưởng đội: **{player.dao_hieu}**\nBấm nút bên dưới để chọn vai trò gia nhập đội!",
+                color=discord.Color.blue()
+            )
+            await ctx.send(embed=embed, view=lobby_view)
+
+        elif action in ["bat-dau", "start"]:
+            lobby = self.active_party_rooms.get(ch_id)
+            if not lobby:
+                await ctx.send("❌ Không có phòng Bí Cảnh nào đang chờ trong kênh này! Gõ `!bi-canh tao-phong`.")
+                return
+
+            mem_count = len(lobby.members)
+            total_dps = mem_count * (3000 + player.realm_index * 2000)
+            exp_per_mem = 10000 + (player.realm_index * 5000)
+            lt_per_mem = 2000 + (player.realm_index * 1000)
+
+            for uid in lobby.members.keys():
+                p = self.db.get_player(uid)
+                if p:
+                    req_exp = REALM_REQUIRED_EXP.get(p.realm_index, 1000000000)
+                    p.exp = min(req_exp, p.exp + exp_per_mem)
+                    p.linh_thach += lt_per_mem
+                    self.db.update_player(p)
+
+            embed = discord.Embed(
+                title="🐉 ĐỘT PHÁ BÍ CẢNH MA LONG ĐỘNG THÀNH CÔNG!",
+                description=f"Tổ đội **{mem_count} Tu Sĩ** phối hợp nhịp nhàng, gây `{total_dps:,}` Sát thương tiêu diệt Ma Long!\n"
+                            f"🎁 Mỗi thành viên nhận: `+{exp_per_mem:,}` EXP | `+{lt_per_mem:,}` Linh Thạch!",
+                color=discord.Color.green()
+            )
+            await ctx.send(embed=embed)
+            del self.active_party_rooms[ch_id]
+
+    @commands.command(
+        name="diet-boss",
+        aliases=["boss-server", "worldboss"],
+        brief="Xông vào Ma Vương Giáng Lâm (World Boss Server).",
+        usage="diet-boss"
+    )
+    async def dietboss_cmd(self, ctx: commands.Context):
+        """Xông vào Ma Vương Giáng Lâm (World Boss Toàn Server)."""
+        player = self.db.get_player(ctx.author.id)
+        if not player:
+            await ctx.send("❌ Vui lòng gõ `!nhapmon` trước!")
+            return
+
+        p_atk, crit_chance = calculate_player_pve_atk(player)
+        dmg = int(p_atk * random.uniform(2.5, 4.0))
+
+        self.world_boss_hp = max(0, self.world_boss_hp - dmg)
+        self.db.update_world_boss_dps(player.user_id, dmg)
+
+        embed = discord.Embed(
+            title=f"🔥 THÁI CỔ MA VƯƠNG GIÁNG LÂM 🔥",
+            description=f"⚔️ Tu sĩ **{player.dao_hieu}** dốc toàn lực tung ra đòn chí mạng gây **`{dmg:,}` Sát Thương** lên **{self.world_boss_name}**!\n"
+                        f"> 🐍 Máu Ma Vương còn: `{self.world_boss_hp:,} / {self.world_boss_max_hp:,}` HP",
+            color=discord.Color.dark_purple()
+        )
+        await ctx.send(embed=embed)
+
+    @commands.command(
+        name="bi-canh-cam-dia",
+        aliases=["camdia", "roguelike"],
+        brief="Vào Thái Cổ Cấm Địa Roguelike (Mê Cung 5 Phòng Sinh Tồn).",
+        usage="bi-canh-cam-dia"
+    )
+    async def camdia_cmd(self, ctx: commands.Context):
+        """Khám phá Mê Cung Sinh Tồn Roguelike — Thái Cổ Cấm Địa."""
+        player = self.db.get_player(ctx.author.id)
+        if not player:
+            await ctx.send("❌ Vui lòng gõ `!nhapmon` trước!")
+            return
+
+        rooms = generate_roguelike_dungeon_matrix()
+        embed = discord.Embed(
+            title="🕸️ THÁI CỔ CẤM ĐỊA — MÊ CUNG SINH TỒN (ROGUELIKE)",
+            description=f"Tu sĩ **[{player.dao_hieu}]** chính thức bước vào cấm địa! (HP: `{player.hp:,}/{player.max_hp:,}`)\n"
+                        f"⚠️ *Lưu ý: Khí huyết không tự phục hồi giữa các phòng!*",
+            color=discord.Color.dark_red()
+        )
+        msg_obj = await ctx.send(embed=embed)
+
+        for idx, room in enumerate(rooms, 1):
+            await asyncio.sleep(1.5)
+            r_embed = discord.Embed(
+                title=f"🏛️ PHÒNG [{idx}/5]: {room['title']}",
+                description=f"> *{room['desc']}*",
+                color=discord.Color.gold()
+            )
+
+            if room["type"] == "MONSTER":
+                monster = generate_pve_monster(player.realm_index)
+                log, monster = process_turn_action(player, monster, "ATTACK")
+                r_embed.add_field(name="⚔️ Trận Chiến Yêu Thú", value=f"> {log['message']}", inline=False)
+
+            elif room["type"] == "TRAP":
+                trap_view = TrapSacrificeView(ctx.author.id)
+                await msg_obj.edit(embed=r_embed, view=trap_view)
+                await trap_view.wait()
+                dmg_trap = int(player.max_hp * 0.20)
+                player.hp = max(1, player.hp - dmg_trap)
+                r_embed.add_field(name="🩸 Bẫy Cổ Trận", value=f"Bẫy cổ kích hoạt, tổn thất `-{dmg_trap:,}` HP!", inline=False)
+
+            elif room["type"] == "MIMIC":
+                if random.random() < 0.50:
+                    player.tien_ngoc += 30
+                    r_embed.add_field(name="✨ Rương Thần", value="Mở rương thật! Nhận `+30` Tiên Ngọc 🌟!", inline=False)
+                else:
+                    m_dmg = int(player.max_hp * 0.25)
+                    player.hp = max(1, player.hp - m_dmg)
+                    r_embed.add_field(name="🐍 Rương Mimic Giả", value=f"Rương giả cắn chí mạng `-{m_dmg:,}` HP!", inline=False)
+
+            elif room["type"] == "MERCHANT":
+                merchant_view = DungeonMerchantView(ctx.author.id)
+                await msg_obj.edit(embed=r_embed, view=merchant_view)
+                await merchant_view.wait()
+
+            elif room["type"] == "BOSS":
+                boss = generate_pve_monster(player.realm_index, floor_offset=3)
+                boss["name"] = "🐉 THÁI CỔ MÃNG HOÀNG (BOSS CẤM ĐỊA)"
+                log, boss = process_turn_action(player, boss, "GONGFA")
+                r_embed.add_field(name="🐉 Trảm Boss Cấm Địa", value=f"> {log['message']}", inline=False)
+
+            self.db.update_player(player)
+            await msg_obj.edit(embed=r_embed, view=None)
+
+        win_embed = discord.Embed(
+            title="🏆 VIÊN MÃN THÔNG QUAN THÁI CỔ CẤM ĐỊA!",
+            description=f"Chúc mừng Tu sĩ **{player.dao_hieu}** đã sinh tồn thành công qua 5 phòng Cấm Địa!",
+            color=discord.Color.green()
+        )
+        await ctx.send(embed=win_embed)
+
+    @commands.command(
+        name="cuu-thuong",
+        aliases=["cuuthuong", "rescue"],
+        brief="Dùng Vạn Linh Đan hoặc Tiên Ngọc cứu đạo hữu bị Kinh Mạch Đoạn Tuyệt.",
+        usage="cuu-thuong @user"
+    )
+    async def cuuthuong_cmd(self, ctx: commands.Context, target: discord.Member):
+        """Cứu đạo hữu khỏi nạn Kinh Mạch Đoạn Tuyệt (Hại Căn Cơ)."""
+        saver = self.db.get_player(ctx.author.id)
+        victim = self.db.get_player(target.id)
+
+        if not saver or not victim:
+            await ctx.send("❌ Cả 2 tu sĩ đều phải nhập môn Tu Tiên!")
+            return
+
+        now = time.time()
+        if not victim.kinh_mach_doan_tuyet_until or victim.kinh_mach_doan_tuyet_until <= now:
+            await ctx.send(f"❌ Tu sĩ **{victim.dao_hieu}** kinh mạch bình thường, không ở trong trạng thái nguy cấp!")
+            return
+
+        if saver.van_linh_dan > 0:
+            saver.van_linh_dan -= 1
+            used_str = "1x Vạn Linh Đan"
+        elif saver.tien_ngoc >= 20:
+            saver.tien_ngoc -= 20
+            used_str = "20 Tiên Ngọc"
+        else:
+            await ctx.send("❌ Bạn không sở hữu **Vạn Linh Đan** hoặc **20 Tiên Ngọc** để thực hiện cứu chữa đạo hữu!")
+            return
+
+        victim.kinh_mach_doan_tuyet_until = None
+        victim.hp = int(victim.max_hp * 0.50)
+        self.db.update_player(saver)
+        self.db.update_player(victim)
+
+        await ctx.send(f"✨ **CỨU THƯƠNG THÀNH CÔNG!** **{saver.dao_hieu}** đã dùng `{used_str}` cứu **{victim.dao_hieu}** khỏi nạn Kinh Mạch Đoạn Tuyệt (Phục hồi 50% HP)!")
+
+    @commands.command(
+        name="giai-doc",
+        aliases=["giaidoc", "cleanse"],
+        brief="Tẩy trừ hiệu ứng Độc Tố Thấu Cốt / Ô Nhiễm Tâm Ma.",
+        usage="giai-doc"
+    )
+    async def giaidoc_cmd(self, ctx: commands.Context):
+        """Tẩy trừ hiệu ứng Độc Tố Thấu Cốt / Ô Nhiễm Tâm Ma."""
+        player = self.db.get_player(ctx.author.id)
+        if not player:
+            await ctx.send("❌ Vui lòng gõ `!nhapmon` trước!")
+            return
+
+        if not player.lingering_debuff:
+            await ctx.send("✅ Cơ thể bạn thanh sạch, không bị dính độc tố hay tâm ma ô nhiễm!")
+            return
+
+        player.lingering_debuff = None
+        self.db.update_player(player)
+        await ctx.send(f"✨ **TẨY TRỪ THÀNH CÔNG!** Tu sĩ **{player.dao_hieu}** đã giải trừ toàn bộ Độc Tố & Ô Nhiễm Tâm Ma!")
