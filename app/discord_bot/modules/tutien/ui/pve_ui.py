@@ -173,3 +173,122 @@ class RevivePromptView(discord.ui.View):
         self.accepted = False
         await interaction.response.defer()
         self.stop()
+
+
+class TutienTopLeaderboardView(discord.ui.View):
+    """Interactive Tab-switching View for Tu Tiên Leaderboards (!tutien-top)."""
+    def __init__(self, db, current_tab: str = "tu-vi", timeout: float = 120.0):
+        super().__init__(timeout=timeout)
+        self.db = db
+        self.current_tab = current_tab
+        self._update_button_styles()
+
+    def _update_button_styles(self):
+        self.btn_tuvi.style = discord.ButtonStyle.primary if self.current_tab == "tu-vi" else discord.ButtonStyle.secondary
+        self.btn_giatai.style = discord.ButtonStyle.primary if self.current_tab == "gia-tai" else discord.ButtonStyle.secondary
+        self.btn_thap.style = discord.ButtonStyle.primary if self.current_tab == "thap" else discord.ButtonStyle.secondary
+        self.btn_boss.style = discord.ButtonStyle.primary if self.current_tab == "boss" else discord.ButtonStyle.secondary
+
+    def build_embed(self) -> discord.Embed:
+        medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]
+        if self.current_tab == "gia-tai":
+            rows = self.db.get_top_wealthy(10)
+            embed = discord.Embed(
+                title="💰 BẢNG XẾP HẠNG TOP TRÚC THẠCH TRONG THỜI (GIA TÀI)",
+                description="Top 10 Đại Phú Hào sở hữu Linh Thạch & Tiên Ngọc khủng nhất Server:",
+                color=discord.Color.gold()
+            )
+            if not rows:
+                embed.description += "\n\n_Chưa có dữ liệu tu sĩ nào._"
+            else:
+                for idx, r in enumerate(rows):
+                    m = medals[idx] if idx < len(medals) else f"`{idx+1}`"
+                    vip_str = f" `[VIP {r['vip_level']}]`" if r['vip_level'] > 0 else ""
+                    embed.add_field(
+                        name=f"{m} {r['dao_hieu']}{vip_str}",
+                        value=f"> 💰 `{r['linh_thach']:,}` Linh Thạch | 💎 `{r['tien_ngoc']:,}` Tiên Ngọc\n> ☯️ {r['realm_name']}",
+                        inline=False
+                    )
+
+        elif self.current_tab == "thap":
+            rows = self.db.get_tower_leaderboard(10)
+            embed = discord.Embed(
+                title="🏛️ BẢNG XẾP HẠNG THÁP THIÊN CỰC (LEO THÁP)",
+                description="Top 10 Cao Thủ leo tầng cao nhất Tháp Thiên Cực:",
+                color=discord.Color.purple()
+            )
+            if not rows:
+                embed.description += "\n\n_Chưa có dữ liệu leo tháp._"
+            else:
+                for idx, r in enumerate(rows):
+                    m = medals[idx] if idx < len(medals) else f"`{idx+1}`"
+                    embed.add_field(
+                        name=f"{m} {r['dao_hieu']}",
+                        value=f"> 🏆 **Tầng {r['tower_floor']}** | ☯️ {r['realm_name']}",
+                        inline=False
+                    )
+
+        elif self.current_tab == "boss":
+            rows = self.db.get_world_boss_rankings(10)
+            embed = discord.Embed(
+                title="🔥 BẢNG XẾP HẠNG SÁT THƯƠNG MA VƯƠNG (WORLD BOSS)",
+                description="Top 10 Dũng Sĩ gây nhiều DPS nhất lên Thái Cổ Ma Vương hôm nay:",
+                color=discord.Color.dark_red()
+            )
+            if not rows:
+                embed.description += "\n\n_Chưa có tu sĩ nào khiêu chiến Boss hôm nay._"
+            else:
+                for idx, r in enumerate(rows):
+                    m = medals[idx] if idx < len(medals) else f"`{idx+1}`"
+                    embed.add_field(
+                        name=f"{m} {r['dao_hieu']}",
+                        value=f"> ⚔️ Sát Thương tích lũy: `{r['boss_dps_today']:,}` DPS | ☯️ {r['realm_name']}",
+                        inline=False
+                    )
+
+        else:
+            # Default: Tu Vi
+            rows = self.db.get_top_cultivators(10)
+            embed = discord.Embed(
+                title="🏆 BẢNG XẾP HẠNG TOP TU SĨ SERVER (CẢNH GIỚI & TU VI)",
+                description="Top 10 Đại Năng có Cảnh Giới & Tu Vi cao nhất Server:",
+                color=discord.Color.gold()
+            )
+            if not rows:
+                embed.description += "\n\n_Chưa có tu sĩ nào gia nhập._"
+            else:
+                for idx, r in enumerate(rows):
+                    m = medals[idx] if idx < len(medals) else f"`{idx+1}`"
+                    vip_str = f" `[VIP {r['vip_level']}]`" if r['vip_level'] > 0 else ""
+                    embed.add_field(
+                        name=f"{m} **{r['dao_hieu']}**{vip_str}",
+                        value=f"> ☯️ Cảnh giới: **{r['realm_name']}** | `{r['exp']:,}` EXP\n> ⚡ Linh căn: `{r['linh_can_quality']}` ({r['linh_can_element']})",
+                        inline=False
+                    )
+
+        embed.set_footer(text="Bấm nút sang trang phía dưới để xem các Bảng Xếp Hạng khác")
+        return embed
+
+    @discord.ui.button(label="🏆 Top Tu Vi", style=discord.ButtonStyle.primary, custom_id="btn_top_tuvi")
+    async def btn_tuvi(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.current_tab = "tu-vi"
+        self._update_button_styles()
+        await interaction.response.edit_message(embed=self.build_embed(), view=self)
+
+    @discord.ui.button(label="💰 Top Gia Tài", style=discord.ButtonStyle.secondary, custom_id="btn_top_giatai")
+    async def btn_giatai(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.current_tab = "gia-tai"
+        self._update_button_styles()
+        await interaction.response.edit_message(embed=self.build_embed(), view=self)
+
+    @discord.ui.button(label="🏛️ Top Leo Tháp", style=discord.ButtonStyle.secondary, custom_id="btn_top_thap")
+    async def btn_thap(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.current_tab = "thap"
+        self._update_button_styles()
+        await interaction.response.edit_message(embed=self.build_embed(), view=self)
+
+    @discord.ui.button(label="🔥 Top Boss Server", style=discord.ButtonStyle.secondary, custom_id="btn_top_boss")
+    async def btn_boss(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.current_tab = "boss"
+        self._update_button_styles()
+        await interaction.response.edit_message(embed=self.build_embed(), view=self)
