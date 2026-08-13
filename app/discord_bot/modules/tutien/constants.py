@@ -212,6 +212,60 @@ TIEN_CAC_SHOP: Dict[str, Dict[str, Any]] = {
         "price": 150,
         "desc": "Hồi sinh ngay lập tức tại chỗ với 100% HP và xóa sạch Độc Tố / Ô Nhiễm Tâm Ma.",
         "category": "Cứu Thương PVE"
+    },
+    "Thất Nhật Miễn Chiến Phù": {
+        "price": 300,
+        "desc": "Khóa tính năng bị PK dã ngoại và cướp phá Động Phủ an toàn trong 7 ngày (168 Giờ)!",
+        "category": "Bảo Hiểm PVP"
+    },
+    "Gói Phục Hồi Cấp Tốc": {
+        "price": 100,
+        "desc": "Xóa sạch Chấn Thương Kinh Mạch ngay lập tức, hồi 100% HP và +20% Sát Thương Phục Thù trong 15 phút!",
+        "category": "Cứu Thương PVP"
+    }
+}
+
+# --- 🥋 PVP LUẬN ĐẠO ĐÀI & TÀNG KINH CÁC CONSTANTS ---
+
+PVP_RANKS: List[Dict[str, Any]] = [
+    {"tier": "Đế Cấp (Chí Cao)", "min_elo": 2000, "badge": "👑", "color": 0xFFD700, "win_danh_vong": 30, "loss_danh_vong": 10},
+    {"tier": "Chí Tôn (Đỉnh Phong)", "min_elo": 1600, "badge": "💎", "color": 0x9B59B6, "win_danh_vong": 20, "loss_danh_vong": 7},
+    {"tier": "Tiên Đạo (Thành Thục)", "min_elo": 1200, "badge": "⚔️", "color": 0x3498DB, "win_danh_vong": 15, "loss_danh_vong": 5},
+    {"tier": "Sơ Nhập (Tân Thủ)", "min_elo": 0, "badge": "🥋", "color": 0x2ECC71, "win_danh_vong": 10, "loss_danh_vong": 3}
+]
+
+def get_pvp_rank(elo: int) -> Dict[str, Any]:
+    for rank in PVP_RANKS:
+        if elo >= rank["min_elo"]:
+            return rank
+    return PVP_RANKS[-1]
+
+# Shop Tàng Kinh Các (Đổi Điểm Danh Vọng)
+TANG_KINH_CAC_SHOP: Dict[str, Dict[str, Any]] = {
+    "《Thái Hư Kiếm Điển》": {
+        "cost": 150,
+        "type": "Công Pháp (Thiên Cấp)",
+        "desc": "Bí kíp Kiếm Đạo tối thượng, tăng +25% Sát Thương Kiếm Đạo & +10% Bạo Kích PVP."
+    },
+    "《Bất Diệt Chân Kinh》": {
+        "cost": 300,
+        "type": "Công Pháp Luyện Thể (Đế Cấp)",
+        "desc": "Công pháp rèn luyện Thần Thể, tăng +5,000 Max HP và giảm 15% Sát Thương PVP gánh chịu."
+    },
+    "Mảnh Thần Binh Thượng Cổ": {
+        "cost": 80,
+        "type": "Nguyên Liệu Hiếm",
+        "desc": "Tích lũy 3 mảnh để hợp thành Thần Khí Đế Cấp tự chọn."
+    },
+    "Định Thần Hoàn": {
+        "cost": 40,
+        "type": "Đan Dược Đặc Biệt",
+        "desc": "Tẩy trừ trạng thái Chấn Thương Kinh Mạch hoặc Tẩu Hỏa Nhập Ma tức thì."
+    },
+    "Bảo Rương Danh Vọng": {
+        "cost": 60,
+        "type": "Bảo Rương",
+        "desc": "Mở nhận ngẫu nhiên 10,000 - 50,000 Linh Thạch và 1-3 Vé Tiên Duyên Phù."
     }
 }
 
@@ -229,3 +283,4 @@ VIP_LEVELS: Dict[int, Dict[str, Any]] = {
     9: {"req_exp": 12000, "name": "VIP 9 - Thượng Cổ", "benefits": "Khung Thẻ Profile Cửu Long Phản Quang Vàng Kim."},
     10: {"req_exp": 20000, "name": "VIP 10 - Tiên Đế", "benefits": "Tự động né 10% sát thương Lôi Kiếp vĩnh viễn, Khung Tiên Đế Độc Quyền."}
 }
+

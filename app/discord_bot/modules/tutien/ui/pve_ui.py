@@ -299,7 +299,7 @@ class TutienGuidePaginatorView(discord.ui.View):
     def __init__(self, current_page: int = 1, timeout: float = 180.0):
         super().__init__(timeout=timeout)
         self.current_page = current_page
-        self.total_pages = 4
+        self.total_pages = 5
         self._update_buttons()
 
     def _update_buttons(self):
@@ -310,7 +310,7 @@ class TutienGuidePaginatorView(discord.ui.View):
     def build_embed(self) -> discord.Embed:
         if self.current_page == 1:
             embed = discord.Embed(
-                title="📜 CẨM NANG TU TIÊN — TRANG 1/4: LINH CĂN & THUỘC TÍNH",
+                title=f"📜 CẨM NANG TU TIÊN — TRANG 1/{self.total_pages}: LINH CĂN & THUỘC TÍNH",
                 description="Chào mừng đến với **«ĐẠI ĐẠO TRANH PHONG»**! Dưới đây là thông tin chi tiết về Linh Căn & Thuộc Tính:",
                 color=discord.Color.gold()
             )
@@ -341,7 +341,7 @@ class TutienGuidePaginatorView(discord.ui.View):
 
         elif self.current_page == 2:
             embed = discord.Embed(
-                title="📜 CẨM NANG TU TIÊN — TRANG 2/4: TU LUYỆN & ĐỘT PHÁ CẢNH GIỚI",
+                title=f"📜 CẨM NANG TU TIÊN — TRANG 2/{self.total_pages}: TU LUYỆN & ĐỘT PHÁ CẢNH GIỚI",
                 description="Hướng dẫn quy trình tích lũy Tu Vi, Bế Quan AFK và Đột Phá Đội Kiếp:",
                 color=discord.Color.purple()
             )
@@ -371,7 +371,7 @@ class TutienGuidePaginatorView(discord.ui.View):
 
         elif self.current_page == 3:
             embed = discord.Embed(
-                title="📜 CẨM NANG TU TIÊN — TRANG 3/4: CHINH PHỤC HARDCORE PVE",
+                title=f"📜 CẨM NANG TU TIÊN — TRANG 3/{self.total_pages}: CHINH PHỤC HARDCORE PVE",
                 description="Tổng quan 4 Chế độ PVE Souls-like & Cơ chế Sinh tồn Nguy hiểm:",
                 color=discord.Color.red()
             )
@@ -402,9 +402,44 @@ class TutienGuidePaginatorView(discord.ui.View):
                 inline=False
             )
 
+        elif self.current_page == 4:
+            embed = discord.Embed(
+                title=f"📜 CẨM NANG TU TIÊN — TRANG 4/{self.total_pages}: ⚔️ PVP TRANH PHONG & SÁT LỤC",
+                description="Ma trận chiến đấu 5 tầng, Đấu trường ELO, Sinh Tử Đoạt Bảo và Bảng Truy Nã:",
+                color=discord.Color.dark_red()
+            )
+            embed.add_field(
+                name="🥋 Luận Đạo Đài 1v1 Ranked (!luan-dao & !bxh-pvp)",
+                value="> Đấu xếp hạng ELO văn minh không mất đồ (4 Bậc: Sơ Nhập -> Tiên Đạo -> Chí Tôn -> Đế Cấp).\n"
+                      "> Tích lũy Điểm Danh Vọng đổi Công Pháp Thiên/Đế Cấp tại `!tang-kinh-cac`.",
+                inline=False
+            )
+            embed.add_field(
+                name="💀 Sinh Tử Đài Đặt Cược Sinh Tử (!sinh-tu-dai @user [cược])",
+                value="> Đặt cược Linh Thạch lớn, phát chiến thư công khai. Kẻ thua mất sạch cược + dính **Chấn Thương Kinh Mạch (-30% chỉ số trong 12h)**.",
+                inline=False
+            )
+            embed.add_field(
+                name="🥷 Cướp Động Phủ & Phá Bế Quan (!cuop-dong-phu @user)",
+                value="> Đột nhập Động Phủ cướp 10-20% Linh Thạch, bẻ gãy Bế Quan AFK gây **TẨU HỎA NHẬP MA (4h)** (+15 Nghiệp Lực). Thua bị Trận Pháp phản phệ -50% HP.",
+                inline=False
+            )
+            embed.add_field(
+                name="🩸 Lệnh Truy Nã Huyết Sát & Trảm Ma (!truy-na-ma-tu & !tram-ma)",
+                value="> Bị cướp có thể treo thưởng Headshot Ma Đầu (`!truy-na-ma-tu`).\n"
+                      "> Chính Đạo tu sĩ gõ `!tram-ma @user` để săn Ma Đầu ẵm trọn tiền thưởng + 50 Danh Vọng.",
+                inline=False
+            )
+            embed.add_field(
+                name="🛡️ Thất Nhật Miễn Chiến Phù & Huyết Lôi Cửu Thiên",
+                value="> Gõ `!mien-chien` (mua tại `!tiencac`) để khóa PK và cướp bóc an toàn trong 7 Ngày.\n"
+                      "> ⚠️ Ma Tu có Nghiệp Lực > 100 khi Độ Kiếp bị giáng **Huyết Lôi x3 sát thương** (thua rớt 50% Linh Thạch và mất bảo vật)!",
+                inline=False
+            )
+
         else:
             embed = discord.Embed(
-                title="📜 CẨM NANG TU TIÊN — TRANG 4/4: GACHA, TIÊN CÁC & VIP",
+                title=f"📜 CẨM NANG TU TIÊN — TRANG 5/{self.total_pages}: GACHA, TIÊN CÁC & VIP",
                 description="Hệ thống Tiên Các, Định Hướng Đạo Vận Wishlist và Đặc Quyền VIP:",
                 color=discord.Color.blue()
             )
@@ -420,7 +455,7 @@ class TutienGuidePaginatorView(discord.ui.View):
             )
             embed.add_field(
                 name="🛍️ Shop Tiên Các (!tiencac & !mua)",
-                value="> Mua Thần Phù Bảo Mệnh (Bảo hiểm độ kiếp), Vạn Linh Đan (Cứu thương PVE), Thánh Thể Phù (Bảo vệ rớt đồ), Thẻ Tháng VIP.",
+                value="> Mua Thần Phù Bảo Mệnh, Thất Nhật Miễn Chiến Phù, Gói Phục Hồi Cấp Tốc, Vạn Linh Đan, Thẻ Tháng VIP.",
                 inline=False
             )
             embed.add_field(
@@ -429,7 +464,7 @@ class TutienGuidePaginatorView(discord.ui.View):
                 inline=False
             )
 
-        embed.set_footer(text="Bấm nút sang trang ◀ ▶ bên dưới để chuyển các trang cẩm nang!")
+        embed.set_footer(text=f"Bấm nút sang trang ◀ ▶ bên dưới để chuyển các trang cẩm nang! (Trang {self.current_page}/{self.total_pages})")
         return embed
 
     @discord.ui.button(label="◀ Trang Trước", style=discord.ButtonStyle.primary, custom_id="btn_guide_prev")
@@ -439,7 +474,7 @@ class TutienGuidePaginatorView(discord.ui.View):
             self._update_buttons()
             await interaction.response.edit_message(embed=self.build_embed(), view=self)
 
-    @discord.ui.button(label="Trang 1/4", style=discord.ButtonStyle.secondary, disabled=True, custom_id="btn_guide_indicator")
+    @discord.ui.button(label="Trang 1/5", style=discord.ButtonStyle.secondary, disabled=True, custom_id="btn_guide_indicator")
     async def btn_page_indicator(self, interaction: discord.Interaction, button: discord.ui.Button):
         pass
 
@@ -449,3 +484,4 @@ class TutienGuidePaginatorView(discord.ui.View):
             self.current_page += 1
             self._update_buttons()
             await interaction.response.edit_message(embed=self.build_embed(), view=self)
+

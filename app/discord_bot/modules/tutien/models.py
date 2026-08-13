@@ -85,6 +85,26 @@ class CultivatorProfile(BaseModel):
     dao_luan_points: Dict[str, int] = Field(default_factory=dict)
     active_dao_domain: Optional[str] = None
 
+    # PVP Schema («Tu Sĩ Tranh Phong / Sát Lục - Luận Đạo»)
+    pvp_elo: int = 1000              # Điểm ELO Luận Đạo Đài
+    danh_vong: int = 0               # Điểm Danh Vọng đổi Tàng Kinh Các
+    pvp_wins: int = 0
+    pvp_losses: int = 0
+    pvp_streak: int = 0
+    chan_thuong_until: Optional[float] = None # Chấn Thương Kinh Mạch (-30% chỉ số)
+    mien_chien_until: Optional[float] = None  # Thất Nhật Miễn Chiến Phù (Chống cướp & PK)
+
+
+class BountyEntry(BaseModel):
+    bounty_id: Optional[int] = None
+    target_user_id: int
+    issuer_user_id: int
+    reward_linh_thach: int = 0
+    reward_tien_ngoc: int = 0
+    reason: str = "Treo thưởng trảm trừ Ma Đầu!"
+    status: str = "OPEN"             # OPEN, COMPLETED, CANCELLED
+    created_at: float = 0.0
+
 
 class GongfaEquipment(BaseModel):
     user_id: int
@@ -108,3 +128,4 @@ class ChannelLinhKhiModel(BaseModel):
     channel_id: int
     current_linh_khi: int = 100000
     max_linh_khi: int = 100000
+

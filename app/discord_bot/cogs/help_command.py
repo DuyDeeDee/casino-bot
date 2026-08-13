@@ -145,16 +145,25 @@ def _group_embed(group_label: str, cmds: list[commands.Command], prefix: str) ->
                 ("wishlist", ["dinh-huong"], "Cấu hình Định Hướng Đạo Vận (Ưu tiên UR 100% khi lệch rate)."),
                 ("xienquach", ["bocque", "quere"], "Bốc quẻ Khí Vận hàng ngày nhận Linh Duyên Phù & Tiên Ngọc."),
                 ("linhbui-shop", ["doilinhbui"], "Xem & Đổi Linh Bụi Tiên Các lấy vật phẩm UR/SR tự chọn."),
-                ("tiencac", ["tiencac-shop"], "Xem danh mục Shop Tiên Các (Bảo hiểm độ kiếp, Bùa cứu thương, VIP)."),
+                ("tiencac", ["tiencac-shop"], "Xem danh mục Shop Tiên Các (Bảo hiểm độ kiếp, Bùa cứu thương, Miễn chiến, VIP)."),
                 ("mua", ["muatiencac"], "Mua vật phẩm từ Shop Tiên Các bằng Tiên Ngọc."),
                 ("vip", ["the-thang"], "Xem Cấp VIP & Trạng thái Thẻ Tháng Đạo Tâm Tôn Giả."),
             ],
-            "🗡️ V. TƯƠNG TÁC TU SĨ": [
-                ("cuop", ["cuop-dong-phu"], "Đột nhập Động Phủ tu sĩ khác cướp Linh Thạch (Cooldown 12h)."),
+            "🥋 V. PVP TRANH PHONG & SÁT LỤC": [
+                ("luan-dao", ["luandao", "pvp", "arena"], "Luận Đạo Đài 1v1 Ranked tính ELO chuẩn FIDE, cày Điểm Danh Vọng."),
+                ("bxh-pvp", ["top-elo", "toppvp"], "Xem Bảng Xếp Hạng ELO & Danh Vọng Luận Đạo Đài Top 10 Server."),
+                ("tang-kinh-cac", ["tangkinhcac", "shop-danh-vong"], "Đổi Điểm Danh Vọng lấy Công Pháp Thiên Cấp/Đế Cấp, Thần Binh hiếm."),
+                ("sinh-tu-dai", ["sinhtudai", "quyetchien"], "Đặt cược Linh Thạch Sinh Tử Đài (Thua mất sạch & dính Chấn Thương 12h)."),
+                ("cuop", ["cuop-dong-phu"], "Đột nhập Động Phủ cướp Linh Thạch, bẻ gãy bế quan gây Tẩu Hỏa Nhập Ma (+15 Nghiệp Lực)."),
+                ("truy-na-ma-tu", ["truyna", "treothuong"], "Treo Thưởng Lệnh Truy Nã Huyết Sát trảm trừ Ma Đầu."),
+                ("bang-truy-na", ["bounties", "ds-truyna"], "Xem Bảng Lệnh Truy Nã Huyết Sát Ma Đầu toàn server."),
+                ("tram-ma", ["tramma", "san-ma"], "Trảm Ma Đầu theo Lệnh Truy Nã nhận trọn tiền thưởng Headshot & Danh Vọng."),
+                ("mien-chien", ["mienchien", "baove"], "Xem & Kích hoạt Thất Nhật Miễn Chiến Phù (Khóa bị PK 7 ngày)."),
             ]
         }
 
         for cat_title, cmd_list in categories.items():
+
             cat_text = ""
             for c_name, aliases, desc in cmd_list:
                 alias_str = f" `({', '.join(aliases)})`" if aliases else ""

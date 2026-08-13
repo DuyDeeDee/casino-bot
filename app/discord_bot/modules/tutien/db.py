@@ -109,7 +109,14 @@ class TuTienDB:
                 "thanh_the_phu": "INTEGER DEFAULT 0",
                 "van_linh_dan": "INTEGER DEFAULT 0",
                 "cuu_chuyen_dan": "INTEGER DEFAULT 0",
-                "last_cuop_time": "REAL"
+                "last_cuop_time": "REAL",
+                "pvp_elo": "INTEGER DEFAULT 1000",
+                "danh_vong": "INTEGER DEFAULT 0",
+                "pvp_wins": "INTEGER DEFAULT 0",
+                "pvp_losses": "INTEGER DEFAULT 0",
+                "pvp_streak": "INTEGER DEFAULT 0",
+                "chan_thuong_until": "REAL",
+                "mien_chien_until": "REAL"
             }
             for col_name, col_type in new_cols.items():
                 if col_name not in existing_cols:
@@ -126,6 +133,21 @@ class TuTienDB:
                     bi_thuat_json TEXT DEFAULT '[]'
                 )
             """)
+
+            # Table: Bounties (Lệnh Truy Nã Huyết Sát)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS tutien_bounties (
+                    bounty_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    target_user_id INTEGER NOT NULL,
+                    issuer_user_id INTEGER NOT NULL,
+                    reward_linh_thach INTEGER DEFAULT 0,
+                    reward_tien_ngoc INTEGER DEFAULT 0,
+                    reason TEXT DEFAULT 'Treo thưởng trảm trừ Ma Đầu!',
+                    status TEXT DEFAULT 'OPEN',
+                    created_at REAL NOT NULL
+                )
+            """)
+
 
             # Table: Inventory
             conn.execute("""
@@ -287,7 +309,9 @@ class TuTienDB:
                     gacha_pity_count = ?, is_meditating = ?, meditate_start_time = ?,
                     meditate_duration_hours = ?, tau_hoa_nhap_ma_until = ?, active_dao_domain = ?,
                     kinh_mach_doan_tuyet_until = ?, lingering_debuff = ?, thanh_the_phu = ?,
-                    van_linh_dan = ?, cuu_chuyen_dan = ?, last_cuop_time = ?
+                    van_linh_dan = ?, cuu_chuyen_dan = ?, last_cuop_time = ?,
+                    pvp_elo = ?, danh_vong = ?, pvp_wins = ?, pvp_losses = ?,
+                    pvp_streak = ?, chan_thuong_until = ?, mien_chien_until = ?
                 WHERE user_id = ?
             """, (
                 player.dao_hieu, player.realm_index, player.exp,
@@ -304,8 +328,11 @@ class TuTienDB:
                 player.meditate_duration_hours, player.tau_hoa_nhap_ma_until, player.active_dao_domain,
                 player.kinh_mach_doan_tuyet_until, player.lingering_debuff, player.thanh_the_phu,
                 player.van_linh_dan, player.cuu_chuyen_dan, player.last_cuop_time,
+                player.pvp_elo, player.danh_vong, player.pvp_wins, player.pvp_losses,
+                player.pvp_streak, player.chan_thuong_until, player.mien_chien_until,
                 player.user_id
             ))
+
 
     # --- INVENTORY METHODS ---
     def add_item(self, user_id: int, item_name: str, item_type: str, quantity: int = 1):
@@ -473,3 +500,71 @@ class TuTienDB:
                 "ORDER BY pve.boss_dps_today DESC LIMIT ?", (limit,)
             )
             return cursor.fetchall()
+
+    # --- PVP & BOUNTY METHODS («Tu Sĩ Tranh Phong / Sát Lục») ---
+    def get_pvp_leaderboard(self, limit: int = 10) -> List[Dict[str, Any]]:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT user_id, dao_hieu, realm_index, pvp_elo, danh_vong, pvp_wins, pvp_losses, pvp_streak, vip_level
+                FROM tutien_players
+                ORDER BY pvp_elo DESC, danh_vong DESC, pvp_wins DESC
+                LIMIT ?
+            """, (limit,))
+            rows = cursor.fetchall()
+            results = []
+            for r in rows:
+                d = dict(r)
+                d["realm_name"] = REALMS[min(d["realm_index"], len(REALMS) - 1)]
+                results.append(d)
+            return results
+
+    def add_bounty(self, target_user_id: int, issuer_user_id: int, reward_linh_thach: int, reward_tien_ngoc: int = 0, reason: str = "Treo thưởng trảm trừ Ma Đầu!") -> int:
+        now = time.time()
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO tutien_bounties (target_user_id, issuer_user_id, reward_linh_thach, reward_tien_ngoc, reason, status, created_at)
+                VALUES (?, ?, ?, ?, ?, 'OPEN', ?)
+            """, (target_user_id, issuer_user_id, reward_linh_thach, reward_tien_ngoc, reason, now))
+            return cursor.lastrowid
+
+    def get_active_bounties(self, limit: int = 20) -> List[Dict[str, Any]]:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT b.bounty_id, b.target_user_id, b.issuer_user_id, b.reward_linh_thach, b.reward_tien_ngoc,
+                       b.reason, b.created_at, p.dao_hieu AS target_dao_hieu, p.realm_index AS target_realm_index,
+                       p.nghiep_luc AS target_nghiep_luc, ip.dao_hieu AS issuer_dao_hieu
+                FROM tutien_bounties b
+                JOIN tutien_players p ON b.target_user_id = p.user_id
+                JOIN tutien_players ip ON b.issuer_user_id = ip.user_id
+                WHERE b.status = 'OPEN'
+                ORDER BY b.reward_linh_thach DESC, b.created_at DESC
+                LIMIT ?
+            """, (limit,))
+            rows = cursor.fetchall()
+            results = []
+            for r in rows:
+                d = dict(r)
+                d["target_realm_name"] = REALMS[min(d["target_realm_index"], len(REALMS) - 1)]
+                results.append(d)
+            return results
+
+    def get_bounty_for_target(self, target_user_id: int) -> Optional[Dict[str, Any]]:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT * FROM tutien_bounties WHERE target_user_id = ? AND status = 'OPEN' ORDER BY created_at DESC LIMIT 1
+            """, (target_user_id,))
+            row = cursor.fetchone()
+            return dict(row) if row else None
+
+    def complete_bounty(self, bounty_id: int):
+        with self.get_connection() as conn:
+            conn.execute("UPDATE tutien_bounties SET status = 'COMPLETED' WHERE bounty_id = ?", (bounty_id,))
+
+    def cancel_bounty(self, bounty_id: int):
+        with self.get_connection() as conn:
+            conn.execute("UPDATE tutien_bounties SET status = 'CANCELLED' WHERE bounty_id = ?", (bounty_id,))
+

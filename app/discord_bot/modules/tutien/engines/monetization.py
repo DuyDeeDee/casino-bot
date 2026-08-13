@@ -74,11 +74,26 @@ def buy_tiencac_item(db: TuTienDB, player: CultivatorProfile, item_name: str) ->
         db.update_player(player)
         return True, "🛡️ **KÍCH HOẠT TRẬN PHÁP BẤT XÂM PHẠM!** Động Phủ của bạn an toàn 100% khỏi các lệnh cướp phá trong 24 Giờ!", player
 
+    elif item_name == "Thất Nhật Miễn Chiến Phù":
+        now = time.time()
+        player.mien_chien_until = max(now, player.mien_chien_until or 0) + (7 * 86400)
+        db.update_player(player)
+        return True, "🛡️ **KÍCH HOẠT THẤT NHẬT MIỄN CHIẾN PHÙ!** Bạn đã được bảo hộ an toàn khỏi PK Dã Ngoại và Cướp Động Phủ trong 7 Ngày (168 Giờ)!", player
+
+    elif item_name == "Gói Phục Hồi Cấp Tốc":
+        player.hp = player.max_hp
+        player.chan_thuong_until = None
+        player.tau_hoa_nhap_ma_until = None
+        player.lingering_debuff = None
+        db.update_player(player)
+        return True, "💊 **SỬ DỤNG GÓI PHỤC HỒI CẤP TỐC!** Phục hồi 100% HP, xóa sạch Chấn Thương Kinh Mạch và Tẩu Hỏa Nhập Ma! Sẵn sàng phục thù!", player
+
     else:
         # Save insurance items to inventory
         db.add_item(player.user_id, item_name, item_info["category"], 1)
         db.update_player(player)
         return True, f"🛍️ **MUA THÀNH CÔNG!** Đã nhận **[{item_name}]** vào Túi Đồ của bạn!", player
+
 
 
 def roll_gacha_banner(db: TuTienDB, player: CultivatorProfile) -> Tuple[bool, str, CultivatorProfile]:
