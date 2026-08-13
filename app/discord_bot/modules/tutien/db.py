@@ -235,6 +235,40 @@ class TuTienDB:
             conn.execute("DELETE FROM tutien_inventory WHERE user_id = ?", (user_id,))
             conn.execute("DELETE FROM tutien_pve_progress WHERE user_id = ?", (user_id,))
 
+    def get_top_cultivators(self, limit: int = 10) -> List[Dict[str, Any]]:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT user_id, dao_hieu, realm_index, exp, linh_can_quality, linh_can_element, vip_level, linh_thach
+                FROM tutien_players
+                ORDER BY realm_index DESC, exp DESC, can_co DESC
+                LIMIT ?
+            """, (limit,))
+            rows = cursor.fetchall()
+            results = []
+            for r in rows:
+                d = dict(r)
+                d["realm_name"] = REALMS[min(d["realm_index"], len(REALMS) - 1)]
+                results.append(d)
+            return results
+
+    def get_top_wealthy(self, limit: int = 10) -> List[Dict[str, Any]]:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT user_id, dao_hieu, realm_index, linh_thach, tien_ngoc, vip_level
+                FROM tutien_players
+                ORDER BY (linh_thach + (tien_ngoc * 1000)) DESC
+                LIMIT ?
+            """, (limit,))
+            rows = cursor.fetchall()
+            results = []
+            for r in rows:
+                d = dict(r)
+                d["realm_name"] = REALMS[min(d["realm_index"], len(REALMS) - 1)]
+                results.append(d)
+            return results
+
     def update_player(self, player: CultivatorProfile):
         with self.get_connection() as conn:
             conn.execute("""

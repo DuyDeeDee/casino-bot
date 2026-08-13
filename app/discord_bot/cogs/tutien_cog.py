@@ -1413,3 +1413,92 @@ class TuTienCog(commands.Cog, name="TuTien"):
 
         embed.set_footer(text="Gõ !tiencac để mua thêm bùa & vé quay | Gõ !profile để xem hồ sơ nhân vật")
         await ctx.send(embed=embed)
+
+    @commands.command(
+        name="tutien-top",
+        aliases=["toptuvi", "bxh-tutien", "top-tutien", "toptutien", "toprank"],
+        brief="Xem Bảng Xếp Hạng Top Tu Sĩ Server (Tu Vi, Gia Tài, Tháp, Boss).",
+        usage="tutien-top [tu-vi|gia-tai|thap|boss]"
+    )
+    async def top_cmd(self, ctx: commands.Context, category: str = "tu-vi"):
+        """Xem Bảng Xếp Hạng Top Tu Sĩ Server (!tutien-top)."""
+        cat_clean = category.lower()
+        medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]
+
+        if cat_clean in ["gia-tai", "giatai", "tien", "giau"]:
+            rows = self.db.get_top_wealthy(10)
+            embed = discord.Embed(
+                title="💰 BẢNG XẾP HẠNG TOP TRÚC THẠCH TRONG THỜI (GIA TÀI)",
+                description="Top 10 Đại Phú Hào sở hữu Linh Thạch & Tiên Ngọc khủng nhất Server:",
+                color=discord.Color.gold()
+            )
+            if not rows:
+                embed.description += "\n\n_Chưa có dữ liệu tu sĩ nào._"
+            else:
+                for idx, r in enumerate(rows):
+                    m = medals[idx] if idx < len(medals) else f"`{idx+1}`"
+                    vip_str = f" `[VIP {r['vip_level']}]`" if r['vip_level'] > 0 else ""
+                    embed.add_field(
+                        name=f"{m} {r['dao_hieu']}{vip_str}",
+                        value=f"> 💰 `{r['linh_thach']:,}` Linh Thạch | 💎 `{r['tien_ngoc']:,}` Tiên Ngọc\n> ☯️ {r['realm_name']}",
+                        inline=False
+                    )
+
+        elif cat_clean in ["thap", "leothap"]:
+            rows = self.db.get_tower_leaderboard(10)
+            embed = discord.Embed(
+                title="🏛️ BẢNG XẾP HẠNG THÁP THIÊN CỰC (LEO THÁP)",
+                description="Top 10 Cao Thủ leo tầng cao nhất Tháp Thiên Cực:",
+                color=discord.Color.purple()
+            )
+            if not rows:
+                embed.description += "\n\n_Chưa có dữ liệu leo tháp._"
+            else:
+                for idx, r in enumerate(rows):
+                    m = medals[idx] if idx < len(medals) else f"`{idx+1}`"
+                    embed.add_field(
+                        name=f"{m} {r['dao_hieu']}",
+                        value=f"> 🏆 **Tầng {r['tower_floor']}** | ☯️ {r['realm_name']}",
+                        inline=False
+                    )
+
+        elif cat_clean in ["boss", "dietboss"]:
+            rows = self.db.get_world_boss_rankings(10)
+            embed = discord.Embed(
+                title="🔥 BẢNG XẾP HẠNG SÁT THƯƠNG MA VƯƠNG (WORLD BOSS)",
+                description="Top 10 Dũng Sĩ gây nhiều DPS nhất lên Thái Cổ Ma Vương hôm nay:",
+                color=discord.Color.dark_red()
+            )
+            if not rows:
+                embed.description += "\n\n_Chưa có tu sĩ nào khiêu chiến Boss hôm nay._"
+            else:
+                for idx, r in enumerate(rows):
+                    m = medals[idx] if idx < len(medals) else f"`{idx+1}`"
+                    embed.add_field(
+                        name=f"{m} {r['dao_hieu']}",
+                        value=f"> ⚔️ Sát Thương tích lũy: `{r['boss_dps_today']:,}` DPS | ☯️ {r['realm_name']}",
+                        inline=False
+                    )
+
+        else:
+            # Default: Tu Vi
+            rows = self.db.get_top_cultivators(10)
+            embed = discord.Embed(
+                title="🏆 BẢNG XẾP HẠNG TOP TU SĨ SERVER (CẢNH GIỚI & TU VI)",
+                description="Top 10 Đại Năng có Cảnh Giới & Tu Vi cao nhất Server:",
+                color=discord.Color.gold()
+            )
+            if not rows:
+                embed.description += "\n\n_Chưa có tu sĩ nào gia nhập._"
+            else:
+                for idx, r in enumerate(rows):
+                    m = medals[idx] if idx < len(medals) else f"`{idx+1}`"
+                    vip_str = f" `[VIP {r['vip_level']}]`" if r['vip_level'] > 0 else ""
+                    embed.add_field(
+                        name=f"{m} **{r['dao_hieu']}**{vip_str}",
+                        value=f"> ☯️ Cảnh giới: **{r['realm_name']}** | `{r['exp']:,}` EXP\n> ⚡ Linh căn: `{r['linh_can_quality']}` ({r['linh_can_element']})",
+                        inline=False
+                    )
+
+        embed.set_footer(text="Các mục khác: !tutien-top [tu-vi | gia-tai | thap | boss]")
+        await ctx.send(embed=embed)
