@@ -298,6 +298,12 @@ class TuTienDB:
                 conn.execute("UPDATE tutien_inventory SET quantity = quantity - ? WHERE id = ?", (quantity, row["id"]))
             return True
 
+    def get_inventory(self, user_id: int) -> List[Dict[str, Any]]:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT item_name, item_type, quantity FROM tutien_inventory WHERE user_id = ? AND quantity > 0", (user_id,))
+            return [dict(row) for row in cursor.fetchall()]
+
     # --- GONGFA METHODS ---
     def get_gongfa(self, user_id: int) -> GongfaEquipment:
         with self.get_connection() as conn:

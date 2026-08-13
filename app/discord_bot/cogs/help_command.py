@@ -117,6 +117,7 @@ def _group_embed(group_label: str, cmds: list[commands.Command], prefix: str) ->
             "👤 I. NHÂN VẬT & TÂN THỦ": [
                 ("nhapmon", ["taonhanvat", "nhap-mon"], "Nhập môn Tu Tiên, quay Linh Căn ngẫu nhiên (Phàm Phẩm -> Hỗn Độn) & nhận 500 Linh Thạch."),
                 ("tutien-profile", ["profile", "tt", "hoso-tutien"], "Xem Thẻ Hình Ảnh PNG 18 thuộc tính nghệ thuật nhân vật."),
+                ("tutien-inventory", ["ttinv", "tuitu", "tutieninv"], "Xem Túi Trữ Vật Tu Tiên (Tiền tệ, Vé Gacha, Bùa bảo hiểm, Đan dược)."),
                 ("tamcanh", ["can-co", "tam-canh"], "Kiểm tra tỷ lệ Đột Phá, trạng thái Tâm Cảnh & độ vững chắc Căn Cơ."),
                 ("tutien-huongdan", ["huongdan", "tutienhelp"], "Xem cẩm nang hướng dẫn Tu Tiên 7 bước chi tiết."),
                 ("phe-tu-vi", ["phetuvi"], "Phế bỏ toàn bộ tu vi hiện tại để tu luyện lại từ Luyện Khí Tầng 1."),

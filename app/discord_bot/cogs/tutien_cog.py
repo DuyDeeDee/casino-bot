@@ -1241,3 +1241,58 @@ class TuTienCog(commands.Cog, name="TuTien"):
         player.lingering_debuff = None
         self.db.update_player(player)
         await ctx.send(f"✨ **TẨY TRỪ THÀNH CÔNG!** Tu sĩ **{player.dao_hieu}** đã giải trừ toàn bộ Độc Tố & Ô Nhiễm Tâm Ma!")
+
+    @commands.command(
+        name="tutien-inventory",
+        aliases=["ttinv", "tutieninv", "tuitu", "tuidotutien", "inv-tutien"],
+        brief="Xem Túi Trữ Vật Tu Tiên (Linh Thạch, Tiên Ngọc, Vé Gacha, Bùa bảo hiểm, Đan dược).",
+        usage="tutien-inventory"
+    )
+    async def inventory_cmd(self, ctx: commands.Context):
+        """Xem Túi Trữ Vật Tu Tiên (!ttinv)."""
+        player = self.db.get_player(ctx.author.id)
+        if not player:
+            await ctx.send("❌ Vui lòng gõ `!nhapmon` trước!")
+            return
+
+        inv_items = self.db.get_inventory(ctx.author.id)
+
+        embed = discord.Embed(
+            title=f"🎒 TÚI TRỮ VẬT TU TIÊN — [{player.dao_hieu}]",
+            description=f"☯ Tu sĩ: **[{player.dao_hieu}]** | Cảnh giới: **{player.realm_name}**",
+            color=discord.Color.purple()
+        )
+
+        # 1. Currencies
+        currencies_text = (
+            f"> 💰 **Linh Thạch:** `{player.linh_thach:,}`\n"
+            f"> 💎 **Tiên Ngọc (Nạp):** `{player.tien_ngoc:,}`\n"
+            f"> 🔮 **Linh Bụi Tiên Các:** `{player.linh_bui:,}`"
+        )
+        embed.add_field(name="💰 Tài Bảo & Tiền Tệ", value=currencies_text, inline=False)
+
+        # 2. Gacha Tickets
+        tickets_text = (
+            f"> 🎟️ **Linh Duyên Phù (Banner Thường):** `{player.linh_duyen_phu}` vé\n"
+            f"> 🌟 **Tiên Duyên Phù (Banner VIP):** `{player.tien_duyen_phu}` vé\n"
+            f"> ☯️ **Tẩy Tủy Phù (Cải Mệnh):** `{player.tay_tuy_phu}` vé"
+        )
+        embed.add_field(name="🎟️ Vé Quay Gacha", value=tickets_text, inline=False)
+
+        # 3. Protections & Rescue Consumables
+        consumables_text = (
+            f"> 💊 **Vạn Linh Đan (Cứu Thương):** `{player.van_linh_dan}` viên\n"
+            f"> 🛡️ **Thánh Thể Phù (Bảo Hiểm Rớt Đồ):** `{player.thanh_the_phu}` lá\n"
+            f"> ✨ **Cửu Chuyển Tái Tạo Đan (Hồi Sinh):** `{player.cuu_chuyen_dan}` viên"
+        )
+        embed.add_field(name="🛡️ Bùa Bảo Hiểm & Cứu Thương", value=consumables_text, inline=False)
+
+        # 4. Inventory items from DB
+        if inv_items:
+            items_str = "\n".join(f"> 📦 **{item['item_name']}** ({item['item_type']}): x`{item['quantity']}`" for item in inv_items)
+        else:
+            items_str = "> _Chưa có thêm vật phẩm đặc biệt trong túi đồ._"
+        embed.add_field(name="🎒 Bảo Vật & Nguyên Liệu Khác", value=items_str, inline=False)
+
+        embed.set_footer(text="Gõ !tiencac để mua thêm bùa & vé quay | Gõ !profile để xem hồ sơ nhân vật")
+        await ctx.send(embed=embed)
