@@ -292,3 +292,160 @@ class TutienTopLeaderboardView(discord.ui.View):
         self.current_tab = "boss"
         self._update_button_styles()
         await interaction.response.edit_message(embed=self.build_embed(), view=self)
+
+
+class TutienGuidePaginatorView(discord.ui.View):
+    """Interactive Multi-Page Guide Paginator for Tu Tiên (!huongdan)."""
+    def __init__(self, current_page: int = 1, timeout: float = 180.0):
+        super().__init__(timeout=timeout)
+        self.current_page = current_page
+        self.total_pages = 4
+        self._update_buttons()
+
+    def _update_buttons(self):
+        self.btn_prev.disabled = (self.current_page <= 1)
+        self.btn_next.disabled = (self.current_page >= self.total_pages)
+        self.btn_page_indicator.label = f"Trang {self.current_page}/{self.total_pages}"
+
+    def build_embed(self) -> discord.Embed:
+        if self.current_page == 1:
+            embed = discord.Embed(
+                title="📜 CẨM NANG TU TIÊN — TRANG 1/4: LINH CĂN & THUỘC TÍNH",
+                description="Chào mừng đến với **«ĐẠI ĐẠO TRANH PHONG»**! Dưới đây là thông tin chi tiết về Linh Căn & Thuộc Tính:",
+                color=discord.Color.gold()
+            )
+            embed.add_field(
+                name="1️⃣ Nhập Môn & Khởi Tạo Linh Căn (!nhapmon)",
+                value="> Gõ `!nhapmon [Đạo Hiệu]` để nhập môn, quay Linh Căn ngẫu nhiên & nhận `500` Linh Thạch + `100` Tinh Lực.",
+                inline=False
+            )
+            embed.add_field(
+                name="🔮 6 Cấp Độ Linh Căn (Rarity & Buff)",
+                value="> 🟢 **Phàm Phẩm (45%)**: Căn cơ tiêu chuẩn, 100% EXP speed.\n"
+                      "> 🔵 **Linh Phẩm (30%)**: +15% Tốc độ tu vi.\n"
+                      "> 🟣 **Địa Phẩm (15%)**: +30% Tốc độ tu vi, +5% Tỷ lệ Đột Phá.\n"
+                      "> 🟡 **Thiên Phẩm (7.5%)**: +50% Tốc độ tu vi, +10% Đột Phá, +10% Bạo Kích.\n"
+                      "> 🔴 **Tiên Phẩm (2.49%)**: +80% Tốc độ tu vi, +15% Đột Phá, +15% Bạo Kích.\n"
+                      "> 🌟 **Hỗn Độn Linh Căn (0.01% - Siêu Hiếm)**: +150% Tốc độ tu vi, +30% Đột Phá, +25% Bạo Kích & Kháng 30% Lôi Kiếp!",
+                inline=False
+            )
+            embed.add_field(
+                name="⚡ Thuộc Tính Ngũ Hành & Dị Linh Căn",
+                value="> ☯️ **Ngũ Hành**: 🔥 Hỏa, 💧 Thủy, 🌳 Mộc, ⚡ Kim, 🪨 Thổ (Khắc chế lẫn nhau +50% DMG).\n"
+                      "> ⚡ **Lôi Hệ**: Bộc phát Sát Thương & Tê liệt Yêu Thú.\n"
+                      "> ❄️ **Băng Hệ**: Đóng băng mục tiêu & Giảm 15% Sát thương nhận vào.\n"
+                      "> 🌪️ **Phong Hệ**: Thân pháp linh hoạt, +20% Né Tránh.\n"
+                      "> 🌌 **Không Gian**: Diễn biến vi diệu, +40% Sát thương Đột Phá.",
+                inline=False
+            )
+
+        elif self.current_page == 2:
+            embed = discord.Embed(
+                title="📜 CẨM NANG TU TIÊN — TRANG 2/4: TU LUYỆN & ĐỘT PHÁ CẢNH GIỚI",
+                description="Hướng dẫn quy trình tích lũy Tu Vi, Bế Quan AFK và Đột Phá Đội Kiếp:",
+                color=discord.Color.purple()
+            )
+            embed.add_field(
+                name="🧘 Tu Luyện Chủ Động (!tuluyen)",
+                value="> Tiêu 15 Tinh Lực/lần (Hồi `+5` Tinh Lực mỗi 5 phút). Tích lũy EXP Tu Vi theo Cảnh Giới.",
+                inline=False
+            )
+            embed.add_field(
+                name="🛌 Bế Quan AFK & Xuất Quan (!nhapdinh & !xuat-quan)",
+                value="> Gõ `!nhapdinh [1h|4h|8h|12h|16h|24h]` bế quan tích lũy tài nguyên khi offline.\n"
+                      "> Gõ `!xuat-quan` để xuất quan sớm & nhận quà tích lũy.",
+                inline=False
+            )
+            embed.add_field(
+                name="💪 Luyện Thể & Căn Cơ (!luyenthe & !tamcanh)",
+                value="> Gõ `!luyenthe` tiêu Linh Thạch nâng cấp Tôi Thể -> Bất Diệt Thể tăng HP & Giáp.\n"
+                      "> Gõ `!tamcanh` kiểm tra độ vững Căn Cơ & tỷ lệ thành công Đột Phá.",
+                inline=False
+            )
+            embed.add_field(
+                name="⚡ Quy Trình Độ Kiếp Lôi Kiếp (!dotpha)",
+                value="> Khi Tu Vi đạt 100%, gõ `!dotpha` nghênh đón Lôi Kiếp thời gian thực 10s/đợt.\n"
+                      "> Chọn `[🛡️ Trận Pháp]` hoặc `[💊 Uống Đan Dược]` để hóa giải Sát Thương Lôi Kiếp!",
+                inline=False
+            )
+
+        elif self.current_page == 3:
+            embed = discord.Embed(
+                title="📜 CẨM NANG TU TIÊN — TRANG 3/4: CHINH PHỤC HARDCORE PVE",
+                description="Tổng quan 4 Chế độ PVE Souls-like & Cơ chế Sinh tồn Nguy hiểm:",
+                color=discord.Color.red()
+            )
+            embed.add_field(
+                name="⚔️ Săn Yêu Thường (!san-yeu)",
+                value="> Đánh quái theo Cảnh Giới (VIP 2+ gõ `!san-yeu quet` 10x). Có 15% quái Biến Dị 3x stats & Boss Smart AI.",
+                inline=False
+            )
+            embed.add_field(
+                name="🏛️ Tháp Thiên Cực (!leo-thap & !top-thap)",
+                value="> Chinh phục 100 Tầng Tháp nhận Tiên Duyên Phù & Tiên Ngọc. Tầng 10, 20... xuất hiện Ảo Ảnh Bản Thân!",
+                inline=False
+            )
+            embed.add_field(
+                name="🏰 Bí Cảnh Cổ Đại (!bi-canh)",
+                value="> Lập đội 3-5 Tu Sĩ với 3 vai trò (**Tiền Phong Tank**, **Chủ Lực DPS**, **Hỗ Trợ Healer**).",
+                inline=False
+            )
+            embed.add_field(
+                name="🕸️ Mê Cung Roguelike Thái Cổ Cấm Địa (!bi-canh-cam-dia)",
+                value="> Đột phá Mê Cung 5 Phòng Sinh Tồn (HP không tự hồi). Bẫy Thí Mạng chọn 1 người gánh 80% HP!",
+                inline=False
+            )
+            embed.add_field(
+                name="🩸 Kinh Mạch Đoạn Tuyệt & Cứu Thương (!cuu-thuong & !giai-doc)",
+                value="> Tử trận PVE gây trạng thái Kinh Mạch Đoạn Tuyệt (10 phút). Nhờ bạn gõ `!cuu-thuong @user` để cứu!\n"
+                      "> Gõ `!giai-doc` để giải trừ Độc Tố Thấu Cốt / Ô Nhiễm Tâm Ma.",
+                inline=False
+            )
+
+        else:
+            embed = discord.Embed(
+                title="📜 CẨM NANG TU TIÊN — TRANG 4/4: GACHA, TIÊN CÁC & VIP",
+                description="Hệ thống Tiên Các, Định Hướng Đạo Vận Wishlist và Đặc Quyền VIP:",
+                color=discord.Color.blue()
+            )
+            embed.add_field(
+                name="🔮 Gacha 3 Banner (!gacha)",
+                value="> Banner Thường (Linh Duyên Phù), Banner VIP (Tiên Duyên Phù - UR 0.7%), Banner Cải Mệnh (Tẩy Tủy Phù). Pity bảo hiểm 80 lượt.",
+                inline=False
+            )
+            embed.add_field(
+                name="🎯 Định Hướng Đạo Vận Wishlist (!wishlist)",
+                value="> Gõ `!wishlist [Tên_Item]` cấu hình bảo báu mơ ước. Lượt nổ hũ UR tiếp theo chắc chắn 100% ra món chọn!",
+                inline=False
+            )
+            embed.add_field(
+                name="🛍️ Shop Tiên Các (!tiencac & !mua)",
+                value="> Mua Thần Phù Bảo Mệnh (Bảo hiểm độ kiếp), Vạn Linh Đan (Cứu thương PVE), Thánh Thể Phù (Bảo vệ rớt đồ), Thẻ Tháng VIP.",
+                inline=False
+            )
+            embed.add_field(
+                name="🌟 Hệ Thống VIP & Thẻ Tháng (!vip)",
+                value="> Tích nạp mở khóa VIP 1 -> VIP 10 (+Tốc độ Tinh Lực, Quét 10x, Thẻ Tháng Bế Quan 24h).",
+                inline=False
+            )
+
+        embed.set_footer(text="Bấm nút sang trang ◀ ▶ bên dưới để chuyển các trang cẩm nang!")
+        return embed
+
+    @discord.ui.button(label="◀ Trang Trước", style=discord.ButtonStyle.primary, custom_id="btn_guide_prev")
+    async def btn_prev(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.current_page > 1:
+            self.current_page -= 1
+            self._update_buttons()
+            await interaction.response.edit_message(embed=self.build_embed(), view=self)
+
+    @discord.ui.button(label="Trang 1/4", style=discord.ButtonStyle.secondary, disabled=True, custom_id="btn_guide_indicator")
+    async def btn_page_indicator(self, interaction: discord.Interaction, button: discord.ui.Button):
+        pass
+
+    @discord.ui.button(label="Trang Sau ▶", style=discord.ButtonStyle.primary, custom_id="btn_guide_next")
+    async def btn_next(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.current_page < self.total_pages:
+            self.current_page += 1
+            self._update_buttons()
+            await interaction.response.edit_message(embed=self.build_embed(), view=self)

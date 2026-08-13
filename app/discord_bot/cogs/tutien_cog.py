@@ -36,7 +36,7 @@ from app.discord_bot.modules.tutien.engines.pve import (
 from app.discord_bot.modules.tutien.renderers.profile_renderer import render_tutien_profile_card
 from app.discord_bot.modules.tutien.ui.tribulation_ui import TribulationWaveView, HeartDemonQuizView
 from app.discord_bot.modules.tutien.ui.pve_ui import (
-    PveBattleView, PartyLobbyView, RevivePromptView, QteOneShotView, TrapSacrificeView, DungeonMerchantView, TutienTopLeaderboardView
+    PveBattleView, PartyLobbyView, RevivePromptView, QteOneShotView, TrapSacrificeView, DungeonMerchantView, TutienTopLeaderboardView, TutienGuidePaginatorView
 )
 
 GIF_CHEST_PATH = "pictures/open_chest.gif"
@@ -543,53 +543,15 @@ class TuTienCog(commands.Cog, name="TuTien"):
     @commands.command(
         name="tutien-huongdan",
         aliases=["huongdan", "tutienhelp", "tuhds"],
-        brief="Xem Cẩm Nang Hướng Dẫn Tân Thủ Tu Tiên 6 bước.",
+        brief="Xem Cẩm Nang Hướng Dẫn Tu Tiên Toàn Tập (Nút bấm sang trang 1/4 - 4/4).",
         usage="tutien-huongdan"
     )
-    async def huongdan_cmd(self, ctx: commands.Context):
-        """Cẩm Nang Hướng Dẫn Tân Thủ Tu Tiên: «ĐẠI ĐẠO TRANH PHONG»."""
-        embed = discord.Embed(
-            title="📜 CẨM NANG HƯỚNG DẪN TÂN THỦ TU TIÊN 📜",
-            description="Chào mừng đến với thế giới **«ĐẠI ĐẠO TRANH PHONG»**! Dưới đây là quy trình 6 bước nhập môn dành cho Tân Thủ:",
-            color=discord.Color.gold()
-        )
-        embed.add_field(
-            name="1️⃣ Bước 1: Nhập Môn & Khởi Tạo Linh Căn",
-            value="> Gõ `!nhapmon [Đạo Hiệu]` để bước vào giới tu tiên, quay Linh Căn ngẫu nhiên (từ Phàm Phẩm 45% đến Hỗn Độn 0.01%) & nhận 500 Linh Thạch tân thủ.",
-            inline=False
-        )
-        embed.add_field(
-            name="2️⃣ Bước 2: Kiểm Tra 18 Thuộc Tính",
-            value="> Gõ `!profile` xem Thẻ Hình Ảnh PNG thuộc tính. Gõ `!tamcanh` để kiểm tra tỷ lệ độ kiếp & độ vững chắc của Căn Cơ.",
-            inline=False
-        )
-        embed.add_field(
-            name="3️⃣ Bước 3: Tích Lũy Tu Vi & Tinh Lực",
-            value="> Gõ `!tuluyen` (tốn 15 Tinh lực/lần, hồi 10 Tinh lực/h) để tích lũy tu vi. Gõ `!nhapdinh [1h|4h|8h]` để bế quan AFK khi không online.",
-            inline=False
-        )
-        embed.add_field(
-            name="4️⃣ Bước 4: Luyện Thể & Lĩnh Ngộ Công Pháp",
-            value="> Gõ `!luyenthe` rèn luyện thân thể (Tôi Thể -> Bất Diệt Thể). Gõ `!trangbi [Tên_Công_Pháp]` chọn lối tu (Chính Đạo / Ma Đạo). Gõ `!ngodao` để ghép Đạo Vực.",
-            inline=False
-        )
-        embed.add_field(
-            name="5️⃣ Bước 5: Xung Kích Bình Cảnh & Độ Kiếp",
-            value="> Khi Tu Vi đạt 100%, gõ `!dotpha` để nghênh đón Lôi Kiếp thời gian thực (10s/đợt chọn nút Đỡ Pháp Bảo / Đan Dược / Nghênh Đón) & vượt Thử Thách Tâm Ma.",
-            inline=False
-        )
-        embed.add_field(
-            name="6️⃣ Bước 6: Chinh Phục PVE (Săn Yêu, Leo Tháp, Bí Cảnh, Boss)",
-            value="> Gõ `!san-yeu` đánh quái lượt (VIP 2+ `!san-yeu quet` 10x). Gõ `!leo-thap` leo 100 Tầng Tháp. Gõ `!bi-canh` lập đội 3-5 người. Gõ `!diet-boss` đánh Boss Server.",
-            inline=False
-        )
-        embed.add_field(
-            name="7️⃣ Bước 7: Shop Tiên Các & Gacha",
-            value="> Gõ `!tiencac` xem shop bảo hiểm độ kiếp, bùa chống cướp, Thẻ VIP. Gõ `!gacha` quay bảo vật Tiên Cấp (có bảo hiểm Pity 80 lượt).",
-            inline=False
-        )
-        embed.set_footer(text="Gõ !tutien-profile để xem hồ sơ nhân vật | Gõ !san-yeu để chiến đấu PVE!")
-        await ctx.send(embed=embed)
+    async def huongdan_cmd(self, ctx: commands.Context, page: int = 1):
+        """Cẩm Nang Hướng Dẫn Tu Tiên Chi Tiết Toàn Tập với nút bấm sang trang (!huongdan)."""
+        page = max(1, min(4, page))
+        view = TutienGuidePaginatorView(current_page=page, timeout=180.0)
+        embed = view.build_embed()
+        await ctx.send(embed=embed, view=view)
 
     @commands.command(
         name="tutien-profile",
