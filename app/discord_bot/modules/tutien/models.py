@@ -79,6 +79,7 @@ class CultivatorProfile(BaseModel):
     thanh_the_phu: int = 0
     van_linh_dan: int = 0
     cuu_chuyen_dan: int = 0
+    last_cuop_time: Optional[float] = None
 
     # Dao Domain points
     dao_luan_points: Dict[str, int] = Field(default_factory=dict)

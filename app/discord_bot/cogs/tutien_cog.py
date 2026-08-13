@@ -635,6 +635,13 @@ class TuTienCog(commands.Cog, name="TuTien"):
             await ctx.send("❌ Vui lòng gõ `!nhapmon [Đạo Hiệu]` trước!")
             return
 
+        now = time.time()
+        if player.kinh_mach_doan_tuyet_until and player.kinh_mach_doan_tuyet_until > now:
+            remain_min = int((player.kinh_mach_doan_tuyet_until - now) // 60) + 1
+            await ctx.send(f"🩸 **BẠN ĐANG BỊ KINH MẠCH ĐOẠN TUYỆT!** (`{remain_min} phút` nữa)\n"
+                           f"> 💊 Hãy nhờ đạo hữu dùng `!cuu-thuong @user` hoặc mua Cửu Chuyển Tái Tạo Đan tại `!tiencac` để phục hồi trước khi tu luyện!")
+            return
+
         gongfa = self.db.get_gongfa(ctx.author.id)
         channel_id = ctx.channel.id
         channel_linh_khi = self.db.get_channel_linh_khi(channel_id)
@@ -665,6 +672,10 @@ class TuTienCog(commands.Cog, name="TuTien"):
         player = self.db.get_player(ctx.author.id)
         if not player:
             await ctx.send("❌ Vui lòng gõ `!nhapmon` trước!")
+            return
+
+        if player.is_meditating:
+            await ctx.send("⚠️ **BẠN ĐANG TRONG TRẠNG THÁI BẾ QUAN!** Vui lòng gõ `!xuat-quan` để thu công nhận quà AFK trước khi bắt đầu lượt bế quan mới!")
             return
 
         if hours not in [1, 4, 8, 12, 16, 24]:
@@ -758,6 +769,17 @@ class TuTienCog(commands.Cog, name="TuTien"):
         player = self.db.get_player(ctx.author.id)
         if not player:
             await ctx.send("❌ Vui lòng gõ `!nhapmon` trước!")
+            return
+
+        now = time.time()
+        if player.kinh_mach_doan_tuyet_until and player.kinh_mach_doan_tuyet_until > now:
+            remain_min = int((player.kinh_mach_doan_tuyet_until - now) // 60) + 1
+            await ctx.send(f"🩸 **BẠN ĐANG BỊ KINH MẠCH ĐOẠN TUYỆT!** (`{remain_min} phút` nữa)\n"
+                           f"> 💊 Hãy nhờ đạo hữu dùng `!cuu-thuong @user` hoặc mua Cửu Chuyển Tái Tạo Đan tại `!tiencac` để phục hồi trước khi Đột Phá!")
+            return
+
+        if player.is_meditating:
+            await ctx.send("🧘 **BẠN ĐANG BẾ QUAN!** Vui lòng gõ `!xuat-quan` để xuất quan trước khi Đột Phá.")
             return
 
         req_exp = REALM_REQUIRED_EXP.get(player.realm_index, 1000000000)
@@ -908,6 +930,17 @@ class TuTienCog(commands.Cog, name="TuTien"):
         player = self.db.get_player(ctx.author.id)
         if not player:
             await ctx.send("❌ Vui lòng gõ `!nhapmon` trước!")
+            return
+
+        now = time.time()
+        if player.kinh_mach_doan_tuyet_until and player.kinh_mach_doan_tuyet_until > now:
+            remain_min = int((player.kinh_mach_doan_tuyet_until - now) // 60) + 1
+            await ctx.send(f"🩸 **BẠN ĐANG BỊ KINH MẠCH ĐOẠN TUYỆT!** (`{remain_min} phút` nữa)\n"
+                           f"> 💊 Hãy nhờ đạo hữu dùng `!cuu-thuong @user` hoặc mua Cửu Chuyển Tái Tạo Đan tại `!tiencac` để phục hồi trước khi đi Săn Yêu!")
+            return
+
+        if player.is_meditating:
+            await ctx.send("🧘 **BẠN ĐANG BẾ QUAN!** Vui lòng gõ `!xuat-quan` để xuất quan trước khi đi Săn Yêu.")
             return
 
         # 1. VIP 2+ Quick Sweep 10x

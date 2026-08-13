@@ -108,7 +108,8 @@ class TuTienDB:
                 "lingering_debuff": "TEXT",
                 "thanh_the_phu": "INTEGER DEFAULT 0",
                 "van_linh_dan": "INTEGER DEFAULT 0",
-                "cuu_chuyen_dan": "INTEGER DEFAULT 0"
+                "cuu_chuyen_dan": "INTEGER DEFAULT 0",
+                "last_cuop_time": "REAL"
             }
             for col_name, col_type in new_cols.items():
                 if col_name not in existing_cols:
@@ -286,7 +287,7 @@ class TuTienDB:
                     gacha_pity_count = ?, is_meditating = ?, meditate_start_time = ?,
                     meditate_duration_hours = ?, tau_hoa_nhap_ma_until = ?, active_dao_domain = ?,
                     kinh_mach_doan_tuyet_until = ?, lingering_debuff = ?, thanh_the_phu = ?,
-                    van_linh_dan = ?, cuu_chuyen_dan = ?
+                    van_linh_dan = ?, cuu_chuyen_dan = ?, last_cuop_time = ?
                 WHERE user_id = ?
             """, (
                 player.dao_hieu, player.realm_index, player.exp,
@@ -302,7 +303,7 @@ class TuTienDB:
                 player.gacha_pity_count, 1 if player.is_meditating else 0, player.meditate_start_time,
                 player.meditate_duration_hours, player.tau_hoa_nhap_ma_until, player.active_dao_domain,
                 player.kinh_mach_doan_tuyet_until, player.lingering_debuff, player.thanh_the_phu,
-                player.van_linh_dan, player.cuu_chuyen_dan,
+                player.van_linh_dan, player.cuu_chuyen_dan, player.last_cuop_time,
                 player.user_id
             ))
 
