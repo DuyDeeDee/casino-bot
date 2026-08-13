@@ -112,7 +112,7 @@ class DungeonMerchantView(discord.ui.View):
     async def buy_van_linh(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_message("✅ Đã mua **Vạn Linh Đan**! Dùng `!cuu-thuong @user` để cứu đạo hữu bị tổn thương!", ephemeral=True)
 
-    @discord.ui.button(label="🛡️ Mua Thánh Thể Phù (80 Tiên Ngọc)", style=discord.ButtonStyle.gold, custom_id="btn_buy_thanh_the")
+    @discord.ui.button(label="🛡️ Mua Thánh Thể Phù (80 Tiên Ngọc)", style=discord.ButtonStyle.secondary, custom_id="btn_buy_thanh_the")
     async def buy_thanh_the(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_message("✅ Đã mua **Thánh Thể Phù**! Giúp bảo vệ không bị rớt đồ và hại Căn Cơ khi tử trận!", ephemeral=True)
 
@@ -162,7 +162,7 @@ class RevivePromptView(discord.ui.View):
             return False
         return True
 
-    @discord.ui.button(label="✨ Cửu Chuyển Đan Hồi Sinh (20 Tiên Ngọc)", style=discord.ButtonStyle.gold, custom_id="btn_revive_yes")
+    @discord.ui.button(label="✨ Cửu Chuyển Đan Hồi Sinh (20 Tiên Ngọc)", style=discord.ButtonStyle.primary, custom_id="btn_revive_yes")
     async def revive_yes(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.accepted = True
         await interaction.response.defer()
