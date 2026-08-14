@@ -275,31 +275,15 @@ class TutienTopLeaderboardView(discord.ui.View):
         self._update_button_styles()
         await interaction.response.edit_message(embed=self.build_embed(), view=self)
 
-    @discord.ui.button(label="💰 Top Gia Tài", style=discord.ButtonStyle.secondary, custom_id="btn_top_giatai")
-    async def btn_giatai(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.current_tab = "gia-tai"
-        self._update_button_styles()
-        await interaction.response.edit_message(embed=self.build_embed(), view=self)
-
-    @discord.ui.button(label="🏛️ Top Leo Tháp", style=discord.ButtonStyle.secondary, custom_id="btn_top_thap")
-    async def btn_thap(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.current_tab = "thap"
-        self._update_button_styles()
-        await interaction.response.edit_message(embed=self.build_embed(), view=self)
-
-    @discord.ui.button(label="🔥 Top Boss Server", style=discord.ButtonStyle.secondary, custom_id="btn_top_boss")
-    async def btn_boss(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.current_tab = "boss"
-        self._update_button_styles()
-        await interaction.response.edit_message(embed=self.build_embed(), view=self)
-
 
 class TutienGuidePaginatorView(discord.ui.View):
-    """Interactive Multi-Page Guide Paginator for Tu Tiên (!huongdan)."""
+    """
+    7-Page Interactive Xianxia Guide Paginator with Previous/Next buttons.
+    """
     def __init__(self, current_page: int = 1, timeout: float = 180.0):
         super().__init__(timeout=timeout)
         self.current_page = current_page
-        self.total_pages = 5
+        self.total_pages = 7
         self._update_buttons()
 
     def _update_buttons(self):
@@ -310,17 +294,17 @@ class TutienGuidePaginatorView(discord.ui.View):
     def build_embed(self) -> discord.Embed:
         if self.current_page == 1:
             embed = discord.Embed(
-                title=f"📜 CẨM NANG TU TIÊN — TRANG 1/{self.total_pages}: LINH CĂN & THUỘC TÍNH",
-                description="Chào mừng đến với **«ĐẠI ĐẠO TRANH PHONG»**! Dưới đây là thông tin chi tiết về Linh Căn & Thuộc Tính:",
+                title=f"📜 CẨM NANG TU TIÊN — TRANG 1/{self.total_pages}: LINH CĂN & 18 CHỈ SỐ NHÂN VẬT",
+                description="Chào mừng đến với **«ĐẠI ĐẠO TRANH PHONG»**! Chi tiết 18 thuộc tính cốt lõi của tu sĩ:",
                 color=discord.Color.gold()
             )
             embed.add_field(
                 name="1️⃣ Nhập Môn & Khởi Tạo Linh Căn (!nhapmon)",
-                value="> Gõ `!nhapmon [Đạo Hiệu]` để nhập môn, quay Linh Căn ngẫu nhiên & nhận `500` Linh Thạch + `100` Tinh Lực.",
+                value="> Gõ `!nhapmon [Đạo Hiệu]` khởi tạo Linh Căn ngẫu nhiên + `500` Linh Thạch + `100` Tinh Lực.",
                 inline=False
             )
             embed.add_field(
-                name="🔮 6 Cấp Độ Linh Căn (Rarity & Buff)",
+                name="🔮 6 Phẩm Cấp Linh Căn (Rarity & Buff)",
                 value="> 🟢 **Phàm Phẩm (45%)**: Căn cơ tiêu chuẩn, 100% EXP speed.\n"
                       "> 🔵 **Linh Phẩm (30%)**: +15% Tốc độ tu vi.\n"
                       "> 🟣 **Địa Phẩm (15%)**: +30% Tốc độ tu vi, +5% Tỷ lệ Đột Phá.\n"
@@ -330,54 +314,117 @@ class TutienGuidePaginatorView(discord.ui.View):
                 inline=False
             )
             embed.add_field(
-                name="⚡ Thuộc Tính Ngũ Hành & Dị Linh Căn",
-                value="> ☯️ **Ngũ Hành**: 🔥 Hỏa, 💧 Thủy, 🌳 Mộc, ⚡ Kim, 🪨 Thổ (Khắc chế lẫn nhau +50% DMG).\n"
-                      "> ⚡ **Lôi Hệ**: Bộc phát Sát Thương & Tê liệt Yêu Thú.\n"
-                      "> ❄️ **Băng Hệ**: Đóng băng mục tiêu & Giảm 15% Sát thương nhận vào.\n"
-                      "> 🌪️ **Phong Hệ**: Thân pháp linh hoạt, +20% Né Tránh.\n"
-                      "> 🌌 **Không Gian**: Diễn biến vi diệu, +40% Sát thương Đột Phá.",
+                name="📊 Ý Nghĩa Chi Tiết 18 Thuộc Tính (!tutien-profile)",
+                value="> ⚔️ **Đạo Tâm**: Tăng bản lĩnh chịu đựng Tâm Ma & tăng lực chiến PVP.\n"
+                      "> ✦ **Ngộ Tính**: Tăng lượng EXP nhận được khi `!tuluyen` & nhanh học công pháp.\n"
+                      "> ❖ **Thần Thức**: Tăng % Bạo Kích (Crit), phát hiện bẫy cấm địa & tăng lực chiến.\n"
+                      "> ◈ **Căn Cơ**: Nền tảng tu vi (0-100%). Căn cơ cao tăng % Đột Phá. Bị rớt khi Đột Phá tạch.\n"
+                      "> ☯️ **Tâm Cảnh**: Tỷ lệ Đột Phá thành công. Thấp hơn mốc yêu cầu ➔ % Đột phá = 0%! Tăng khi Bế Quan.\n"
+                      "> ☯️ **Nghiệp Lực**: Điểm Ma Đạo (tăng khi `!cuop-dong-phu`). >20 bị trừ % Đột phá, >50 dính Huyết Lôi x3 DMG!\n"
+                      "> ✦ **Cơ Duyên**: Tăng tỷ lệ rớt vé quay Gacha (Linh Duyên Phù) & đồ hiếm khi `!san-yeu`.\n"
+                      "> ✵ **Thiên Đạo Điểm**: Điểm tích lũy khi thông quan PVE Hardcore & Sự Kiện.",
                 inline=False
             )
 
         elif self.current_page == 2:
             embed = discord.Embed(
-                title=f"📜 CẨM NANG TU TIÊN — TRANG 2/{self.total_pages}: TU LUYỆN & ĐỘT PHÁ CẢNH GIỚI",
-                description="Hướng dẫn quy trình tích lũy Tu Vi, Bế Quan AFK và Đột Phá Đội Kiếp:",
-                color=discord.Color.purple()
+                title=f"📜 CẨM NANG TU TIÊN — TRANG 2/{self.total_pages}: 📜 CÔNG PHÁP CHỦ TU & CÁCH ĐỔI",
+                description="Công Pháp Chủ Tu ảnh hưởng trực tiếp đến Tốc độ Tu Vi, Tâm Cảnh, Nghiệp Lực & Sát Thương:",
+                color=discord.Color.blue()
             )
             embed.add_field(
-                name="🧘 Tu Luyện Chủ Động (!tuluyen)",
-                value="> Tiêu 15 Tinh Lực/lần (Hồi `+5` Tinh Lực mỗi 5 phút). Tích lũy EXP Tu Vi theo Cảnh Giới.",
+                name="📚 Ma Trận 4 Đại Công Pháp Chủ Tu",
+                value="> 📜 **《Phàm Nhân Quyết》**: Công pháp căn bản nhập môn. Tốc độ EXP x1.0.\n"
+                      "> 📜 **《Thanh Tâm Đạo Kinh》** (Chính Đạo): Tu vi -30%, Tâm Cảnh +50%, Đột phá +20%, Tự giảm Nghiệp Lực.\n"
+                      "> 📜 **《Thôn Thiên Ma Công》** (Ma Đạo UR): Tu vi **+150% (x2.5 EXP)**, Tâm Cảnh -40%, Nghiệp Lực +10/lần tu, Lôi Kiếp x2 DMG!\n"
+                      "> 📜 **《Thái Huyền Kim Thân Quyết》** (Trung Lập): Hồi 50% HP khi tu luyện, trâu bò phòng thủ.",
                 inline=False
             )
             embed.add_field(
-                name="🛌 Bế Quan AFK & Xuất Quan (!nhapdinh & !xuat-quan)",
-                value="> Gõ `!nhapdinh [1h|4h|8h|12h|16h|24h]` bế quan tích lũy tài nguyên khi offline.\n"
-                      "> Gõ `!xuat-quan` để xuất quan sớm & nhận quà tích lũy.",
+                name="🔄 Cách Xem & Thay Đổi Công Pháp (!doi-cong-phap)",
+                value="> Gõ `!doi-cong-phap` để xem Công Pháp hiện tại & danh sách sách sở hữu trong Túi Đồ.\n"
+                      "> Gõ `!doi-cong-phap <Tên_Công_Pháp>` để đổi (Ví dụ: `!doi-cong-phap Thôn Thiên Ma Công`).",
                 inline=False
             )
             embed.add_field(
-                name="💪 Luyện Thể & Căn Cơ (!luyenthe & !tamcanh)",
-                value="> Gõ `!luyenthe` tiêu Linh Thạch nâng cấp Tôi Thể -> Bất Diệt Thể tăng HP & Giáp.\n"
-                      "> Gõ `!tamcanh` kiểm tra độ vững Căn Cơ & tỷ lệ thành công Đột Phá.",
-                inline=False
-            )
-            embed.add_field(
-                name="⚡ Quy Trình Độ Kiếp Lôi Kiếp (!dotpha)",
-                value="> Khi Tu Vi đạt 100%, gõ `!dotpha` nghênh đón Lôi Kiếp thời gian thực 10s/đợt.\n"
-                      "> Chọn `[🛡️ Trận Pháp]` hoặc `[💊 Uống Đan Dược]` để hóa giải Sát Thương Lôi Kiếp!",
+                name="🎁 Cách Kiếm Công Pháp Mới",
+                value="> Quay Gacha `!quay-gacha`, đổi Linh Bụi tại `!linhbui-shop`, hoặc đánh Boss Bí Cảnh `!bi-canh`.",
                 inline=False
             )
 
         elif self.current_page == 3:
             embed = discord.Embed(
-                title=f"📜 CẨM NANG TU TIÊN — TRANG 3/{self.total_pages}: CHINH PHỤC HARDCORE PVE",
-                description="Tổng quan 4 Chế độ PVE Souls-like & Cơ chế Sinh tồn Nguy hiểm:",
+                title=f"📜 CẨM NANG TU TIÊN — TRANG 3/{self.total_pages}: 💊 ĐAN DƯỢC & VẬT PHẨM BẢO BẢO",
+                description="Hệ thống Đan Dược, Bùa Phù bảo hiểm và cách sử dụng:",
+                color=discord.Color.green()
+            )
+            embed.add_field(
+                name="💊 Cửu Chuyển Tái Tạo Đan (!dung-dan)",
+                value="> Gõ `!dung-dan` để hồi **100% HP, MP & 100% Căn Cơ**, tẩy sạch Chấn Thương, Tẩu Hỏa Nhập Ma & Độc Tố.",
+                inline=False
+            )
+            embed.add_field(
+                name="💊 Tái Tạo Đan (Shop !tiencac)",
+                value="> Khôi phục ngay 100% Căn Cơ bị tổn hại sau khi độ kiếp thất bại.",
+                inline=False
+            )
+            embed.add_field(
+                name="🛡️ Thần Phù Bảo Mệnh (Shop !tiencac)",
+                value="> Bùa bảo hiểm Độ Kiếp — Giữ nguyên 100% Tu Vi và Căn Cơ nếu lỡ Độ Kiếp thất bại!",
+                inline=False
+            )
+            embed.add_field(
+                name="🍾 Tiên Mật Hồi Tinh Lực (Shop !tiencac)",
+                value="> Khôi phục ngay **100% Tinh Lực (100/100)** lập tức không cần chờ.",
+                inline=False
+            )
+            embed.add_field(
+                name="🛡️ Thất Nhật Miễn Chiến Phù & Vạn Linh Đan",
+                value="> `!mien-chien`: Khóa PK & cướp bóc an toàn trong 7 Ngày (168 Giờ).\n"
+                      "> `!cuu-thuong @user`: Cứu đạo hữu khỏi nạn Kinh Mạch Đoạn Tuyệt (Hồi 50% HP).\n"
+                      "> `!giai-doc`: Tẩy trừ Độc Tố Thấu Cốt / Ô Nhiễm Tâm Ma (tốn 500 Linh Thạch).",
+                inline=False
+            )
+
+        elif self.current_page == 4:
+            embed = discord.Embed(
+                title=f"📜 CẨM NANG TU TIÊN — TRANG 4/{self.total_pages}: TU LUYỆN, BẾ QUAN AFK & ĐỘT PHÁ",
+                description="Hướng dẫn quy trình tích lũy Tu Vi, Bế Quan Tĩnh Dưỡng và Độ Kiếp Lôi Kiếp:",
+                color=discord.Color.purple()
+            )
+            embed.add_field(
+                name="🧘 Tu Luyện Chủ Động (!tuluyen)",
+                value="> Tiêu 15 Tinh Lực/lần (Hồi `+5` Tinh Lực/5 phút). Tích lũy EXP Tu Vi theo Cảnh Giới.",
+                inline=False
+            )
+            embed.add_field(
+                name="🛌 Bế Quan AFK & Xuất Quan (!nhapdinh & !xuat-quan)",
+                value="> Gõ `!nhapdinh [1h|4h|8h|12h|16h|24h]` bế quan tích lũy Tu Vi, Linh Thạch, Tâm Cảnh & Căn Cơ.\n"
+                      "> Gõ `!xuat-quan` để xuất quan & **hồi phục 100% HP & Mana đầy bình miễn phí**!",
+                inline=False
+            )
+            embed.add_field(
+                name="💪 Luyện Thể & Kiểm Tra Tâm Cảnh (!luyenthe & !tamcanh)",
+                value="> Gõ `!luyenthe` tiêu Linh Thạch nâng cấp Tôi Thể -> Bất Diệt Thể tăng HP & Giáp.\n"
+                      "> Gõ `!tamcanh` kiểm tra mốc Tâm Cảnh yêu cầu & % tỷ lệ Đột Phá.",
+                inline=False
+            )
+            embed.add_field(
+                name="⚡ Quy Trình Độ Kiếp Lôi Kiếp (!dotpha)",
+                value="> Khi Tu Vi đạt 100%, gõ `!dotpha` nghênh đón Lôi Kiếp thời gian thực 10s/đợt.\n"
+                      "> Bấm nút **`[🛡️ Dùng Pháp Bảo]`** (giảm 60% DMG) hoặc **`[💊 Uống Kháng Lôi Đan]`** (giảm 40% DMG) để sống sót!",
+                inline=False
+            )
+
+        elif self.current_page == 5:
+            embed = discord.Embed(
+                title=f"📜 CẨM NANG TU TIÊN — TRANG 5/{self.total_pages}: CHINH PHỤC HARDCORE PVE",
+                description="Tổng quan 5 Chế độ PVE Souls-like & Cơ chế Sinh tồn Nguy hiểm:",
                 color=discord.Color.red()
             )
             embed.add_field(
                 name="⚔️ Săn Yêu Thường (!san-yeu)",
-                value="> Đánh quái theo Cảnh Giới (VIP 2+ gõ `!san-yeu quet` 10x). Có 15% quái Biến Dị 3x stats & Boss Smart AI.",
+                value="> Đánh quái tích Linh Thạch & EXP (VIP 2+ gõ `!san-yeu quet` 10x). Có 15% quái Biến Dị 3x stats & Boss Smart AI.",
                 inline=False
             )
             embed.add_field(
@@ -396,15 +443,14 @@ class TutienGuidePaginatorView(discord.ui.View):
                 inline=False
             )
             embed.add_field(
-                name="🩸 Kinh Mạch Đoạn Tuyệt & Cứu Thương (!cuu-thuong & !giai-doc)",
-                value="> Tử trận PVE gây trạng thái Kinh Mạch Đoạn Tuyệt (10 phút). Nhờ bạn gõ `!cuu-thuong @user` để cứu!\n"
-                      "> Gõ `!giai-doc` để giải trừ Độc Tố Thấu Cốt / Ô Nhiễm Tâm Ma.",
+                name="👹 Ma Vương Giáng Lâm - World Boss Server (!diet-boss)",
+                value="> Toàn server cùng hợp lực trảm Ma Vương Cổ Đại 10.000.000 HP nhận vô số bảo vật!",
                 inline=False
             )
 
-        elif self.current_page == 4:
+        elif self.current_page == 6:
             embed = discord.Embed(
-                title=f"📜 CẨM NANG TU TIÊN — TRANG 4/{self.total_pages}: ⚔️ PVP TRANH PHONG & SÁT LỤC",
+                title=f"📜 CẨM NANG TU TIÊN — TRANG 6/{self.total_pages}: ⚔️ PVP TRANH PHONG & SÁT LỤC",
                 description="Ma trận chiến đấu 5 tầng, Đấu trường ELO, Sinh Tử Đoạt Bảo và Bảng Truy Nã:",
                 color=discord.Color.dark_red()
             )
@@ -430,27 +476,26 @@ class TutienGuidePaginatorView(discord.ui.View):
                       "> Chính Đạo tu sĩ gõ `!tram-ma @user` để săn Ma Đầu ẵm trọn tiền thưởng + 50 Danh Vọng.",
                 inline=False
             )
-            embed.add_field(
-                name="🛡️ Thất Nhật Miễn Chiến Phù & Huyết Lôi Cửu Thiên",
-                value="> Gõ `!mien-chien` (mua tại `!tiencac`) để khóa PK và cướp bóc an toàn trong 7 Ngày.\n"
-                      "> ⚠️ Ma Tu có Nghiệp Lực > 100 khi Độ Kiếp bị giáng **Huyết Lôi x3 sát thương** (thua rớt 50% Linh Thạch và mất bảo vật)!",
-                inline=False
-            )
 
         else:
             embed = discord.Embed(
-                title=f"📜 CẨM NANG TU TIÊN — TRANG 5/{self.total_pages}: GACHA, TIÊN CÁC & VIP",
+                title=f"📜 CẨM NANG TU TIÊN — TRANG 7/{self.total_pages}: GACHA, TIÊN CÁC, WISHLIST & VIP",
                 description="Hệ thống Tiên Các, Định Hướng Đạo Vận Wishlist và Đặc Quyền VIP:",
                 color=discord.Color.blue()
             )
             embed.add_field(
-                name="🔮 Gacha 3 Banner (!gacha)",
+                name="🔮 Gacha 3 Banner (!quay-gacha)",
                 value="> Banner Thường (Linh Duyên Phù), Banner VIP (Tiên Duyên Phù - UR 0.7%), Banner Cải Mệnh (Tẩy Tủy Phù). Pity bảo hiểm 80 lượt.",
                 inline=False
             )
             embed.add_field(
                 name="🎯 Định Hướng Đạo Vận Wishlist (!wishlist)",
                 value="> Gõ `!wishlist [Tên_Item]` cấu hình bảo báu mơ ước. Lượt nổ hũ UR tiếp theo chắc chắn 100% ra món chọn!",
+                inline=False
+            )
+            embed.add_field(
+                name="💎 Đổi Linh Bụi Shop (!linhbui-shop)",
+                value="> Gõ `!linhbui-shop` dùng Linh Bụi đổi trực tiếp bí kíp Công Pháp Đế Cấp & vật phẩm UR.",
                 inline=False
             )
             embed.add_field(
