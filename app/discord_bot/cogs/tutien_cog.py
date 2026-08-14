@@ -2024,31 +2024,6 @@ class TuTienCog(commands.Cog, name="TuTien"):
         await ctx.send(f"✨ **TẨY TRỪ THÀNH CÔNG!** Tu sĩ **{player.dao_hieu}** đã tốn `500` Linh Thạch giải trừ toàn bộ Độc Tố & Ô Nhiễm Tâm Ma!")
 
     @commands.command(
-        name="tri-thuong",
-        aliases=["trithuong", "hoi-mau", "hoimau", "heal"],
-        brief="Tiêu tốn 200 Linh Thạch để hồi phục 100% Máu (HP) & đúc lại Căn Cơ.",
-        usage="tri-thuong"
-    )
-    async def trithuong_cmd(self, ctx: commands.Context):
-        """Tiêu tốn 200 Linh Thạch để hồi phục 100% HP & Căn Cơ."""
-        player = self.db.get_player(ctx.author.id)
-        if not player:
-            await ctx.send("❌ Vui lòng gõ `!nhapmon` trước!")
-            return
-
-        if player.linh_thach < 200:
-            await ctx.send("❌ Bạn không đủ Linh Thạch! Chi phí trị thương là `200` Linh Thạch.")
-            return
-
-        player.linh_thach -= 200
-        player.hp = player.max_hp
-        player.mana = player.max_mana
-        player.can_co = min(100.0, player.can_co + 30.0)
-        self.db.update_player(player)
-
-        await ctx.send(f"💖 **TRỊ THƯƠNG THÀNH CÔNG!** Tu sĩ **{player.dao_hieu}** tốn `200` Linh Thạch hồi phục **100% HP đầy bình** (`{player.max_hp:,}/{player.max_hp:,}`) và phục hồi `+30%` Căn Cơ!")
-
-    @commands.command(
         name="dung-dan",
         aliases=["dungdan", "use-pill", "su-dung-dan"],
         brief="Sử dụng Cửu Chuyển Tái Tạo Đan để hồi 100% HP/Mana và xóa sạch chấn thương, độc tố.",
