@@ -119,11 +119,12 @@ class TuTienCog(commands.Cog, name="TuTien"):
                         exp_gain = int(5000 * duration_h * (1 + realm_idx * 0.1))
                         linh_thach_gain = int(500 * duration_h)
                         tam_canh_gain = min(100.0, duration_h * 2.0)
+                        can_co_gain = round(duration_h * 10.0, 1)
 
                         conn.execute(
                             "UPDATE tutien_players SET is_meditating = 0, meditate_start_time = NULL, meditate_duration_hours = 0, "
-                            "exp = exp + ?, linh_thach = linh_thach + ?, tam_canh = MIN(100.0, tam_canh + ?) WHERE user_id = ?",
-                            (exp_gain, linh_thach_gain, tam_canh_gain, u_id)
+                            "hp = max_hp, mana = max_mana, can_co = MIN(100.0, can_co + ?), exp = exp + ?, linh_thach = linh_thach + ?, tam_canh = MIN(100.0, tam_canh + ?) WHERE user_id = ?",
+                            (can_co_gain, exp_gain, linh_thach_gain, tam_canh_gain, u_id)
                         )
                         finished_notifications.append((u_id, duration_h, exp_gain, linh_thach_gain, tam_canh_gain))
                         continue
@@ -745,11 +746,15 @@ class TuTienCog(commands.Cog, name="TuTien"):
         exp_gain = int(5000 * actual_hours * (1 + player.realm_index * 0.1))
         linh_thach_gain = int(500 * actual_hours)
         tam_canh_gain = round(actual_hours * 2.0, 1)
+        can_co_gain = round(actual_hours * 10.0, 1)
 
         req_exp = REALM_REQUIRED_EXP.get(player.realm_index, 1000000000)
         player.exp = min(req_exp, player.exp + exp_gain)
         player.linh_thach += linh_thach_gain
         player.tam_canh = min(100.0, player.tam_canh + tam_canh_gain)
+        player.can_co = min(100.0, player.can_co + can_co_gain)
+        player.hp = player.max_hp  # Hồi phục toàn bộ Máu HP khi xuất quan!
+        player.mana = player.max_mana
         player.is_meditating = False
         player.meditate_start_time = None
         player.meditate_duration_hours = 0
@@ -758,12 +763,13 @@ class TuTienCog(commands.Cog, name="TuTien"):
 
         embed = discord.Embed(
             title=f"🧘 XUẤT QUAN THÀNH CÔNG — {player.dao_hieu}",
-            description=f"Tu sĩ **{player.dao_hieu}** đã thu công xuất quan sau **{actual_hours:.1f} Giờ** nhập định!",
+            description=f"Tu sĩ **{player.dao_hieu}** đã thu công xuất quan sau **{actual_hours:.1f} Giờ** nhập định!\n"
+                        f"✨ Khí Huyết (HP) & Chân Nguyên (MP) đã được hồi phục **100%** đầy bình!",
             color=discord.Color.green()
         )
         embed.add_field(
             name="🎁 Phần Thưởng Tích Lũy",
-            value=f"> ✨ Tu Vi: `+{exp_gain:,}`\n> 💰 Linh Thạch: `+{linh_thach_gain:,}`\n> 🧘 Tâm Cảnh: `+{tam_canh_gain}%`",
+            value=f"> ✨ Tu Vi: `+{exp_gain:,}`\n> 💰 Linh Thạch: `+{linh_thach_gain:,}`\n> 🧘 Tâm Cảnh: `+{tam_canh_gain}%`\n> ◈ Căn Cơ: `+{can_co_gain}%`",
             inline=False
         )
         await ctx.send(embed=embed)
@@ -2018,6 +2024,31 @@ class TuTienCog(commands.Cog, name="TuTien"):
         await ctx.send(f"✨ **TẨY TRỪ THÀNH CÔNG!** Tu sĩ **{player.dao_hieu}** đã tốn `500` Linh Thạch giải trừ toàn bộ Độc Tố & Ô Nhiễm Tâm Ma!")
 
     @commands.command(
+        name="tri-thuong",
+        aliases=["trithuong", "hoi-mau", "hoimau", "heal"],
+        brief="Tiêu tốn 200 Linh Thạch để hồi phục 100% Máu (HP) & đúc lại Căn Cơ.",
+        usage="tri-thuong"
+    )
+    async def trithuong_cmd(self, ctx: commands.Context):
+        """Tiêu tốn 200 Linh Thạch để hồi phục 100% HP & Căn Cơ."""
+        player = self.db.get_player(ctx.author.id)
+        if not player:
+            await ctx.send("❌ Vui lòng gõ `!nhapmon` trước!")
+            return
+
+        if player.linh_thach < 200:
+            await ctx.send("❌ Bạn không đủ Linh Thạch! Chi phí trị thương là `200` Linh Thạch.")
+            return
+
+        player.linh_thach -= 200
+        player.hp = player.max_hp
+        player.mana = player.max_mana
+        player.can_co = min(100.0, player.can_co + 30.0)
+        self.db.update_player(player)
+
+        await ctx.send(f"💖 **TRỊ THƯƠNG THÀNH CÔNG!** Tu sĩ **{player.dao_hieu}** tốn `200` Linh Thạch hồi phục **100% HP đầy bình** (`{player.max_hp:,}/{player.max_hp:,}`) và phục hồi `+30%` Căn Cơ!")
+
+    @commands.command(
         name="dung-dan",
         aliases=["dungdan", "use-pill", "su-dung-dan"],
         brief="Sử dụng Cửu Chuyển Tái Tạo Đan để hồi 100% HP/Mana và xóa sạch chấn thương, độc tố.",
@@ -2040,13 +2071,14 @@ class TuTienCog(commands.Cog, name="TuTien"):
 
         player.hp = player.max_hp
         player.mana = player.max_mana
+        player.can_co = 100.0
         player.chan_thuong_until = None
         player.tau_hoa_nhap_ma_until = None
         player.kinh_mach_doan_tuyet_until = None
         player.lingering_debuff = None
         self.db.update_player(player)
 
-        await ctx.send(f"💊 **SỬ DỤNG CỬU CHUYỂN TÁI TẠO ĐAN THÀNH CÔNG!** Tu sĩ **{player.dao_hieu}** đã hồi phục 100% HP, Mana và tẩy sạch toàn bộ Chấn Thương, Tẩu Hỏa Nhập Ma & Độc Tố!")
+        await ctx.send(f"💊 **SỬ DỤNG CỬU CHUYỂN TÁI TẠO ĐAN THÀNH CÔNG!** Tu sĩ **{player.dao_hieu}** đã hồi phục 100% HP, Mana, 100% Căn Cơ và tẩy sạch toàn bộ Chấn Thương, Tẩu Hỏa Nhập Ma & Độc Tố!")
 
     @commands.command(
         name="tutien-inventory",
