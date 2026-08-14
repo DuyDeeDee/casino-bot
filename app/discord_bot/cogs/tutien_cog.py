@@ -99,10 +99,13 @@ class TuTienCog(commands.Cog, name="TuTien"):
         await self.bot.wait_until_ready()
         try:
             now = time.time()
+            finished_notifications = []
+            tam_ma_notifications = []
+
             with self.db.get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute("SELECT user_id, meditate_start_time, meditate_duration_hours, is_vip_pass, realm_index FROM tutien_players WHERE is_meditating = 1")
-                meditating_players = cursor.fetchall()
+                meditating_players = [dict(r) for r in cursor.fetchall()]
 
                 for row in meditating_players:
                     u_id = row["user_id"]
@@ -122,15 +125,7 @@ class TuTienCog(commands.Cog, name="TuTien"):
                             "exp = exp + ?, linh_thach = linh_thach + ?, tam_canh = MIN(100.0, tam_canh + ?) WHERE user_id = ?",
                             (exp_gain, linh_thach_gain, tam_canh_gain, u_id)
                         )
-                        user = self.bot.get_user(u_id)
-                        if user:
-                            try:
-                                await user.send(
-                                    f"🎉 **VIÊN MÃN XUẤT QUAN!** Bạn đã hoàn tất **{duration_h} Giờ** bế quan nhập định!\n"
-                                    f"🎁 Phần thưởng AFK: `+{exp_gain:,}` Tu Vi | `+{linh_thach_gain:,}` Linh Thạch | `+{tam_canh_gain:.1f}%` Tâm Cảnh!"
-                                )
-                            except Exception:
-                                pass
+                        finished_notifications.append((u_id, duration_h, exp_gain, linh_thach_gain, tam_canh_gain))
                         continue
 
                     # 2. Tu sĩ đang bế quan được thưởng thêm +5 Tinh Lực mỗi 5 phút
@@ -146,13 +141,32 @@ class TuTienCog(commands.Cog, name="TuTien"):
                     last_notice = self.last_tam_ma_notice.get(u_id, 0)
                     # Giới hạn thông báo: Ít nhất 1 tiếng mới gửi 1 lần (nếu dính tỉ lệ 15%)
                     if start_t and (now - start_t > 900) and (now - last_notice > 3600) and random.random() < 0.15:
-                        user = self.bot.get_user(u_id)
-                        if user:
-                            try:
-                                await user.send("⚠️ **Tâm trí bạn xuất hiện ảo giác Tâm Ma khi bế quan!** Hãy gõ `!tuluyen` để định tâm duy trì nhập định!")
-                                self.last_tam_ma_notice[u_id] = now
-                            except Exception:
-                                pass
+                        tam_ma_notifications.append(u_id)
+                        self.last_tam_ma_notice[u_id] = now
+
+            # DB context closed and committed here BEFORE async network calls
+
+            # Send finished meditation DMs
+            for u_id, duration_h, exp_gain, linh_thach_gain, tam_canh_gain in finished_notifications:
+                try:
+                    user = self.bot.get_user(u_id) or await self.bot.fetch_user(u_id)
+                    if user:
+                        await user.send(
+                            f"🎉 **VIÊN MÃN XUẤT QUAN!** Bạn đã hoàn tất **{duration_h} Giờ** bế quan nhập định!\n"
+                            f"🎁 Phần thưởng AFK: `+{exp_gain:,}` Tu Vi | `+{linh_thach_gain:,}` Linh Thạch | `+{tam_canh_gain:.1f}%` Tâm Cảnh!"
+                        )
+                except Exception:
+                    pass
+
+            # Send Tâm Ma notifications
+            for u_id in tam_ma_notifications:
+                try:
+                    user = self.bot.get_user(u_id) or await self.bot.fetch_user(u_id)
+                    if user:
+                        await user.send("⚠️ **Tâm trí bạn xuất hiện ảo giác Tâm Ma khi bế quan!** Hãy gõ `!tuluyen` để định tâm duy trì nhập định!")
+                except Exception:
+                    pass
+
         except Exception as e:
             print(f"[TuTien] Retention guard error: {e}")
 
