@@ -880,12 +880,13 @@ class TuTienCog(commands.Cog, name="TuTien"):
 
         if failed or random.uniform(0, 100) > chance:
             has_insurance = self.db.consume_item(player.user_id, "Thần Phù Bảo Mệnh", 1)
+            reason_msg = "🩸 **Máu (HP) bị tụt về 0 do sát thương Lôi Kiếp quá lớn!**" if failed else f"☯️ **Sống sót qua lôi kiếp nhưng Khí Vận / Tâm Cảnh chưa đủ!** (Tỷ lệ thành công: `{chance:.1f}%`)"
             if has_insurance:
                 player.hp = max(1, player.hp)  # Giữ sống nếu có bảo hiểm
                 self.db.update_player(player)
                 fail_embed = discord.Embed(
                     title="🛡️ KÍCH HOẠT THẦN PHÙ BẢO MỆNH!",
-                    description=f"Độ kiếp thất bại nhưng **Thần Phù Bảo Mệnh** đã kích hoạt! Tu sĩ **{player.dao_hieu}** giữ nguyên 100% Tu Vi và Căn Cơ!",
+                    description=f"Độ kiếp thất bại nhưng **Thần Phù Bảo Mệnh** đã kích hoạt! Tu sĩ **{player.dao_hieu}** giữ nguyên 100% Tu Vi và Căn Cơ!\n> {reason_msg}",
                     color=discord.Color.gold()
                 )
             else:
@@ -902,8 +903,8 @@ class TuTienCog(commands.Cog, name="TuTien"):
                 self.db.update_player(player)
                 fail_embed = discord.Embed(
                     title="💀 ĐỘ KIẾP THẤT BẠI!",
-                    description=f"Thiên lôi oanh kích tan tành! Tu sĩ **{player.dao_hieu}** bị rớt tu vi và tổn hại `-20%` Căn Cơ!{loss_extra_msg}\n"
-                                f"🔥 *Gói Phục Hồi Thánh Đan đang giảm giá trong Shop !tiencac!*",
+                    description=f"Thiên lôi oanh kích tan tành! Tu sĩ **{player.dao_hieu}** bị rớt tu vi và tổn hại `-20%` Căn Cơ!\n> {reason_msg}{loss_extra_msg}\n"
+                                f"🔥 *Gói Phục Hồi Thánh Đan / Thần Phù Bảo Mệnh đang giảm giá trong Shop !tiencac!*",
                     color=discord.Color.red()
                 )
             await msg_obj.edit(embed=fail_embed, view=None)
