@@ -314,6 +314,15 @@ class TutienGuidePaginatorView(discord.ui.View):
                 inline=False
             )
             embed.add_field(
+                name="⚡ Thuộc Tính Ngũ Hành & Dị Linh Căn",
+                value="> ☯️ **Ngũ Hành**: 🔥 Hỏa, 💧 Thủy, 🌳 Mộc, ⚡ Kim, 🪨 Thổ (Khắc chế lẫn nhau +50% DMG).\n"
+                      "> ⚡ **Lôi Hệ**: Bộc phát Sát Thương & Tê liệt Yêu Thú.\n"
+                      "> ❄️ **Băng Hệ**: Đóng băng mục tiêu & Giảm 15% Sát thương nhận vào.\n"
+                      "> 🌪️ **Phong Hệ**: Thân pháp linh hoạt, +20% Né Tránh.\n"
+                      "> 🌌 **Không Gian**: Diễn biến vi diệu, +40% Sát thương Đột Phá.",
+                inline=False
+            )
+            embed.add_field(
                 name="📊 Ý Nghĩa Chi Tiết 18 Thuộc Tính (!tutien-profile)",
                 value="> ⚔️ **Đạo Tâm**: Tăng bản lĩnh chịu đựng Tâm Ma & tăng lực chiến PVP.\n"
                       "> ✦ **Ngộ Tính**: Tăng lượng EXP nhận được khi `!tuluyen` & nhanh học công pháp.\n"
