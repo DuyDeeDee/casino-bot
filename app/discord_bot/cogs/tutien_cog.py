@@ -596,7 +596,7 @@ class TuTienCog(commands.Cog, name="TuTien"):
             pass
 
         gf = self.db.get_gongfa(target_user.id)
-        gongfa_name = gf.get("chu_tu") if gf else None
+        gongfa_name = getattr(gf, "chu_tu", None) if gf else None
         img_buf = render_tutien_profile_card(player, avatar_bytes, gongfa_name=gongfa_name)
         file = discord.File(fp=img_buf, filename=f"profile_{player.user_id}.png")
         await ctx.send(file=file)
