@@ -2039,6 +2039,60 @@ class TuTienCog(commands.Cog, name="TuTien"):
         await ctx.send(f"💊 **SỬ DỤNG CỬU CHUYỂN TÁI TẠO ĐAN THÀNH CÔNG!** Tu sĩ **{player.dao_hieu}** đã hồi phục 100% HP, Mana, 100% Căn Cơ và tẩy sạch toàn bộ Chấn Thương, Tẩu Hỏa Nhập Ma & Độc Tố!")
 
     @commands.command(
+        name="doi-cong-phap",
+        aliases=["doicongphap", "trang-bi-cong-phap", "cong-phap"],
+        brief="Trang bị / Thay đổi Công Pháp Chủ Tu từ Túi Đồ.",
+        usage="doi-cong-phap [tên_công_pháp]"
+    )
+    async def doicongphap_cmd(self, ctx: commands.Context, *, gongfa_name: str = None):
+        """Trang bị / Thay đổi Công Pháp Chủ Tu từ Túi Đồ (!doi-cong-phap)."""
+        player = self.db.get_player(ctx.author.id)
+        if not player:
+            await ctx.send("❌ Vui lòng gõ `!nhapmon` trước!")
+            return
+
+        gongfa = self.db.get_gongfa(ctx.author.id)
+
+        if not gongfa_name:
+            inv = self.db.get_inventory(ctx.author.id)
+            available = [item["item_name"] for item in inv if "Công Pháp" in item.get("item_type", "") or "《" in item.get("item_name", "")]
+            available_str = "\n".join([f"> 📜 `{name}`" for name in available]) if available else "> *(Chưa sở hữu bí kíp Công Pháp nào khác, quay Gacha `!quay-gacha` hoặc đổi tại `!linhbui-shop`)*"
+            
+            embed = discord.Embed(
+                title="📜 CÔNG PHÁP CHỦ TU HIỆN TẠI",
+                description=f"Công Pháp đang tu luyện: **{gongfa.chu_tu}**\n\n"
+                            f"**📚 Sách Công Pháp Trong Túi Đồ:**\n{available_str}\n\n"
+                            f"> 💡 Gõ `!doi-cong-phap <Tên Công Pháp>` để chuyển đổi (Ví dụ: `!doi-cong-phap Thôn Thiên Ma Công` hoặc `!doi-cong-phap Phàm Nhân Quyết`).",
+                color=discord.Color.gold()
+            )
+            await ctx.send(embed=embed)
+            return
+
+        # Find matching gongfa in database or inventory
+        target_name = None
+        for key in GONGFA_DATABASE.keys():
+            if gongfa_name.lower() in key.lower() or key.lower().strip("《》") in gongfa_name.lower():
+                target_name = key
+                break
+
+        if not target_name:
+            await ctx.send(f"❌ Không tìm thấy Công Pháp **[{gongfa_name}]** trong ma trận bí kíp! Hãy gõ `!doi-cong-phap` để xem danh sách.")
+            return
+
+        if target_name != "《Phàm Nhân Quyết》":
+            inv = self.db.get_inventory(ctx.author.id)
+            has_book = any(target_name in item["item_name"] for item in inv)
+            if not has_book:
+                await ctx.send(f"❌ Bạn không sở hữu bí kíp **[{target_name}]** trong Túi Đồ! Hãy quay Gacha `!quay-gacha` hoặc đổi tại `!linhbui-shop`!")
+                return
+
+        gongfa.chu_tu = target_name
+        self.db.update_gongfa(gongfa)
+
+        info = GONGFA_DATABASE.get(target_name, {})
+        await ctx.send(f"✨ **ĐỔI CÔNG PHÁP THÀNH CÔNG!** Tu sĩ **{player.dao_hieu}** đã chuyển sang chủ tu **[{target_name}]**!\n> 📜 *{info.get('desc', '')}*")
+
+    @commands.command(
         name="tutien-inventory",
         aliases=["ttinv", "tutieninv", "tuitu", "tuidotutien", "inv-tutien"],
         brief="Xem Túi Trữ Vật Tu Tiên (Linh Thạch, Tiên Ngọc, Vé Gacha, Bùa bảo hiểm, Đan dược).",
