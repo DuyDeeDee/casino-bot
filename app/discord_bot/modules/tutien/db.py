@@ -60,6 +60,7 @@ class TuTienDB:
                     co_duyen INTEGER DEFAULT 10,
                     thien_dao_diem INTEGER DEFAULT 0,
                     tinh_luc INTEGER DEFAULT 100,
+                    max_tinh_luc INTEGER DEFAULT 100,
                     body_realm_index INTEGER DEFAULT 0,
                     dong_phu_level INTEGER DEFAULT 1,
                     sect_id INTEGER,
@@ -90,6 +91,7 @@ class TuTienDB:
             # Ensure column migration for existing tables
             existing_cols = [row[1] for row in conn.execute("PRAGMA table_info(tutien_players)").fetchall()]
             new_cols = {
+                "max_tinh_luc": "INTEGER DEFAULT 100",
                 "tien_ngoc": "INTEGER DEFAULT 0",
                 "linh_duyen_phu": "INTEGER DEFAULT 0",
                 "tien_duyen_phu": "INTEGER DEFAULT 0",
@@ -204,6 +206,16 @@ class TuTienDB:
                 )
             """)
 
+            # Table: World Boss Persistence
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS tutien_world_boss (
+                    boss_id INTEGER PRIMARY KEY,
+                    name TEXT DEFAULT '👹 Ma Vương Cổ Đại — Vô Cực Thi Cụ',
+                    hp INTEGER DEFAULT 10000000,
+                    max_hp INTEGER DEFAULT 10000000
+                )
+            """)
+
             # Table: PVE Progress & Tower
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS tutien_pve_progress (
@@ -301,6 +313,7 @@ class TuTienDB:
                     can_co = ?, tam_canh = ?, dao_tam = ?, ngo_tinh = ?,
                     hp = ?, max_hp = ?, mana = ?, max_mana = ?, than_thuc = ?,
                     nghiep_luc = ?, co_duyen = ?, thien_dao_diem = ?, tinh_luc = ?,
+                    max_tinh_luc = ?,
                     body_realm_index = ?, dong_phu_level = ?, sect_id = ?, sect_role = ?,
                     linh_thach = ?, tien_ngoc = ?, linh_duyen_phu = ?, tien_duyen_phu = ?,
                     tay_tuy_phu = ?, linh_bui = ?, soft_pity_count = ?, wishlist_item = ?,
@@ -319,6 +332,7 @@ class TuTienDB:
                 player.can_co, player.tam_canh, player.dao_tam, player.ngo_tinh,
                 player.hp, player.max_hp, player.mana, player.max_mana, player.than_thuc,
                 player.nghiep_luc, player.co_duyen, player.thien_dao_diem, player.tinh_luc,
+                player.max_tinh_luc,
                 player.body_realm_index, player.dong_phu_level, player.sect_id, player.sect_role,
                 player.linh_thach, player.tien_ngoc, player.linh_duyen_phu, player.tien_duyen_phu,
                 player.tay_tuy_phu, player.linh_bui, player.soft_pity_count, player.wishlist_item,
@@ -500,6 +514,20 @@ class TuTienDB:
                 "ORDER BY pve.boss_dps_today DESC LIMIT ?", (limit,)
             )
             return cursor.fetchall()
+
+    def get_world_boss(self) -> Dict[str, Any]:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM tutien_world_boss WHERE boss_id = 1")
+            row = cursor.fetchone()
+            if not row:
+                conn.execute("INSERT INTO tutien_world_boss (boss_id, name, hp, max_hp) VALUES (1, '👹 Ma Vương Cổ Đại — Vô Cực Thi Cụ', 10000000, 10000000)")
+                return {"boss_id": 1, "name": "👹 Ma Vương Cổ Đại — Vô Cực Thi Cụ", "hp": 10000000, "max_hp": 10000000}
+            return dict(row)
+
+    def update_world_boss_hp(self, hp: int):
+        with self.get_connection() as conn:
+            conn.execute("UPDATE tutien_world_boss SET hp = ? WHERE boss_id = 1", (hp,))
 
     # --- PVP & BOUNTY METHODS («Tu Sĩ Tranh Phong / Sát Lục») ---
     def get_pvp_leaderboard(self, limit: int = 10) -> List[Dict[str, Any]]:

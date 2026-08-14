@@ -88,7 +88,7 @@ def clean_pillow_text(text: str) -> str:
     return text.strip()
 
 
-def render_tutien_profile_card(player: CultivatorProfile, avatar_bytes: Optional[bytes] = None) -> io.BytesIO:
+def render_tutien_profile_card(player: CultivatorProfile, avatar_bytes: Optional[bytes] = None, gongfa_name: Optional[str] = None) -> io.BytesIO:
     """
     Renders a 900x580 PNG Profile Card featuring 18 Attributes & Xianxia Aesthetic.
     If player is VIP or has Monthly Pass, renders a Gold Glowing Border & VIP Crown Badge.
@@ -218,7 +218,7 @@ def render_tutien_profile_card(player: CultivatorProfile, avatar_bytes: Optional
 
     # Footer Info (Gongfa, Dongphu)
     draw.line([(40, 520), (WIDTH - 40, 520)], fill=(50, 60, 80, 255), width=1)
-    raw_gongfa = player.active_dao_domain if player.active_dao_domain else "[Phàm Nhân Quyết]"
+    raw_gongfa = gongfa_name or player.active_dao_domain or "[Phàm Nhân Quyết]"
     clean_gongfa = clean_pillow_text(raw_gongfa)
     draw.text((40, 535), f"❖ Công Pháp Chủ Tu: {clean_gongfa}", font=font_small, fill=(220, 220, 180, 255))
     draw.text((WIDTH - 40, 535), f"◈ Động Phủ: Cấp {player.dong_phu_level} (Linh Khí +{player.dong_phu_level * 15}%)", font=font_small, fill=(180, 220, 180, 255), anchor="rm")

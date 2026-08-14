@@ -61,9 +61,11 @@ class TuTienCog(commands.Cog, name="TuTien"):
         self.ho_phap_registry = {}  # {target_user_id: guardian_user_id}
         self.last_tam_ma_notice = {}  # {user_id: last_notification_timestamp}
         self.last_cuop_time = {}  # {user_id: last_cuop_timestamp}
-        self.world_boss_max_hp = 10000000
-        self.world_boss_hp = 10000000
-        self.world_boss_name = "👹 Ma Vương Cổ Đại — Vô Cực Thi Cụ"
+        
+        wb = self.db.get_world_boss()
+        self.world_boss_max_hp = wb.get("max_hp", 10000000)
+        self.world_boss_hp = wb.get("hp", 10000000)
+        self.world_boss_name = wb.get("name", "👹 Ma Vương Cổ Đại — Vô Cực Thi Cụ")
         self.active_party_rooms = {}  # {channel_id: PartyLobbyView}
         self.bg_recovery_task.start()
         self.bg_retention_guard.start()
@@ -487,8 +489,6 @@ class TuTienCog(commands.Cog, name="TuTien"):
             return
 
         success, msg, updated_player = buy_tiencac_item(self.db, player, item_name)
-        if success:
-            self.db.update_player(updated_player)
         await ctx.send(msg)
 
     @commands.command(
@@ -581,7 +581,9 @@ class TuTienCog(commands.Cog, name="TuTien"):
         except Exception:
             pass
 
-        img_buf = render_tutien_profile_card(player, avatar_bytes)
+        gf = self.db.get_gongfa(target_user.id)
+        gongfa_name = gf.get("chu_tu") if gf else None
+        img_buf = render_tutien_profile_card(player, avatar_bytes, gongfa_name=gongfa_name)
         file = discord.File(fp=img_buf, filename=f"profile_{player.user_id}.png")
         await ctx.send(file=file)
 
@@ -622,11 +624,18 @@ class TuTienCog(commands.Cog, name="TuTien"):
 
         player.realm_index = 0
         player.exp = 0
-        player.can_co = 90.0
-        player.tam_canh = 80.0
+        player.body_realm_index = 0
+        player.can_co = 80.0
+        player.tam_canh = 70.0
+        player.max_hp = 1000
+        player.hp = 1000
+        player.max_mana = 500
+        player.mana = 500
+        player.than_thuc = 50
+        player.active_dao_domain = None
         self.db.update_player(player)
 
-        await ctx.send(f"💥 **PHẾ VỊ THÀNH CÔNG!** Tu sĩ **{player.dao_hieu}** đã tự phế tu vi, quay về Luyện Khí Tầng 1 để đúc lại Căn Cơ!")
+        await ctx.send(f"💥 **PHẾ VỊ THÀNH CÔNG!** Tu sĩ **{player.dao_hieu}** đã phế sạch Tu Vi & Thân Thể, quay về Luyện Khí Tầng 1 để đúc lại Căn Cơ!")
 
     # --- 📂 NHÓM LỆNH [/tu-luyen] ---
 
@@ -800,9 +809,6 @@ class TuTienCog(commands.Cog, name="TuTien"):
             await ctx.send("❌ **TÂM CẢNH KHÔNG ĐỦ!** Tỷ lệ đột phá thành công của bạn hiện là `0%`! Hãy thiền định tăng Tâm Cảnh!")
             return
 
-        total_waves = 3 + (player.realm_index // 3)
-        current_hp = player.hp
-
         is_blood_tribulation = (player.nghiep_luc > 100)
         total_waves = 3 + (player.realm_index // 3)
         current_hp = player.hp
@@ -855,9 +861,14 @@ class TuTienCog(commands.Cog, name="TuTien"):
                 break
             await asyncio.sleep(1.5)
 
+        # Sync HP sau kiếp lôi
+        player.hp = max(0, current_hp)
+
         if failed or random.uniform(0, 100) > chance:
             has_insurance = self.db.consume_item(player.user_id, "Thần Phù Bảo Mệnh", 1)
             if has_insurance:
+                player.hp = max(1, player.hp)  # Giữ sống nếu có bảo hiểm
+                self.db.update_player(player)
                 fail_embed = discord.Embed(
                     title="🛡️ KÍCH HOẠT THẦN PHÙ BẢO MỆNH!",
                     description=f"Độ kiếp thất bại nhưng **Thần Phù Bảo Mệnh** đã kích hoạt! Tu sĩ **{player.dao_hieu}** giữ nguyên 100% Tu Vi và Căn Cơ!",
@@ -866,6 +877,7 @@ class TuTienCog(commands.Cog, name="TuTien"):
             else:
                 player.exp = int(player.exp * 0.7)
                 player.can_co = max(0.0, player.can_co - 20.0)
+                player.hp = max(1, player.hp)  # Không để chết hẳn
                 
                 loss_extra_msg = ""
                 if is_blood_tribulation:
@@ -886,10 +898,22 @@ class TuTienCog(commands.Cog, name="TuTien"):
             player.realm_name = REALMS[player.realm_index]
             player.exp = 0
             player.can_co = min(100.0, player.can_co + 5.0)
+
+            # Tăng stats khi lên cảnh giới mới
+            hp_gain = 500 + (player.realm_index * 200)
+            mana_gain = 200 + (player.realm_index * 100)
+            player.max_hp += hp_gain
+            player.max_mana += mana_gain
+            player.hp = player.max_hp  # Hồi phục toàn bộ HP
+            player.mana = player.max_mana  # Hồi phục toàn bộ Mana
+            player.than_thuc += 5 + (player.realm_index // 3)  # Tăng Thần Thức
+
             self.db.update_player(player)
             win_embed = discord.Embed(
                 title="🎉 ĐỘ KIẾP THÀNH CÔNG!",
-                description=f"Chúc mừng Tu sĩ **[{player.dao_hieu}]** đã vượt qua Thiên Kiếp, chính thức tiến cấp lên **[{player.realm_name}]**!",
+                description=f"Chúc mừng Tu sĩ **[{player.dao_hieu}]** đã vượt qua Thiên Kiếp, chính thức tiến cấp lên **[{player.realm_name}]**!\n"
+                            f"💪 Nhận: `+{hp_gain:,}` Max HP | `+{mana_gain:,}` Max Mana | `+{5 + (player.realm_index // 3)}` Thần Thức\n"
+                            f"✨ HP & Mana đã được hồi phục hoàn toàn!",
                 color=discord.Color.green()
             )
             await msg_obj.edit(embed=win_embed, view=None)
@@ -920,6 +944,8 @@ class TuTienCog(commands.Cog, name="TuTien"):
         if player1.tinh_luc < 5:
             await ctx.send(f"❌ Không đủ Tinh Lực! Cần `5` Tinh Lực để tham gia Luận Đạo Đài (Hiện có: `{player1.tinh_luc}/100`).")
             return
+
+        is_auto_matched = (target is None)
 
         # Target opponent or find random in leaderboard
         if target:
@@ -965,6 +991,8 @@ class TuTienCog(commands.Cog, name="TuTien"):
         # Calculate ELO and Fame Points
         if is_p1_win:
             elo_gain, elo_loss = calculate_elo_change(player1.pvp_elo, player2.pvp_elo)
+            if is_auto_matched:
+                elo_loss = 0  # Protecting unprovoked auto-matched defender from losing ELO
             player1.pvp_elo += elo_gain
             player2.pvp_elo = max(100, player2.pvp_elo - elo_loss)
             player1.pvp_wins += 1
@@ -1644,8 +1672,6 @@ class TuTienCog(commands.Cog, name="TuTien"):
 
             await asyncio.sleep(1.0)
 
-            await asyncio.sleep(1.0)
-
     @commands.command(
         name="leo-thap",
         aliases=["leothap", "thap-thien-cuc", "thap"],
@@ -1679,8 +1705,20 @@ class TuTienCog(commands.Cog, name="TuTien"):
         )
         msg_obj = await ctx.send(embed=embed)
 
-        log, monster = process_turn_action(player, monster, "GONGFA")
-        if monster["current_hp"] <= 0:
+        # Auto-combat 5 lượt (thay vì chỉ 1 đòn)
+        tower_won = False
+        for t_turn in range(1, 6):
+            action = "GONGFA" if t_turn % 2 == 1 else "ATTACK"
+            log, monster = process_turn_action(player, monster, action)
+            if monster["current_hp"] <= 0:
+                tower_won = True
+                break
+            if player.hp <= 0:
+                break
+
+        self.db.update_player(player)
+
+        if tower_won:
             new_floor = floor + 1
             self.db.update_pve_progress(player.user_id, tower_floor=new_floor)
 
@@ -1751,10 +1789,20 @@ class TuTienCog(commands.Cog, name="TuTien"):
                 await ctx.send("❌ Không có phòng Bí Cảnh nào đang chờ trong kênh này! Gõ `!bi-canh tao-phong`.")
                 return
 
+            if ctx.author.id != lobby.host_id:
+                await ctx.send("❌ Chỉ Trưởng Đội (người mở phòng) mới có quyền khởi hành bí cảnh!")
+                return
+
             mem_count = len(lobby.members)
-            total_dps = mem_count * (3000 + player.realm_index * 2000)
-            exp_per_mem = 10000 + (player.realm_index * 5000)
-            lt_per_mem = 2000 + (player.realm_index * 1000)
+            total_realm_sum = 0
+            for uid in lobby.members.keys():
+                p = self.db.get_player(uid)
+                if p:
+                    total_realm_sum += p.realm_index
+            avg_realm = total_realm_sum / max(1, mem_count)
+            total_dps = int(mem_count * (3000 + avg_realm * 2000))
+            exp_per_mem = int(10000 + (avg_realm * 5000))
+            lt_per_mem = int(2000 + (avg_realm * 1000))
 
             for uid in lobby.members.keys():
                 p = self.db.get_player(uid)
@@ -1790,6 +1838,7 @@ class TuTienCog(commands.Cog, name="TuTien"):
         dmg = int(p_atk * random.uniform(2.5, 4.0))
 
         self.world_boss_hp = max(0, self.world_boss_hp - dmg)
+        self.db.update_world_boss_hp(self.world_boss_hp)
         self.db.update_world_boss_dps(player.user_id, dmg)
 
         embed = discord.Embed(
@@ -1822,6 +1871,7 @@ class TuTienCog(commands.Cog, name="TuTien"):
         )
         msg_obj = await ctx.send(embed=embed)
 
+        dungeon_failed = False
         for idx, room in enumerate(rooms, 1):
             await asyncio.sleep(1.5)
             r_embed = discord.Embed(
@@ -1866,12 +1916,28 @@ class TuTienCog(commands.Cog, name="TuTien"):
             self.db.update_player(player)
             await msg_obj.edit(embed=r_embed, view=None)
 
-        win_embed = discord.Embed(
-            title="🏆 VIÊN MÃN THÔNG QUAN THÁI CỔ CẤM ĐỊA!",
-            description=f"Chúc mừng Tu sĩ **{player.dao_hieu}** đã sinh tồn thành công qua 5 phòng Cấm Địa!",
-            color=discord.Color.green()
-        )
-        await ctx.send(embed=win_embed)
+            # Kiểm tra player chết giữa dungeon
+            if player.hp <= 0:
+                dungeon_failed = True
+                hardcore_res = process_hardcore_defeat(player, self.db, "Thái Cổ Cấm Địa")
+                death_embed = discord.Embed(
+                    title="💀 TỬ TRẬN TRONG CẤM ĐỊA!",
+                    description=f"Tu sĩ **{player.dao_hieu}** đã gục ngã tại Phòng [{idx}/5]!\n"
+                                f"> ⚠️ Kinh Mạch Đoạn Tuyệt (10 phút)! Nhờ đạo hữu `!cuu-thuong @user` hoặc mua đan dược tại `!tiencac`!",
+                    color=discord.Color.dark_red()
+                )
+                if hardcore_res["stolen_lt"] > 0:
+                    death_embed.add_field(name="💸 Tổn Thất", value=f"Bị rơi mất `{hardcore_res['stolen_lt']:,}` Linh Thạch!", inline=False)
+                await ctx.send(embed=death_embed)
+                break
+
+        if not dungeon_failed:
+            win_embed = discord.Embed(
+                title="🏆 VIÊN MÃN THÔNG QUAN THÁI CỔ CẤM ĐỊA!",
+                description=f"Chúc mừng Tu sĩ **{player.dao_hieu}** đã sinh tồn thành công qua 5 phòng Cấm Địa!",
+                color=discord.Color.green()
+            )
+            await ctx.send(embed=win_embed)
 
     @commands.command(
         name="cuu-thuong",
@@ -1913,7 +1979,7 @@ class TuTienCog(commands.Cog, name="TuTien"):
     @commands.command(
         name="giai-doc",
         aliases=["giaidoc", "cleanse"],
-        brief="Tẩy trừ hiệu ứng Độc Tố Thấu Cốt / Ô Nhiễm Tâm Ma.",
+        brief="Tẩy trừ hiệu ứng Độc Tố Thấu Cốt / Ô Nhiễm Tâm Ma (Tiêu tốn 500 Linh Thạch).",
         usage="giai-doc"
     )
     async def giaidoc_cmd(self, ctx: commands.Context):
@@ -1927,9 +1993,45 @@ class TuTienCog(commands.Cog, name="TuTien"):
             await ctx.send("✅ Cơ thể bạn thanh sạch, không bị dính độc tố hay tâm ma ô nhiễm!")
             return
 
+        if player.linh_thach < 500:
+            await ctx.send("❌ Chi phí giải độc tẩy tâm ma là `500` Linh Thạch! Bạn không đủ Linh Thạch.")
+            return
+
+        player.linh_thach -= 500
         player.lingering_debuff = None
         self.db.update_player(player)
-        await ctx.send(f"✨ **TẨY TRỪ THÀNH CÔNG!** Tu sĩ **{player.dao_hieu}** đã giải trừ toàn bộ Độc Tố & Ô Nhiễm Tâm Ma!")
+        await ctx.send(f"✨ **TẨY TRỪ THÀNH CÔNG!** Tu sĩ **{player.dao_hieu}** đã tốn `500` Linh Thạch giải trừ toàn bộ Độc Tố & Ô Nhiễm Tâm Ma!")
+
+    @commands.command(
+        name="dung-dan",
+        aliases=["dungdan", "use-pill", "su-dung-dan"],
+        brief="Sử dụng Cửu Chuyển Tái Tạo Đan để hồi 100% HP/Mana và xóa sạch chấn thương, độc tố.",
+        usage="dung-dan"
+    )
+    async def dungdan_cmd(self, ctx: commands.Context):
+        """Sử dụng Cửu Chuyển Tái Tạo Đan."""
+        player = self.db.get_player(ctx.author.id)
+        if not player:
+            await ctx.send("❌ Vui lòng gõ `!nhapmon` trước!")
+            return
+
+        has_dan = player.cuu_chuyen_dan > 0 or self.db.consume_item(player.user_id, "Cửu Chuyển Tái Tạo Đan", 1)
+        if not has_dan:
+            await ctx.send("❌ Bạn không sở hữu **Cửu Chuyển Tái Tạo Đan**! Mua tại `!tiencac` với 150 Tiên Ngọc.")
+            return
+
+        if player.cuu_chuyen_dan > 0:
+            player.cuu_chuyen_dan -= 1
+
+        player.hp = player.max_hp
+        player.mana = player.max_mana
+        player.chan_thuong_until = None
+        player.tau_hoa_nhap_ma_until = None
+        player.kinh_mach_doan_tuyet_until = None
+        player.lingering_debuff = None
+        self.db.update_player(player)
+
+        await ctx.send(f"💊 **SỬ DỤNG CỬU CHUYỂN TÁI TẠO ĐAN THÀNH CÔNG!** Tu sĩ **{player.dao_hieu}** đã hồi phục 100% HP, Mana và tẩy sạch toàn bộ Chấn Thương, Tẩu Hỏa Nhập Ma & Độc Tố!")
 
     @commands.command(
         name="tutien-inventory",

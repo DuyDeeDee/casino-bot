@@ -40,21 +40,21 @@ def roll_single_item(player: CultivatorProfile, banner_type: str) -> Tuple[Dict[
             item_name = f"🔴 [ĐẾ CẤP] {player.wishlist_item}"
         else:
             ur_options = [x for x in GACHA_ITEMS_PREMIUM if "Đế Cấp" in x[2]]
-            item_name = random.choice(ur_options)[0]
+            item_name = random.choice(ur_options if ur_options else GACHA_ITEMS_PREMIUM)[0]
     else:
         # Roll SR (4.3%) vs Địa/Phàm
         if rand_val < (ur_rate + 0.043):
             grade = "🟡 Thiên Cấp (SR)"
             sr_options = [x for x in GACHA_ITEMS_PREMIUM if "Thiên Cấp" in x[2]]
-            item_name = random.choice(sr_options)[0]
+            item_name = random.choice(sr_options if sr_options else GACHA_ITEMS_PREMIUM)[0]
         elif rand_val < (ur_rate + 0.293):
             grade = "🟣 Địa Cấp"
             dia_options = [x for x in GACHA_ITEMS_PREMIUM if "Địa Cấp" in x[2]]
-            item_name = random.choice(dia_options)[0]
+            item_name = random.choice(dia_options if dia_options else GACHA_ITEMS_PREMIUM)[0]
         else:
             grade = "🟢 Phàm/Huyền Cấp"
-            other_options = [x for x in GACHA_ITEMS_PREMIUM if x[2] not in ["Đế Cấp (UR)", "Thiên Cấp (SR)", "Địa Cấp"]]
-            item_name = random.choice(other_options)[0]
+            other_options = [x for x in GACHA_ITEMS_PREMIUM if not any(k in x[2] for k in ["Đế Cấp", "Thiên Cấp", "Địa Cấp"])]
+            item_name = random.choice(other_options if other_options else GACHA_ITEMS_PREMIUM)[0]
 
     res = {
         "item_name": item_name,
