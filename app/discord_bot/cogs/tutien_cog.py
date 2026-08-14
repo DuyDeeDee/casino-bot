@@ -549,12 +549,12 @@ class TuTienCog(commands.Cog, name="TuTien"):
     @commands.command(
         name="tutien-huongdan",
         aliases=["huongdan", "tutienhelp", "tuhds"],
-        brief="Xem Cẩm Nang Hướng Dẫn Tu Tiên Toàn Tập (Nút bấm sang trang 1/4 - 4/4).",
-        usage="tutien-huongdan"
+        brief="Xem Cẩm Nang Hướng Dẫn Tu Tiên Toàn Tập (Nút bấm sang trang 1/7 - 7/7).",
+        usage="tutien-huongdan [trang]"
     )
     async def huongdan_cmd(self, ctx: commands.Context, page: int = 1):
         """Cẩm Nang Hướng Dẫn Tu Tiên Chi Tiết Toàn Tập với nút bấm sang trang (!huongdan)."""
-        page = max(1, min(4, page))
+        page = max(1, min(7, page))
         view = TutienGuidePaginatorView(current_page=page, timeout=180.0)
         embed = view.build_embed()
         await ctx.send(embed=embed, view=view)
