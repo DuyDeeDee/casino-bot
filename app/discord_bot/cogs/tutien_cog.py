@@ -95,12 +95,11 @@ class TuTienCog(commands.Cog, name="TuTien"):
 
     @tasks.loop(minutes=5)
     async def bg_retention_guard(self):
-        """Check AFK meditation completion & retention guard (ảo giác Tâm Ma) cho tu sĩ bế quan."""
+        """Check AFK meditation completion cho tu sĩ bế quan."""
         await self.bot.wait_until_ready()
         try:
             now = time.time()
             finished_notifications = []
-            tam_ma_notifications = []
 
             with self.db.get_connection() as conn:
                 cursor = conn.cursor()
@@ -137,13 +136,6 @@ class TuTienCog(commands.Cog, name="TuTien"):
 
                     if is_vip_pass:
                         conn.execute("UPDATE tutien_players SET dao_tam = dao_tam + 5 WHERE user_id = ?", (u_id,))
-                        continue
-
-                    last_notice = self.last_tam_ma_notice.get(u_id, 0)
-                    # Giới hạn thông báo: Ít nhất 1 tiếng mới gửi 1 lần (nếu dính tỉ lệ 15%)
-                    if start_t and (now - start_t > 900) and (now - last_notice > 3600) and random.random() < 0.15:
-                        tam_ma_notifications.append(u_id)
-                        self.last_tam_ma_notice[u_id] = now
 
             # DB context closed and committed here BEFORE async network calls
 
@@ -156,15 +148,6 @@ class TuTienCog(commands.Cog, name="TuTien"):
                             f"🎉 **VIÊN MÃN XUẤT QUAN!** Bạn đã hoàn tất **{duration_h} Giờ** bế quan nhập định!\n"
                             f"🎁 Phần thưởng AFK: `+{exp_gain:,}` Tu Vi | `+{linh_thach_gain:,}` Linh Thạch | `+{tam_canh_gain:.1f}%` Tâm Cảnh!"
                         )
-                except Exception:
-                    pass
-
-            # Send Tâm Ma notifications
-            for u_id in tam_ma_notifications:
-                try:
-                    user = self.bot.get_user(u_id) or await self.bot.fetch_user(u_id)
-                    if user:
-                        await user.send("⚠️ **Tâm trí bạn xuất hiện ảo giác Tâm Ma khi bế quan!** Hãy gõ `!tuluyen` để định tâm duy trì nhập định!")
                 except Exception:
                     pass
 
