@@ -31,6 +31,7 @@ class TribulationWaveView(discord.ui.View):
         if interaction.user.id != self.player.user_id:
             await interaction.response.send_message("❌ Bạn không phải là người đang độ kiếp!", ephemeral=True)
             return
+        await interaction.response.defer()
         self.chosen_action = "SHIELD"
         self.interaction = interaction
         self.stop()
@@ -40,6 +41,7 @@ class TribulationWaveView(discord.ui.View):
         if interaction.user.id != self.player.user_id:
             await interaction.response.send_message("❌ Bạn không phải là người đang độ kiếp!", ephemeral=True)
             return
+        await interaction.response.defer()
         self.chosen_action = "PILL"
         self.interaction = interaction
         self.stop()
@@ -49,6 +51,7 @@ class TribulationWaveView(discord.ui.View):
         if interaction.user.id != self.player.user_id:
             await interaction.response.send_message("❌ Bạn không phải là người đang độ kiếp!", ephemeral=True)
             return
+        await interaction.response.defer()
         self.chosen_action = "FACE"
         self.interaction = interaction
         self.stop()
@@ -80,6 +83,7 @@ class HeartDemonQuizView(discord.ui.View):
             if interaction.user.id != self.player.user_id:
                 await interaction.response.send_message("❌ Tâm Ma này không thuộc về bạn!", ephemeral=True)
                 return
+            await interaction.response.defer()
             self.selected_idx = idx
             self.interaction = interaction
             self.stop()
