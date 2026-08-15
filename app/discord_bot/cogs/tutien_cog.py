@@ -55,122 +55,6 @@ BANNER_IMAGES = {
 }
 
 
-class TuTienCog(commands.Cog, name="TuTien"):
-
-    """
-    Hệ thống Tu Tiên: «ĐẠI ĐẠO TRANH PHONG» (Prefix Commands + Gacha Engine + PVE System)
-    """
-
-    def __init__(self, bot: commands.Bot):
-        self.bot = bot
-        self.db = TuTienDB()
-        self.ho_phap_registry = {}  # {target_user_id: guardian_user_id}
-        self.last_tam_ma_notice = {}  # {user_id: last_notification_timestamp}
-        self.last_cuop_time = {}  # {user_id: last_cuop_timestamp}
-        
-        wb = self.db.get_world_boss()
-        self.world_boss_max_hp = wb.get("max_hp", 10000000)
-        self.world_boss_hp = wb.get("hp", 10000000)
-        self.world_boss_name = wb.get("name", "👹 Ma Vương Cổ Đại — Vô Cực Thi Cụ")
-        self.active_party_rooms = {}  # {channel_id: PartyLobbyView}
-        self.bg_recovery_task.start()
-        self.bg_retention_guard.start()
-
-    def cog_unload(self):
-        self.bg_recovery_task.cancel()
-        self.bg_retention_guard.cancel()
-
-    async def cog_command_error(self, ctx: commands.Context, error: Exception):
-        orig = getattr(error, 'original', error)
-        if isinstance(error, commands.MissingRequiredArgument):
-            await ctx.send(f"❌ Thiếu tham số bắt buộc! Cú pháp đúng: `{ctx.prefix}{ctx.command.name} {ctx.command.signature}`")
-        elif isinstance(error, commands.BadArgument):
-            await ctx.send(f"❌ Tham số nhập vào không hợp lệ! Cú pháp: `{ctx.prefix}{ctx.command.name} {ctx.command.signature}`")
-        elif isinstance(error, commands.NotOwner):
-            await ctx.send("❌ Lệnh này chỉ dành cho Chủ Bot!")
-        elif isinstance(error, commands.CommandOnCooldown):
-            await ctx.send(f"⏳ Vui lòng chờ `{error.retry_after:.1f}s` trước khi tiếp tục dùng lệnh này.")
-        elif isinstance(orig, commands.CheckFailure):
-            return
-        else:
-            print(f"[TuTien] Command error in {ctx.command}: {orig}")
-            await ctx.send(f"⚠️ **Lỗi thực thi lệnh:** `{orig}`")
-
-    # --- BACKGROUND TASKS ---
-    @tasks.loop(minutes=5)
-    async def bg_recovery_task(self):
-        """Phục hồi Tinh Lực (+5/5p = +60/h) & Linh Khí Kênh (+416/5p = +5000/h) định kỳ."""
-        await self.bot.wait_until_ready()
-        try:
-            self.db.recover_all_players_tinh_luc(5)
-            self.db.recover_all_channels_linh_khi(416)
-        except Exception as e:
-            print(f"[TuTien] Error in recovery task: {e}")
-
-    @tasks.loop(minutes=5)
-    async def bg_retention_guard(self):
-        """Check AFK meditation completion cho tu sĩ bế quan."""
-        await self.bot.wait_until_ready()
-        try:
-            now = time.time()
-            finished_notifications = []
-
-            with self.db.get_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute("SELECT user_id, meditate_start_time, meditate_duration_hours, is_vip_pass, realm_index FROM tutien_players WHERE is_meditating = 1")
-                meditating_players = [dict(r) for r in cursor.fetchall()]
-
-                for row in meditating_players:
-                    u_id = row["user_id"]
-                    start_t = row["meditate_start_time"]
-                    duration_h = row["meditate_duration_hours"] or 1
-                    is_vip_pass = row["is_vip_pass"]
-                    realm_idx = row["realm_index"]
-
-                    # 1. Kiểm tra hoàn thành bế quan AFK khi đủ thời gian
-                    if start_t and (now - start_t >= duration_h * 3600):
-                        # AFK EXP scale cùng formula exponential với active cultivation
-                        # ~30 lần tu luyện/giờ, có bonus VIP 7 (+30%) sẽ apply sau
-                        base_afk_per_hour = int(200 * (1.4 ** realm_idx) * 30)
-                        exp_gain = int(base_afk_per_hour * duration_h)
-                        linh_thach_gain = int(800 * duration_h * (1 + realm_idx * 0.05))
-                        tam_canh_gain = min(100.0, duration_h * 2.0)
-                        can_co_gain = round(duration_h * 10.0, 1)
-
-                        conn.execute(
-                            "UPDATE tutien_players SET is_meditating = 0, meditate_start_time = NULL, meditate_duration_hours = 0, "
-                            "hp = max_hp, mana = max_mana, can_co = MIN(100.0, can_co + ?), exp = exp + ?, linh_thach = linh_thach + ?, tam_canh = MIN(100.0, tam_canh + ?) WHERE user_id = ?",
-                            (can_co_gain, exp_gain, linh_thach_gain, tam_canh_gain, u_id)
-                        )
-                        finished_notifications.append((u_id, duration_h, exp_gain, linh_thach_gain, tam_canh_gain))
-                        continue
-
-                    # 2. Tu sĩ đang bế quan được thưởng thêm +5 Tinh Lực mỗi 5 phút
-                    conn.execute(
-                        "UPDATE tutien_players SET tinh_luc = CASE WHEN (tinh_luc + 5) > max_tinh_luc THEN max_tinh_luc ELSE (tinh_luc + 5) END WHERE user_id = ?",
-                        (u_id,)
-                    )
-
-                    if is_vip_pass:
-                        conn.execute("UPDATE tutien_players SET dao_tam = dao_tam + 5 WHERE user_id = ?", (u_id,))
-
-            # DB context closed and committed here BEFORE async network calls
-
-            # Send finished meditation DMs
-            for u_id, duration_h, exp_gain, linh_thach_gain, tam_canh_gain in finished_notifications:
-                try:
-                    user = self.bot.get_user(u_id) or await self.bot.fetch_user(u_id)
-                    if user:
-                        await user.send(
-                            f"🎉 **VIÊN MÃN XUẤT QUAN!** Bạn đã hoàn tất **{duration_h} Giờ** bế quan nhập định!\n"
-                            f"🎁 Phần thưởng AFK: `+{exp_gain:,}` Tu Vi | `+{linh_thach_gain:,}` Linh Thạch | `+{tam_canh_gain:.1f}%` Tâm Cảnh!"
-                        )
-                except Exception:
-                    pass
-
-        except Exception as e:
-            print(f"[TuTien] Retention guard error: {e}")
-
 class GachaInteractiveView(discord.ui.View):
     """
     Interactive View for Gacha Banners:
@@ -334,6 +218,122 @@ class GachaInteractiveView(discord.ui.View):
             flex_msg = f"💥 **[THIÊN ĐẠO DIỆU BIẾN]**: Tu sĩ <@{self.user_id}> vừa gặp đại cơ duyên tại Tiên Các rút thành công **{', '.join(ur_items)}**! Toàn thể tu sĩ bái phục!"
             await interaction.followup.send(flex_msg)
 
+
+class TuTienCog(commands.Cog, name="TuTien"):
+
+    """
+    Hệ thống Tu Tiên: «ĐẠI ĐẠO TRANH PHONG» (Prefix Commands + Gacha Engine + PVE System)
+    """
+
+    def __init__(self, bot: commands.Bot):
+        self.bot = bot
+        self.db = TuTienDB()
+        self.ho_phap_registry = {}  # {target_user_id: guardian_user_id}
+        self.last_tam_ma_notice = {}  # {user_id: last_notification_timestamp}
+        self.last_cuop_time = {}  # {user_id: last_cuop_timestamp}
+        
+        wb = self.db.get_world_boss()
+        self.world_boss_max_hp = wb.get("max_hp", 10000000)
+        self.world_boss_hp = wb.get("hp", 10000000)
+        self.world_boss_name = wb.get("name", "👹 Ma Vương Cổ Đại — Vô Cực Thi Cụ")
+        self.active_party_rooms = {}  # {channel_id: PartyLobbyView}
+        self.bg_recovery_task.start()
+        self.bg_retention_guard.start()
+
+    def cog_unload(self):
+        self.bg_recovery_task.cancel()
+        self.bg_retention_guard.cancel()
+
+    async def cog_command_error(self, ctx: commands.Context, error: Exception):
+        orig = getattr(error, 'original', error)
+        if isinstance(error, commands.MissingRequiredArgument):
+            await ctx.send(f"❌ Thiếu tham số bắt buộc! Cú pháp đúng: `{ctx.prefix}{ctx.command.name} {ctx.command.signature}`")
+        elif isinstance(error, commands.BadArgument):
+            await ctx.send(f"❌ Tham số nhập vào không hợp lệ! Cú pháp: `{ctx.prefix}{ctx.command.name} {ctx.command.signature}`")
+        elif isinstance(error, commands.NotOwner):
+            await ctx.send("❌ Lệnh này chỉ dành cho Chủ Bot!")
+        elif isinstance(error, commands.CommandOnCooldown):
+            await ctx.send(f"⏳ Vui lòng chờ `{error.retry_after:.1f}s` trước khi tiếp tục dùng lệnh này.")
+        elif isinstance(orig, commands.CheckFailure):
+            return
+        else:
+            print(f"[TuTien] Command error in {ctx.command}: {orig}")
+            await ctx.send(f"⚠️ **Lỗi thực thi lệnh:** `{orig}`")
+
+    # --- BACKGROUND TASKS ---
+    @tasks.loop(minutes=5)
+    async def bg_recovery_task(self):
+        """Phục hồi Tinh Lực (+5/5p = +60/h) & Linh Khí Kênh (+416/5p = +5000/h) định kỳ."""
+        await self.bot.wait_until_ready()
+        try:
+            self.db.recover_all_players_tinh_luc(5)
+            self.db.recover_all_channels_linh_khi(416)
+        except Exception as e:
+            print(f"[TuTien] Error in recovery task: {e}")
+
+    @tasks.loop(minutes=5)
+    async def bg_retention_guard(self):
+        """Check AFK meditation completion cho tu sĩ bế quan."""
+        await self.bot.wait_until_ready()
+        try:
+            now = time.time()
+            finished_notifications = []
+
+            with self.db.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT user_id, meditate_start_time, meditate_duration_hours, is_vip_pass, realm_index FROM tutien_players WHERE is_meditating = 1")
+                meditating_players = [dict(r) for r in cursor.fetchall()]
+
+                for row in meditating_players:
+                    u_id = row["user_id"]
+                    start_t = row["meditate_start_time"]
+                    duration_h = row["meditate_duration_hours"] or 1
+                    is_vip_pass = row["is_vip_pass"]
+                    realm_idx = row["realm_index"]
+
+                    # 1. Kiểm tra hoàn thành bế quan AFK khi đủ thời gian
+                    if start_t and (now - start_t >= duration_h * 3600):
+                        # AFK EXP scale cùng formula exponential với active cultivation
+                        # ~30 lần tu luyện/giờ, có bonus VIP 7 (+30%) sẽ apply sau
+                        base_afk_per_hour = int(200 * (1.4 ** realm_idx) * 30)
+                        exp_gain = int(base_afk_per_hour * duration_h)
+                        linh_thach_gain = int(800 * duration_h * (1 + realm_idx * 0.05))
+                        tam_canh_gain = min(100.0, duration_h * 2.0)
+                        can_co_gain = round(duration_h * 10.0, 1)
+
+                        conn.execute(
+                            "UPDATE tutien_players SET is_meditating = 0, meditate_start_time = NULL, meditate_duration_hours = 0, "
+                            "hp = max_hp, mana = max_mana, can_co = MIN(100.0, can_co + ?), exp = exp + ?, linh_thach = linh_thach + ?, tam_canh = MIN(100.0, tam_canh + ?) WHERE user_id = ?",
+                            (can_co_gain, exp_gain, linh_thach_gain, tam_canh_gain, u_id)
+                        )
+                        finished_notifications.append((u_id, duration_h, exp_gain, linh_thach_gain, tam_canh_gain))
+                        continue
+
+                    # 2. Tu sĩ đang bế quan được thưởng thêm +5 Tinh Lực mỗi 5 phút
+                    conn.execute(
+                        "UPDATE tutien_players SET tinh_luc = CASE WHEN (tinh_luc + 5) > max_tinh_luc THEN max_tinh_luc ELSE (tinh_luc + 5) END WHERE user_id = ?",
+                        (u_id,)
+                    )
+
+                    if is_vip_pass:
+                        conn.execute("UPDATE tutien_players SET dao_tam = dao_tam + 5 WHERE user_id = ?", (u_id,))
+
+            # DB context closed and committed here BEFORE async network calls
+
+            # Send finished meditation DMs
+            for u_id, duration_h, exp_gain, linh_thach_gain, tam_canh_gain in finished_notifications:
+                try:
+                    user = self.bot.get_user(u_id) or await self.bot.fetch_user(u_id)
+                    if user:
+                        await user.send(
+                            f"🎉 **VIÊN MÃN XUẤT QUAN!** Bạn đã hoàn tất **{duration_h} Giờ** bế quan nhập định!\n"
+                            f"🎁 Phần thưởng AFK: `+{exp_gain:,}` Tu Vi | `+{linh_thach_gain:,}` Linh Thạch | `+{tam_canh_gain:.1f}%` Tâm Cảnh!"
+                        )
+                except Exception:
+                    pass
+
+        except Exception as e:
+            print(f"[TuTien] Retention guard error: {e}")
 
     # --- 🔮 GACHA 3 BANNERS COMMANDS ---
 
