@@ -161,20 +161,90 @@ class TuTienCog(commands.Cog, name="TuTien"):
     # --- 🔮 GACHA 3 BANNERS COMMANDS ---
 
     @commands.command(
+        name="banner",
+        aliases=["banners", "ds-banner", "gacha-info", "cac-banner"],
+        brief="Xem danh sách 3 Đại Banners Gacha («THIÊN ĐỊA DUYÊN CƠ») & số vé hiện có.",
+        usage="banner"
+    )
+    async def banner_cmd(self, ctx: commands.Context):
+        """Xem danh sách 3 Đại Banners Gacha & Hướng dẫn quay."""
+        player = self.db.get_player(ctx.author.id)
+        if not player:
+            await ctx.send("❌ Vui lòng gõ `!nhapmon` trước!")
+            return
+
+        embed = discord.Embed(
+            title="🔮 THIÊN ĐỊA DUYÊN CƠ — 3 ĐẠI BANNERS GACHA 🔮",
+            description=f"Tu sĩ: **[{player.dao_hieu}]** | Lượt Bảo Hiểm (Pity): `{player.soft_pity_count}/80`\n"
+                        f"🎯 **Định Hướng Đạo Vận (Wishlist):** `{player.wishlist_item or 'Chưa cài đặt (!wishlist)'}`\n\n"
+                        f"🎟️ **Vé & Tài Bảo Đang Sở Hữu:**\n"
+                        f"> 🎟️ **Linh Duyên Phù (Banner Thường):** `{player.linh_duyen_phu}` vé\n"
+                        f"> 🌟 **Tiên Duyên Phù (Banner VIP):** `{player.tien_duyen_phu}` vé\n"
+                        f"> ☯ **Tẩy Tủy Phù (Cải Mệnh):** `{player.tay_tuy_phu}` vé\n"
+                        f"> 💰 **Linh Thạch:** `{player.linh_thach:,}` | 💎 **Tiên Ngọc:** `{player.tien_ngoc:,}`",
+            color=discord.Color.purple()
+        )
+
+        # 1. Banner Thường (Tụ Bảo Các)
+        embed.add_field(
+            name="1️⃣ 🏮 TỤ BẢO CÁC (Banner Thường - F2P)",
+            value="> 🎟️ Chi phí: `1x Linh Duyên Phù` hoặc `10,000 Linh Thạch` / lượt\n"
+                  "> 🎁 Vật phẩm: Đan Dược, Thảo Dược, Pháp Bảo, Linh Thạch, Vé Quay\n"
+                  "> 🚀 **Cú pháp quay:** `!gacha tubao 1x` hoặc `!gacha tubao 10x`",
+            inline=False
+        )
+
+        # 2. Banner VIP (Cửu Thiên Tiên Các)
+        embed.add_field(
+            name="2️⃣ 🌟 CỬU THIÊN TIÊN CÁC (Banner VIP - Premium)",
+            value="> 🎟️ Chi phí: `1x Tiên Duyên Phù` hoặc `50 Tiên Ngọc` / lượt\n"
+                  "> 🎁 Vật phẩm: **Đế Cấp UR** (Thôn Thiên Ma Công, Trảm Tiên Kiếm, Cửu Vĩ Thiên Hồ), **Thiên Cấp SR** (Thái Huyền Đạo Kinh)\n"
+                  "> 🛡️ Cơ chế: **Soft Pity (60+)** / **Hard Pity (80)** chắc chắn ra Đế Cấp!\n"
+                  "> 🚀 **Cú pháp quay:** `!gacha tiencac 1x` hoặc `!gacha tiencac 10x`",
+            inline=False
+        )
+
+        # 3. Banner Cải Mệnh (Thái Cổ Cải Mệnh Đài)
+        embed.add_field(
+            name="3️⃣ ☯ THÁI CỔ CẢI MỆNH ĐÀI (Special Banner)",
+            value="> 🎟️ Chi phí: `1x Tẩy Tủy Phù` hoặc `100 Tiên Ngọc` / lượt\n"
+                  "> 🎁 Hiệu quả: Tẩy lại **Linh Căn Phẩm Cấp** (Thượng/Tiên/Thánh Phẩm) & **Dị Linh Căn Thượng Cổ** (⚡ Lôi, ❄️ Băng, 🌪️ Phong, 🌌 Không Gian)\n"
+                  "> 🚀 **Cú pháp quay:** `!gacha caimenh 1x` hoặc `!gacha caimenh 10x`",
+            inline=False
+        )
+
+        embed.set_footer(text="Gõ !wishlist [Tên UR] để chọn quà bảo hiểm khi nổ hũ Đế Cấp!")
+        await ctx.send(embed=embed)
+
+    @commands.command(
         name="quay-gacha",
         aliases=["gacha", "quaygacha"],
         brief="Quay Gacha 3 Đại Banners để nhận bảo vật & linh dược.",
-        usage="quay-gacha [tiencac|caimenh|bg] [1x|10x]"
+        usage="quay-gacha [tubao|tiencac|caimenh] [1x|10x]"
     )
-    async def quay_gacha_cmd(self, ctx: commands.Context, banner: str = "tiencac", rolls: str = "1x"):
+    async def quay_gacha_cmd(self, ctx: commands.Context, banner: str = "tubao", rolls: str = "1x"):
         """Quay Gacha Ba Đại Banners (Dùng open_chest.gif animation & Server Flex khi ra Đế Cấp)."""
         player = self.db.get_player(ctx.author.id)
         if not player:
             await ctx.send("❌ Vui lòng gõ `!nhapmon` trước!")
             return
 
-        roll_count = 10 if "10" in rolls else 1
-        banner_key = banner.lower()
+        # Normalize banner aliases
+        b_raw = banner.lower().strip()
+        if b_raw in ["tubao", "thuong", "f2p", "linh-duyen", "linhduyen", "1", "tu-bao"]:
+            banner_key = "tubao"
+        elif b_raw in ["tiencac", "vip", "premium", "tien-duyen", "tienduyen", "2", "tien-cac"]:
+            banner_key = "tiencac"
+        elif b_raw in ["caimenh", "taytuy", "tay-tuy", "reroll", "3", "cai-menh"]:
+            banner_key = "caimenh"
+        else:
+            banner_key = b_raw
+
+        roll_count = 10 if "10" in rolls or "10" in banner else 1
+        # If user typed "!gacha 10x" without specifying banner
+        if banner in ["10x", "10", "1x", "1"]:
+            roll_count = 10 if "10" in banner else 1
+            banner_key = "tubao"
 
         success, title_msg, roll_results, updated_player = process_gacha_rolls(self.db, player, banner_key, roll_count)
         if not success:
@@ -210,7 +280,7 @@ class TuTienCog(commands.Cog, name="TuTien"):
                 has_ur = True
                 ur_items.append(res["item_name"])
 
-        embed.set_footer(text="Gõ !wishlist để chọn vật phẩm bảo hiểm hoặc !linhbui-shop để đổi đồ!")
+        embed.set_footer(text="Gõ !banner để xem các banner khác hoặc !wishlist để định hướng đồ UR!")
         await ctx.send(embed=embed)
 
         # Server-wide Flex Notification if UR pulled
