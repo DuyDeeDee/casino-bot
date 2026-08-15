@@ -1,14 +1,11 @@
-"""
-Database Manager for Tu Tien System (`tutien.db`)
-Includes Monetization Schema, VIP Progression, Gacha Tickets & Safe Connection Context Management.
-"""
+from __future__ import annotations
 
 import os
 import json
 import time
 import sqlite3
 from contextlib import contextmanager
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Tuple
 from app.discord_bot.modules.tutien.constants import REALMS, REALM_REQUIRED_EXP, BODY_REALMS
 from app.discord_bot.modules.tutien.models import CultivatorProfile, GongfaEquipment, SectModel
 
