@@ -158,113 +158,119 @@ class TuTienCog(commands.Cog, name="TuTien"):
         except Exception as e:
             print(f"[TuTien] Retention guard error: {e}")
 
-    # --- 🔮 GACHA 3 BANNERS COMMANDS ---
+class GachaInteractiveView(discord.ui.View):
+    """
+    Interactive View for Gacha Banners:
+    - Switch between 3 banners: Tụ Bảo Các (F2P), Tiên Các (VIP), Cải Mệnh Đài (Special)
+    - Instant Roll buttons: [Quay 1x] and [Quay 10x]
+    - Dynamic update of remaining tickets, currency, pity count and items.
+    """
+    def __init__(self, bot_cog, user_id: int, db, initial_banner: str = "tubao", timeout: float = 180.0):
+        super().__init__(timeout=timeout)
+        self.bot_cog = bot_cog
+        self.user_id = user_id
+        self.db = db
+        self.current_banner = initial_banner
+        self._update_button_styles()
 
-    @commands.command(
-        name="banner",
-        aliases=["banners", "ds-banner", "gacha-info", "cac-banner"],
-        brief="Xem danh sách 3 Đại Banners Gacha («THIÊN ĐỊA DUYÊN CƠ») & số vé hiện có.",
-        usage="banner"
-    )
-    async def banner_cmd(self, ctx: commands.Context):
-        """Xem danh sách 3 Đại Banners Gacha & Hướng dẫn quay."""
-        player = self.db.get_player(ctx.author.id)
+    def _update_button_styles(self):
+        self.btn_tubao.style = discord.ButtonStyle.success if self.current_banner == "tubao" else discord.ButtonStyle.secondary
+        self.btn_tiencac.style = discord.ButtonStyle.success if self.current_banner == "tiencac" else discord.ButtonStyle.secondary
+        self.btn_caimenh.style = discord.ButtonStyle.success if self.current_banner == "caimenh" else discord.ButtonStyle.secondary
+
+    def get_embed(self) -> discord.Embed:
+        player = self.db.get_player(self.user_id)
         if not player:
-            await ctx.send("❌ Vui lòng gõ `!nhapmon` trước!")
-            return
+            return discord.Embed(title="❌ Lỗi", description="Không tìm thấy dữ liệu tu sĩ!", color=discord.Color.red())
 
-        embed = discord.Embed(
-            title="🔮 THIÊN ĐỊA DUYÊN CƠ — 3 ĐẠI BANNERS GACHA 🔮",
-            description=f"Tu sĩ: **[{player.dao_hieu}]** | Lượt Bảo Hiểm (Pity): `{player.soft_pity_count}/80`\n"
-                        f"🎯 **Định Hướng Đạo Vận (Wishlist):** `{player.wishlist_item or 'Chưa cài đặt (!wishlist)'}`\n\n"
-                        f"🎟️ **Vé & Tài Bảo Đang Sở Hữu:**\n"
-                        f"> 🎟️ **Linh Duyên Phù (Banner Thường):** `{player.linh_duyen_phu}` vé\n"
-                        f"> 🌟 **Tiên Duyên Phù (Banner VIP):** `{player.tien_duyen_phu}` vé\n"
-                        f"> ☯ **Tẩy Tủy Phù (Cải Mệnh):** `{player.tay_tuy_phu}` vé\n"
-                        f"> 💰 **Linh Thạch:** `{player.linh_thach:,}` | 💎 **Tiên Ngọc:** `{player.tien_ngoc:,}`",
-            color=discord.Color.purple()
-        )
+        pity_str = f"`{player.soft_pity_count}/80` (Soft Pity: 60+)"
+        wish_str = f"🎯 Wishlist: **[{player.wishlist_item or 'Chưa cài đặt (!wishlist)'}]**"
 
-        # 1. Banner Thường (Tụ Bảo Các)
-        embed.add_field(
-            name="1️⃣ 🏮 TỤ BẢO CÁC (Banner Thường - F2P)",
-            value="> 🎟️ Chi phí: `1x Linh Duyên Phù` hoặc `10,000 Linh Thạch` / lượt\n"
-                  "> 🎁 Vật phẩm: Đan Dược, Thảo Dược, Pháp Bảo, Linh Thạch, Vé Quay\n"
-                  "> 🚀 **Cú pháp quay:** `!gacha tubao 1x` hoặc `!gacha tubao 10x`",
-            inline=False
-        )
-
-        # 2. Banner VIP (Cửu Thiên Tiên Các)
-        embed.add_field(
-            name="2️⃣ 🌟 CỬU THIÊN TIÊN CÁC (Banner VIP - Premium)",
-            value="> 🎟️ Chi phí: `1x Tiên Duyên Phù` hoặc `50 Tiên Ngọc` / lượt\n"
-                  "> 🎁 Vật phẩm: **Đế Cấp UR** (Thôn Thiên Ma Công, Trảm Tiên Kiếm, Cửu Vĩ Thiên Hồ), **Thiên Cấp SR** (Thái Huyền Đạo Kinh)\n"
-                  "> 🛡️ Cơ chế: **Soft Pity (60+)** / **Hard Pity (80)** chắc chắn ra Đế Cấp!\n"
-                  "> 🚀 **Cú pháp quay:** `!gacha tiencac 1x` hoặc `!gacha tiencac 10x`",
-            inline=False
-        )
-
-        # 3. Banner Cải Mệnh (Thái Cổ Cải Mệnh Đài)
-        embed.add_field(
-            name="3️⃣ ☯ THÁI CỔ CẢI MỆNH ĐÀI (Special Banner)",
-            value="> 🎟️ Chi phí: `1x Tẩy Tủy Phù` hoặc `100 Tiên Ngọc` / lượt\n"
-                  "> 🎁 Hiệu quả: Tẩy lại **Linh Căn Phẩm Cấp** (Thượng/Tiên/Thánh Phẩm) & **Dị Linh Căn Thượng Cổ** (⚡ Lôi, ❄️ Băng, 🌪️ Phong, 🌌 Không Gian)\n"
-                  "> 🚀 **Cú pháp quay:** `!gacha caimenh 1x` hoặc `!gacha caimenh 10x`",
-            inline=False
-        )
-
-        embed.set_footer(text="Gõ !wishlist [Tên UR] để chọn quà bảo hiểm khi nổ hũ Đế Cấp!")
-        await ctx.send(embed=embed)
-
-    @commands.command(
-        name="quay-gacha",
-        aliases=["gacha", "quaygacha"],
-        brief="Quay Gacha 3 Đại Banners để nhận bảo vật & linh dược.",
-        usage="quay-gacha [tubao|tiencac|caimenh] [1x|10x]"
-    )
-    async def quay_gacha_cmd(self, ctx: commands.Context, banner: str = "tubao", rolls: str = "1x"):
-        """Quay Gacha Ba Đại Banners (Dùng open_chest.gif animation & Server Flex khi ra Đế Cấp)."""
-        player = self.db.get_player(ctx.author.id)
-        if not player:
-            await ctx.send("❌ Vui lòng gõ `!nhapmon` trước!")
-            return
-
-        # Normalize banner aliases
-        b_raw = banner.lower().strip()
-        if b_raw in ["tubao", "thuong", "f2p", "linh-duyen", "linhduyen", "1", "tu-bao"]:
-            banner_key = "tubao"
-        elif b_raw in ["tiencac", "vip", "premium", "tien-duyen", "tienduyen", "2", "tien-cac"]:
-            banner_key = "tiencac"
-        elif b_raw in ["caimenh", "taytuy", "tay-tuy", "reroll", "3", "cai-menh"]:
-            banner_key = "caimenh"
+        if self.current_banner == "tubao":
+            embed = discord.Embed(
+                title="🏮 TỤ BẢO CÁC — BANNER THƯỜNG (F2P)",
+                description=f"Tu sĩ: **[{player.dao_hieu}]** | Lượt Bảo Hiểm (Pity): {pity_str}\n\n"
+                            f"🎟️ **Vé Linh Duyên Phù:** `{player.linh_duyen_phu}` vé\n"
+                            f"💰 **Linh Thạch có sẵn:** `{player.linh_thach:,}`\n\n"
+                            f"📜 **Chi phí:** `1x Linh Duyên Phù` hoặc `10,000 Linh Thạch` / lượt\n"
+                            f"🎁 **Vật phẩm:** Đan Dược Cực Phẩm, Thảo Dược, Linh Bụi, Pháp Bảo Huyền Cấp, Vé Tiên Duyên...",
+                color=discord.Color.teal()
+            )
+        elif self.current_banner == "tiencac":
+            embed = discord.Embed(
+                title="🌟 CỬU THIÊN TIÊN CÁC — BANNER VIP (PREMIUM)",
+                description=f"Tu sĩ: **[{player.dao_hieu}]** | Lượt Bảo Hiểm (Pity): {pity_str}\n"
+                            f"> {wish_str}\n\n"
+                            f"🌟 **Vé Tiên Duyên Phù:** `{player.tien_duyen_phu}` vé\n"
+                            f"💎 **Tiên Ngọc có sẵn:** `{player.tien_ngoc:,}`\n\n"
+                            f"📜 **Chi phí:** `1x Tiên Duyên Phù` hoặc `50 Tiên Ngọc` / lượt\n"
+                            f"🎁 **Bảo vật:** **Đế Cấp (UR 0.7%)** (《Thôn Thiên Ma Công》, Trảm Tiên Kiếm, Cửu Vĩ Thiên Hồ), **Thiên Cấp (SR 4.3%)**\n"
+                            f"🛡️ **Cơ chế:** Soft Pity 60 lượt (+5%/lượt) | Hard Pity 80 lượt chắc chắn ra UR!",
+                color=discord.Color.gold()
+            )
         else:
-            banner_key = b_raw
+            embed = discord.Embed(
+                title="☯ THÁI CỔ CẢI MỆNH ĐÀI — BANNER CẢI MỆNH",
+                description=f"Tu sĩ: **[{player.dao_hieu}]**\n"
+                            f"⚡ **Linh Căn Hiện Tại:** `{player.linh_can_quality}` ({player.linh_can_element})\n\n"
+                            f"☯ **Vé Tẩy Tủy Phù:** `{player.tay_tuy_phu}` vé\n"
+                            f"💎 **Tiên Ngọc có sẵn:** `{player.tien_ngoc:,}`\n\n"
+                            f"📜 **Chi phí:** `1x Tẩy Tủy Phù` hoặc `100 Tiên Ngọc` / lượt\n"
+                            f"🎁 **Hiệu quả:** Tẩy lại Linh Căn Phẩm Cấp (Tiên/Thánh/Hỗn Độn) & Dị Linh Căn (⚡ Lôi, ❄️ Băng, 🌪️ Phong, 🌌 Không Gian)!",
+                color=discord.Color.purple()
+            )
 
-        roll_count = 10 if "10" in rolls or "10" in banner else 1
-        # If user typed "!gacha 10x" without specifying banner
-        if banner in ["10x", "10", "1x", "1"]:
-            roll_count = 10 if "10" in banner else 1
-            banner_key = "tubao"
+        embed.set_footer(text="Chọn nút Banner bên dưới để đổi xem banner khác | Bấm Quay 1x hoặc Quay 10x để mở rương!")
+        return embed
 
-        success, title_msg, roll_results, updated_player = process_gacha_rolls(self.db, player, banner_key, roll_count)
-        if not success:
-            await ctx.send(title_msg)
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message("❌ Bạn không thể thao tác trên bảng Gacha của người khác!", ephemeral=True)
+            return False
+        return True
+
+    @discord.ui.button(label="🏮 Tụ Bảo Các (Thường)", style=discord.ButtonStyle.success, row=0)
+    async def btn_tubao(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.current_banner = "tubao"
+        self._update_button_styles()
+        await interaction.response.edit_message(embed=self.get_embed(), view=self)
+
+    @discord.ui.button(label="🌟 Tiên Các (VIP)", style=discord.ButtonStyle.secondary, row=0)
+    async def btn_tiencac(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.current_banner = "tiencac"
+        self._update_button_styles()
+        await interaction.response.edit_message(embed=self.get_embed(), view=self)
+
+    @discord.ui.button(label="☯ Cải Mệnh Đài", style=discord.ButtonStyle.secondary, row=0)
+    async def btn_caimenh(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.current_banner = "caimenh"
+        self._update_button_styles()
+        await interaction.response.edit_message(embed=self.get_embed(), view=self)
+
+    @discord.ui.button(label="🎲 Quay 1 Lần (1x)", style=discord.ButtonStyle.primary, row=1)
+    async def btn_roll_1x(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._execute_roll(interaction, 1)
+
+    @discord.ui.button(label="⚡ Quay 10 Lần (10x)", style=discord.ButtonStyle.danger, row=1)
+    async def btn_roll_10x(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._execute_roll(interaction, 10)
+
+    async def _execute_roll(self, interaction: discord.Interaction, roll_count: int):
+        player = self.db.get_player(self.user_id)
+        if not player:
+            await interaction.response.send_message("❌ Vui lòng gõ `!nhapmon` trước!", ephemeral=True)
             return
 
-        # Send animation GIF if file exists
-        if os.path.exists(GIF_CHEST_PATH):
-            file_gif = discord.File(fp=GIF_CHEST_PATH, filename="open_chest.gif")
-            anim_msg = await ctx.send("🔮 **Đang vận chuyển Đạo Luật... Linh khí hội tụ!**", file=file_gif)
-            await asyncio.sleep(2.0)
-            try:
-                await anim_msg.delete()
-            except Exception:
-                pass
+        success, msg, roll_results, updated_player = process_gacha_rolls(self.db, player, self.current_banner, roll_count)
+        if not success:
+            await interaction.response.send_message(msg, ephemeral=True)
+            return
 
         # Format Result Embed
-        embed = discord.Embed(
-            title=f"✨ KẾT QUẢ QUAY GACHA — {GACHA_BANNERS.get(banner_key, {}).get('name', 'Banner')}",
-            description=f"Tu sĩ **[{updated_player.dao_hieu}]** vừa mở rương thần cực! (Lượt Pity: `{updated_player.soft_pity_count}/80`)",
+        banner_name = GACHA_BANNERS.get(self.current_banner, {}).get("name", "Banner")
+        res_embed = discord.Embed(
+            title=f"✨ KẾT QUẢ QUAY GACHA — {banner_name}",
+            description=f"Tu sĩ **[{updated_player.dao_hieu}]** vừa mở rương! (Pity: `{updated_player.soft_pity_count}/80`)",
             color=discord.Color.gold()
         )
 
@@ -275,18 +281,98 @@ class TuTienCog(commands.Cog, name="TuTien"):
             if res.get("duplicate_converted"):
                 val_str += f" *(Trùng! Chuyển thành +{res['duplicate_converted']} Linh Bụi)*"
 
-            embed.add_field(name=f"[{idx}] {res['item_name']}", value=val_str, inline=False)
+            res_embed.add_field(name=f"[{idx}] {res['item_name']}", value=val_str, inline=False)
             if res.get("is_ur"):
                 has_ur = True
                 ur_items.append(res["item_name"])
 
-        embed.set_footer(text="Gõ !banner để xem các banner khác hoặc !wishlist để định hướng đồ UR!")
-        await ctx.send(embed=embed)
+        # Update the main gacha status embed
+        await interaction.response.edit_message(embed=self.get_embed(), view=self)
+        await interaction.followup.send(embed=res_embed)
 
-        # Server-wide Flex Notification if UR pulled
         if has_ur:
-            flex_msg = f"💥 **[THIÊN ĐẠO DIỆU BIẾN]**: Tu sĩ **{ctx.author.mention}** vừa gặp đại cơ duyên tại Tiên Các rút thành công **{', '.join(ur_items)}**! Toàn thể tu sĩ bái phục!"
-            await ctx.send(flex_msg)
+            flex_msg = f"💥 **[THIÊN ĐẠO DIỆU BIẾN]**: Tu sĩ <@{self.user_id}> vừa gặp đại cơ duyên tại Tiên Các rút thành công **{', '.join(ur_items)}**! Toàn thể tu sĩ bái phục!"
+            await interaction.followup.send(flex_msg)
+
+
+    # --- 🔮 GACHA 3 BANNERS COMMANDS ---
+
+    @commands.command(
+        name="banner",
+        aliases=["banners", "ds-banner", "gacha-info", "cac-banner"],
+        brief="Xem danh sách 3 Đại Banners Gacha («THIÊN ĐỊA DUYÊN CƠ») tương tác nút bấm.",
+        usage="banner"
+    )
+    async def banner_cmd(self, ctx: commands.Context):
+        """Xem danh sách 3 Đại Banners Gacha & tương tác quay qua nút bấm."""
+        player = self.db.get_player(ctx.author.id)
+        if not player:
+            await ctx.send("❌ Vui lòng gõ `!nhapmon` trước!")
+            return
+
+        view = GachaInteractiveView(self, ctx.author.id, self.db, initial_banner="tubao")
+        await ctx.send(embed=view.get_embed(), view=view)
+
+    @commands.command(
+        name="quay-gacha",
+        aliases=["gacha", "quaygacha"],
+        brief="Mở giao diện quay Gacha tương tác nút bấm (Chọn Banner, Quay 1x/10x).",
+        usage="quay-gacha [tubao|tiencac|caimenh] [1x|10x]"
+    )
+    async def quay_gacha_cmd(self, ctx: commands.Context, banner: str = "tubao", rolls: str = None):
+        """Quay Gacha Ba Đại Banners (Giao diện tương tác nút bấm)."""
+        player = self.db.get_player(ctx.author.id)
+        if not player:
+            await ctx.send("❌ Vui lòng gõ `!nhapmon` trước!")
+            return
+
+        # Normalize banner name if provided
+        b_raw = banner.lower().strip() if banner else "tubao"
+        if b_raw in ["tubao", "thuong", "f2p", "linh-duyen", "linhduyen", "1", "tu-bao"]:
+            banner_key = "tubao"
+        elif b_raw in ["tiencac", "vip", "premium", "tien-duyen", "tienduyen", "2", "tien-cac"]:
+            banner_key = "tiencac"
+        elif b_raw in ["caimenh", "taytuy", "tay-tuy", "reroll", "3", "cai-menh"]:
+            banner_key = "caimenh"
+        elif b_raw in ["10x", "10", "1x", "1"]:
+            rolls = b_raw
+            banner_key = "tubao"
+        else:
+            banner_key = "tubao"
+
+        # If rolls is specified (e.g. !gacha tiencac 10x), execute directly
+        if rolls:
+            roll_count = 10 if "10" in rolls else 1
+            success, title_msg, roll_results, updated_player = process_gacha_rolls(self.db, player, banner_key, roll_count)
+            if not success:
+                await ctx.send(title_msg)
+                return
+
+            embed = discord.Embed(
+                title=f"✨ KẾT QUẢ QUAY GACHA — {GACHA_BANNERS.get(banner_key, {}).get('name', 'Banner')}",
+                description=f"Tu sĩ **[{updated_player.dao_hieu}]** vừa mở rương! (Pity: `{updated_player.soft_pity_count}/80`)",
+                color=discord.Color.gold()
+            )
+            has_ur = False
+            ur_items = []
+            for idx, res in enumerate(roll_results, 1):
+                val_str = f"> Phẩm cấp: `{res['grade']}`"
+                if res.get("duplicate_converted"):
+                    val_str += f" *(Trùng! +{res['duplicate_converted']} Linh Bụi)*"
+                embed.add_field(name=f"[{idx}] {res['item_name']}", value=val_str, inline=False)
+                if res.get("is_ur"):
+                    has_ur = True
+                    ur_items.append(res["item_name"])
+
+            await ctx.send(embed=embed)
+            if has_ur:
+                flex_msg = f"💥 **[THIÊN ĐẠO DIỆU BIẾN]**: Tu sĩ {ctx.author.mention} vừa gặp đại cơ duyên tại Tiên Các rút thành công **{', '.join(ur_items)}**! Toàn thể tu sĩ bái phục!"
+                await ctx.send(flex_msg)
+            return
+
+        # Default: Open Interactive View with selected banner
+        view = GachaInteractiveView(self, ctx.author.id, self.db, initial_banner=banner_key)
+        await ctx.send(embed=view.get_embed(), view=view)
 
     @commands.command(
         name="xienquach",
