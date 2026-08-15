@@ -27,6 +27,11 @@ def grant_topup_and_vip_exp(player: CultivatorProfile, tien_ngoc_amount: int) ->
 
     player.vip_level = new_vip
     vip_upgraded = new_vip > old_vip
+
+    # VIP 8: Tụ Linh Trận Động Phủ tự động tăng Cấp +10 khi lần đầu đạt VIP 8
+    if vip_upgraded and new_vip >= 8 and old_vip < 8:
+        player.dong_phu_level = min(50, player.dong_phu_level + 10)
+
     return player, vip_upgraded
 
 
@@ -96,40 +101,18 @@ def buy_tiencac_item(db: TuTienDB, player: CultivatorProfile, item_name: str) ->
 
 
 
-def roll_gacha_banner(db: TuTienDB, player: CultivatorProfile) -> Tuple[bool, str, CultivatorProfile]:
+
+
+def roll_gacha_banner(db, player: CultivatorProfile):
     """
-    Executes 1 Gacha roll (Costs 50 Tiên Ngọc) with 80-pull Pity Guarantee.
+    ⚠️  DEPRECATED — Hàm này đã bị vô hiệu hóa.
+    Toàn bộ logic gacha đã được thống nhất vào:
+        engines/gacha.py :: process_gacha_rolls()
+    Hàm đó sử dụng soft_pity_count (duy nhất), soft pity tại 60, hard pity tại 80,
+    và áp dụng đầy đủ Wishlist Định Hướng Đạo Vận.
     """
-    gacha_cost = 50
-    if player.tien_ngoc < gacha_cost:
-        return False, f"❌ Cần `{gacha_cost}` Tiên Ngọc để quay Tiên Các!", player
+    raise RuntimeError(
+        "[TuTien] roll_gacha_banner() đã bị deprecated! "
+        "Hãy dùng engines.gacha.process_gacha_rolls() thay thế."
+    )
 
-    player.tien_ngoc -= gacha_cost
-    player.gacha_pity_count += 1
-
-    # Check Pity (80 pulls guarantee Tiên Cấp)
-    if player.gacha_pity_count >= 80:
-        player.gacha_pity_count = 0
-        won_item = GACHA_ITEMS_PREMIUM[0]  # Pity Reward
-        db.add_item(player.user_id, won_item[0], won_item[1], 1)
-        db.update_player(player)
-        return True, f"🌟 **CHẮC CHẮN PITY BẢO HIỂM 80 LƯỢT!** Nhận ngay **[{won_item[0]}]**!", player
-
-    # Normal weighted roll
-    rand_val = random.uniform(0, 100)
-    cumulative = 0.0
-    won_item = GACHA_ITEMS_PREMIUM[-1]
-
-    for item_tuple in GACHA_ITEMS_PREMIUM:
-        cumulative += item_tuple[3]
-        if rand_val <= cumulative:
-            won_item = item_tuple
-            break
-
-    if won_item[2] == "Tiên Cấp":
-        player.gacha_pity_count = 0  # Reset Pity on legend hit
-
-    db.add_item(player.user_id, won_item[0], won_item[1], 1)
-    db.update_player(player)
-
-    return True, f"🎲 **TIÊN CÁC QUAY SỐ:** Bạn nhận được **[{won_item[0]}]**! (Lượt Pity: `{player.gacha_pity_count}/80`)", player

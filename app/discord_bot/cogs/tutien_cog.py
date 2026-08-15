@@ -115,8 +115,11 @@ class TuTienCog(commands.Cog, name="TuTien"):
 
                     # 1. Kiểm tra hoàn thành bế quan AFK khi đủ thời gian
                     if start_t and (now - start_t >= duration_h * 3600):
-                        exp_gain = int(5000 * duration_h * (1 + realm_idx * 0.1))
-                        linh_thach_gain = int(500 * duration_h)
+                        # AFK EXP scale cùng formula exponential với active cultivation
+                        # ~30 lần tu luyện/giờ, có bonus VIP 7 (+30%) sẽ apply sau
+                        base_afk_per_hour = int(200 * (1.4 ** realm_idx) * 30)
+                        exp_gain = int(base_afk_per_hour * duration_h)
+                        linh_thach_gain = int(800 * duration_h * (1 + realm_idx * 0.05))
                         tam_canh_gain = min(100.0, duration_h * 2.0)
                         can_co_gain = round(duration_h * 10.0, 1)
 
@@ -535,6 +538,18 @@ class TuTienCog(commands.Cog, name="TuTien"):
         quality, element, is_di = roll_spiritual_root()
         player = self.db.create_player(ctx.author.id, ctx.guild.id if ctx.guild else 0, dao_hieu, quality, element, is_di)
 
+        # --- Apply Element Buff ngay khi nhập môn ---
+        elem_bonuses = []
+        if "Ộc" in element or "Moc" in element:
+            # Mộc: +25% Max HP ngay từ đầu
+            bonus_hp = int(player.max_hp * 0.25)
+            player.max_hp += bonus_hp
+            player.hp += bonus_hp
+            self.db.update_player(player)
+            elem_bonuses.append(f"🌳 **Mộc Hệ:** +{bonus_hp} Max HP (tổng: {player.max_hp})")
+        elif "Thủy" in element:
+            elem_bonuses.append("💧 **Thủy Hệ:** +10% Tâm Cảnh khi Nhập Định AFK, +15% Hồi Phục HP/MP mỗi lượt PVE")
+
         embed = discord.Embed(
             title="☯ THIÊN ĐẠO CHỨNG GIÁM: NHẬP MÔN THÀNH CÔNG! ☯",
             description=f"Chúc mừng Đạo hữu **[{dao_hieu}]** đã bước chân vào con đường trường sinh!",
@@ -543,6 +558,8 @@ class TuTienCog(commands.Cog, name="TuTien"):
         embed.add_field(name="⚡ Phẩm Cấp Linh Căn", value=f"**{quality}**", inline=True)
         embed.add_field(name="🔮 Thuộc Tính", value=f"**{element}**", inline=True)
         embed.add_field(name="💰 Tài Bảo Nhập Môn", value="`500` Linh Thạch | `100` Tinh Lực", inline=False)
+        if elem_bonuses:
+            embed.add_field(name="✨ Hiệu Ứng Linh Căn Kích Hoạt", value="\n".join(elem_bonuses), inline=False)
         embed.set_footer(text="Gõ !tutien-profile để xem hồ sơ PNG hoặc gõ !huongdan để xem cẩm nang tân thủ!")
         await ctx.send(embed=embed)
 
@@ -669,12 +686,20 @@ class TuTienCog(commands.Cog, name="TuTien"):
         self.db.consume_channel_linh_khi(channel_id, 50)
         self.db.update_player(updated_player)
 
+        # --- Quest Tracking: Chuyên Tâm Tu Đạo ---
+        completed_q = self.db.increment_quest_progress(ctx.author.id, "tu_luyen")
+        if completed_q:
+            await ctx.send(
+                f"🏆 **ĐẠO VỤ HOÀN THÀNH!** `{completed_q['quest_name']}` — Gõ `!dao-vu` để nhận thưởng!"
+            )
+
         msg = f"🧘 **[{player.dao_hieu}]** tiến hành bế quan vận công...\n> {res['message']}\n"
         msg += f"📊 **Tu Vi:** `{updated_player.exp:,}` / `{res['required_exp']:,}` | 🔥 **Tinh Lực còn:** `{updated_player.tinh_luc}/100`"
         if res["can_breakthrough"]:
             msg += "\n⚡ **TU VI ĐÃ MÃN!** Hãy gõ `!dotpha` để xung kích bình cảnh!"
 
         await ctx.send(msg)
+
 
     @commands.command(
         name="nhap-dinh",
@@ -726,9 +751,16 @@ class TuTienCog(commands.Cog, name="TuTien"):
         elapsed_hours = (now - start_t) / 3600.0
         actual_hours = max(0.05, min(elapsed_hours, float(player.meditate_duration_hours or 1)))
 
-        exp_gain = int(5000 * actual_hours * (1 + player.realm_index * 0.1))
-        linh_thach_gain = int(500 * actual_hours)
+        # AFK EXP scale cùng formula exponential với active cultivation
+        # VIP 7 nhận thêm +30% tốc độ AFK (thêm 30% EXP)
+        base_afk_per_hour = int(200 * (1.4 ** player.realm_index) * 30)
+        vip7_bonus = 1.30 if player.vip_level >= 7 else 1.0
+        exp_gain = int(base_afk_per_hour * actual_hours * vip7_bonus)
+        linh_thach_gain = int(800 * actual_hours * (1 + player.realm_index * 0.05))
         tam_canh_gain = round(actual_hours * 2.0, 1)
+        # Thủy element: +10% Tâm Cảnh hiệu quả khi AFK (bonus thêm 10%)
+        if "Thủy" in player.linh_can_element:
+            tam_canh_gain = round(tam_canh_gain * 1.10, 1)
         can_co_gain = round(actual_hours * 10.0, 1)
 
         req_exp = REALM_REQUIRED_EXP.get(player.realm_index, 1000000000)
@@ -758,6 +790,73 @@ class TuTienCog(commands.Cog, name="TuTien"):
         await ctx.send(embed=embed)
 
     @commands.command(
+        name="nhapdinh-nhanh",
+        aliases=["nhapdinhnhanh", "beequan-nhanh", "vip-afk"],
+        brief="[VIP 5] Nhận ngay phần thưởng tương đương 4 Giờ Bế Quan AFK tức thì.",
+        usage="nhapdinh-nhanh"
+    )
+    async def nhapdinh_nhanh_cmd(self, ctx: commands.Context):
+        """[VIP 5+] Nhập Định Nhanh — Nhận tức thì phần thưởng tương đương 4 Giờ Bế Quan."""
+        player = self.db.get_player(ctx.author.id)
+        if not player:
+            await ctx.send("❌ Vui lòng gõ `!nhapmon` trước!")
+            return
+
+        if player.vip_level < 5:
+            await ctx.send(
+                f"🔒 **[VIP 5 YÊU CẦU]** Lệnh `!nhapdinh-nhanh` chỉ dành cho tu sĩ **VIP 5 (Tôn Giả)** trở lên!\n"
+                f"> 👑 VIP hiện tại của bạn: **VIP {player.vip_level}** | Nạp thêm Tiên Ngọc để thăng VIP!"
+            )
+            return
+
+        if player.is_meditating:
+            await ctx.send("🧘 **BẠN ĐANG TRONG TRẠNG THÁI BẾ QUAN!** Gõ `!xuat-quan` trước!")
+            return
+
+        # Cooldown 24h cho nhapdinh-nhanh (dùng last_daily_fortune tạm thời như proxy)
+        now = time.time()
+        cooldown_key = f"nhapdinh_nhanh_{ctx.author.id}"
+        last_used = getattr(self, '_nhapdinh_nhanh_cooldowns', {}).get(ctx.author.id, 0)
+        if now - last_used < 86400:
+            remain_h = int((86400 - (now - last_used)) / 3600)
+            await ctx.send(f"⏳ **ĐÃ DÙNG HÔM NAY!** Lệnh `!nhapdinh-nhanh` hồi trong `{remain_h}` giờ nữa.")
+            return
+
+        # Trao phần thưởng tương đương 4h AFK
+        afk_hours = 4.0
+        base_afk_per_hour = int(200 * (1.4 ** player.realm_index) * 30)
+        exp_gain = int(base_afk_per_hour * afk_hours * 1.30)  # VIP 5+ tự động có VIP 7 bonus spirit
+        linh_thach_gain = int(800 * afk_hours * (1 + player.realm_index * 0.05))
+        tam_canh_gain = round(afk_hours * 2.0, 1)
+        can_co_gain = round(afk_hours * 10.0, 1)
+
+        req_exp = REALM_REQUIRED_EXP.get(player.realm_index, 1000000000)
+        player.exp = min(req_exp, player.exp + exp_gain)
+        player.linh_thach += linh_thach_gain
+        player.tam_canh = min(100.0, player.tam_canh + tam_canh_gain)
+        player.can_co = min(100.0, player.can_co + can_co_gain)
+        self.db.update_player(player)
+
+        # Lưu cooldown vào memory (đủ cho session)
+        if not hasattr(self, '_nhapdinh_nhanh_cooldowns'):
+            self._nhapdinh_nhanh_cooldowns = {}
+        self._nhapdinh_nhanh_cooldowns[ctx.author.id] = now
+
+        embed = discord.Embed(
+            title="⚡ [VIP 5] NHẬP ĐỊNH NHANH — TỨC THÌ THU CÔNG!",
+            description=f"Tu sĩ **{player.dao_hieu}** kích hoạt bí thuật **Thời Không Định Tâm** của Tôn Giả!\n"
+                        f"Nhận tức thì phần thưởng tương đương **4 Giờ Bế Quan AFK**!",
+            color=discord.Color.gold()
+        )
+        embed.add_field(
+            name="🎁 Phần Thưởng",
+            value=f"> ✨ Tu Vi: `+{exp_gain:,}`\n> 💰 Linh Thạch: `+{linh_thach_gain:,}`\n> 🧘 Tâm Cảnh: `+{tam_canh_gain}%`\n> ◈ Căn Cơ: `+{can_co_gain}%`",
+            inline=False
+        )
+        embed.set_footer(text="Lệnh này hồi lại sau 24 Giờ. VIP 5 đặc quyền!")
+        await ctx.send(embed=embed)
+
+    @commands.command(
         name="luyen-the",
         aliases=["luyenthe"],
         brief="Rèn luyện Thân Thể tiêu hao Linh Thạch để đột phá Tôi Thể.",
@@ -775,6 +874,7 @@ class TuTienCog(commands.Cog, name="TuTien"):
         if success:
             self.db.update_player(updated_player)
         await ctx.send(msg)
+
 
     # --- 📂 NHÓM LỆNH [/dot-pha] ---
 
@@ -1031,7 +1131,20 @@ class TuTienCog(commands.Cog, name="TuTien"):
         self.db.update_player(player1)
         self.db.update_player(player2)
 
-        # Format Combat Log Embed with Visual HP Bars
+        # --- Quest Tracking: Thiên Kiêu Tranh Phong (PVP Wins) ---
+        winner_id = player1.user_id if is_p1_win else player2.user_id
+        completed_pvp_q = self.db.increment_quest_progress(winner_id, "pvp_wins")
+        if completed_pvp_q:
+            try:
+                winner_user = self.bot.get_user(winner_id)
+                if winner_user:
+                    await ctx.send(
+                        f"🏆 **ĐẠO VỤ HOÀN THÀNH!** Tu sĩ **{w_player.dao_hieu}** hoàn tất `{completed_pvp_q['quest_name']}`! Gõ `!dao-vu` để nhận thưởng!"
+                    )
+            except Exception:
+                pass
+
+
         p1_bar = render_progress_bar(match_res["final_hp1"], player1.max_hp)
         p2_bar = render_progress_bar(match_res["final_hp2"], player2.max_hp)
 
@@ -1572,6 +1685,11 @@ class TuTienCog(commands.Cog, name="TuTien"):
             embed.add_field(name="💰 Linh Thạch Thu Được", value=f"`+{res['total_linh_thach']:,}` Linh Thạch", inline=True)
             embed.add_field(name="🎟️ Vé Quay Gacha Drop", value=f"`+{res['tickets_dropped']}` Linh Duyên Phù", inline=True)
             embed.add_field(name="🌿 Thảo Dược Luyện Đan", value=f"`+{res['herbs_dropped']}` Thảo Dược Thô", inline=True)
+            # --- Quest Tracking: Diệt Yêu Trừ Ma ---
+            completed_pve_q = self.db.increment_quest_progress(player.user_id, "pve_kills", 10)
+            if completed_pve_q:
+                embed.add_field(name="🏆 Đạo Vụ Hoàn Thành", value=f"> `{completed_pve_q['quest_name']}`! Gõ `!dao-vu` nhận quà!", inline=False)
+
             embed.set_footer(text="Tinh Lực còn lại: " + f"{player.tinh_luc}/100")
             await ctx.send(embed=embed)
             return
@@ -1649,13 +1767,11 @@ class TuTienCog(commands.Cog, name="TuTien"):
                 player.linh_duyen_phu += ticket_drop
                 self.db.update_player(player)
 
-                win_embed = discord.Embed(
-                    title="🎉 TRẢM YÊU THÀNH CÔNG!",
-                    description=f"Tu sĩ **{player.dao_hieu}** đã kết liễu **{monster['name']}**!\n"
-                                f"🎁 Phần thưởng: `+{exp_gain:,}` EXP | `+{lt_gain:,}` Linh Thạch"
-                                + (f" | `+1` Linh Duyên Phù 🎟️" if ticket_drop else ""),
-                    color=discord.Color.green()
-                )
+                # --- Quest Tracking: Diệt Yêu Trừ Ma ---
+                completed_pve_q = self.db.increment_quest_progress(player.user_id, "pve_kills", 1)
+                if completed_pve_q:
+                    win_embed.add_field(name="🏆 Đạo Vụ Hoàn Thành", value=f"> `{completed_pve_q['quest_name']}`! Gõ `!dao-vu` để nhận thưởng!", inline=False)
+
                 await ctx.send(embed=win_embed)
                 return
 
@@ -1734,11 +1850,11 @@ class TuTienCog(commands.Cog, name="TuTien"):
                 self.db.update_player(player)
                 bonus_str = "\n🎉 **MỐC TẦNG ĐẶC BIỆT!** Nhận ngay `+1` Tiên Duyên Phù 🎟️ + `50` Tiên Ngọc 🌟!"
 
-            win_embed = discord.Embed(
-                title=f"🎉 VƯỢT THÁP THÀNH CÔNG TẦNG {floor}!",
-                description=f"Chúc mừng tu sĩ **{player.dao_hieu}** đã vượt qua Tầng {floor}, mở khóa **Tầng {new_floor}**!{bonus_str}",
-                color=discord.Color.gold()
-            )
+            # --- Quest Tracking: Diệt Yêu Trừ Ma (Vượt Tháp) ---
+            completed_tower_q = self.db.increment_quest_progress(player.user_id, "pve_kills", 1)
+            if completed_tower_q:
+                win_embed.add_field(name="🏆 Đạo Vụ Hoàn Thành", value=f"> `{completed_tower_q['quest_name']}`! Gõ `!dao-vu` để nhận thưởng!", inline=False)
+
             await ctx.send(embed=win_embed)
         else:
             await ctx.send(f"❌ Khiêu chiến Tầng {floor} thất bại! {monster['name']} quá mạnh mẽ.")
@@ -1907,7 +2023,7 @@ class TuTienCog(commands.Cog, name="TuTien"):
                     r_embed.add_field(name="🐍 Rương Mimic Giả", value=f"Rương giả cắn chí mạng `-{m_dmg:,}` HP!", inline=False)
 
             elif room["type"] == "MERCHANT":
-                merchant_view = DungeonMerchantView(ctx.author.id)
+                merchant_view = DungeonMerchantView(ctx.author.id, db=self.db)
                 await msg_obj.edit(embed=r_embed, view=merchant_view)
                 await merchant_view.wait()
 
@@ -2168,3 +2284,316 @@ class TuTienCog(commands.Cog, name="TuTien"):
         view = TutienTopLeaderboardView(self.db, current_tab=init_tab, timeout=120.0)
         embed = view.build_embed()
         await ctx.send(embed=embed, view=view)
+
+    @commands.command(
+        name="khai-dao",
+        aliases=["khaidao", "ngo-dao", "ngodao", "dao-domain"],
+        brief="Khai ngộ hoặc hợp nhất Đạo Vực để thức tỉnh sức mạnh ẩn.",
+        usage="khai-dao [đạo_1] [đạo_2]"
+    )
+    async def khai_dao_cmd(self, ctx: commands.Context, dao_1: str = None, dao_2: str = None):
+        """
+        Khai ngộ Đạo Vực cá nhân hoặc hợp nhất 2 Đạo thành Đạo Phức Hợp.
+        - Dùng `!khai-dao` để xem các Đạo Vực có thể mở khóa & fusion matrix.
+        - Dùng `!khai-dao <Đạo A> <Đạo B>` để hợp nhất 2 Đạo thành Đạo Phức Hợp.
+        - Hợp nhất đơn: `!khai-dao <Đạo>` để khai ngộ và gán Đạo Vực cơ bản.
+        """
+        from app.discord_bot.modules.tutien.constants import DAO_FUSION_MATRIX
+        from app.discord_bot.modules.tutien.engines.body_refining import fuse_dao_domains
+
+        player = self.db.get_player(ctx.author.id)
+        if not player:
+            await ctx.send("❌ Vui lòng gõ `!nhapmon` trước!")
+            return
+
+        # Hiển thị thông tin Đạo Vực nếu không có args
+        if not dao_1:
+            embed = discord.Embed(
+                title="☯ HỆ THỐNG ĐẠO VỰC — KHAI NGỘ THẦN THÔNG",
+                description=f"**Đạo Vực Hiện Tại:** `{player.active_dao_domain or 'Chưa khai ngộ'}`\n\n"
+                            f"Khai ngộ Đạo Vực đơn hoặc hợp nhất 2 Đạo để tạo **Đạo Phức Hợp** siêu việt!\n"
+                            f"Cú pháp: `!khai-dao <Đạo>` hoặc `!khai-dao <Đạo A> <Đạo B>`",
+                color=discord.Color.dark_purple()
+            )
+            embed.add_field(
+                name="📋 Đạo Cơ Bản (Tự Khai Ngộ)",
+                value="> `Kiếm Đạo` | `Hỏa Đạo` | `Tử Vong Đạo` | `Không Gian`\n> `Lôi Đạo` | `Sinh Mệnh Đạo` | `Thần Thức` | `Phong Đạo`",
+                inline=False
+            )
+            embed.add_field(
+                name="✨ Đạo Phức Hợp (Hợp Nhất 2 Đạo)",
+                value="".join([
+                    f"> `{k[0]}` + `{k[1]}` → **{v['name']}**\n> *{v['effect']}*\n\n"
+                    for k, v in DAO_FUSION_MATRIX.items()
+                ]),
+                inline=False
+            )
+            embed.add_field(
+                name="⚠️ Yêu Cầu",
+                value="> Khai ngộ cơ bản: Cảnh giới **Trúc Cơ** trở lên (Realm ≥ 9)\n"
+                      "> Hợp nhất Đạo Phức Hợp: Cảnh giới **Kim Đan** trở lên (Realm ≥ 13) + `200` Danh Vọng",
+                inline=False
+            )
+            await ctx.send(embed=embed)
+            return
+
+        # Yêu cầu tối thiểu cảnh giới Trúc Cơ (realm_index >= 9)
+        if player.realm_index < 9:
+            await ctx.send(
+                f"❌ **CẢNH GIỚI KHÔNG ĐỦ!** Cần đạt **Trúc Cơ Sơ Kỳ** (Realm 9) mới có thể khai ngộ Đạo Vực!\n"
+                f"> Cảnh giới hiện tại: `{player.realm_name}` (Realm {player.realm_index})"
+            )
+            return
+
+        # Fusion 2 Đạo thành Đạo Phức Hợp
+        if dao_2:
+            if player.realm_index < 13:
+                await ctx.send(
+                    f"❌ **CẢNH GIỚI KHÔNG ĐỦ!** Hợp nhất Đạo Vực cần đạt **Kim Đan Sơ Kỳ** (Realm 13)!\n"
+                    f"> Cảnh giới hiện tại: `{player.realm_name}`"
+                )
+                return
+
+            fusion_cost_dv = 200
+            if player.danh_vong < fusion_cost_dv:
+                await ctx.send(
+                    f"❌ **THIẾU DANH VỌNG!** Hợp nhất Đạo Vực cần `{fusion_cost_dv}` Danh Vọng!\n"
+                    f"> Danh Vọng hiện có: `{player.danh_vong}`"
+                )
+                return
+
+            fused = fuse_dao_domains(dao_1, dao_2)
+            if not fused:
+                await ctx.send(
+                    f"❌ **HỢP NHẤT THẤT BẠI!** Không tìm thấy Đạo Phức Hợp từ `{dao_1}` + `{dao_2}`!\n"
+                    f"> Gõ `!khai-dao` để xem Fusion Matrix hợp lệ."
+                )
+                return
+
+            player.danh_vong -= fusion_cost_dv
+            player.active_dao_domain = fused["name"]
+            self.db.update_player(player)
+
+            embed = discord.Embed(
+                title=f"✨ ĐẠO VỰC HỢP NHẤT — {fused['name']}",
+                description=f"Tu sĩ **{player.dao_hieu}** đã khai ngộ thành công Đạo Phức Hợp tối thượng!\n"
+                            f"`{dao_1}` + `{dao_2}` ⟶ **{fused['name']}**",
+                color=discord.Color.gold()
+            )
+            embed.add_field(name="⚡ Hiệu Ứng Đạo Vực", value=f"> {fused['effect']}", inline=False)
+            embed.add_field(name="💎 Chi Phí", value=f"> `-{fusion_cost_dv}` Danh Vọng", inline=True)
+            embed.add_field(name="☯ Đạo Vực Kích Hoạt", value=f"> **{player.active_dao_domain}**", inline=True)
+            await ctx.send(embed=embed)
+
+        else:
+            # Khai ngộ Đạo đơn (cơ bản)
+            basic_domains = [
+                "Kiếm Đạo", "Hỏa Đạo", "Tử Vong Đạo", "Không Gian",
+                "Lôi Đạo", "Sinh Mệnh Đạo", "Thần Thức", "Phong Đạo"
+            ]
+            # Kiểm tra match (không phân biệt hoa thường)
+            matched_domain = next((d for d in basic_domains if dao_1.lower() in d.lower() or d.lower() in dao_1.lower()), None)
+            if not matched_domain:
+                await ctx.send(
+                    f"❌ **ĐẠO VỰC KHÔNG HỢP LỆ!** `{dao_1}` không phải Đạo Vực cơ bản.\n"
+                    f"> Gõ `!khai-dao` để xem danh sách Đạo hợp lệ."
+                )
+                return
+
+            old_domain = player.active_dao_domain
+            player.active_dao_domain = matched_domain
+            self.db.update_player(player)
+
+            embed = discord.Embed(
+                title=f"☯ KHAI NGỘ ĐẠO VỰC — {matched_domain}",
+                description=f"Tu sĩ **{player.dao_hieu}** đã khai ngộ **{matched_domain}**!\n"
+                            f"Đạo Vực sẽ ảnh hưởng trực tiếp đến chiến đấu PVP và Đột Phá!",
+                color=discord.Color.purple()
+            )
+            if old_domain:
+                embed.add_field(name="🔄 Thay Thế", value=f"> `{old_domain}` → **{matched_domain}**", inline=False)
+            embed.add_field(
+                name="💡 Nâng Cấp",
+                value=f"> Dùng `!khai-dao {matched_domain} <Đạo khác>` để hợp nhất thành Đạo Phức Hợp khi đạt **Kim Đan**!",
+                inline=False
+            )
+            await ctx.send(embed=embed)
+
+    # --- 📂 NHÓM LỆNH [/dao-vu] (DAILY QUESTS) ---
+
+    @commands.command(
+        name="dao-vu",
+        aliases=["nhiem-vu", "nhiemvu", "daovu", "quest", "dailyquest", "nv"],
+        brief="Xem danh sách Đạo Vụ Hàng Ngày (Nhiệm vụ nhận Linh Thạch, Tiên Ngọc, Vé quay).",
+        usage="dao-vu"
+    )
+    async def daovu_cmd(self, ctx: commands.Context):
+        """Xem danh sách Đạo Vụ Hàng Ngày với giao diện nút bấm nhận thưởng tức thì (!dao-vu)."""
+        player = self.db.get_player(ctx.author.id)
+        if not player:
+            await ctx.send("❌ Vui lòng gõ `!nhapmon` trước!")
+            return
+
+        quests = self.db.get_or_generate_daily_quests(ctx.author.id, player.realm_index)
+        view = DailyQuestView(self.db, ctx.author.id, player.realm_index, timeout=120.0)
+        embed = view.build_embed(player.dao_hieu, quests)
+        await ctx.send(embed=embed, view=view)
+
+    @commands.command(
+        name="nhan-dao-vu",
+        aliases=["nhandaovu", "nhannv", "claim-quest", "claimquest", "nhan-nv"],
+        brief="Nhận thưởng Đạo Vụ Hàng Ngày đã hoàn thành.",
+        usage="nhan-dao-vu [tất_cả | tu_luyen | pve_kills | pvp_wins]"
+    )
+    async def nhan_daovu_cmd(self, ctx: commands.Context, target: str = "tat_ca"):
+        """Nhận phần thưởng Đạo Vụ đã hoàn thành."""
+        player = self.db.get_player(ctx.author.id)
+        if not player:
+            await ctx.send("❌ Vui lòng gõ `!nhapmon` trước!")
+            return
+
+        quests = self.db.get_or_generate_daily_quests(ctx.author.id, player.realm_index)
+        target_lower = target.lower()
+
+        claimed_rewards = []
+        if target_lower in ["tat_ca", "all", "tatca", "het"]:
+            for q in quests:
+                if not q["is_claimed"] and q["current_count"] >= q["target_count"]:
+                    claimed = self.db.claim_quest_reward(ctx.author.id, q["quest_type"])
+                    if claimed:
+                        unit = "Linh Thạch" if claimed["reward_type"] == "linh_thach" else ("Tiên Ngọc" if claimed["reward_type"] == "tien_ngoc" else "Linh Duyên Phù")
+                        claimed_rewards.append(f"• **{claimed['quest_name']}**: `+{claimed['reward_amount']}` {unit}")
+        else:
+            # Match specific quest type
+            match_type = None
+            if "tu" in target_lower or "luyen" in target_lower:
+                match_type = "tu_luyen"
+            elif "pve" in target_lower or "yeu" in target_lower or "quai" in target_lower or "thap" in target_lower:
+                match_type = "pve_kills"
+            elif "pvp" in target_lower or "tranh" in target_lower or "dau" in target_lower:
+                match_type = "pvp_wins"
+
+            if match_type:
+                claimed = self.db.claim_quest_reward(ctx.author.id, match_type)
+                if claimed:
+                    unit = "Linh Thạch" if claimed["reward_type"] == "linh_thach" else ("Tiên Ngọc" if claimed["reward_type"] == "tien_ngoc" else "Linh Duyên Phù")
+                    claimed_rewards.append(f"• **{claimed['quest_name']}**: `+{claimed['reward_amount']}` {unit}")
+                else:
+                    await ctx.send("❌ Nhiệm vụ này chưa hoàn thành hoặc bạn đã nhận thưởng rồi!")
+                    return
+            else:
+                await ctx.send("❌ Không nhận diện được loại nhiệm vụ! Dùng `!nhan-dao-vu all` để nhận tất cả.")
+                return
+
+        if not claimed_rewards:
+            await ctx.send("⚠️ Bạn chưa có Đạo Vụ nào hoàn thành để nhận thưởng! Hãy gõ `!dao-vu` để xem tiến độ.")
+            return
+
+        embed = discord.Embed(
+            title="🎁 NHẬN THƯỞNG ĐẠO VỤ THÀNH CÔNG! 🎁",
+            description=f"Chúc mừng tu sĩ **[{player.dao_hieu}]** đã hoàn thành Đạo Vụ Thiên Đình!\n\n" + "\n".join(claimed_rewards),
+            color=discord.Color.gold()
+        )
+        embed.set_footer(text="Đạo Vụ làm mới mỗi ngày vào 00:00 UTC!")
+        await ctx.send(embed=embed)
+
+
+class DailyQuestView(discord.ui.View):
+    """Interactive Discord View for Daily Quests (!dao-vu)."""
+    def __init__(self, db, user_id: int, realm_index: int, timeout: float = 120.0):
+        super().__init__(timeout=timeout)
+        self.db = db
+        self.user_id = user_id
+        self.realm_index = realm_index
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message("❌ Đây không phải sổ Đạo Vụ của bạn!", ephemeral=True)
+            return False
+        return True
+
+    def build_embed(self, dao_hieu: str, quests: list) -> discord.Embed:
+        from datetime import datetime
+        today_str = datetime.utcnow().strftime("%d/%m/%Y")
+
+        embed = discord.Embed(
+            title="📜 THIÊN ĐÌNH ĐẠO VỤ — NHIỆM VỤ HÀNG NGÀY",
+            description=f"Tu sĩ **[{dao_hieu}]** | Ngày: `{today_str} (UTC)`\n"
+                        f"*Hoàn thành Đạo Vụ mỗi ngày để nhận Linh Thạch, Tiên Ngọc & Vé Quay F2P!*\n",
+            color=discord.Color.teal()
+        )
+
+        all_completed = True
+        has_claimable = False
+
+        for q in quests:
+            curr = q["current_count"]
+            target = q["target_count"]
+            pct = min(100, int((curr / target) * 100)) if target > 0 else 100
+
+            # Progress bar
+            filled = int(pct / 10)
+            bar = "█" * filled + "░" * (10 - filled)
+
+            # Unit name
+            unit = "Linh Thạch" if q["reward_type"] == "linh_thach" else ("Tiên Ngọc 🌟" if q["reward_type"] == "tien_ngoc" else "Linh Duyên Phù 🎟️")
+
+            if q["is_claimed"]:
+                status_str = "✅ **ĐÃ NHẬN THƯỞNG**"
+            elif curr >= target:
+                status_str = "✨ **HOÀN THÀNH — CÓ THỂ NHẬN!**"
+                has_claimable = True
+                all_completed = False
+            else:
+                status_str = f"⏳ **ĐANG THỰC HIỆN** (`{pct}%`)"
+                all_completed = False
+
+            field_val = (
+                f"> Tiến độ: `[{bar}]` **{curr}/{target}**\n"
+                f"> Phần thưởng: `+{q['reward_amount']}` {unit}\n"
+                f"> Trạng thái: {status_str}"
+            )
+            embed.add_field(name=f"📌 {q['quest_name']}", value=field_val, inline=False)
+
+        if all_completed and len(quests) > 0:
+            embed.set_footer(text="🎉 Bạn đã hoàn thành xuất sắc tất cả Đạo Vụ hôm nay! Hãy quay lại vào ngày mai.")
+        elif has_claimable:
+            embed.set_footer(text="💡 Bấm nút '🎁 Nhận Tất Cả Thưởng' bên dưới để thu nhận tài bảo!")
+        else:
+            embed.set_footer(text="Gõ !tuluyen, !sanquai, !thap, !pvp để tăng tiến độ Đạo Vụ!")
+
+        return embed
+
+    @discord.ui.button(label="🎁 Nhận Tất Cả Thưởng", style=discord.ButtonStyle.success, custom_id="btn_claim_all_quests")
+    async def claim_all(self, interaction: discord.Interaction, button: discord.ui.Button):
+        quests = self.db.get_or_generate_daily_quests(self.user_id, self.realm_index)
+        claimed_rewards = []
+
+        for q in quests:
+            if not q["is_claimed"] and q["current_count"] >= q["target_count"]:
+                claimed = self.db.claim_quest_reward(self.user_id, q["quest_type"])
+                if claimed:
+                    unit = "Linh Thạch" if claimed["reward_type"] == "linh_thach" else ("Tiên Ngọc" if claimed["reward_type"] == "tien_ngoc" else "Linh Duyên Phù")
+                    claimed_rewards.append(f"• **{claimed['quest_name']}**: `+{claimed['reward_amount']}` {unit}")
+
+        if not claimed_rewards:
+            await interaction.response.send_message("❌ Chưa có Đạo Vụ nào hoàn thành để nhận thưởng!", ephemeral=True)
+            return
+
+        # Refresh embed
+        player = self.db.get_player(self.user_id)
+        updated_quests = self.db.get_or_generate_daily_quests(self.user_id, self.realm_index)
+        new_embed = self.build_embed(player.dao_hieu, updated_quests)
+
+        reward_msg = "🎁 **ĐÃ NHẬN THƯỞNG ĐẠO VỤ!**\n" + "\n".join(claimed_rewards)
+        await interaction.response.edit_message(embed=new_embed, view=self)
+        await interaction.followup.send(reward_msg, ephemeral=True)
+
+    @discord.ui.button(label="🔄 Làm Mới Tiến Độ", style=discord.ButtonStyle.secondary, custom_id="btn_refresh_quests")
+    async def refresh_view(self, interaction: discord.Interaction, button: discord.ui.Button):
+        player = self.db.get_player(self.user_id)
+        quests = self.db.get_or_generate_daily_quests(self.user_id, self.realm_index)
+        new_embed = self.build_embed(player.dao_hieu, quests)
+        await interaction.response.edit_message(embed=new_embed, view=self)
+
+

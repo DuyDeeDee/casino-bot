@@ -126,6 +126,8 @@ def calculate_player_pvp_atk(player: CultivatorProfile, gongfa: Optional[GongfaE
         base_atk = int(base_atk * 1.10)
     elif "Kim" in elem:
         base_atk = int(base_atk * 1.20)
+    elif "Mộc" in elem:
+        base_atk = int(base_atk * 1.10)
     elif "Lôi" in elem:
         crit_chance += 0.15
         base_atk = int(base_atk * 1.25)
@@ -198,8 +200,10 @@ def simulate_pvp_turn(
 
     raw_dmg = atk_val * r_dmg * elem_dmg * dao_dmg * crit_mult * random.uniform(0.9, 1.15)
     
-    # Defense reduction factoring armor penetration
+    # Defense reduction factoring armor penetration & Body Refining & Thổ Element
     def_reduction = (1.0 - armor_pen) * (0.85 if defender.body_realm_index >= 4 else 1.0)
+    if "Thổ" in defender.linh_can_element:
+        def_reduction *= 0.70  # Thổ: +30% Phòng thủ
     final_dmg = max(100, int(raw_dmg * def_reduction))
 
     # Skill name flavor

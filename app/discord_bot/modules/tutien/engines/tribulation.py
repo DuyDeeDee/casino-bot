@@ -34,6 +34,10 @@ def calculate_breakthrough_chance(player: CultivatorProfile) -> float:
     if player.nghiep_luc > 20:
         total_chance -= (player.nghiep_luc - 20) * 0.2
 
+    # VIP 4: +5% breakthrough rate vĩnh viễn
+    if player.vip_level >= 4:
+        total_chance += 5.0
+
     return max(5.0, min(total_chance, 95.0))
 
 
@@ -49,8 +53,20 @@ def calculate_tribulation_damage(player: CultivatorProfile, current_wave: int) -
     if player.nghiep_luc > 50:
         base *= 2.0
 
+    # --- NGŨ HÀNH / DỊ LINH CĂN KHÁNG LÔI KIếP ---
+    # Lôi Di Linh Căn: -20% Tribulation damage
     if "Lôi" in player.linh_can_element:
-        base *= 0.8
+        base *= 0.80
+    # Thổ Ngũ Hành: -10% Tribulation damage (bonus cộng với Lôi)
+    if "Thổ" in player.linh_can_element:
+        base *= 0.90
+
+    # VIP 6: tự động né 5% sát thương Lôi Kiếp vĩnh viễn
+    if player.vip_level >= 6:
+        base *= 0.95
+    # VIP 10: né thêm (-10% tổng, stack với VIP 6 → -14.25% tổng)
+    if player.vip_level >= 10:
+        base *= 0.90
 
     return int(base)
 

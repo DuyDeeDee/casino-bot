@@ -129,11 +129,36 @@ def generate_roguelike_dungeon_matrix() -> List[Dict[str, Any]]:
 
 
 def calculate_player_pve_atk(player: CultivatorProfile) -> Tuple[int, float]:
-    """Calculate player PVE attack and crit chance."""
+    """Calculate player PVE attack and crit chance. Applies elemental ATK bonuses."""
     base_atk = 250 + (player.realm_index * 180) + (player.body_realm_index * 100)
     crit_chance = min(0.75, 0.15 + (player.ngo_tinh * 0.02) + (player.vip_level * 0.02))
     if player.is_di_linh_can:
         crit_chance += 0.10
+
+    # --- NGŨ HÀNH ATK BONUSES (apply trong PVE) ---
+    elem = player.linh_can_element
+    if "Hỏa" in elem:
+        # Hỏa: +20% Bạo kích (cờ chế độ crit)
+        crit_chance = min(0.75, crit_chance + 0.20)
+    elif "Kim" in elem:
+        # Kim: +20% Sát thương Kiếm Đạo (ATK)
+        base_atk = int(base_atk * 1.20)
+    elif "Mộc" in elem:
+        # Mộc: +25% Max HP → dẫn đến ATK bonus nhỏ thông qua sinh mệnh
+        # (HP bonus được apply lúc tạo nhân vật / luỳen thể, ở đây cấp thêm +10% base ATK)
+        base_atk = int(base_atk * 1.10)
+    # Thổ: no ATK bonus, chỉ DEF — xử lý trong process_turn_action
+    # Thủy: no ATK bonus, chỉ regen — xử lý trong AFK
+
+    # --- DỊ LINH CĂN ATK BONUSES ---
+    if "Lôi" in elem:
+        crit_chance = min(0.75, crit_chance + 0.15)
+        base_atk = int(base_atk * 1.20)
+    elif "Phong" in elem:
+        base_atk = int(base_atk * 1.15)
+    elif "Không Gian" in elem:
+        base_atk = int(base_atk * 1.30)
+
     return base_atk, crit_chance
 
 
@@ -234,6 +259,19 @@ def process_turn_action(
             else:
                 rage_bonus = 1.8 if monster.get("is_raging") else 1.0
                 m_dmg = int(monster["atk"] * def_mult * rage_bonus * random.uniform(0.85, 1.15))
+
+                # --- Thổ element: +30% Phòng thủ → giảm 30% damage nhận ---
+                elem = player.linh_can_element
+                if "Thổ" in elem:
+                    m_dmg = int(m_dmg * 0.70)
+                    if not log["message"].endswith("[Thổ]"):
+                        log["message"] += " 🪨 **[Thổ Hệ Phòng Thủ -30% DMG]**"
+                # Thủy: +15% HP hồi phục mỗi lượt nếu đủ HP
+                elif "Thủy" in elem and player.hp < player.max_hp:
+                    regen = int(player.max_hp * 0.05)
+                    player.hp = min(player.max_hp, player.hp + regen)
+                    log["message"] += f" 💧 **[Thủy Hệ Hồi Sinh +{regen:,} HP]**"
+
                 player.hp = max(0, player.hp - m_dmg)
                 log["monster_damage"] = m_dmg
                 log["message"] += f"\n🐍 {monster['name']} phản công gây `{m_dmg:,}` Sát thương!"

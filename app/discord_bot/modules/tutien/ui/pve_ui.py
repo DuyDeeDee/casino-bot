@@ -97,10 +97,11 @@ class TrapSacrificeView(discord.ui.View):
 
 
 class DungeonMerchantView(discord.ui.View):
-    """Mystery Merchant View inside Roguelike Dungeon Matrix."""
-    def __init__(self, user_id: int, timeout: float = 60.0):
+    """Mystery Merchant View inside Roguelike Dungeon Matrix — với giao dịch DB thật."""
+    def __init__(self, user_id: int, db=None, timeout: float = 60.0):
         super().__init__(timeout=timeout)
         self.user_id = user_id
+        self.db = db  # TuTienDB instance để thực hiện transaction
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.user_id:
@@ -110,11 +111,53 @@ class DungeonMerchantView(discord.ui.View):
 
     @discord.ui.button(label="💊 Mua Vạn Linh Đan (50 Tiên Ngọc)", style=discord.ButtonStyle.success, custom_id="btn_buy_van_linh")
     async def buy_van_linh(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message("✅ Đã mua **Vạn Linh Đan**! Dùng `!cuu-thuong @user` để cứu đạo hữu bị tổn thương!", ephemeral=True)
+        if not self.db:
+            await interaction.response.send_message("❌ Hệ thống giao dịch tạm thời không khả dụng!", ephemeral=True)
+            return
+        player = self.db.get_player(self.user_id)
+        if not player:
+            await interaction.response.send_message("❌ Không tìm thấy hồ sơ tu sĩ!", ephemeral=True)
+            return
+        cost = 50
+        if player.tien_ngoc < cost:
+            await interaction.response.send_message(
+                f"❌ Không đủ Tiên Ngọc! Cần `{cost}` (Hiện có: `{player.tien_ngoc}`)", ephemeral=True
+            )
+            return
+        player.tien_ngoc -= cost
+        player.van_linh_dan += 1
+        self.db.update_player(player)
+        button.disabled = True
+        await interaction.response.edit_message(view=self)
+        await interaction.followup.send(
+            f"✅ **MUA THÀNH CÔNG!** Đã nhận **Vạn Linh Đan** (-{cost} Tiên Ngọc). Dùng `!cuu-thuong @user` để cứu đạo hữu!", ephemeral=True
+        )
 
     @discord.ui.button(label="🛡️ Mua Thánh Thể Phù (80 Tiên Ngọc)", style=discord.ButtonStyle.secondary, custom_id="btn_buy_thanh_the")
     async def buy_thanh_the(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message("✅ Đã mua **Thánh Thể Phù**! Giúp bảo vệ không bị rớt đồ và hại Căn Cơ khi tử trận!", ephemeral=True)
+        if not self.db:
+            await interaction.response.send_message("❌ Hệ thống giao dịch tạm thời không khả dụng!", ephemeral=True)
+            return
+        player = self.db.get_player(self.user_id)
+        if not player:
+            await interaction.response.send_message("❌ Không tìm thấy hồ sơ tu sĩ!", ephemeral=True)
+            return
+        cost = 80
+        if player.tien_ngoc < cost:
+            await interaction.response.send_message(
+                f"❌ Không đủ Tiên Ngọc! Cần `{cost}` (Hiện có: `{player.tien_ngoc}`)", ephemeral=True
+            )
+            return
+        player.tien_ngoc -= cost
+        player.thanh_the_phu += 1
+        self.db.update_player(player)
+        button.disabled = True
+        await interaction.response.edit_message(view=self)
+        await interaction.followup.send(
+            f"✅ **MUA THÀNH CÔNG!** Đã nhận **Thánh Thể Phù** (-{cost} Tiên Ngọc). Bảo vệ không bị rớt đồ khi tử trận!", ephemeral=True
+        )
+
+
 
 
 class PartyLobbyView(discord.ui.View):

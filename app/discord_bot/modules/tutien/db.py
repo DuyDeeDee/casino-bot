@@ -228,6 +228,35 @@ class TuTienDB:
                 )
             """)
 
+            # Table: Daily Quests (Đạo Vụ Nhim Vụ Hàng Ngày)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS tutien_daily_quests (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    quest_date TEXT NOT NULL,
+                    quest_type TEXT NOT NULL,
+                    quest_name TEXT NOT NULL,
+                    target_count INTEGER NOT NULL,
+                    current_count INTEGER DEFAULT 0,
+                    reward_type TEXT NOT NULL,
+                    reward_amount INTEGER NOT NULL,
+                    is_claimed INTEGER DEFAULT 0,
+                    UNIQUE(user_id, quest_date, quest_type)
+                )
+            """)
+
+            # Migration: thêm quest tracking columns vào tutien_players
+            existing_cols = [row[1] for row in conn.execute("PRAGMA table_info(tutien_players)").fetchall()]
+            quest_cols = {
+                "daily_tu_luyen_count": "INTEGER DEFAULT 0",
+                "daily_pve_kills": "INTEGER DEFAULT 0",
+                "daily_pvp_wins": "INTEGER DEFAULT 0",
+                "last_quest_reset": "REAL"
+            }
+            for col_name, col_type in quest_cols.items():
+                if col_name not in existing_cols:
+                    conn.execute(f"ALTER TABLE tutien_players ADD COLUMN {col_name} {col_type}")
+
     # --- PLAYER METHODS ---
     def get_player(self, user_id: int) -> Optional[CultivatorProfile]:
         with self.get_connection() as conn:
@@ -595,4 +624,129 @@ class TuTienDB:
     def cancel_bounty(self, bounty_id: int):
         with self.get_connection() as conn:
             conn.execute("UPDATE tutien_bounties SET status = 'CANCELLED' WHERE bounty_id = ?", (bounty_id,))
+
+    # --- DAILY QUEST METHODS ---
+
+    def get_or_generate_daily_quests(self, user_id: int, realm_index: int) -> List[Dict[str, Any]]:
+        """Lấy hoặc tự sinh 3 Đạo Vụ ngày hôm nay cho người chơi."""
+        import random
+        from datetime import datetime
+        today = datetime.utcnow().strftime("%Y-%m-%d")
+
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT * FROM tutien_daily_quests WHERE user_id = ? AND quest_date = ?",
+                (user_id, today)
+            )
+            rows = cursor.fetchall()
+            if rows:
+                return [dict(r) for r in rows]
+
+            # Sinh 3 quest ngẫu nhiên dựa theo realm_index
+            tu_target = max(5, 8 + realm_index // 3)
+            pve_target = max(3, 3 + realm_index // 5)
+            pvp_target = max(1, 1 + realm_index // 10)
+
+            quests_to_create = [
+                {
+                    "quest_type": "tu_luyen",
+                    "quest_name": f"Chuyên Tâm Tu Đạo ({tu_target} lần tu luyện)",
+                    "target_count": tu_target,
+                    "reward_type": "linh_thach",
+                    "reward_amount": 500 + realm_index * 50,
+                },
+                {
+                    "quest_type": "pve_kills",
+                    "quest_name": f"Diệt Yêu Trừ Ma ({pve_target} trận PVE thắng)",
+                    "target_count": pve_target,
+                    "reward_type": random.choice(["tien_ngoc", "linh_duyen_phu"]),
+                    "reward_amount": 30 if "tien_ngoc" else 1,
+                },
+                {
+                    "quest_type": "pvp_wins",
+                    "quest_name": f"Thiên Kiêu Tranh Phong ({pvp_target} trận PVP thắng)",
+                    "target_count": pvp_target,
+                    "reward_type": "linh_thach",
+                    "reward_amount": 1000 + realm_index * 100,
+                },
+            ]
+            # Fix reward_amount cho pve_kills
+            quests_to_create[1]["reward_amount"] = 30 if quests_to_create[1]["reward_type"] == "tien_ngoc" else 2
+
+            for q in quests_to_create:
+                conn.execute("""
+                    INSERT OR IGNORE INTO tutien_daily_quests
+                    (user_id, quest_date, quest_type, quest_name, target_count, reward_type, reward_amount)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, (user_id, today, q["quest_type"], q["quest_name"],
+                      q["target_count"], q["reward_type"], q["reward_amount"]))
+
+            cursor.execute(
+                "SELECT * FROM tutien_daily_quests WHERE user_id = ? AND quest_date = ?",
+                (user_id, today)
+            )
+            return [dict(r) for r in cursor.fetchall()]
+
+    def increment_quest_progress(self, user_id: int, quest_type: str, amount: int = 1) -> Optional[Dict[str, Any]]:
+        """Tăng tiến độ quest. Trả về quest nếu vừa hoàn thành (để notify)."""
+        from datetime import datetime
+        today = datetime.utcnow().strftime("%Y-%m-%d")
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT * FROM tutien_daily_quests WHERE user_id = ? AND quest_date = ? AND quest_type = ?",
+                (user_id, today, quest_type)
+            )
+            row = cursor.fetchone()
+            if not row:
+                return None
+            q = dict(row)
+            if q["is_claimed"] or q["current_count"] >= q["target_count"]:
+                return None  # Đã đủ / đã nhận
+            new_count = min(q["target_count"], q["current_count"] + amount)
+            conn.execute(
+                "UPDATE tutien_daily_quests SET current_count = ? WHERE id = ?",
+                (new_count, q["id"])
+            )
+            q["current_count"] = new_count
+            if new_count >= q["target_count"]:
+                return q  # Vừa hoàn thành
+            return None
+
+    def claim_quest_reward(self, user_id: int, quest_type: str) -> Optional[Dict[str, Any]]:
+        """Nhận phần thưởng quest đã hoàn thành. Trả về quest dict nếu thành công."""
+        from datetime import datetime
+        today = datetime.utcnow().strftime("%Y-%m-%d")
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT * FROM tutien_daily_quests WHERE user_id = ? AND quest_date = ? AND quest_type = ?",
+                (user_id, today, quest_type)
+            )
+            row = cursor.fetchone()
+            if not row:
+                return None
+            q = dict(row)
+            if q["is_claimed"]:
+                return None
+            if q["current_count"] < q["target_count"]:
+                return None
+            conn.execute(
+                "UPDATE tutien_daily_quests SET is_claimed = 1 WHERE id = ?",
+                (q["id"],)
+            )
+            # Trao phần thưởng vào player
+            if q["reward_type"] == "linh_thach":
+                conn.execute("UPDATE tutien_players SET linh_thach = linh_thach + ? WHERE user_id = ?",
+                             (q["reward_amount"], user_id))
+            elif q["reward_type"] == "tien_ngoc":
+                conn.execute("UPDATE tutien_players SET tien_ngoc = tien_ngoc + ? WHERE user_id = ?",
+                             (q["reward_amount"], user_id))
+            elif q["reward_type"] == "linh_duyen_phu":
+                conn.execute("UPDATE tutien_players SET linh_duyen_phu = linh_duyen_phu + ? WHERE user_id = ?",
+                             (q["reward_amount"], user_id))
+            return q
+
+
 

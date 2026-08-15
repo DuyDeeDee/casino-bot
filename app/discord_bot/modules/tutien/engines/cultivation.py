@@ -56,7 +56,9 @@ def calculate_cultivation_gain(
     Calculates Cultivation EXP gain based on formula:
     Tu Vi = Base * CP_Chủ_tu * Bonus_Linh_Căn * Buff_Động_Phủ * Nồng_Độ_Channel * Hệ_Số_Tâm_Cảnh * Bonus_Ngộ_Tính
     """
-    base_exp = 100 + (player.realm_index * 25)
+    # Exponential scaling: EXP gain tăng theo cảnh giới, tránh late-game bị vỡ
+    # Formula: 200 × 1.4^realm → realm 0=200, realm 10=5782, realm 20=167k, realm 27=2.1M
+    base_exp = int(200 * (1.4 ** player.realm_index))
 
     # Gongfa multiplier (default 1.0, Ma Dao +1.5, Chinh Dao 0.7)
     gongfa_mult = 1.0
@@ -82,8 +84,11 @@ def calculate_cultivation_gain(
     # Ngo Tinh bonus
     ngo_tinh_mult = 1.0 + (player.ngo_tinh * 0.02)
 
+    # VIP 1: +10% Thần Thức → tăng hiệu suất tu luyện thêm 10%
+    vip1_bonus = 1.10 if player.vip_level >= 1 else 1.0
+
     total_exp = int(
-        base_exp * gongfa_mult * root_mult * dong_phu_mult * channel_mult * tam_canh_mult * ngo_tinh_mult
+        base_exp * gongfa_mult * root_mult * dong_phu_mult * channel_mult * tam_canh_mult * ngo_tinh_mult * vip1_bonus
     )
     return max(10, total_exp)
 

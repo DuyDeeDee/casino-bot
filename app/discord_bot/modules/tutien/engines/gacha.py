@@ -34,13 +34,23 @@ def roll_single_item(player: CultivatorProfile, banner_type: str) -> Tuple[Dict[
     if is_ur:
         player.soft_pity_count = 0
         grade = "🔴 Đế Cấp (UR)"
-        
-        # Check Wishlist
+
+        # Ưu tiên Wishlist (Định Hướng Đạo Vận) nếu có — áp dụng cả khi pity lẫn khi ra rate thường
         if player.wishlist_item:
-            item_name = f"🔴 [ĐẾ CẤP] {player.wishlist_item}"
+            # Tìm item trùng tên wishlist trong pool UR
+            matched = [x for x in GACHA_ITEMS_PREMIUM if "Đế Cấp" in x[2] and player.wishlist_item.lower() in x[0].lower()]
+            if matched:
+                item_name = matched[0][0]
+                player.wishlist_item = None  # Xóa wishlist sau khi đã trúng
+            else:
+                # Wishlist không match → random UR pool
+                ur_options = [x for x in GACHA_ITEMS_PREMIUM if "Đế Cấp" in x[2]]
+                item_name = random.choice(ur_options if ur_options else GACHA_ITEMS_PREMIUM)[0]
         else:
+            # Không có wishlist → random trong toàn bộ UR pool
             ur_options = [x for x in GACHA_ITEMS_PREMIUM if "Đế Cấp" in x[2]]
             item_name = random.choice(ur_options if ur_options else GACHA_ITEMS_PREMIUM)[0]
+
     else:
         # Roll SR (4.3%) vs Địa/Phàm
         if rand_val < (ur_rate + 0.043):
