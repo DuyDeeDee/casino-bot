@@ -48,6 +48,11 @@ from app.discord_bot.modules.tutien.ui.pvp_ui import (
 )
 
 GIF_CHEST_PATH = "pictures/open_chest.gif"
+BANNER_IMAGES = {
+    "tubao": "pictures/banner_tubao.jpg",
+    "tiencac": "pictures/banner_tiencac.jpg",
+    "caimenh": "pictures/banner_caimenh.jpg"
+}
 
 
 class TuTienCog(commands.Cog, name="TuTien"):
@@ -223,6 +228,16 @@ class GachaInteractiveView(discord.ui.View):
         embed.set_footer(text="Chọn nút Banner bên dưới để đổi xem banner khác | Bấm Quay 1x hoặc Quay 10x để mở rương!")
         return embed
 
+    def get_banner_file_and_embed(self) -> Tuple[Optional[discord.File], discord.Embed]:
+        embed = self.get_embed()
+        img_path = BANNER_IMAGES.get(self.current_banner)
+        if img_path and os.path.exists(img_path):
+            filename = f"banner_{self.current_banner}.jpg"
+            file = discord.File(img_path, filename=filename)
+            embed.set_image(url=f"attachment://{filename}")
+            return file, embed
+        return None, embed
+
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.user_id:
             await interaction.response.send_message("❌ Bạn không thể thao tác trên bảng Gacha của người khác!", ephemeral=True)
@@ -233,19 +248,31 @@ class GachaInteractiveView(discord.ui.View):
     async def btn_tubao(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.current_banner = "tubao"
         self._update_button_styles()
-        await interaction.response.edit_message(embed=self.get_embed(), view=self)
+        file, embed = self.get_banner_file_and_embed()
+        if file:
+            await interaction.response.edit_message(embed=embed, view=self, attachments=[file])
+        else:
+            await interaction.response.edit_message(embed=embed, view=self)
 
     @discord.ui.button(label="🌟 Tiên Các (VIP)", style=discord.ButtonStyle.secondary, row=0)
     async def btn_tiencac(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.current_banner = "tiencac"
         self._update_button_styles()
-        await interaction.response.edit_message(embed=self.get_embed(), view=self)
+        file, embed = self.get_banner_file_and_embed()
+        if file:
+            await interaction.response.edit_message(embed=embed, view=self, attachments=[file])
+        else:
+            await interaction.response.edit_message(embed=embed, view=self)
 
     @discord.ui.button(label="☯ Cải Mệnh Đài", style=discord.ButtonStyle.secondary, row=0)
     async def btn_caimenh(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.current_banner = "caimenh"
         self._update_button_styles()
-        await interaction.response.edit_message(embed=self.get_embed(), view=self)
+        file, embed = self.get_banner_file_and_embed()
+        if file:
+            await interaction.response.edit_message(embed=embed, view=self, attachments=[file])
+        else:
+            await interaction.response.edit_message(embed=embed, view=self)
 
     @discord.ui.button(label="🎲 Quay 1 Lần (1x)", style=discord.ButtonStyle.primary, row=1)
     async def btn_roll_1x(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -287,7 +314,12 @@ class GachaInteractiveView(discord.ui.View):
                 ur_items.append(res["item_name"])
 
         # Update the main gacha status embed
-        await interaction.response.edit_message(embed=self.get_embed(), view=self)
+        file, embed = self.get_banner_file_and_embed()
+        if file:
+            await interaction.response.edit_message(embed=embed, view=self, attachments=[file])
+        else:
+            await interaction.response.edit_message(embed=embed, view=self)
+
         await interaction.followup.send(embed=res_embed)
 
         if has_ur:
@@ -311,7 +343,11 @@ class GachaInteractiveView(discord.ui.View):
             return
 
         view = GachaInteractiveView(self, ctx.author.id, self.db, initial_banner="tubao")
-        await ctx.send(embed=view.get_embed(), view=view)
+        file, embed = view.get_banner_file_and_embed()
+        if file:
+            await ctx.send(file=file, embed=embed, view=view)
+        else:
+            await ctx.send(embed=embed, view=view)
 
     @commands.command(
         name="quay-gacha",
@@ -372,7 +408,11 @@ class GachaInteractiveView(discord.ui.View):
 
         # Default: Open Interactive View with selected banner
         view = GachaInteractiveView(self, ctx.author.id, self.db, initial_banner=banner_key)
-        await ctx.send(embed=view.get_embed(), view=view)
+        file, embed = view.get_banner_file_and_embed()
+        if file:
+            await ctx.send(file=file, embed=embed, view=view)
+        else:
+            await ctx.send(embed=embed, view=view)
 
     @commands.command(
         name="xienquach",
