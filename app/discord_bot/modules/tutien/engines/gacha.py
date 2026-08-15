@@ -5,7 +5,7 @@ Gacha Engine: 3 Banner System («THIÊN ĐỊA DUYÊN CƠ»), Soft Pity (60+), H
 import random
 from typing import Tuple, List, Dict, Any, Optional
 from app.discord_bot.modules.tutien.constants import (
-    GACHA_BANNERS, GACHA_ITEMS_PREMIUM, LINH_BUI_SHOP, SPIRITUAL_ROOT_QUALITIES, ELEMENTS_NGU_HANH, ELEMENTS_DI_LINH_CAN
+    GACHA_BANNERS, GACHA_ITEMS_TUBAO, GACHA_ITEMS_PREMIUM, LINH_BUI_SHOP, SPIRITUAL_ROOT_QUALITIES, ELEMENTS_NGU_HANH, ELEMENTS_DI_LINH_CAN
 )
 from app.discord_bot.modules.tutien.models import CultivatorProfile
 from app.discord_bot.modules.tutien.db import TuTienDB
@@ -14,8 +14,37 @@ from app.discord_bot.modules.tutien.db import TuTienDB
 def roll_single_item(player: CultivatorProfile, banner_type: str) -> Tuple[Dict[str, Any], CultivatorProfile]:
     """
     Executes a single roll on banner `banner_type`.
-    Applies Soft Pity (pull 60+), Hard Pity (pull 80), Wishlist, and Linh Bụi conversion.
+    - `tubao` (Banner Thường - F2P): Max Thiên Cấp (SR 3%), Địa Cấp (27%), Huyền (35%), Phàm (35%). Có thể rơi vé Tiên Duyên Phù.
+    - `tiencac` (Banner VIP): Đế Cấp UR (0.7% + Soft/Hard Pity 60-80), Thiên Cấp SR (4.3%), Wishlist 100% & Linh Bụi.
     """
+    # 1. BANNER THƯỜNG — TỤ BẢO CÁC (F2P)
+    if banner_type == "tubao":
+        rand_val = random.random()
+        if rand_val < 0.03:  # 3% SR
+            grade = "🟡 Thiên Cấp (SR)"
+            sr_options = [x for x in GACHA_ITEMS_TUBAO if "Thiên Cấp" in x[2]]
+            item_name = random.choice(sr_options)[0]
+        elif rand_val < 0.30:  # 27% Địa Cấp
+            grade = "🟣 Địa Cấp"
+            dia_options = [x for x in GACHA_ITEMS_TUBAO if "Địa Cấp" in x[2]]
+            item_name = random.choice(dia_options)[0]
+        elif rand_val < 0.65:  # 35% Huyền Cấp
+            grade = "🔵 Huyền Cấp"
+            huyen_options = [x for x in GACHA_ITEMS_TUBAO if "Huyền Cấp" in x[2]]
+            item_name = random.choice(huyen_options)[0]
+        else:  # 35% Phàm Cấp
+            grade = "🟢 Phàm Cấp"
+            pham_options = [x for x in GACHA_ITEMS_TUBAO if "Phàm Cấp" in x[2]]
+            item_name = random.choice(pham_options)[0]
+
+        return {
+            "item_name": item_name,
+            "grade": grade,
+            "is_ur": False,
+            "pity_count": player.soft_pity_count
+        }, player
+
+    # 2. BANNER VIP — CỬU THIÊN TIÊN CÁC (PREMIUM)
     player.soft_pity_count += 1
     
     # Calculate UR probability
@@ -35,36 +64,33 @@ def roll_single_item(player: CultivatorProfile, banner_type: str) -> Tuple[Dict[
         player.soft_pity_count = 0
         grade = "🔴 Đế Cấp (UR)"
 
-        # Ưu tiên Wishlist (Định Hướng Đạo Vận) nếu có — áp dụng cả khi pity lẫn khi ra rate thường
+        # Ưu tiên Wishlist (Định Hướng Đạo Vận) nếu có
         if player.wishlist_item:
-            # Tìm item trùng tên wishlist trong pool UR
             matched = [x for x in GACHA_ITEMS_PREMIUM if "Đế Cấp" in x[2] and player.wishlist_item.lower() in x[0].lower()]
             if matched:
                 item_name = matched[0][0]
-                player.wishlist_item = None  # Xóa wishlist sau khi đã trúng
+                player.wishlist_item = None
             else:
-                # Wishlist không match → random UR pool
                 ur_options = [x for x in GACHA_ITEMS_PREMIUM if "Đế Cấp" in x[2]]
-                item_name = random.choice(ur_options if ur_options else GACHA_ITEMS_PREMIUM)[0]
+                item_name = random.choice(ur_options)[0]
         else:
-            # Không có wishlist → random trong toàn bộ UR pool
             ur_options = [x for x in GACHA_ITEMS_PREMIUM if "Đế Cấp" in x[2]]
-            item_name = random.choice(ur_options if ur_options else GACHA_ITEMS_PREMIUM)[0]
+            item_name = random.choice(ur_options)[0]
 
     else:
-        # Roll SR (4.3%) vs Địa/Phàm
+        # Roll SR (4.3%) vs Địa/Huyền
         if rand_val < (ur_rate + 0.043):
             grade = "🟡 Thiên Cấp (SR)"
             sr_options = [x for x in GACHA_ITEMS_PREMIUM if "Thiên Cấp" in x[2]]
-            item_name = random.choice(sr_options if sr_options else GACHA_ITEMS_PREMIUM)[0]
+            item_name = random.choice(sr_options)[0]
         elif rand_val < (ur_rate + 0.293):
             grade = "🟣 Địa Cấp"
             dia_options = [x for x in GACHA_ITEMS_PREMIUM if "Địa Cấp" in x[2]]
-            item_name = random.choice(dia_options if dia_options else GACHA_ITEMS_PREMIUM)[0]
+            item_name = random.choice(dia_options)[0]
         else:
-            grade = "🟢 Phàm/Huyền Cấp"
-            other_options = [x for x in GACHA_ITEMS_PREMIUM if not any(k in x[2] for k in ["Đế Cấp", "Thiên Cấp", "Địa Cấp"])]
-            item_name = random.choice(other_options if other_options else GACHA_ITEMS_PREMIUM)[0]
+            grade = "🔵 Huyền Cấp"
+            other_options = [x for x in GACHA_ITEMS_PREMIUM if "Huyền Cấp" in x[2]]
+            item_name = random.choice(other_options)[0]
 
     res = {
         "item_name": item_name,

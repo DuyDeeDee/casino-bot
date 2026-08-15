@@ -137,7 +137,30 @@ GACHA_BANNERS: Dict[str, Dict[str, Any]] = {
     }
 }
 
-# Gacha Pool Items per Grade
+# Gacha Pool Items per Banner
+
+# 1. Pool Banner Thường (Tụ Bảo Các - F2P)
+GACHA_ITEMS_TUBAO: List[Tuple[str, str, str, float]] = [
+    # Thiên Cấp / SR (3.0%)
+    ("🟡 [THIÊN CẤP] Công Pháp: 《Thái Hư Kiếm Điển》", "Công Pháp", "Thiên Cấp (SR)", 1.0),
+    ("🟡 [THIÊN CẤP] Thần Binh: Thái Cổ Linh Thuẫn", "Pháp Bảo", "Thiên Cấp (SR)", 1.0),
+    ("🟡 [THIÊN CẤP] Thần Thú: Huyết Lang Cổ Xưa", "Thú Cưỡi", "Thiên Cấp (SR)", 1.0),
+    
+    # Địa Cấp (27.0%)
+    ("🟣 [ĐỊA CẤP] Đan Dược: Trúc Cơ Đan Cực Phẩm x3", "Đan Dược", "Địa Cấp", 10.0),
+    ("🟣 [ĐỊA CẤP] Thần Phù: Tẩy Tủy Phù x1", "Thần Phù", "Địa Cấp", 10.0),
+    ("🟣 [ĐỊA CẤP] Vé Quý: Tiên Duyên Phù x1", "Vé Gacha", "Địa Cấp", 7.0),
+    
+    # Huyền Cấp (35.0%)
+    ("🔵 [HUYỀN CẤP] Tài Bảo: 25,000 Linh Thạch", "Tài Bảo", "Huyền Cấp", 20.0),
+    ("🔵 [HUYỀN CẤP] Khoáng Thạch: Thần Thiết Thô x5", "Nguyên Liệu", "Huyền Cấp", 15.0),
+    
+    # Phàm Cấp (35.0%)
+    ("🟢 [PHÀM CẤP] Thảo Dược: Thảo Dược Thô x10", "Nguyên Liệu", "Phàm Cấp", 20.0),
+    ("🟢 [PHÀM CẤP] Thảo Dược: Linh Chi Ngàn Năm x5", "Nguyên Liệu", "Phàm Cấp", 15.0)
+]
+
+# 2. Pool Banner VIP (Cửu Thiên Tiên Các - Premium)
 GACHA_ITEMS_PREMIUM: List[Tuple[str, str, str, float]] = [
     # Đế Cấp / UR (0.7%)
     ("🔴 [ĐẾ CẤP] Công Pháp: 《Thôn Thiên Ma Công》", "Công Pháp", "Đế Cấp (UR)", 0.2),
@@ -151,11 +174,12 @@ GACHA_ITEMS_PREMIUM: List[Tuple[str, str, str, float]] = [
     
     # Địa Cấp (25.0%)
     ("🟣 [ĐỊA CẤP] Đan Dược: Niết Bàn Đan x2", "Đan Dược", "Địa Cấp", 10.0),
-    ("🟣 [ĐỊA CẤP] Đan Dược: Trúc Cơ Đan Cực Phẩm x3", "Đan Dược", "Địa Cấp", 15.0),
+    ("🟣 [ĐỊA CẤP] Đan Dược: Cửu Chuyển Tái Tạo Đan x1", "Tiên Đan", "Địa Cấp", 5.0),
+    ("🟣 [ĐỊA CẤP] Đan Dược: Trúc Cơ Đan Cực Phẩm x5", "Đan Dược", "Địa Cấp", 10.0),
     
-    # Phàm / Huyền Cấp (70.0%)
-    ("🔵 [HUYỀN CẤP] Tài Bảo: 50,000 Linh Thạch", "Tài Bảo", "Huyền Cấp", 30.0),
-    ("🟢 [PHÀM CẤP] Thảo Dược: Linh Chi Ngàn Năm x10", "Nguyên Liệu", "Phàm Cấp", 40.0)
+    # Huyền Cấp (70.0%)
+    ("🔵 [HUYỀN CẤP] Tài Bảo: 100,000 Linh Thạch", "Tài Bảo", "Huyền Cấp", 40.0),
+    ("🔵 [HUYỀN CẤP] Tiên Bụi: 20x Linh Bụi Tiên Các", "Vật Phẩm", "Huyền Cấp", 30.0)
 ]
 
 # Shop Linh Bụi Tiên Các (Shard Shop)
