@@ -749,5 +749,123 @@ class TuTienDB:
                              (q["reward_amount"], user_id))
             return q
 
+    # --- 🏪 SÀN ĐẤU GIÁ & CHỢ TU TIÊN (AUCTION HOUSE) ---
+
+    def create_auction(self, seller_id: int, item_name: str, quantity: int, price: int, duration_hours: int = 24) -> Optional[int]:
+        """Tạo phiên đấu giá bán vật phẩm trên Sàn Giao Dịch."""
+        expires_at = time.time() + (duration_hours * 3600)
+        with self.get_connection() as conn:
+            # Kiểm tra vật phẩm trong túi đồ của seller
+            cursor = conn.cursor()
+            cursor.execute("SELECT id, quantity, item_type FROM tutien_inventory WHERE user_id = ? AND item_name = ?", (seller_id, item_name))
+            row = cursor.fetchone()
+            if not row or row["quantity"] < quantity:
+                return None
+
+            item_type = row["item_type"]
+            # Trừ vật phẩm từ túi đồ
+            if row["quantity"] == quantity:
+                conn.execute("DELETE FROM tutien_inventory WHERE id = ?", (row["id"],))
+            else:
+                conn.execute("UPDATE tutien_inventory SET quantity = quantity - ? WHERE id = ?", (quantity, row["id"]))
+
+            # Thêm vào tutien_auctions
+            cursor.execute(
+                "INSERT INTO tutien_auctions (seller_id, item_name, quantity, price, expires_at) VALUES (?, ?, ?, ?, ?)",
+                (seller_id, item_name, quantity, price, expires_at)
+            )
+            return cursor.lastrowid
+
+    def get_active_auctions(self, limit: int = 20) -> List[Dict[str, Any]]:
+        """Lấy danh sách các món đồ đang được bày bán trên Sàn Đấu Giá."""
+        now = time.time()
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT a.*, p.dao_hieu as seller_name
+                FROM tutien_auctions a
+                LEFT JOIN tutien_players p ON a.seller_id = p.user_id
+                WHERE a.expires_at > ?
+                ORDER BY a.auction_id DESC
+                LIMIT ?
+            """, (now, limit))
+            return [dict(r) for r in cursor.fetchall()]
+
+    def get_auction(self, auction_id: int) -> Optional[Dict[str, Any]]:
+        """Lấy thông tin 1 phiên đấu giá theo ID."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM tutien_auctions WHERE auction_id = ?", (auction_id,))
+            row = cursor.fetchone()
+            return dict(row) if row else None
+
+    def buy_auction_item(self, buyer_id: int, auction_id: int) -> Tuple[bool, str]:
+        """Mua vật phẩm từ Sàn Đấu Giá (Áp dụng 5% Phí Thuế Thiêu Đốt Linh Thạch)."""
+        now = time.time()
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM tutien_auctions WHERE auction_id = ?", (auction_id,))
+            auc = cursor.fetchone()
+            if not auc:
+                return False, "❌ Phiên đấu giá không tồn tại hoặc đã bị hủy!"
+            if auc["expires_at"] <= now:
+                return False, "❌ Phiên đấu giá này đã hết hạn bày bán!"
+            if auc["seller_id"] == buyer_id:
+                return False, "❌ Bạn không thể tự mua vật phẩm do chính mình đăng bán!"
+
+            # Kiểm tra số dư Linh Thạch của người mua
+            cursor.execute("SELECT linh_thach, dao_hieu FROM tutien_players WHERE user_id = ?", (buyer_id,))
+            buyer = cursor.fetchone()
+            if not buyer or buyer["linh_thach"] < auc["price"]:
+                return False, f"❌ Không đủ Linh Thạch! Cần `{auc['price']:,}` Linh Thạch."
+
+            # Trừ tiền người mua
+            conn.execute("UPDATE tutien_players SET linh_thach = linh_thach - ? WHERE user_id = ?", (auc["price"], buyer_id))
+
+            # Tính phí thuế sàn 5% (Linh Thạch Sink)
+            tax = int(auc["price"] * 0.05)
+            seller_receive = auc["price"] - tax
+
+            # Cộng tiền cho người bán
+            conn.execute("UPDATE tutien_players SET linh_thach = linh_thach + ? WHERE user_id = ?", (seller_receive, auc["seller_id"]))
+
+            # Thêm vật phẩm vào túi người mua
+            cursor.execute("SELECT id FROM tutien_inventory WHERE user_id = ? AND item_name = ?", (buyer_id, auc["item_name"]))
+            inv_row = cursor.fetchone()
+            if inv_row:
+                conn.execute("UPDATE tutien_inventory SET quantity = quantity + ? WHERE id = ?", (auc["quantity"], inv_row["id"]))
+            else:
+                conn.execute("INSERT INTO tutien_inventory (user_id, item_name, item_type, quantity) VALUES (?, ?, 'Giao Dịch', ?)",
+                             (buyer_id, auc["item_name"], auc["quantity"]))
+
+            # Xóa khỏi sàn đấu giá
+            conn.execute("DELETE FROM tutien_auctions WHERE auction_id = ?", (auction_id,))
+
+            msg = f"✨ **MUA HÀNG THÀNH CÔNG!** Đã mua `{auc['quantity']}x` **[{auc['item_name']}]** với giá `{auc['price']:,}` Linh Thạch (Phí thuế 5% `{tax:,}` LT đã bị thiêu đốt)!"
+            return True, msg
+
+    def cancel_auction(self, seller_id: int, auction_id: int) -> Tuple[bool, str]:
+        """Hủy đăng bán và nhận lại vật phẩm về túi đồ."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM tutien_auctions WHERE auction_id = ?", (auction_id,))
+            auc = cursor.fetchone()
+            if not auc:
+                return False, "❌ Phiên đấu giá không tồn tại!"
+            if auc["seller_id"] != seller_id:
+                return False, "❌ Bạn không phải là người sở hữu phiên đấu giá này!"
+
+            # Trả lại đồ về túi
+            cursor.execute("SELECT id FROM tutien_inventory WHERE user_id = ? AND item_name = ?", (seller_id, auc["item_name"]))
+            inv_row = cursor.fetchone()
+            if inv_row:
+                conn.execute("UPDATE tutien_inventory SET quantity = quantity + ? WHERE id = ?", (auc["quantity"], inv_row["id"]))
+            else:
+                conn.execute("INSERT INTO tutien_inventory (user_id, item_name, item_type, quantity) VALUES (?, ?, 'Vật Phẩm', ?)",
+                             (seller_id, auc["item_name"], auc["quantity"]))
+
+            conn.execute("DELETE FROM tutien_auctions WHERE auction_id = ?", (auction_id,))
+            return True, f"✨ Đã hủy đăng bán phiên `#{auction_id}` và hoàn trả `{auc['quantity']}x` **[{auc['item_name']}]** vào Túi Đồ!"
+
 
 

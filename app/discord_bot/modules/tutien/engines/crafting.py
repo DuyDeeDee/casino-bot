@@ -74,10 +74,75 @@ def craft_alchemy_pill(player: CultivatorProfile, recipe_key: str) -> Tuple[bool
         msg = f"💥 **NỔ LÒ LUYỆN ĐAN!** Hỏa hầu mất kiểm soát! Đan dược hóa tro tàn, bạn bị linh hỏa phản phệ `- {hp_loss:,}` HP và `-2%` Căn Cơ!"
         return False, msg, recipe, player
 
-    # Thành công: có tỉ lệ nhận thêm Ngộ Tính
-    if random.random() < 0.30:
+# Danh Mục Công Thức Luyện Khí (Đúc Trang Bị & Pháp Bảo)
+FORGING_RECIPES: Dict[str, Dict[str, Any]] = {
+    "Hộ Thân Phù": {
+        "name": "Hộ Thân Phù",
+        "ore": 3,
+        "linh_thach": 500,
+        "base_rate": 0.75,
+        "type": "Pháp Bảo Phòng Thủ",
+        "desc": "Thần phù hộ thể, gia tăng +500 Khí Huyết Tối Đa."
+    },
+    "Tụ Linh Kỳ": {
+        "name": "Tụ Linh Kỳ",
+        "ore": 5,
+        "linh_thach": 1000,
+        "base_rate": 0.70,
+        "type": "Trận Kỳ",
+        "desc": "Kỳ trận tụ hội thiên địa linh khí, tăng +20% EXP khi bế quan tu luyện."
+    },
+    "Thái Ất Hộ Tâm Kính": {
+        "name": "Thái Ất Hộ Tâm Kính",
+        "ore": 8,
+        "linh_thach": 2500,
+        "base_rate": 0.60,
+        "type": "Pháp Bảo Thượng Phẩm",
+        "desc": "Gương báu hộ tâm thượng cổ, giảm 10% toàn bộ Sát Thương nhận vào trong PVE & PVP."
+    },
+    "Xích Lôi Tiên Kiếm": {
+        "name": "Xích Lôi Tiên Kiếm",
+        "ore": 15,
+        "linh_thach": 5000,
+        "base_rate": 0.50,
+        "type": "Thần Binh",
+        "desc": "Thần kiếm lôi đình, tăng +400 Sức Mạnh Công Kích & +15% Tỷ Lệ Bạo Kích."
+    }
+}
+
+
+def craft_equipment_item(player: CultivatorProfile, recipe_key: str) -> Tuple[bool, str, Optional[Dict[str, Any]], CultivatorProfile]:
+    """
+    Attempts to forge equipment using FORGING_RECIPES.
+    Considers metal/fire element bonus & Ngo Tinh.
+    """
+    recipe = FORGING_RECIPES.get(recipe_key)
+    if not recipe:
+        return False, f"❌ Bản vẽ đúc tạo **[{recipe_key}]** không tồn tại trong Luyện Khí Các!", None, player
+
+    if player.linh_thach < recipe["linh_thach"]:
+        return False, f"❌ Không đủ Linh Thạch! Cần `{recipe['linh_thach']:,}` Linh Thạch (Hiện có: `{player.linh_thach:,}`).", None, player
+
+    # Calculate success rate (Kim +15%, Hỏa +10%, Ngộ Tính +1%/pt)
+    success_rate = recipe["base_rate"] + (player.ngo_tinh * 0.01)
+    if "Kim" in player.linh_can_element:
+        success_rate += 0.15
+    elif "Hỏa" in player.linh_can_element:
+        success_rate += 0.10
+
+    success_rate = min(0.95, max(0.20, success_rate))
+
+    # Deduct Linh Thạch
+    player.linh_thach -= recipe["linh_thach"]
+
+    roll = random.random()
+    if roll > success_rate:
+        msg = f"💥 **ĐÚC KHÍ THẤT BẠI!** Thần Thiết bị nung chảy quá độ, linh khí phân tán! Mất trắng nguyên liệu và `{recipe['linh_thach']:,}` Linh Thạch!"
+        return False, msg, recipe, player
+
+    if random.random() < 0.25:
         player.ngo_tinh += 1
 
-    msg = f"💊 **LUYỆN ĐAN THÀNH CÔNG!** Đan lò ngưng tụ thành công **[{recipe['name']}]**! (Tỷ lệ đan thành: `{int(success_rate*100)}%`)"
+    msg = f"⚔️ **ĐÚC KHÍ THÀNH CÔNG!** Đã rèn đúc thành công bảo vật **[{recipe['name']}]**! (Tỷ lệ thành công: `{int(success_rate*100)}%`)"
     return True, msg, recipe, player
 

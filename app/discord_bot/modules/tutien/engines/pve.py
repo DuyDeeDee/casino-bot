@@ -378,6 +378,7 @@ def process_quick_sweep_10x(player: CultivatorProfile, db) -> Dict[str, Any]:
             tickets_dropped += 1
             player.linh_duyen_phu += 1
         herbs_dropped += random.randint(1, 3)
+        ores_dropped = random.randint(1, 2) if random.random() < 0.60 else 0
 
     req_exp = REALM_REQUIRED_EXP.get(player.realm_index, 1000000000)
     player.exp = min(req_exp, player.exp + total_exp)
@@ -385,6 +386,8 @@ def process_quick_sweep_10x(player: CultivatorProfile, db) -> Dict[str, Any]:
 
     if herbs_dropped > 0:
         db.add_item(player.user_id, "Thảo Dược Thô", "Nguyên Liệu Luyện Đan", herbs_dropped)
+    if ores_dropped > 0:
+        db.add_item(player.user_id, "Thần Thiết Thô", "Khoáng Thạch Luyện Khí", ores_dropped)
 
     db.update_player(player)
 
@@ -394,6 +397,7 @@ def process_quick_sweep_10x(player: CultivatorProfile, db) -> Dict[str, Any]:
         "total_linh_thach": total_linh_thach,
         "tickets_dropped": tickets_dropped,
         "herbs_dropped": herbs_dropped,
+        "ores_dropped": ores_dropped,
         "player": player
     }
 

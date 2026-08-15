@@ -24,7 +24,9 @@ from app.discord_bot.modules.tutien.engines.tribulation import (
     calculate_breakthrough_chance, calculate_tribulation_damage, calculate_kim_dan_quality, HEART_DEMON_QUESTIONS
 )
 from app.discord_bot.modules.tutien.engines.body_refining import upgrade_body_refining, fuse_dao_domains
-from app.discord_bot.modules.tutien.engines.crafting import craft_alchemy_pill, ALCHEMY_RECIPES
+from app.discord_bot.modules.tutien.engines.crafting import (
+    craft_alchemy_pill, ALCHEMY_RECIPES, craft_equipment_item, FORGING_RECIPES
+)
 from app.discord_bot.modules.tutien.engines.gongfa import GONGFA_DATABASE
 from app.discord_bot.modules.tutien.engines.monetization import (
     grant_topup_and_vip_exp, buy_tiencac_item, is_array_protected
@@ -1960,10 +1962,14 @@ class GachaInteractiveView(discord.ui.View):
                 lt_gain = int((300 + (player.realm_index * 150)) * mult)
                 ticket_drop = 1 if random.random() < 0.08 else 0
 
-                # Thảo dược drop để Luyện Đan (!luyen-dan)
+                # Thảo dược & Khoáng thạch drop để Luyện Đan (!luyen-dan) & Luyện Khí (!luyen-khi)
                 herb_drop = random.randint(1, 3) if is_mutant else (1 if random.random() < 0.40 else 0)
                 if herb_drop > 0:
                     self.db.add_item(player.user_id, "Thảo Dược Thô", "Nguyên Liệu Luyện Đan", herb_drop)
+
+                ore_drop = random.randint(1, 2) if is_mutant else (1 if random.random() < 0.35 else 0)
+                if ore_drop > 0:
+                    self.db.add_item(player.user_id, "Thần Thiết Thô", "Khoáng Thạch Luyện Khí", ore_drop)
 
                 tien_ngoc_drop = random.randint(10, 30) if (is_mutant and random.random() < 0.35) else 0
                 linh_bui_drop = random.randint(10, 40) if (is_mutant and random.random() < 0.25) else 0
@@ -1982,6 +1988,8 @@ class GachaInteractiveView(discord.ui.View):
                     loot_items.append("`+1` Linh Duyên Phù 🎟️")
                 if herb_drop:
                     loot_items.append(f"`+{herb_drop}` Thảo Dược Thô 🌿")
+                if ore_drop:
+                    loot_items.append(f"`+{ore_drop}` Thần Thiết Thô ⛏️")
                 if tien_ngoc_drop:
                     loot_items.append(f"`+{tien_ngoc_drop}` Tiên Ngọc 🌟")
                 if linh_bui_drop:
@@ -2465,6 +2473,260 @@ class GachaInteractiveView(discord.ui.View):
 
         self.db.update_player(updated_player)
         await ctx.send(msg)
+
+    @commands.command(
+        name="luyen-khi",
+        aliases=["luyenkhi", "che-tao", "duc-khi", "smithing"],
+        brief="Rèn đúc Thần Binh, Trận Kỳ, Pháp Bảo từ Thần Thiết Thô và Linh Thạch.",
+        usage="luyen-khi [tên_trang_bị]"
+    )
+    async def luyenkhi_cmd(self, ctx: commands.Context, *, equip_name: str = None):
+        """Rèn đúc Thần Binh, Trận Kỳ, Pháp Bảo (!luyen-khi)."""
+        player = self.db.get_player(ctx.author.id)
+        if not player:
+            await ctx.send("❌ Vui lòng gõ `!nhapmon` trước!")
+            return
+
+        inv = self.db.get_inventory(ctx.author.id)
+        ore_item = next((item for item in inv if "Thần Thiết" in item["item_name"] or "Khoáng Thạch" in item.get("item_type", "")), None)
+        ore_count = ore_item["quantity"] if ore_item else 0
+
+        # Nếu không truyền tên: hiển thị Khí Phổ (Danh mục công thức)
+        if not equip_name:
+            embed = discord.Embed(
+                title="⚒️ THIÊN CÔNG LÒ — KHÍ PHỔ LUYỆN KHÍ ⚒️",
+                description=f"Tu sĩ: **[{player.dao_hieu}]** ({player.linh_can_element})\n"
+                            f"⛏️ **Thần Thiết Thô có sẵn:** `{ore_count:,}` khối | 💰 **Linh Thạch:** `{player.linh_thach:,}`\n"
+                            f"> Cú pháp đúc tạo: `!luyen-khi <Tên Bảo Vật>` (Ví dụ: `!luyen-khi Ho Than Phu`)\n"
+                            f"> ⚡ *Linh Căn Kim (+15%) & Hỏa (+10%) tăng Tỷ lệ Đúc Khí thành công!*",
+                color=discord.Color.dark_gold()
+            )
+            for key, rec in FORGING_RECIPES.items():
+                kim_bonus = " *(+15% Kim)*" if "Kim" in player.linh_can_element else (" *(+10% Hỏa)*" if "Hỏa" in player.linh_can_element else "")
+                bonus_pct = 0.15 if "Kim" in player.linh_can_element else (0.10 if "Hỏa" in player.linh_can_element else 0.0)
+                rate_pct = int(min(95, rec['base_rate'] + (player.ngo_tinh * 0.01) + bonus_pct) * 100)
+                val = (
+                    f"> ⛏️ Nguyên liệu: `{rec['ore']}` Thần Thiết Thô + `{rec['linh_thach']:,}` Linh Thạch\n"
+                    f"> ⚡ Tỷ lệ đúc thành: **{rate_pct}%**{kim_bonus}\n"
+                    f"> 📜 *{rec['desc']}*"
+                )
+                embed.add_field(name=f"🛡️ {rec['name']} [{rec['type']}]", value=val, inline=False)
+
+            embed.set_footer(text="Săn quái (!sanyeu) để đào thêm Thần Thiết Thô!")
+            await ctx.send(embed=embed)
+            return
+
+        # Tìm công thức match
+        target_recipe_key = None
+        for key in FORGING_RECIPES.keys():
+            if equip_name.lower() in key.lower():
+                target_recipe_key = key
+                break
+
+        if not target_recipe_key:
+            await ctx.send(f"❌ Không tìm thấy bản vẽ bảo vật **[{equip_name}]** trong Khí Phổ! Gõ `!luyen-khi` để xem danh sách.")
+            return
+
+        recipe = FORGING_RECIPES[target_recipe_key]
+        req_ore = recipe["ore"]
+
+        if ore_count < req_ore:
+            await ctx.send(
+                f"❌ Không đủ **Thần Thiết Thô**! Cần `{req_ore}` khối (Hiện có: `{ore_count}`).\n"
+                f"> ⛏️ Hãy đi Săn Yêu (`!sanyeu`) để khai thác thêm khoáng thạch!"
+            )
+            return
+
+        # Trừ khoáng thạch trước
+        self.db.consume_item(player.user_id, ore_item["item_name"], req_ore)
+
+        # Tiến hành đúc khí
+        success, msg, rec_data, updated_player = craft_equipment_item(player, target_recipe_key)
+        if success and rec_data:
+            self.db.add_item(player.user_id, rec_data["name"], rec_data["type"], 1)
+
+        self.db.update_player(updated_player)
+        await ctx.send(msg)
+
+    # --- 🏪 SÀN ĐẤU GIÁ & CHỢ TU TIÊN (AUCTION HOUSE) ---
+
+    @commands.command(
+        name="cho-troi",
+        aliases=["chotroi", "dau-gia", "daugia", "market", "san-dau-gia"],
+        brief="Xem các vật phẩm, đan dược, pháp bảo đang bày bán trên Sàn Đấu Giá.",
+        usage="cho-troi"
+    )
+    async def chotroi_cmd(self, ctx: commands.Context):
+        """Xem Sàn Đấu Giá Chợ Trời Tu Tiên (!cho-troi)."""
+        player = self.db.get_player(ctx.author.id)
+        if not player:
+            await ctx.send("❌ Vui lòng gõ `!nhapmon` trước!")
+            return
+
+        auctions = self.db.get_active_auctions(limit=15)
+        embed = discord.Embed(
+            title="🏪 SÀN ĐẤU GIÁ — VẠN BẢO CÁC 🏪",
+            description=f"Tu sĩ: **[{player.dao_hieu}]** | 💰 **Linh Thạch của bạn:** `{player.linh_thach:,}`\n"
+                        f"> 💡 Mua hàng: `!mua-hang <Mã_Số>` (Ví dụ: `!mua-hang 1`)\n"
+                        f"> 💡 Đăng bán: `!dang-ban <Tên_Vật_Phẩm> <Số_Lượng> <Giá_Linh_Thạch>`\n"
+                        f"> 💡 Rút hàng: `!huy-ban <Mã_Số>`",
+            color=discord.Color.gold()
+        )
+
+        if not auctions:
+            embed.add_field(name="📦 Hiện Tại Chưa Có Vật Phẩm Nào", value="> Hãy là người đầu tiên đăng bán vật phẩm từ Túi Đồ bằng lệnh `!dang-ban`!", inline=False)
+        else:
+            now = time.time()
+            for auc in auctions:
+                remain_h = max(0, int((auc['expires_at'] - now) / 3600))
+                remain_m = max(0, int(((auc['expires_at'] - now) % 3600) / 60))
+                seller_str = auc.get('seller_name') or f"Đạo hữu ({auc['seller_id']})"
+                val = (
+                    f"> 👤 Người bán: **{seller_str}**\n"
+                    f"> 💰 Giá bán: `{auc['price']:,}` Linh Thạch\n"
+                    f"> ⏳ Hết hạn sau: `{remain_h}h {remain_m}m`\n"
+                    f"> 👉 Mua nhanh: `!mua-hang {auc['auction_id']}`"
+                )
+                embed.add_field(name=f"🏷️ [Mã #{auc['auction_id']}] {auc['quantity']}x {auc['item_name']}", value=val, inline=False)
+
+        embed.set_footer(text="Mọi giao dịch áp dụng thuế 5% Linh Thạch thiêu đốt bảo hộ kinh tế.")
+        await ctx.send(embed=embed)
+
+    @commands.command(
+        name="dang-ban",
+        aliases=["dangban", "sell-item", "rao-ban"],
+        brief="Đăng bán vật phẩm từ Túi Đồ lên Sàn Đấu Giá.",
+        usage="dang-ban [tên_vật_phẩm] [số_lượng] [giá_linh_thạch]"
+    )
+    async def dangban_cmd(self, ctx: commands.Context, item_name: str, quantity: int, price: int):
+        """Đăng bán vật phẩm từ Túi Đồ lên Sàn Đấu Giá (!dang-ban)."""
+        player = self.db.get_player(ctx.author.id)
+        if not player:
+            await ctx.send("❌ Vui lòng gõ `!nhapmon` trước!")
+            return
+
+        if quantity <= 0 or price <= 0:
+            await ctx.send("❌ Số lượng và giá bán phải lớn hơn 0!")
+            return
+
+        if price > 100000000:
+            await ctx.send("❌ Giá bán không được vượt quá 100,000,000 Linh Thạch!")
+            return
+
+        inv = self.db.get_inventory(ctx.author.id)
+        matched_item = None
+        for it in inv:
+            if item_name.lower() in it["item_name"].lower():
+                matched_item = it
+                break
+
+        if not matched_item or matched_item["quantity"] < quantity:
+            avail = matched_item["quantity"] if matched_item else 0
+            await ctx.send(f"❌ Bạn không đủ vật phẩm **[{item_name}]** trong Túi Đồ! (Hiện có: `{avail}`). Gõ `!ttinv` để kiểm tra.")
+            return
+
+        auction_id = self.db.create_auction(player.user_id, matched_item["item_name"], quantity, price, duration_hours=24)
+        if not auction_id:
+            await ctx.send("❌ Không thể đăng bán vật phẩm! Vui lòng thử lại sau.")
+            return
+
+        await ctx.send(
+            f"✅ **ĐĂNG BÁN THÀNH CÔNG!**\n"
+            f"> 🏷️ **Mã Phiên:** `#{auction_id}`\n"
+            f"> 📦 **Vật phẩm:** `{quantity}x` **[{matched_item['item_name']}]**\n"
+            f"> 💰 **Giá bán:** `{price:,}` Linh Thạch\n"
+            f"> ⏳ Thời hạn bày bán: **24 Giờ** (Xem tại `!cho-troi`)."
+        )
+
+    @commands.command(
+        name="mua-hang",
+        aliases=["muahang", "mua-dau-gia", "buy-market"],
+        brief="Mua vật phẩm từ Sàn Đấu Giá theo Mã Số Phiên.",
+        usage="mua-hang [mã_số_phiên]"
+    )
+    async def muahang_cmd(self, ctx: commands.Context, auction_id: int):
+        """Mua vật phẩm từ Sàn Đấu Giá (!mua-hang <Mã_Số>)."""
+        player = self.db.get_player(ctx.author.id)
+        if not player:
+            await ctx.send("❌ Vui lòng gõ `!nhapmon` trước!")
+            return
+
+        success, msg = self.db.buy_auction_item(player.user_id, auction_id)
+        await ctx.send(msg)
+
+    @commands.command(
+        name="huy-ban",
+        aliases=["huyban", "cancel-sell", "rut-hang"],
+        brief="Hủy phiên đăng bán và nhận lại vật phẩm về Túi Đồ.",
+        usage="huy-ban [mã_số_phiên]"
+    )
+    async def huyban_cmd(self, ctx: commands.Context, auction_id: int):
+        """Hủy phiên đăng bán (!huy-ban <Mã_Số>)."""
+        player = self.db.get_player(ctx.author.id)
+        if not player:
+            await ctx.send("❌ Vui lòng gõ `!nhapmon` trước!")
+            return
+
+        success, msg = self.db.cancel_auction(player.user_id, auction_id)
+        await ctx.send(msg)
+
+    # --- 🏡 ĐỘNG PHỦ & NÂNG CẤP TỤ LINH TRẬN (LINH THẠCH SINK) ---
+
+    @commands.command(
+        name="dong-phu",
+        aliases=["dongphu", "nang-cap-dong-phu", "tu-gia", "dong-phu-tu-luyen"],
+        brief="Xem thông tin Động Phủ & Nâng Cấp Tụ Linh Trận bằng Linh Thạch.",
+        usage="dong-phu [nangcap]"
+    )
+    async def dongphu_cmd(self, ctx: commands.Context, action: str = None):
+        """Xem & Nâng Cấp Động Phủ (!dong-phu [nangcap])."""
+        player = self.db.get_player(ctx.author.id)
+        if not player:
+            await ctx.send("❌ Vui lòng gõ `!nhapmon` trước!")
+            return
+
+        current_lvl = player.dong_phu_level
+        upgrade_cost = int(15000 * (current_lvl ** 1.4))
+
+        if action and action.lower() in ["nangcap", "upgrade", "up", "nang-cap"]:
+            if current_lvl >= 50:
+                await ctx.send("👑 Động Phủ của bạn đã đạt Cấp Tối Đa (Cấp 50 - Tiên Đế Tiên Phủ)!")
+                return
+
+            if player.linh_thach < upgrade_cost:
+                await ctx.send(f"❌ Không đủ Linh Thạch để nâng cấp Động Phủ! Cần `{upgrade_cost:,}` Linh Thạch (Hiện có: `{player.linh_thach:,}`).")
+                return
+
+            player.linh_thach -= upgrade_cost
+            player.dong_phu_level += 1
+            self.db.update_player(player)
+
+            new_lvl = player.dong_phu_level
+            new_exp_buff = int((new_lvl - 1) * 15)
+            await ctx.send(
+                f"🏰 **NÂNG CẤP ĐỘNG PHỦ THÀNH CÔNG!**\n"
+                f"> 🏡 Động Phủ đã thăng cấp lên: **Cấp {new_lvl}**!\n"
+                f"> ⚡ Hiệu suất Tụ Linh Trận: **+{new_exp_buff}% EXP Bế Quan & Tu Luyện**!\n"
+                f"> 🛡️ Tăng thêm +2 Điểm Hộ Trận Đột Phá Lôi Kiếp!"
+            )
+            return
+
+        # View Động Phủ status
+        exp_buff = int((current_lvl - 1) * 15)
+        embed = discord.Embed(
+            title=f"🏰 TIÊN GIA ĐỘNG PHỦ — [{player.dao_hieu}]",
+            description=f"Cấp độ Động Phủ: **Cấp {current_lvl} / 50**\n"
+                        f"💰 **Linh Thạch hiện có:** `{player.linh_thach:,}`\n\n"
+                        f"✨ **Hiệu Quả Tụ Linh Trận:**\n"
+                        f"> ⚡ Gia tăng tốc độ Tu Luyện & Bế Quan: **+{exp_buff}% EXP**\n"
+                        f"> 🛡️ Hộ Thân Đột Phá: **+{min(20, current_lvl * 2)} Điểm Kháng Kiếp**\n\n"
+                        f"🛠️ **Nâng cấp lên Cấp {current_lvl + 1}:**\n"
+                        f"> 💰 Chi phí: `{upgrade_cost:,}` Linh Thạch\n"
+                        f"> 👉 Gõ `!dong-phu nangcap` để tiến hành nâng cấp!",
+            color=discord.Color.green()
+        )
+        embed.set_footer(text="Nâng cấp Động Phủ giúp tối đa hóa thu nhập tu vi khi bế quan AFK!")
+        await ctx.send(embed=embed)
 
     @commands.command(
         name="doi-cong-phap",
