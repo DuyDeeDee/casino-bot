@@ -25,6 +25,7 @@ from app.discord_bot.modules.tutien.engines.tribulation import (
 )
 from app.discord_bot.modules.tutien.engines.body_refining import upgrade_body_refining, fuse_dao_domains
 from app.discord_bot.modules.tutien.engines.crafting import craft_alchemy_pill, ALCHEMY_RECIPES
+from app.discord_bot.modules.tutien.engines.gongfa import GONGFA_DATABASE
 from app.discord_bot.modules.tutien.engines.monetization import (
     grant_topup_and_vip_exp, buy_tiencac_item, is_array_protected
 )
@@ -2312,9 +2313,10 @@ class TuTienCog(commands.Cog, name="TuTien"):
 
         if target_name != "《Phàm Nhân Quyết》":
             inv = self.db.get_inventory(ctx.author.id)
-            has_book = any(target_name in item["item_name"] for item in inv)
+            clean_kw = target_name.replace("《", "").replace("》", "").strip().lower()
+            has_book = any(clean_kw in item["item_name"].lower() for item in inv)
             if not has_book:
-                await ctx.send(f"❌ Bạn không sở hữu bí kíp **[{target_name}]** trong Túi Đồ! Hãy quay Gacha `!quay-gacha` hoặc đổi tại `!linhbui-shop`!")
+                await ctx.send(f"❌ Bạn không sở hữu bí kíp **[{target_name}]** trong Túi Đồ! Hãy quay Gacha `!quay-gacha` hoặc đổi tại `!tang-kinh-cac` / `!linhbui-shop`!")
                 return
 
         gongfa.chu_tu = target_name
