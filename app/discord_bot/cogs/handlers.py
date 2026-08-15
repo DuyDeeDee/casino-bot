@@ -44,7 +44,7 @@ class Handlers(commands.Cog, name="handlers"):
         # Kiểm tra giới hạn kênh sử dụng bot cho từng Server (Database) và Global config
         if ctx.guild:
             # Các cog thuộc nhóm "Function" và lệnh help được phép dùng ở mọi kênh
-            exempt_cogs = {"Afk", "afk", "Giveaway", "Jail", "ChannelControl"}
+            exempt_cogs = {"Afk", "afk", "Giveaway", "Jail", "ChannelControl", "TuTien", "tutien", "TuTienCog"}
             is_exempt = False
             if ctx.command:
                 if ctx.command.name == "help" or (ctx.command.cog and ctx.command.cog.qualified_name in exempt_cogs):
@@ -95,9 +95,9 @@ class Handlers(commands.Cog, name="handlers"):
                 pass
             raise commands.CheckFailure("Bị ban")
         
-        # Nếu chưa nhận quà khởi nghiệp và lệnh không phải là khoinghiep hoặc help
+        # Nếu chưa nhận quà khởi nghiệp và lệnh không phải là khoinghiep hoặc help hoặc exempt
         if not self.economy.has_claimed_start(user_id):
-            if ctx.command and ctx.command.name in ["khoinghiep", "help"]:
+            if ctx.command and (ctx.command.name in ["khoinghiep", "help"] or (ctx.command.cog and ctx.command.cog.qualified_name in exempt_cogs)):
                 return
                 
             prefix = self.client.command_prefix
