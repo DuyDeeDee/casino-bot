@@ -85,9 +85,9 @@ class TuTienDB:
                 )
             """)
 
-            # Ensure column migration for existing tables
+            # Ensure column migration for existing tables safely
             existing_cols = [row[1] for row in conn.execute("PRAGMA table_info(tutien_players)").fetchall()]
-            new_cols = {
+            all_cols = {
                 "max_tinh_luc": "INTEGER DEFAULT 100",
                 "tien_ngoc": "INTEGER DEFAULT 0",
                 "linh_duyen_phu": "INTEGER DEFAULT 0",
@@ -103,6 +103,11 @@ class TuTienDB:
                 "vip_pass_expires": "REAL",
                 "array_protection_until": "REAL",
                 "gacha_pity_count": "INTEGER DEFAULT 0",
+                "is_meditating": "INTEGER DEFAULT 0",
+                "meditate_start_time": "REAL",
+                "meditate_duration_hours": "INTEGER DEFAULT 0",
+                "tau_hoa_nhap_ma_until": "REAL",
+                "active_dao_domain": "TEXT",
                 "kinh_mach_doan_tuyet_until": "REAL",
                 "lingering_debuff": "TEXT",
                 "thanh_the_phu": "INTEGER DEFAULT 0",
@@ -115,11 +120,31 @@ class TuTienDB:
                 "pvp_losses": "INTEGER DEFAULT 0",
                 "pvp_streak": "INTEGER DEFAULT 0",
                 "chan_thuong_until": "REAL",
-                "mien_chien_until": "REAL"
+                "mien_chien_until": "REAL",
+                "body_realm_index": "INTEGER DEFAULT 0",
+                "dong_phu_level": "INTEGER DEFAULT 1",
+                "sect_id": "INTEGER",
+                "sect_role": "TEXT",
+                "can_co": "REAL DEFAULT 80.0",
+                "tam_canh": "REAL DEFAULT 70.0",
+                "dao_tam": "INTEGER DEFAULT 10",
+                "ngo_tinh": "INTEGER DEFAULT 10",
+                "hp": "INTEGER DEFAULT 1000",
+                "max_hp": "INTEGER DEFAULT 1000",
+                "mana": "INTEGER DEFAULT 500",
+                "max_mana": "INTEGER DEFAULT 500",
+                "than_thuc": "INTEGER DEFAULT 50",
+                "nghiep_luc": "INTEGER DEFAULT 0",
+                "co_duyen": "INTEGER DEFAULT 10",
+                "thien_dao_diem": "INTEGER DEFAULT 0",
+                "tinh_luc": "INTEGER DEFAULT 100"
             }
-            for col_name, col_type in new_cols.items():
+            for col_name, col_type in all_cols.items():
                 if col_name not in existing_cols:
-                    conn.execute(f"ALTER TABLE tutien_players ADD COLUMN {col_name} {col_type}")
+                    try:
+                        conn.execute(f"ALTER TABLE tutien_players ADD COLUMN {col_name} {col_type}")
+                    except Exception as e:
+                        pass
 
             # Table: Gongfa
             conn.execute("""
