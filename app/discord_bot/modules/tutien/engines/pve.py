@@ -19,14 +19,47 @@ ELEMENT_COUNTERS = {
     ("💧 Thủy", "🔥 Hỏa"): {"dmg_mult": 1.5, "defense_mult": 0.8, "desc": "💧 Thủy khắc 🔥 Hỏa (+50% Sát thương)"},
 }
 
+# --- POOL YÊU THÚ THEO 10 ĐẠI CẢNH GIỚI TU TIÊN (30+ LOÀI YÊU MA THẦN THÚ) ---
 MONSTER_NAMES_BY_REALM = {
-    0: ["Xà Thú", "Dã Lang", "Hồ Tinh"],
-    1: ["Mộc Tinh Thú", "Thiềm Thừ Yêu", "Xích Xà"],
-    2: ["Cửu Ôn Mãng", "Bạch Ngược Hổ", "U Hồn Yêu"],
-    3: ["Lôi Điệp Thú", "Băng Nhãn Lang", "Hỏa Sí Yêu"],
-    4: ["Thạch Nhàn Thú", "Phong Hống Hổ", "Thiên Ma Tộc"],
-    5: ["Cửu Vĩ Hồ Yêu", "Tuyết Xích Long", "U Minh Ma Tôn"],
+    # 0. Luyện Khí (Realm 0 - 8)
+    0: ["Xà Thú", "Dã Lang", "Hồ Tinh", "Hắc Phong Hùng", "Bạch Ngược Hổ", "Độc Giác Tê", "Thực Cốt Xà", "Quỷ Diện Chu"],
+    # 1. Trúc Cơ (Realm 9 - 12)
+    1: ["Xích Huyết Cự Mãng", "Băng Sương Cự Lang", "Thiềm Thừ Yêu Vương", "Đoạt Phách Ma Tinh", "Kim Sí Điêu Vương", "Địa Ngục Huyết Khôi"],
+    # 2. Kim Đan (Realm 13 - 16)
+    2: ["Cửu U Độc Long Mãng", "Tử Diễm Cuồng Sư", "Bạch Cốt Yêu Tôn", "Thiên Ma Dạ Xoa", "Hám Thiên Ma Hùng", "Thái Cổ Chu Tước Tàn Hồn"],
+    # 3. Nguyên Anh (Realm 17 - 20)
+    3: ["Thôn Thiên Ma Côn", "Vô Cực Cửu Đầu Xà", "Hắc Ám Kỳ Lân", "U Minh Ma Thần", "Bát Hoang Cự Thú", "Vạn Cổ Thi Vương"],
+    # 4. Hóa Thần (Realm 21 - 24)
+    4: ["Thái Cổ Chân Long Hóa Thân", "Thần Ma Bất Diệt Thi", "Hư Không Thôn Phệ Giả", "Hỗn Độn Ma Viên", "Cửu U Minh Vương"],
+    # 5. Luyện Hư (Realm 25)
+    5: ["Thái Cổ Thần Hoàng", "Vô Nhai Huyết Hải Chi Chủ", "Hư Không Chân Long", "Cửu Giới Ma Tôn"],
+    # 6. Hợp Thể (Realm 26)
+    6: ["Thái Hư Cổ Thần", "Hỗn Độn Đạo Tôn Tàn Linh", "Diệt Thế Hắc Long", "Vạn Giới Ma Hoàng"],
+    # 7. Đại Thừa (Realm 27)
+    7: ["Thiên Đạo Trảm Tội Giả", "Hỗn Độn Đệ Nhất Thần Ma", "Vĩnh Hằng Cấm Kỵ Thú", "Bất Hủ Chân Linh"],
+    # 8. Độ Kiếp (Realm 28)
+    8: ["Cửu Trọng Thiên Kiếp Chi Linh", "Đế Thi Phục Sinh", "Thiên Đạo Pháp Thân", "Thái Cổ Tru Thần Giả"],
+    # 9. Tiên Đế (Realm 29)
+    9: ["Vô Thượng Tiên Đế Tàn Ảnh", "Cực Đạo Chí Tôn Chi Thần", "Khởi Nguyên Ma Thần", "Vạn Cổ Độc Tôn Chi Linh"]
 }
+
+# Tuyệt Kỹ Độc Bản Của Yêu Thú (Signature Monster Skills)
+MONSTER_SIGNATURE_SKILLS = [
+    {"name": "《Thôn Thiên Thực Địa》", "dmg_mult": 1.4, "flavor": "há miệng như hắc động hút cạn linh khí xung quanh!"},
+    {"name": "《Cửu U Huyết Trảo》", "dmg_mult": 1.35, "flavor": "móng vuốt rực huyết quang xé toạc hộ thể chân nguyên!"},
+    {"name": "《Thiên Ma Đoạt Hồn》", "dmg_mult": 1.5, "flavor": "hóa thành ma ảnh oanh kích thẳng vào Thần Thức!"},
+    {"name": "《Thái Cổ Long Tức》", "dmg_mult": 1.6, "flavor": "phun ra long tức hủy diệt nung chảy vạn vật!"},
+    {"name": "《Hỗn Độn Diệt Thế Quang》", "dmg_mult": 1.7, "flavor": "phóng thích thần quang hỗn độn chấn động thiên địa!"},
+    {"name": "《Hư Không Đoạt Mệnh Kích》", "dmg_mult": 1.45, "flavor": "xuyên qua khe nứt hư không tập kích chí mạng!"}
+]
+
+# Danh Hiệu Đột Biến Của Yêu Thú
+MUTATION_TYPES = [
+    {"prefix": "🔥 [CUỒNG BẠO] ", "hp_mult": 2.2, "atk_mult": 2.5, "tag": "Cuồng Bạo (+150% ATK)"},
+    {"prefix": "⚡ [LÔI ĐÌNH] ", "hp_mult": 2.5, "atk_mult": 2.2, "tag": "Lôi Đình (Kháng Lôi, Sát thương giật)"},
+    {"prefix": "💀 [TỬ LINH] ", "hp_mult": 2.8, "atk_mult": 2.0, "tag": "Tử Linh (Hấp thụ tinh huyết)"},
+    {"prefix": "👑 [LÃNH CHÚA] ", "hp_mult": 3.5, "atk_mult": 2.4, "tag": "Lãnh Chúa (Bá vương một cõi, Phần thưởng x3)"}
+]
 
 
 def clean_element_name(element_raw: str) -> str:
@@ -64,23 +97,56 @@ def check_elemental_advantage(attacker_elem: str, defender_elem: str) -> Tuple[f
 
 
 def generate_pve_monster(player_realm_index: int, floor_offset: int = 0, is_mutant: bool = False) -> Dict[str, Any]:
-    """Generate monster scaled to player realm or tower floor. Has 15% chance to be Biến Dị Yêu Sơ (3x stats)."""
+    """Generate monster scaled to player realm or tower floor. Has 15% chance to be Biến Dị Yêu Thú với danh hiệu riêng."""
     lvl = max(0, player_realm_index + floor_offset)
-    names = MONSTER_NAMES_BY_REALM.get(min(lvl // 5, 5), ["Yêu Quái Cổ Đại", "Thiên Ma", "Cuồng Thú"])
+    
+    # Map realm level (0-29) into 10 realm groups (0-9)
+    if lvl <= 8:
+        group_idx = 0   # Luyện Khí (0-8)
+    elif lvl <= 12:
+        group_idx = 1   # Trúc Cơ (9-12)
+    elif lvl <= 16:
+        group_idx = 2   # Kim Đan (13-16)
+    elif lvl <= 20:
+        group_idx = 3   # Nguyên Anh (17-20)
+    elif lvl <= 24:
+        group_idx = 4   # Hóa Thần (21-24)
+    elif lvl == 25:
+        group_idx = 5   # Luyện Hư
+    elif lvl == 26:
+        group_idx = 6   # Hợp Thể
+    elif lvl == 27:
+        group_idx = 7   # Đại Thừa
+    elif lvl == 28:
+        group_idx = 8   # Độ Kiếp
+    else:
+        group_idx = 9   # Tiên Đế
+
+    names = MONSTER_NAMES_BY_REALM.get(group_idx, MONSTER_NAMES_BY_REALM[0])
     m_name = random.choice(names)
     
     elements = ["🔥 Hỏa", "💧 Thủy", "🌳 Mộc", "⚡ Kim", "🪨 Thổ", "⚡ Lôi", "❄️ Băng", "🌪️ Phong"]
     m_elem = random.choice(elements)
 
-    mult = 3.0 if is_mutant else 1.0
-    prefix = "⚠️ BIẾN DỊ " if is_mutant else ""
+    if is_mutant:
+        mutation = random.choice(MUTATION_TYPES)
+        prefix = mutation["prefix"]
+        hp_mult = mutation["hp_mult"]
+        atk_mult = mutation["atk_mult"]
+        mutant_tag = mutation["tag"]
+    else:
+        prefix = ""
+        hp_mult = 1.0
+        atk_mult = 1.0
+        mutant_tag = None
 
-    base_hp = int((2000 + (lvl * 1500)) * mult)
-    base_atk = int((150 + (lvl * 120)) * mult)
+    base_hp = int((2000 + (lvl * 1500)) * hp_mult)
+    base_atk = int((150 + (lvl * 120)) * atk_mult)
     shield_max = int(base_hp * 0.35)
 
     return {
         "name": f"{prefix}{m_name} [{REALMS[min(lvl, len(REALMS)-1)]}]",
+        "raw_name": m_name,
         "element": m_elem,
         "max_hp": base_hp,
         "current_hp": base_hp,
@@ -90,6 +156,7 @@ def generate_pve_monster(player_realm_index: int, floor_offset: int = 0, is_muta
         "is_broken": False,
         "stun_turns": 0,
         "is_mutant": is_mutant,
+        "mutant_tag": mutant_tag,
         "is_raging": False,
         "action_history": []
     }
@@ -258,7 +325,16 @@ def process_turn_action(
                 log["message"] += f"\n⚡⚡ **CẢNH BÁO TỤ KHÍ CỬU THIÊN!** {monster['name']} chuẩn bị tung đòn One-Shot 3,000% Sát Thương!"
             else:
                 rage_bonus = 1.8 if monster.get("is_raging") else 1.0
-                m_dmg = int(monster["atk"] * def_mult * rage_bonus * random.uniform(0.85, 1.15))
+                skill_mult = 1.0
+                skill_desc = ""
+
+                # 35% chance monster unleashes Signature Skill
+                if random.random() < 0.35:
+                    skill = random.choice(MONSTER_SIGNATURE_SKILLS)
+                    skill_mult = skill["dmg_mult"]
+                    skill_desc = f"\n👹 **TUYỆT KỸ YÊU MA!** {monster['name']} thi triển **{skill['name']}**, {skill['flavor']}"
+
+                m_dmg = int(monster["atk"] * def_mult * rage_bonus * skill_mult * random.uniform(0.85, 1.15))
 
                 # --- Thổ element: +30% Phòng thủ → giảm 30% damage nhận ---
                 elem = player.linh_can_element
@@ -274,7 +350,7 @@ def process_turn_action(
 
                 player.hp = max(0, player.hp - m_dmg)
                 log["monster_damage"] = m_dmg
-                log["message"] += f"\n🐍 {monster['name']} phản công gây `{m_dmg:,}` Sát thương!"
+                log["message"] += skill_desc + f"\n🐍 {monster['name']} phản công gây `{m_dmg:,}` Sát thương!"
 
     return log, monster
 
@@ -306,6 +382,9 @@ def process_quick_sweep_10x(player: CultivatorProfile, db) -> Dict[str, Any]:
     req_exp = REALM_REQUIRED_EXP.get(player.realm_index, 1000000000)
     player.exp = min(req_exp, player.exp + total_exp)
     player.linh_thach += total_linh_thach
+
+    if herbs_dropped > 0:
+        db.add_item(player.user_id, "Thảo Dược Thô", "Nguyên Liệu Luyện Đan", herbs_dropped)
 
     db.update_player(player)
 

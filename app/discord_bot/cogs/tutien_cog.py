@@ -1763,11 +1763,39 @@ class TuTienCog(commands.Cog, name="TuTien"):
                 lt_gain = int((300 + (player.realm_index * 150)) * mult)
                 ticket_drop = 1 if random.random() < 0.08 else 0
 
+                # Thảo dược drop để Luyện Đan (!luyen-dan)
+                herb_drop = random.randint(1, 3) if is_mutant else (1 if random.random() < 0.40 else 0)
+                if herb_drop > 0:
+                    self.db.add_item(player.user_id, "Thảo Dược Thô", "Nguyên Liệu Luyện Đan", herb_drop)
+
+                tien_ngoc_drop = random.randint(10, 30) if (is_mutant and random.random() < 0.35) else 0
+                linh_bui_drop = random.randint(10, 40) if (is_mutant and random.random() < 0.25) else 0
+
                 req_exp = REALM_REQUIRED_EXP.get(player.realm_index, 1000000000)
                 player.exp = min(req_exp, player.exp + exp_gain)
                 player.linh_thach += lt_gain
                 player.linh_duyen_phu += ticket_drop
+                player.tien_ngoc += tien_ngoc_drop
+                player.linh_bui += linh_bui_drop
                 self.db.update_player(player)
+
+                # Format loot description
+                loot_items = [f"`+{exp_gain:,}` EXP", f"`+{lt_gain:,}` Linh Thạch"]
+                if ticket_drop:
+                    loot_items.append("`+1` Linh Duyên Phù 🎟️")
+                if herb_drop:
+                    loot_items.append(f"`+{herb_drop}` Thảo Dược Thô 🌿")
+                if tien_ngoc_drop:
+                    loot_items.append(f"`+{tien_ngoc_drop}` Tiên Ngọc 🌟")
+                if linh_bui_drop:
+                    loot_items.append(f"`+{linh_bui_drop}` Linh Bụi ✨")
+
+                win_embed = discord.Embed(
+                    title=f"🎉 TRẢM YÊU THÀNH CÔNG — {monster['name']}!",
+                    description=f"Tu sĩ **[{player.dao_hieu}]** đã xuất thủ kết liễu **{monster['name']}**!\n\n"
+                                f"🎁 **Chiến Lợi Phẩm:** " + " | ".join(loot_items),
+                    color=discord.Color.green()
+                )
 
                 # --- Quest Tracking: Diệt Yêu Trừ Ma ---
                 completed_pve_q = self.db.increment_quest_progress(player.user_id, "pve_kills", 1)
