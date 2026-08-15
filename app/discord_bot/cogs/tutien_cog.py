@@ -1,13 +1,11 @@
-"""
-Comprehensive Prefix Commands Cog for Tu Tien System: «ĐẠI ĐẠO TRANH PHONG»
-Includes Monetization Commands, VIP Progression, Gacha 3 Banners with open_chest.gif animation & Server Flex.
-"""
+from __future__ import annotations
 
 import asyncio
 import io
 import os
 import random
 import time
+from typing import Optional, Dict, Any, List, Tuple
 import discord
 from discord.ext import commands, tasks
 
