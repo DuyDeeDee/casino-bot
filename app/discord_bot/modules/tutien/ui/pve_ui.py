@@ -83,7 +83,7 @@ class TrapSacrificeView(discord.ui.View):
             await interaction.response.send_message("❌ Chỉ Trưởng Đội mới có quyền quyết định!", ephemeral=True)
             return
         self.choice = "ALL"
-        await interaction.response.send_message("⚠️ **CẢ ĐỘI CHỊU PHẠT!** Tất cả thành viên trong đội chịu tổn hại -20% HP!", ephemeral=False)
+        await interaction.response.defer()
         self.stop()
 
     @discord.ui.button(label="🎯 1 Người Chịu Gánh 80% HP", style=discord.ButtonStyle.danger, custom_id="btn_trap_one")
@@ -92,7 +92,7 @@ class TrapSacrificeView(discord.ui.View):
             await interaction.response.send_message("❌ Chỉ Trưởng Đội mới có quyền quyết định!", ephemeral=True)
             return
         self.choice = "ONE"
-        await interaction.response.send_message("🩸 **HI SINH BẢO TOÀN!** Trưởng đội chọn 1 người chịu phạt -80% HP để cả đội đi tiếp!", ephemeral=False)
+        await interaction.response.defer()
         self.stop()
 
 

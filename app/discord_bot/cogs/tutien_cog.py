@@ -24,7 +24,7 @@ from app.discord_bot.modules.tutien.engines.tribulation import (
     calculate_breakthrough_chance, calculate_tribulation_damage, calculate_kim_dan_quality, HEART_DEMON_QUESTIONS
 )
 from app.discord_bot.modules.tutien.engines.body_refining import upgrade_body_refining, fuse_dao_domains
-from app.discord_bot.modules.tutien.engines.crafting import craft_alchemy_pill
+from app.discord_bot.modules.tutien.engines.crafting import craft_alchemy_pill, ALCHEMY_RECIPES
 from app.discord_bot.modules.tutien.engines.monetization import (
     grant_topup_and_vip_exp, buy_tiencac_item, is_array_protected
 )
@@ -1404,8 +1404,10 @@ class TuTienCog(commands.Cog, name="TuTien"):
         cd_seconds = 7200  # 2 Giờ Cooldown
         if now - last_c < cd_seconds:
             remain_sec = int(cd_seconds - (now - last_c))
+            remain_h = remain_sec // 3600
             remain_m = (remain_sec % 3600) // 60
-            await ctx.send(f"⏱️ Bạn vừa đột nhập cướp động phủ gần đây! Hãy tĩnh dưỡng `{remain_m} phút` nữa rồi tiếp tục.")
+            time_str = f"{remain_h} giờ {remain_m} phút" if remain_h > 0 else f"{remain_m} phút"
+            await ctx.send(f"⏱️ Bạn vừa đột nhập cướp động phủ gần đây! Hãy tĩnh dưỡng `{time_str}` nữa rồi tiếp tục.")
             return
 
         # Check Protection Scrolls & Buffer Protection
@@ -1898,24 +1900,24 @@ class TuTienCog(commands.Cog, name="TuTien"):
             self.active_party_rooms[ch_id] = lobby_view
             embed = discord.Embed(
                 title="🏰 LẬP ĐỘI BÍ CẢNH CỔ ĐẠI — MA LONG ĐỘNG",
-                description=f"Trưởng đội: **{player.dao_hieu}**\nBấm nút bên dưới để chọn vai trò gia nhập đội!",
+                description=f"Trưởng đội: **{player.dao_hieu}**\nBấm nút bên dưới để chọn vai trò gia nhập đội!\nTrưởng đội bấm **🚀 Bắt Đầu Đột Phá** khi đã sẵn sàng.",
                 color=discord.Color.blue()
             )
-            await ctx.send(embed=embed, view=lobby_view)
+            msg_obj = await ctx.send(embed=embed, view=lobby_view)
+            await lobby_view.wait()
 
-        elif action in ["bat-dau", "start"]:
-            lobby = self.active_party_rooms.get(ch_id)
-            if not lobby:
-                await ctx.send("❌ Không có phòng Bí Cảnh nào đang chờ trong kênh này! Gõ `!bi-canh tao-phong`.")
+            if not lobby_view.is_started:
+                if ch_id in self.active_party_rooms:
+                    del self.active_party_rooms[ch_id]
+                try:
+                    await msg_obj.edit(content="⏱️ **Phòng Bí Cảnh đã hết hạn chờ sau 2 phút!**", view=None)
+                except Exception:
+                    pass
                 return
 
-            if ctx.author.id != lobby.host_id:
-                await ctx.send("❌ Chỉ Trưởng Đội (người mở phòng) mới có quyền khởi hành bí cảnh!")
-                return
-
-            mem_count = len(lobby.members)
+            mem_count = len(lobby_view.members)
             total_realm_sum = 0
-            for uid in lobby.members.keys():
+            for uid in lobby_view.members.keys():
                 p = self.db.get_player(uid)
                 if p:
                     total_realm_sum += p.realm_index
@@ -1924,7 +1926,7 @@ class TuTienCog(commands.Cog, name="TuTien"):
             exp_per_mem = int(10000 + (avg_realm * 5000))
             lt_per_mem = int(2000 + (avg_realm * 1000))
 
-            for uid in lobby.members.keys():
+            for uid in lobby_view.members.keys():
                 p = self.db.get_player(uid)
                 if p:
                     req_exp = REALM_REQUIRED_EXP.get(p.realm_index, 1000000000)
@@ -1932,14 +1934,15 @@ class TuTienCog(commands.Cog, name="TuTien"):
                     p.linh_thach += lt_per_mem
                     self.db.update_player(p)
 
-            embed = discord.Embed(
+            embed_res = discord.Embed(
                 title="🐉 ĐỘT PHÁ BÍ CẢNH MA LONG ĐỘNG THÀNH CÔNG!",
                 description=f"Tổ đội **{mem_count} Tu Sĩ** phối hợp nhịp nhàng, gây `{total_dps:,}` Sát thương tiêu diệt Ma Long!\n"
                             f"🎁 Mỗi thành viên nhận: `+{exp_per_mem:,}` EXP | `+{lt_per_mem:,}` Linh Thạch!",
                 color=discord.Color.green()
             )
-            await ctx.send(embed=embed)
-            del self.active_party_rooms[ch_id]
+            await ctx.send(embed=embed_res)
+            if ch_id in self.active_party_rooms:
+                del self.active_party_rooms[ch_id]
 
     @commands.command(
         name="diet-boss",
@@ -2009,9 +2012,11 @@ class TuTienCog(commands.Cog, name="TuTien"):
                 trap_view = TrapSacrificeView(ctx.author.id)
                 await msg_obj.edit(embed=r_embed, view=trap_view)
                 await trap_view.wait()
-                dmg_trap = int(player.max_hp * 0.20)
+                trap_mult = 0.80 if trap_view.choice == "ONE" else 0.20
+                dmg_trap = int(player.max_hp * trap_mult)
                 player.hp = max(1, player.hp - dmg_trap)
-                r_embed.add_field(name="🩸 Bẫy Cổ Trận", value=f"Bẫy cổ kích hoạt, tổn thất `-{dmg_trap:,}` HP!", inline=False)
+                choice_desc = "Hi sinh cá nhân (-80% HP)" if trap_view.choice == "ONE" else "Cùng gánh vác (-20% HP)"
+                r_embed.add_field(name=f"🩸 Bẫy Cổ Trận ({choice_desc})", value=f"Bẫy cổ kích hoạt, tổn thất `-{dmg_trap:,}` HP!", inline=False)
 
             elif room["type"] == "MIMIC":
                 if random.random() < 0.50:
@@ -2153,6 +2158,88 @@ class TuTienCog(commands.Cog, name="TuTien"):
         self.db.update_player(player)
 
         await ctx.send(f"💊 **SỬ DỤNG CỬU CHUYỂN TÁI TẠO ĐAN THÀNH CÔNG!** Tu sĩ **{player.dao_hieu}** đã hồi phục 100% HP, Mana, 100% Căn Cơ và tẩy sạch toàn bộ Chấn Thương, Tẩu Hỏa Nhập Ma & Độc Tố!")
+
+    @commands.command(
+        name="luyen-dan",
+        aliases=["luyendan", "alchemy", "che-dan"],
+        brief="Luyện chế Linh Đan, Thần Phù từ Thảo Dược Thô và Linh Thạch.",
+        usage="luyen-dan [tên_đan_dược]"
+    )
+    async def luyendan_cmd(self, ctx: commands.Context, *, pill_name: str = None):
+        """Luyện chế Linh Đan, Thần Phù (!luyen-dan)."""
+        player = self.db.get_player(ctx.author.id)
+        if not player:
+            await ctx.send("❌ Vui lòng gõ `!nhapmon` trước!")
+            return
+
+        inv = self.db.get_inventory(ctx.author.id)
+        herb_item = next((item for item in inv if "Thảo Dược" in item["item_name"]), None)
+        herb_count = herb_item["quantity"] if herb_item else 0
+
+        # Nếu không truyền tên đan: hiển thị Đan Phổ (Danh mục công thức)
+        if not pill_name:
+            embed = discord.Embed(
+                title="🧪 THIÊN ĐỊA ĐAN LÒ — ĐAN PHỔ LUYỆN DƯỢC 🧪",
+                description=f"Tu sĩ: **[{player.dao_hieu}]** ({player.linh_can_element})\n"
+                            f"🌿 **Thảo Dược Thô có sẵn:** `{herb_count:,}` cây | 💰 **Linh Thạch:** `{player.linh_thach:,}`\n"
+                            f"> Cú pháp luyện chế: `!luyen-dan <Tên Đan Dược>` (Ví dụ: `!luyen-dan Van Linh Dan`)\n"
+                            f"> 🔥 *Linh Căn Hỏa được +15% Tỷ lệ thành công khi Luyện Đan!*",
+                color=discord.Color.dark_teal()
+            )
+            for key, rec in ALCHEMY_RECIPES.items():
+                fire_bonus = " *(+15% Hỏa)*" if "Hỏa" in player.linh_can_element else ""
+                rate_pct = int(min(95, rec['base_rate'] + (player.ngo_tinh * 0.01) + (0.15 if "Hỏa" in player.linh_can_element else 0.0)) * 100)
+                val = (
+                    f"> 🌿 Nguyên liệu: `{rec['herbs']}` Thảo Dược Thô + `{rec['linh_thach']:,}` Linh Thạch\n"
+                    f"> ⚡ Tỷ lệ đan thành: **{rate_pct}%**{fire_bonus}\n"
+                    f"> 📜 *{rec['desc']}*"
+                )
+                embed.add_field(name=f"💊 {rec['name']} [{rec['type']}]", value=val, inline=False)
+
+            embed.set_footer(text="Săn quái (!sanyeu) để nhặt thêm Thảo Dược Thô!")
+            await ctx.send(embed=embed)
+            return
+
+        # Tìm công thức match
+        target_recipe_key = None
+        for key in ALCHEMY_RECIPES.keys():
+            if pill_name.lower() in key.lower():
+                target_recipe_key = key
+                break
+
+        if not target_recipe_key:
+            await ctx.send(f"❌ Không tìm thấy công thức đan dược **[{pill_name}]** trong Đan Phổ! Gõ `!luyen-dan` để xem danh sách.")
+            return
+
+        recipe = ALCHEMY_RECIPES[target_recipe_key]
+        req_herbs = recipe["herbs"]
+
+        # Kiểm tra thảo dược
+        if herb_count < req_herbs:
+            await ctx.send(
+                f"❌ Không đủ **Thảo Dược Thô**! Cần `{req_herbs}` cây (Hiện có: `{herb_count}`).\n"
+                f"> 🌿 Hãy đi Săn Yêu (`!sanyeu`) để thu thập thêm thảo dược!"
+            )
+            return
+
+        # Trừ thảo dược trước
+        self.db.consume_item(player.user_id, herb_item["item_name"], req_herbs)
+
+        # Tiến hành luyện đan
+        success, msg, rec_data, updated_player = craft_alchemy_pill(player, target_recipe_key)
+        if success and rec_data:
+            # Cộng vật phẩm đan dược vào túi
+            if target_recipe_key == "Vạn Linh Đan":
+                updated_player.van_linh_dan += 1
+            elif target_recipe_key == "Tẩy Tủy Phù":
+                updated_player.tay_tuy_phu += 1
+            elif target_recipe_key == "Cửu Chuyển Tái Tạo Đan":
+                updated_player.cuu_chuyen_dan += 1
+            else:
+                self.db.add_item(player.user_id, rec_data["name"], rec_data["type"], 1)
+
+        self.db.update_player(updated_player)
+        await ctx.send(msg)
 
     @commands.command(
         name="doi-cong-phap",

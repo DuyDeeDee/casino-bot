@@ -531,6 +531,7 @@ class TuTienDB:
             return cursor.fetchall()
 
     def update_world_boss_dps(self, user_id: int, damage: int):
+        self.get_pve_progress(user_id)  # Ensure row exists
         with self.get_connection() as conn:
             conn.execute("UPDATE tutien_pve_progress SET boss_dps_today = boss_dps_today + ? WHERE user_id = ?", (damage, user_id))
 
