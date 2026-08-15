@@ -159,6 +159,20 @@ def _group_embed(group_label: str, cmds: list[commands.Command], prefix: str) ->
                 ("bang-truy-na", ["bounties", "ds-truyna"], "Xem Bảng Lệnh Truy Nã Huyết Sát Ma Đầu toàn server."),
                 ("tram-ma", ["tramma", "san-ma"], "Trảm Ma Đầu theo Lệnh Truy Nã nhận trọn tiền thưởng Headshot & Danh Vọng."),
                 ("mien-chien", ["mienchien", "baove"], "Xem & Kích hoạt Thất Nhật Miễn Chiến Phù (Khóa bị PK 7 ngày)."),
+            ],
+            "⚒️ VI. ĐẠO VỤ, LUYỆN DƯỢC & ĐÚC KHÍ": [
+                ("dao-vu", ["nhiem-vu", "nv", "quest"], "Xem và nhận thưởng 3 Đạo Vụ hàng ngày (Tu Luyện, Săn Yêu, Luận Đạo)."),
+                ("luyen-dan", ["luyendan", "alchemy"], "Thiên Địa Đan Lò: Luyện chế Vạn Linh Đan, Định Thần Đan, Tẩy Tủy Phù, Cửu Chuyển Đan."),
+                ("luyen-khi", ["luyenkhi", "che-tao", "duc-khi"], "Thiên Công Lò: Rèn đúc Hộ Thân Phù, Tụ Linh Kỳ, Thái Ất Hộ Tâm Kính, Xích Lôi Kiếm."),
+                ("doi-cong-phap", ["doicongphap", "cong-phap"], "Trang bị hoặc thay đổi Công Pháp Chủ Tu từ Túi Đồ."),
+                ("khai-dao", ["khaidao", "dao-vuc"], "Khai mở và dung hợp 2 Dị Linh Căn thành Đạo Vực Vô Thượng."),
+            ],
+            "🏪 VII. SÀN ĐẤU GIÁ & ĐỘNG PHỦ": [
+                ("cho-troi", ["chotroi", "dau-gia", "market"], "Xem danh sách vật phẩm đang bày bán trên Sàn Đấu Giá Vạn Bảo Các."),
+                ("dang-ban", ["dangban", "sell-item"], "Đăng bán vật phẩm từ Túi Đồ lên Sàn Đấu Giá với giá Linh Thạch tự định."),
+                ("mua-hang", ["muahang", "mua-dau-gia"], "Mua vật phẩm từ Sàn Đấu Giá theo Mã Số Phiên."),
+                ("huy-ban", ["huyban", "rut-hang"], "Hủy phiên đăng bán và hoàn trả vật phẩm về Túi Đồ."),
+                ("dong-phu", ["dongphu", "tu-gia"], "Xem Tiên Gia Động Phủ & gõ `!dong-phu nangcap` để nâng cấp Tụ Linh Trận (Cấp 1-50)."),
             ]
         }
 
