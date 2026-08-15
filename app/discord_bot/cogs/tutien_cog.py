@@ -83,12 +83,20 @@ class TuTienCog(commands.Cog, name="TuTien"):
         self.bg_retention_guard.cancel()
 
     async def cog_command_error(self, ctx: commands.Context, error: Exception):
+        orig = getattr(error, 'original', error)
         if isinstance(error, commands.MissingRequiredArgument):
-            await ctx.send(f"❌ Thiếu tham số bắt buộc! Cú pháp đúng: `{ctx.prefix}{ctx.command.signature}`")
+            await ctx.send(f"❌ Thiếu tham số bắt buộc! Cú pháp đúng: `{ctx.prefix}{ctx.command.name} {ctx.command.signature}`")
         elif isinstance(error, commands.BadArgument):
-            await ctx.send("❌ Tham số nhập vào không hợp lệ!")
+            await ctx.send(f"❌ Tham số nhập vào không hợp lệ! Cú pháp: `{ctx.prefix}{ctx.command.name} {ctx.command.signature}`")
         elif isinstance(error, commands.NotOwner):
             await ctx.send("❌ Lệnh này chỉ dành cho Chủ Bot!")
+        elif isinstance(error, commands.CommandOnCooldown):
+            await ctx.send(f"⏳ Vui lòng chờ `{error.retry_after:.1f}s` trước khi tiếp tục dùng lệnh này.")
+        elif isinstance(orig, commands.CheckFailure):
+            return
+        else:
+            print(f"[TuTien] Command error in {ctx.command}: {orig}")
+            await ctx.send(f"⚠️ **Lỗi thực thi lệnh:** `{orig}`")
 
     # --- BACKGROUND TASKS ---
     @tasks.loop(minutes=5)
