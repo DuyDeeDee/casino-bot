@@ -151,7 +151,7 @@ GACHA_BANNERS: Dict[str, Dict[str, Any]] = {
     "tubao": {
         "name": "1. TỤ BẢO CÁC (Banner Thường - F2P)",
         "currency": "Linh Thạch",
-        "cost_1x": 10000,
+        "cost_1x": 25000,
         "ticket_item": "Linh Duyên Phù",
         "desc": "Quay đan dược phổ thông, nguyên liệu luyện đan, pháp bảo Hoàng/Huyền Cấp."
     },
@@ -175,23 +175,23 @@ GACHA_BANNERS: Dict[str, Dict[str, Any]] = {
 
 # 1. Pool Banner Thường (Tụ Bảo Các - F2P)
 GACHA_ITEMS_TUBAO: List[Tuple[str, str, str, float]] = [
-    # Thiên Cấp / SR (3.0%)
-    ("🟡 [THIÊN CẤP] Công Pháp: 《Thái Hư Kiếm Điển》", "Công Pháp", "Thiên Cấp (SR)", 1.0),
-    ("🟡 [THIÊN CẤP] Thần Binh: Thái Cổ Linh Thuẫn", "Pháp Bảo", "Thiên Cấp (SR)", 1.0),
-    ("🟡 [THIÊN CẤP] Thần Thú: Huyết Lang Cổ Xưa", "Thú Cưỡi", "Thiên Cấp (SR)", 1.0),
+    # Thiên Cấp / SR (1.5%)
+    ("🟡 [THIÊN CẤP] Công Pháp: 《Thái Hư Kiếm Điển》", "Công Pháp", "Thiên Cấp (SR)", 0.5),
+    ("🟡 [THIÊN CẤP] Thần Binh: Thái Cổ Linh Thuẫn", "Pháp Bảo", "Thiên Cấp (SR)", 0.5),
+    ("🟡 [THIÊN CẤP] Thần Thú: Huyết Lang Cổ Xưa", "Thú Cưỡi", "Thiên Cấp (SR)", 0.5),
     
-    # Địa Cấp (27.0%)
-    ("🟣 [ĐỊA CẤP] Đan Dược: Trúc Cơ Đan Cực Phẩm x3", "Đan Dược", "Địa Cấp", 10.0),
-    ("🟣 [ĐỊA CẤP] Thần Phù: Tẩy Tủy Phù x1", "Thần Phù", "Địa Cấp", 10.0),
-    ("🟣 [ĐỊA CẤP] Vé Quý: Tiên Duyên Phù x1", "Vé Gacha", "Địa Cấp", 7.0),
+    # Địa Cấp (18.5%)
+    ("🟣 [ĐỊA CẤP] Đan Dược: Trúc Cơ Đan x1", "Đan Dược", "Địa Cấp", 10.0),
+    ("🟣 [ĐỊA CẤP] Thần Phù: Tẩy Tủy Phù x1", "Thần Phù", "Địa Cấp", 7.5),
+    ("🟣 [ĐỊA CẤP] Vé Quý: Tiên Duyên Phù x1", "Vé Gacha", "Địa Cấp", 1.0),
     
     # Huyền Cấp (35.0%)
-    ("🔵 [HUYỀN CẤP] Tài Bảo: 25,000 Linh Thạch", "Tài Bảo", "Huyền Cấp", 20.0),
-    ("🔵 [HUYỀN CẤP] Khoáng Thạch: Thần Thiết Thô x5", "Nguyên Liệu", "Huyền Cấp", 15.0),
+    ("🔵 [HUYỀN CẤP] Khoáng Thạch: Thần Thiết Thô x5", "Nguyên Liệu", "Huyền Cấp", 20.0),
+    ("🔵 [HUYỀN CẤP] Thảo Dược: Thảo Dược Thô x10", "Nguyên Liệu", "Huyền Cấp", 15.0),
     
-    # Phàm Cấp (35.0%)
-    ("🟢 [PHÀM CẤP] Thảo Dược: Thảo Dược Thô x10", "Nguyên Liệu", "Phàm Cấp", 20.0),
-    ("🟢 [PHÀM CẤP] Thảo Dược: Linh Chi Ngàn Năm x5", "Nguyên Liệu", "Phàm Cấp", 15.0)
+    # Phàm Cấp (45.0%)
+    ("🟢 [PHÀM CẤP] Thảo Dược: Thảo Dược Thô x3", "Nguyên Liệu", "Phàm Cấp", 25.0),
+    ("🟢 [PHÀM CẤP] Khoáng Thạch: Thần Thiết Thô x2", "Nguyên Liệu", "Phàm Cấp", 20.0)
 ]
 
 # 2. Pool Banner VIP (Cửu Thiên Tiên Các - Premium)
@@ -209,19 +209,19 @@ GACHA_ITEMS_PREMIUM: List[Tuple[str, str, str, float]] = [
     # Địa Cấp (25.0%)
     ("🟣 [ĐỊA CẤP] Đan Dược: Niết Bàn Đan x2", "Đan Dược", "Địa Cấp", 10.0),
     ("🟣 [ĐỊA CẤP] Đan Dược: Cửu Chuyển Tái Tạo Đan x1", "Tiên Đan", "Địa Cấp", 5.0),
-    ("🟣 [ĐỊA CẤP] Đan Dược: Trúc Cơ Đan Cực Phẩm x5", "Đan Dược", "Địa Cấp", 10.0),
+    ("🟣 [ĐỊA CẤP] Đan Dược: Trúc Cơ Đan x2", "Đan Dược", "Địa Cấp", 10.0),
     
     # Huyền Cấp (70.0%)
-    ("🔵 [HUYỀN CẤP] Tài Bảo: 100,000 Linh Thạch", "Tài Bảo", "Huyền Cấp", 40.0),
-    ("🔵 [HUYỀN CẤP] Tiên Bụi: 20x Linh Bụi Tiên Các", "Vật Phẩm", "Huyền Cấp", 30.0)
+    ("🔵 [HUYỀN CẤP] Tài Bảo: 25,000 Linh Thạch", "Tài Bảo", "Huyền Cấp", 20.0),
+    ("🔵 [HUYỀN CẤP] Tiên Bụi: 10x Linh Bụi Tiên Các", "Vật Phẩm", "Huyền Cấp", 50.0)
 ]
 
 # Shop Linh Bụi Tiên Các (Shard Shop)
 LINH_BUI_SHOP: Dict[str, Dict[str, Any]] = {
-    "《Thôn Thiên Ma Công》": {"cost": 300, "type": "Công Pháp UR", "desc": "Công pháp Đế Cấp cựu thượng cổ."},
-    "Trảm Tiên Kiếm": {"cost": 300, "type": "Pháp Bảo UR", "desc": "Thần binh Đế Cấp chém rách hư không."},
-    "Cửu Vĩ Thiên Hồ": {"cost": 300, "type": "Thú Cưỡi UR", "desc": "Linh thú Thượng Cổ buff +50% EXP."},
-    "Thần Phù Bảo Mệnh x5": {"cost": 50, "type": "Vật Phẩm", "desc": "Bảo hiểm Độ Kiếp chống rớt cảnh giới."}
+    "《Thôn Thiên Ma Công》": {"cost": 600, "type": "Công Pháp UR", "desc": "Công pháp Đế Cấp cựu thượng cổ."},
+    "Trảm Tiên Kiếm": {"cost": 600, "type": "Pháp Bảo UR", "desc": "Thần binh Đế Cấp chém rách hư không."},
+    "Cửu Vĩ Thiên Hồ": {"cost": 600, "type": "Thú Cưỡi UR", "desc": "Linh thú Thượng Cổ buff +50% EXP."},
+    "Thần Phù Bảo Mệnh x5": {"cost": 100, "type": "Vật Phẩm", "desc": "Bảo hiểm Độ Kiếp chống rớt cảnh giới."}
 }
 
 # Tiên Các Shop Catalog (Nạp Tiền)

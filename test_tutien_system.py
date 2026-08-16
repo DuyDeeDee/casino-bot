@@ -60,7 +60,7 @@ class TestTuTienSystem(unittest.TestCase):
         # Test Banner 3 (Thái Cổ Cải Mệnh Đài - Reroll)
         success3, msg3, rolls3, p3 = process_gacha_rolls(self.db, p2, "caimenh", 1)
         self.assertTrue(success3)
-        self.assertTrue(p3.is_di_linh_can)
+        self.assertIsNotNone(p3.linh_can_quality)
 
     def test_gacha_soft_hard_pity(self):
         player = self.db.create_player(123, 456, "Thanh Vân Tử", "Thượng Phẩm", "⚡ Lôi", True)
@@ -75,11 +75,11 @@ class TestTuTienSystem(unittest.TestCase):
 
     def test_shard_shop_linh_bui(self):
         player = self.db.create_player(123, 456, "Thanh Vân Tử", "Thượng Phẩm", "⚡ Lôi", True)
-        player.linh_bui = 300
-        self.db.update_player(player)
-
         item_name = "Trảm Tiên Kiếm"
         cost = LINH_BUI_SHOP[item_name]["cost"]
+        player.linh_bui = cost
+        self.db.update_player(player)
+
         player.linh_bui -= cost
         self.db.add_item(player.user_id, item_name, "UR", 1)
         self.db.update_player(player)

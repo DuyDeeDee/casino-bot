@@ -20,19 +20,19 @@ def roll_single_item(player: CultivatorProfile, banner_type: str) -> Tuple[Dict[
     # 1. BANNER THƯỜNG — TỤ BẢO CÁC (F2P)
     if banner_type == "tubao":
         rand_val = random.random()
-        if rand_val < 0.03:  # 3% SR
+        if rand_val < 0.015:  # 1.5% SR
             grade = "🟡 Thiên Cấp (SR)"
             sr_options = [x for x in GACHA_ITEMS_TUBAO if "Thiên Cấp" in x[2]]
             item_name = random.choice(sr_options)[0]
-        elif rand_val < 0.30:  # 27% Địa Cấp
+        elif rand_val < 0.20:  # 18.5% Địa Cấp
             grade = "🟣 Địa Cấp"
             dia_options = [x for x in GACHA_ITEMS_TUBAO if "Địa Cấp" in x[2]]
             item_name = random.choice(dia_options)[0]
-        elif rand_val < 0.65:  # 35% Huyền Cấp
+        elif rand_val < 0.55:  # 35% Huyền Cấp
             grade = "🔵 Huyền Cấp"
             huyen_options = [x for x in GACHA_ITEMS_TUBAO if "Huyền Cấp" in x[2]]
             item_name = random.choice(huyen_options)[0]
-        else:  # 35% Phàm Cấp
+        else:  # 45% Phàm Cấp
             grade = "🟢 Phàm Cấp"
             pham_options = [x for x in GACHA_ITEMS_TUBAO if "Phàm Cấp" in x[2]]
             item_name = random.choice(pham_options)[0]
@@ -142,20 +142,32 @@ def process_gacha_rolls(
         else:
             return False, f"❌ Không đủ Tẩy Tủy Phù hoặc Tiên Ngọc!", [], player
 
-    # Special handling for Thái Cổ Cải Mệnh Đài (Reroll Spiritual Root / Tiên Thể)
+    # Special handling for Thái Cổ Cải Mệnh Đài (Reroll Spiritual Root theo tỷ lệ xác suất chuẩn)
     if banner_key == "caimenh":
         results = []
+        qualities, weights = zip(*SPIRITUAL_ROOT_QUALITIES)
         for _ in range(roll_count):
-            # Roll high quality root
-            quality_roll = random.choice(["Thượng Phẩm", "Cực Phẩm / Thiên Phẩm", "Tiên Phẩm", "Thánh Phẩm", "Hỗn Độn"])
-            element_roll = random.choice(["⚡ Lôi", "❄️ Băng", "🌪️ Phong", "🌌 Không Gian / Thời Gian"])
-            player.linh_can_quality = quality_roll
-            player.linh_can_element = element_roll
-            player.is_di_linh_can = True
-            results.append({"item_name": f"✨ [CẢI MỆNH] {quality_roll} ({element_roll})", "grade": "🔴 Tiên Thể", "is_ur": True})
+            # Roll quality theo đúng bảng xác suất chuẩn (0.01% Hỗn Độn ... 45% Phàm Phẩm)
+            chosen_quality = random.choices(qualities, weights=weights, k=1)[0]
+            
+            # Chỉ có 10% cơ hội thức tỉnh Dị Linh Căn (90% là Ngũ Hành thường)
+            if random.random() < 0.10:
+                chosen_element = random.choice(list(ELEMENTS_DI_LINH_CAN.keys()))
+                is_di = True
+            else:
+                chosen_element = random.choice(list(ELEMENTS_NGU_HANH.keys()))
+                is_di = False
+
+            player.linh_can_quality = chosen_quality
+            player.linh_can_element = chosen_element
+            player.is_di_linh_can = is_di
+
+            is_top_tier = chosen_quality in ["Tiên Phẩm", "Thánh Phẩm", "Hỗn Độn"] or is_di
+            grade_str = "🔴 Tiên Thể / Dị Căn" if is_top_tier else "🔵 Thường Căn"
+            results.append({"item_name": f"✨ [CẢI MỆNH] {chosen_quality} ({chosen_element})", "grade": grade_str, "is_ur": is_top_tier})
         
         db.update_player(player)
-        return True, "✨ **THÁI CỔ CẢI MỆNH THÀNH CÔNG!** Đã tẩy lại Linh Căn & Thể Chất Thượng Cổ!", results, player
+        return True, "✨ **THÁI CỔ CẢI MỆNH THÀNH CÔNG!** Đã cải tạo lại Linh Căn & Đạo Cốt!", results, player
 
     # Roll standard / premium items
     results = []
@@ -166,10 +178,10 @@ def process_gacha_rolls(
         if roll_res["is_ur"]:
             has_ur = True
 
-        # Check duplicate conversion to Linh Bụi
+        # Check duplicate conversion to Linh Bụi (Nerfed: 50 for UR, 5 for non-UR)
         item_name = roll_res["item_name"]
         if db.has_item(player.user_id, item_name):
-            linh_bui_gain = 100 if roll_res["is_ur"] else 20
+            linh_bui_gain = 50 if roll_res["is_ur"] else 5
             player.linh_bui += linh_bui_gain
             roll_res["duplicate_converted"] = linh_bui_gain
         else:
