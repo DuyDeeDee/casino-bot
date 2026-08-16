@@ -2600,7 +2600,7 @@ class TuTienCog(commands.Cog, name="TuTien"):
 
     @commands.command(
         name="su-dung",
-        aliases=["sudung", "use", "dung-item", "dung"],
+        aliases=["dung-do", "dungdo", "dung-item", "tt-dung", "ttuse"],
         brief="Sử dụng vật phẩm/đan dược có trong Túi Trữ Vật (!ttinv).",
         usage="su-dung [tên_vật_phẩm]"
     )
