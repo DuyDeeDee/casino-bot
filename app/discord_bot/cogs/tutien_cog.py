@@ -2836,10 +2836,29 @@ class TuTienCog(commands.Cog, name="TuTien"):
 
         # 4. Inventory items from DB
         if inv_items:
-            items_str = "\n".join(f"> 📦 **{item['item_name']}** ({item['item_type']}): x`{item['quantity']}`" for item in inv_items)
+            lines = [f"> 📦 **{item['item_name']}** ({item['item_type']}): x`{item['quantity']}`" for item in inv_items]
+            chunks = []
+            curr_chunk = []
+            curr_len = 0
+            for line in lines:
+                if curr_len + len(line) + 1 > 950:
+                    chunks.append("\n".join(curr_chunk))
+                    curr_chunk = [line]
+                    curr_len = len(line)
+                else:
+                    curr_chunk.append(line)
+                    curr_len += len(line) + 1
+            if curr_chunk:
+                chunks.append("\n".join(curr_chunk))
+
+            # Limit to at most 10 chunks (Discord max 25 fields total)
+            for idx, chunk in enumerate(chunks[:10], 1):
+                field_title = "🎒 Bảo Vật & Nguyên Liệu Khác" if len(chunks) == 1 else f"🎒 Bảo Vật & Nguyên Liệu ({idx}/{min(len(chunks), 10)})"
+                embed.add_field(name=field_title, value=chunk, inline=False)
+            if len(chunks) > 10:
+                embed.add_field(name="⚠️ Lưu ý", value=f"> *Và còn {len(chunks) - 10} nhóm vật phẩm khác...*", inline=False)
         else:
-            items_str = "> _Chưa có thêm vật phẩm đặc biệt trong túi đồ._"
-        embed.add_field(name="🎒 Bảo Vật & Nguyên Liệu Khác", value=items_str, inline=False)
+            embed.add_field(name="🎒 Bảo Vật & Nguyên Liệu Khác", value="> _Chưa có thêm vật phẩm đặc biệt trong túi đồ._", inline=False)
 
         embed.set_footer(text="Gõ !tiencac để mua thêm bùa & vé quay | Gõ !profile để xem hồ sơ nhân vật")
         await ctx.send(embed=embed)
