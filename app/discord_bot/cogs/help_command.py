@@ -115,78 +115,76 @@ def _group_embed(group_label: str, cmds: list[commands.Command], prefix: str) ->
 
         categories = {
             "👤 I. NHÂN VẬT & TÂN THỦ": [
-                ("nhapmon", ["taonhanvat", "nhap-mon"], "Nhập môn Tu Tiên, quay Linh Căn ngẫu nhiên (Phàm Phẩm -> Hỗn Độn) & nhận 500 Linh Thạch."),
-                ("tutien-profile", ["profile", "tt", "hoso-tutien"], "Xem Thẻ Hình Ảnh PNG 18 thuộc tính nghệ thuật nhân vật."),
-                ("tutien-inventory", ["ttinv", "tuitu", "tutieninv"], "Xem Túi Trữ Vật Tu Tiên (Tiền tệ, Vé Gacha, Bùa bảo hiểm, Đan dược)."),
-                ("tutien-top", ["toptuvi", "bxh-tutien", "toprank"], "Xem Bảng Xếp Hạng Top Tu Sĩ Server (Tu Vi, Gia Tài, Tháp, Boss)."),
-                ("tamcanh", ["can-co", "tam-canh"], "Kiểm tra tỷ lệ Đột Phá, trạng thái Tâm Cảnh & độ vững chắc Căn Cơ."),
-                ("tutien-huongdan", ["huongdan", "tutienhelp"], "Xem cẩm nang hướng dẫn Tu Tiên 7 bước chi tiết."),
-                ("phe-tu-vi", ["phetuvi"], "Phế bỏ toàn bộ tu vi hiện tại để tu luyện lại từ Luyện Khí Tầng 1."),
+                ("nhapmon", "Khởi tạo Linh Căn ngẫu nhiên & nhận 500 Linh Thạch"),
+                ("profile", "Xem Thẻ PNG 18 thuộc tính nghệ thuật nhân vật"),
+                ("ttinv", "Xem Túi Trữ Vật Tu Tiên (Hỗ trợ @user / ID / Đạo Hiệu)"),
+                ("tutien-top", "Bảng Xếp Hạng Top Tu Vi, Gia Tài, Tháp, Boss Server"),
+                ("tamcanh", "Kiểm tra tỷ lệ Đột Phá, Tâm Cảnh & Căn Cơ"),
+                ("huongdan", "Xem cẩm nang hướng dẫn Tu Tiên 7 trang chi tiết"),
+                ("phe-tu-vi", "Phế bỏ toàn bộ tu vi để tu luyện lại từ đầu"),
             ],
-            "🧘 II. TU LUYỆN, BẾ QUAN & ĐỘT PHÁ": [
-                ("tu-luyen", ["tuluyen", "train"], "Tu luyện chủ động (tiêu 15 Tinh Lực, tích lũy EXP Tu Vi)."),
-                ("nhap-dinh", ["nhapdinh", "bequan"], "Bế quan AFK tích lũy tài nguyên (1h, 4h, 8h, 12h, 16h, 24h)."),
-                ("xuat-quan", ["xuatquan", "xuatdinh"], "Thu công xuất quan sớm & nhận quà AFK tích lũy."),
-                ("nhapdinh-nhanh", ["nhapdinhnhanh", "dinh-tam", "dinhtam"], "Tiêu 25 Tiên Ngọc bế quan nhanh 4h nhận ngay tài nguyên AFK."),
-                ("luyen-the", ["luyenthe"], "Rèn luyện Thân Thể tiêu hao Linh Thạch để đột phá Tôi Thể -> Bất Diệt Thể."),
-                ("dot-pha", ["dotpha", "breakthrough"], "Xung kích bình cảnh cảnh giới & nghênh đón Lôi Kiếp thời gian thực."),
+            "🧘 II. TU LUYỆN & ĐỘT PHÁ": [
+                ("tuluyen", "Tu luyện chủ động tiêu 15 Tinh Lực nhận EXP Tu Vi"),
+                ("nhapdinh", "Bế quan AFK tích lũy tài nguyên (1h - 24h)"),
+                ("xuatquan", "Thu công xuất quan sớm & nhận quà tích lũy AFK"),
+                ("nhapdinh-nhanh", "Bế quan nhanh 4h nhận ngay quà AFK (25 Tiên Ngọc)"),
+                ("luyenthe", "Rèn luyện Thân Thể Tôi Thể -> Bất Diệt Thể"),
+                ("dotpha", "Xung kích bình cảnh cảnh giới & nghênh đón Lôi Kiếp"),
             ],
             "⚔️ III. CHINH PHỤC HARDCORE PVE": [
-                ("san-yeu", ["sanyeu", "hunt"], "Săn Yêu Quái (Có 15% quái Biến Dị 3x stats, VIP 2+ gõ !san-yeu quet 10x)."),
-                ("leo-thap", ["leothap", "thap"], "Thử thách Tháp Thiên Cực 100 Tầng (Mỗi 10 tầng gặp Ảo Ảnh Bản Thân)."),
-                ("top-thap", ["topthap"], "Xem Bảng Xếp Hạng Leo Tháp Thiên Cực Top 10 toàn Server."),
-                ("bi-canh", ["bicanh"], "Tổ đội 3-5 Tu Sĩ (Tank, DPS, Healer) đánh Bí Cảnh Cổ Đại."),
-                ("bi-canh-cam-dia", ["camdia", "roguelike"], "Đột phá Mê Cung Sinh Tồn Roguelike Thái Cổ Cấm Địa (5 Phòng)."),
-                ("diet-boss", ["boss-server"], "Xông vào trảm Thái Cổ Ma Vương Giáng Lâm (World Boss Server)."),
-                ("cuu-thuong", ["cuuthuong", "rescue"], "Dùng Vạn Linh Đan hoặc Tiên Ngọc cứu đạo hữu bị Kinh Mạch Đoạn Tuyệt."),
-                ("giai-doc", ["giaidoc", "cleanse"], "Tẩy trừ hiệu ứng Độc Tố Thấu Cốt & Tâm Ma Ô Nhiễm."),
+                ("sanyeu", "Săn Yêu Quái (VIP 2+ dùng !san-yeu quet 10x)"),
+                ("leothap", "Thử thách Tháp Thiên Cực 100 Tầng"),
+                ("topthap", "Bảng Xếp Hạng Leo Tháp Top 10 Server"),
+                ("bicanh", "Tổ đội 2-5 Tu Sĩ đánh Bí Cảnh Cổ Đại (-30 Tinh Lực)"),
+                ("camdia", "Đột phá Mê Cung Sinh Tồn Roguelike 5 Phòng"),
+                ("dietboss", "Xông vào trảm Thái Cổ Ma Vương (World Boss)"),
+                ("cuuthuong", "Dùng Vạn Linh Đan cứu đạo hữu đoạn tuyệt kinh mạch"),
+                ("giaidoc", "Tẩy trừ Độc Tố Thấu Cốt & Tâm Ma Ô Nhiễm"),
             ],
             "🔮 IV. GACHA & SHOP TIÊN CÁC": [
-                ("quay-gacha", ["gacha", "quaygacha"], "Quay Gacha 3 Đại Banners Tiên Các, Cải Mệnh Đài nhận bảo vật UR/SR."),
-                ("banner", ["xem-banner", "gacha-banner"], "Xem danh sách vật phẩm, tỷ lệ rơi và mô tả của 3 Banner Gacha."),
-                ("wishlist", ["dinh-huong"], "Cấu hình Định Hướng Đạo Vận (Ưu tiên UR 100% khi lệch rate)."),
-                ("xienquach", ["bocque", "quere"], "Bốc quẻ Khí Vận hàng ngày nhận Linh Duyên Phù & Tiên Ngọc."),
-                ("linhbui-shop", ["doilinhbui", "shard-shop"], "Xem & Đổi Linh Bụi Tiên Các lấy vật phẩm UR/SR tự chọn."),
-                ("tiencac", ["tiencac-shop"], "Xem danh mục Shop Tiên Các (Bảo hiểm độ kiếp, Bùa cứu thương, Miễn chiến, VIP)."),
-                ("mua", ["muatiencac", "mua-tiencac"], "Mua vật phẩm từ Shop Tiên Các bằng Tiên Ngọc."),
-                ("vip", ["the-thang", "thethang"], "Xem Cấp VIP & Trạng thái Thẻ Tháng Đạo Tâm Tôn Giả."),
+                ("quay-gacha", "Quay Gacha 3 Banner (Tụ Bảo Các, Tiên Các, Cải Mệnh)"),
+                ("banner", "Xem danh sách vật phẩm & tỷ lệ rơi 3 Banner Gacha"),
+                ("wishlist", "Cấu hình Wishlist định hướng 100% ra món UR mơ ước"),
+                ("xienquach", "Bốc quẻ Khí Vận hàng ngày nhận vé quay & Tiên Ngọc"),
+                ("linhbui-shop", "Đổi Linh Bụi lấy vật phẩm UR/SR tự chọn"),
+                ("tiencac", "Xem danh mục Shop Tiên Các (Bảo hiểm, VIP, Thẻ Tháng)"),
+                ("mua", "Mua vật phẩm Shop Tiên Các bằng Tiên Ngọc"),
+                ("vip", "Xem Cấp VIP & Trạng thái Thẻ Tháng Đạo Tâm Tôn Giả"),
             ],
             "🥋 V. PVP TRANH PHONG & SÁT LỤC": [
-                ("luan-dao", ["luandao", "pvp", "arena"], "Luận Đạo Đài 1v1 Ranked tính ELO chuẩn FIDE, cày Điểm Danh Vọng."),
-                ("bxh-pvp", ["top-elo", "toppvp"], "Xem Bảng Xếp Hạng ELO & Danh Vọng Luận Đạo Đài Top 10 Server."),
-                ("tang-kinh-cac", ["tangkinhcac", "shop-danh-vong"], "Đổi Điểm Danh Vọng lấy Công Pháp Thiên Cấp/Đế Cấp, Thần Binh hiếm."),
-                ("sinh-tu-dai", ["sinhtudai", "quyetchien"], "Đặt cược Linh Thạch Sinh Tử Đài (Thua mất sạch & dính Chấn Thương 12h)."),
-                ("cuop", ["cuop-dong-phu", "cuopdongphu"], "Đột nhập Động Phủ cướp Linh Thạch, bẻ gãy bế quan gây Tẩu Hỏa Nhập Ma (+15 Nghiệp Lực)."),
-                ("truy-na-ma-tu", ["truyna", "treothuong", "bounty"], "Treo Thưởng Lệnh Truy Nã Huyết Sát trảm trừ Ma Đầu."),
-                ("bang-truy-na", ["bounties", "ds-truyna", "bounty-board"], "Xem Bảng Lệnh Truy Nã Huyết Sát Ma Đầu toàn server."),
-                ("tram-ma", ["tramma", "san-ma", "hunt-bounty"], "Trảm Ma Đầu theo Lệnh Truy Nã nhận trọn tiền thưởng Headshot & Danh Vọng."),
-                ("mien-chien", ["mienchien", "baove"], "Xem & Kích hoạt Thất Nhật Miễn Chiến Phù (Khóa bị PK 7 ngày)."),
+                ("luandao", "Luận Đạo Đài 1v1 Ranked tính ELO & Danh Vọng"),
+                ("bxh-pvp", "Bảng Xếp Hạng ELO & Danh Vọng Top 10 Server"),
+                ("tang-kinh-cac", "Đổi Danh Vọng lấy Công Pháp, Thần Binh hiếm"),
+                ("sinh-tu-dai", "Đặt cược Linh Thạch Quyết Chiến Sinh Tử"),
+                ("cuop", "Đột nhập Động Phủ cướp Linh Thạch (+15 Nghiệp Lực)"),
+                ("truy-na-ma-tu", "Treo Thưởng Lệnh Truy Nã trảm trừ Ma Đầu"),
+                ("bang-truy-na", "Xem Bảng Lệnh Truy Nã Ma Đầu toàn server"),
+                ("tram-ma", "Trảm Ma Đầu theo Lệnh Truy Nã nhận tiền thưởng"),
+                ("mien-chien", "Kích hoạt Thất Nhật Miễn Chiến Phù (Khóa PK 7 ngày)"),
             ],
             "⚒️ VI. ĐẠO VỤ, DÙNG ĐỒ & LUYỆN KHÍ": [
-                ("dao-vu", ["nhiem-vu", "nhiemvu", "daovu", "quest", "nv"], "Xem sổ Đạo Vụ Hàng Ngày (Tu Luyện, Săn Yêu, Luận Đạo)."),
-                ("nhan-dao-vu", ["nhandaovu", "nhannv", "claim-quest", "nhan-nv"], "Nhận thưởng nhanh các Đạo Vụ Hàng Ngày đã hoàn thành (`!nhan-dao-vu all`)."),
-                ("su-dung", ["dung-do", "dungdo", "dung-item", "tt-dung", "ttuse"], "Sử dụng đan dược, bùa chú, phù lục từ Túi Trữ Vật (`!su-dung <Tên Item>`)."),
-                ("dung-dan", ["dungdan", "use-pill", "su-dung-dan"], "Dùng Cửu Chuyển Tái Tạo Đan hồi phục 100% HP/Mana, 100% Căn Cơ & tẩy sạch debuff."),
-                ("luyen-dan", ["luyendan", "alchemy"], "Thiên Địa Đan Lò: Luyện chế Vạn Linh Đan, Định Thần Đan, Tẩy Tủy Phù, Cửu Chuyển Đan."),
-                ("luyen-khi", ["luyenkhi", "che-tao", "duc-khi", "smithing"], "Thiên Công Lò: Rèn đúc Hộ Thân Phù, Tụ Linh Kỳ, Thái Ất Hộ Tâm Kính, Xích Lôi Kiếm."),
-                ("doi-cong-phap", ["doicongphap", "trang-bi-cong-phap", "cong-phap"], "Trang bị hoặc thay đổi Công Pháp Chủ Tu từ Túi Đồ."),
-                ("khai-dao", ["khaidao", "ngo-dao", "ngodao", "dao-domain"], "Khai ngộ và hợp nhất Đạo Vực Vô Thượng (Kiếm Đạo, Lôi Đạo, Không Gian...)."),
+                ("dao-vu", "Xem sổ Đạo Vụ Hàng Ngày (Tu Luyện, Săn Yêu, Luận Đạo)"),
+                ("nhan-dao-vu", "Nhận nhanh thưởng Đạo Vụ đã xong (!nhan-dao-vu all)"),
+                ("su-dung", "Dùng đan dược, phù lục từ Túi Trữ Vật (!su-dung <item>)"),
+                ("dung-dan", "Dùng Cửu Chuyển Đan hồi 100% HP/Căn Cơ & xóa debuff"),
+                ("luyen-dan", "Thiên Địa Đan Lò: Luyện chế Đan Dược, Phù Lục"),
+                ("luyen-khi", "Thiên Công Lò: Rèn đúc Pháp Bảo, Thần Binh"),
+                ("doi-cong-phap", "Trang bị / Thay đổi Công Pháp Chủ Tu từ Túi Đồ"),
+                ("khai-dao", "Khai ngộ và hợp nhất Đạo Vực Vô Thượng"),
             ],
             "🏪 VII. SÀN ĐẤU GIÁ & ĐỘNG PHỦ": [
-                ("cho-troi", ["chotroi", "dau-gia", "daugia", "market", "san-dau-gia"], "Xem danh sách vật phẩm đang bày bán trên Sàn Đấu Giá Vạn Bảo Các."),
-                ("dang-ban", ["dangban", "sell-item", "rao-ban"], "Đăng bán vật phẩm từ Túi Đồ lên Sàn Đấu Giá với giá Linh Thạch tự định."),
-                ("mua-hang", ["muahang", "mua-dau-gia", "buy-market"], "Mua vật phẩm từ Sàn Đấu Giá theo Mã Số Phiên."),
-                ("huy-ban", ["huyban", "cancel-sell", "rut-hang"], "Hủy phiên đăng bán và hoàn trả vật phẩm về Túi Đồ."),
-                ("dong-phu", ["dongphu", "tu-gia", "dong-tuyen"], "Xem Tiên Gia Động Phủ & gõ `!dong-phu nangcap` để nâng cấp Tụ Linh Trận (Cấp 1-50)."),
+                ("cho-troi", "Xem vật phẩm đang bán trên Sàn Đấu Giá Vạn Bảo Các"),
+                ("dang-ban", "Đăng bán đồ lên Sàn Đấu Giá với giá tự định"),
+                ("mua-hang", "Mua vật phẩm từ Sàn Đấu Giá theo Mã Số Phiên"),
+                ("huy-ban", "Hủy phiên đăng bán hoàn trả đồ về Túi Trữ Vật"),
+                ("dong-phu", "Xem Động Phủ & nâng cấp Tụ Linh Trận (!dong-phu nangcap)"),
             ]
         }
 
         for cat_title, cmd_list in categories.items():
-
-            cat_text = ""
-            for c_name, aliases, desc in cmd_list:
-                alias_str = f" `({', '.join(aliases)})`" if aliases else ""
-                cat_text += f"> `{prefix}{c_name}`{alias_str}\n> ╰ *{desc}*\n"
+            cat_text = "\n".join([f"> `{prefix}{c_name}` — *{desc}*" for c_name, desc in cmd_list])
+            if len(cat_text) > 1024:
+                cat_text = cat_text[:1020] + "..."
             embed.add_field(name=cat_title, value=cat_text, inline=False)
 
         embed.set_footer(text=f"Dùng {prefix}help <tên_lệnh> để xem chi tiết  •  Prefix: {prefix}")
@@ -203,6 +201,8 @@ def _group_embed(group_label: str, cmds: list[commands.Command], prefix: str) ->
         lines.append(f"> `{prefix}{cmd.name}`{aliases}\n> ╰ {brief}")
 
     description = "\n".join(lines) if lines else "_Không có lệnh nào._"
+    if len(description) > 4000:
+        description = description[:3990] + "\n> *...và các lệnh khác...*"
 
     embed = make_embed(
         title=f"{group_label}",
@@ -272,12 +272,18 @@ class CategorySelect(Select):
         )
 
     async def callback(self, interaction: discord.Interaction):
-        chosen = self.values[0]
-        if chosen == "__home__":
-            embed = _home_embed(self.groups, self.prefix)
-        else:
-            embed = _group_embed(chosen, self.groups[chosen], self.prefix)
-        await interaction.response.edit_message(embed=embed)
+        try:
+            chosen = self.values[0]
+            if chosen == "__home__":
+                embed = _home_embed(self.groups, self.prefix)
+            else:
+                embed = _group_embed(chosen, self.groups.get(chosen, []), self.prefix)
+            await interaction.response.edit_message(embed=embed)
+        except Exception as e:
+            try:
+                await interaction.response.send_message(f"❌ Lỗi khi tải danh mục: {e}", ephemeral=True)
+            except Exception:
+                pass
 
 
 class HelpView(View):
