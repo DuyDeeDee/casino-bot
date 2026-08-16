@@ -182,8 +182,7 @@ GACHA_ITEMS_TUBAO: List[Tuple[str, str, str, float]] = [
     
     # Địa Cấp (18.5%)
     ("🟣 [ĐỊA CẤP] Đan Dược: Trúc Cơ Đan x1", "Đan Dược", "Địa Cấp", 10.0),
-    ("🟣 [ĐỊA CẤP] Thần Phù: Tẩy Tủy Phù x1", "Thần Phù", "Địa Cấp", 7.5),
-    ("🟣 [ĐỊA CẤP] Vé Quý: Tiên Duyên Phù x1", "Vé Gacha", "Địa Cấp", 1.0),
+    ("🟣 [ĐỊA CẤP] Thần Phù: Tẩy Tủy Phù x1", "Thần Phù", "Địa Cấp", 8.5),
     
     # Huyền Cấp (35.0%)
     ("🔵 [HUYỀN CẤP] Khoáng Thạch: Thần Thiết Thô x5", "Nguyên Liệu", "Huyền Cấp", 20.0),

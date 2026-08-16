@@ -92,7 +92,7 @@ class GachaInteractiveView(discord.ui.View):
                             f"🎟️ **Vé Linh Duyên Phù:** `{player.linh_duyen_phu}` vé\n"
                             f"💰 **Linh Thạch có sẵn:** `{player.linh_thach:,}`\n\n"
                             f"📜 **Chi phí:** `1x Linh Duyên Phù` hoặc `{tubao_cost:,} Linh Thạch` / lượt\n"
-                            f"🎁 **Vật phẩm:** Đan Dược Cực Phẩm, Thảo Dược, Linh Bụi, Pháp Bảo Huyền Cấp, Vé Tiên Duyên...",
+                            f"🎁 **Vật phẩm:** Đan Dược Cực Phẩm, Thảo Dược, Linh Bụi, Pháp Bảo Huyền Cấp, Thú Cưỡi...",
                 color=discord.Color.teal()
             )
         elif self.current_banner == "tiencac":
