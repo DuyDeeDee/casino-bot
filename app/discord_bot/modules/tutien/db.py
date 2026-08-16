@@ -310,6 +310,15 @@ class TuTienDB:
             
             return CultivatorProfile(**d)
 
+    def get_player_by_dao_hieu(self, dao_hieu: str) -> Optional[CultivatorProfile]:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT user_id FROM tutien_players WHERE LOWER(dao_hieu) = LOWER(?)", (dao_hieu.strip(),))
+            row = cursor.fetchone()
+            if not row:
+                return None
+            return self.get_player(row["user_id"])
+
     def create_player(self, user_id: int, guild_id: int, dao_hieu: str, quality: str, element: str, is_di: bool) -> CultivatorProfile:
         with self.get_connection() as conn:
             conn.execute("""

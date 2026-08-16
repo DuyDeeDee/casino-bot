@@ -3281,19 +3281,55 @@ class TuTienCog(commands.Cog, name="TuTien"):
         name="tutien-inventory",
         aliases=["ttinv", "tutieninv", "tuitu", "tuidotutien", "inv-tutien"],
         brief="Xem Túi Trữ Vật Tu Tiên (Linh Thạch, Tiên Ngọc, Vé Gacha, Bùa bảo hiểm, Đan dược).",
-        usage="tutien-inventory"
+        usage="tutien-inventory [@user|user_id|đạo_hiệu]"
     )
-    async def inventory_cmd(self, ctx: commands.Context):
-        """Xem Túi Trữ Vật Tu Tiên (!ttinv)."""
-        player = self.db.get_player(ctx.author.id)
-        if not player:
-            await ctx.send("❌ Vui lòng gõ `!nhapmon` trước!")
-            return
+    async def inventory_cmd(self, ctx: commands.Context, *, target: str = None):
+        """Xem Túi Trữ Vật Tu Tiên (!ttinv [@user|user_id|đạo_hiệu])."""
+        player = None
+        target_user = None
 
-        inv_items = self.db.get_inventory(ctx.author.id)
+        if not target:
+            target_user = ctx.author
+            player = self.db.get_player(target_user.id)
+            if not player:
+                await ctx.send("❌ Vui lòng gõ `!nhapmon` trước!")
+                return
+        else:
+            cleaned_target = target.strip()
+            # 1. Check if Discord mention or numeric ID
+            cleaned_id = re.sub(r"[<@!>]", "", cleaned_target)
+            if cleaned_id.isdigit():
+                uid = int(cleaned_id)
+                player = self.db.get_player(uid)
+                if ctx.guild:
+                    target_user = ctx.guild.get_member(uid)
+                if not target_user:
+                    try:
+                        target_user = await self.bot.fetch_user(uid)
+                    except Exception:
+                        pass
+
+            # 2. Check if Dao Hieu matches
+            if not player:
+                player = self.db.get_player_by_dao_hieu(cleaned_target)
+                if player:
+                    if ctx.guild:
+                        target_user = ctx.guild.get_member(player.user_id)
+                    if not target_user:
+                        try:
+                            target_user = await self.bot.fetch_user(player.user_id)
+                        except Exception:
+                            pass
+
+            if not player:
+                await ctx.send(f"❌ Không tìm thấy tu sĩ hoặc người dùng **[{cleaned_target}]** trong giới Tu Tiên!")
+                return
+
+        inv_items = self.db.get_inventory(player.user_id)
+        user_suffix = f" • `{target_user.display_name}`" if target_user else ""
 
         embed = discord.Embed(
-            title=f"🎒 TÚI TRỮ VẬT TU TIÊN — [{player.dao_hieu}]",
+            title=f"🎒 TÚI TRỮ VẬT TU TIÊN — [{player.dao_hieu}]{user_suffix}",
             description=f"☯ Tu sĩ: **[{player.dao_hieu}]** | Cảnh giới: **{player.realm_name}**",
             color=discord.Color.purple()
         )
