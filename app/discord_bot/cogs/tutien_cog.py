@@ -264,6 +264,7 @@ class TuTienCog(commands.Cog, name="TuTien"):
         self.world_boss_hp = wb.get("hp", 10000000)
         self.world_boss_name = wb.get("name", "👹 Ma Vương Cổ Đại — Vô Cực Thi Cụ")
         self.active_party_rooms = {}  # {channel_id: PartyLobbyView}
+        self.last_bicanh_time = {}  # {user_id: last_bicanh_timestamp}
         self.bg_recovery_task.start()
         self.bg_retention_guard.start()
 
@@ -1683,8 +1684,8 @@ class TuTienCog(commands.Cog, name="TuTien"):
             player.chan_thuong_until = None
             player.tau_hoa_nhap_ma_until = None
         elif "Bảo Rương" in real_name:
-            lt_bonus = random.randint(10000, 50000)
-            tien_duyen_bonus = random.randint(1, 3)
+            lt_bonus = random.randint(1000, 3000)
+            tien_duyen_bonus = 1 if random.random() < 0.25 else 0
             player.linh_thach += lt_bonus
             player.tien_duyen_phu += tien_duyen_bonus
         else:
@@ -2204,7 +2205,7 @@ class TuTienCog(commands.Cog, name="TuTien"):
             if monster["current_hp"] <= 0:
                 mult = 2.5 if is_mutant else 1.0
                 exp_gain = int((1500 + (player.realm_index * 800)) * mult)
-                lt_gain = int((300 + (player.realm_index * 150)) * mult)
+                lt_gain = int((100 + (player.realm_index * 50)) * mult)
                 ticket_drop = 1 if random.random() < 0.08 else 0
 
                 # Thảo dược & Khoáng thạch drop để Luyện Đan (!luyen-dan) & Luyện Khí (!luyen-khi)
@@ -2390,14 +2391,26 @@ class TuTienCog(commands.Cog, name="TuTien"):
     @commands.command(
         name="bi-canh",
         aliases=["bicanh", "dungeon"],
-        brief="Tổ đội 3-5 Tu Sĩ chinh phục Bí Cảnh Cổ Đại.",
+        brief="Tổ đội 2-5 Tu Sĩ chinh phục Bí Cảnh Cổ Đại (Tiêu 30 Tinh Lực).",
         usage="bi-canh [tao-phong|gia-nhap|bat-dau]"
     )
     async def bicanh_cmd(self, ctx: commands.Context, action: str = "tao-phong"):
-        """Tổ đội 3-5 Tu Sĩ chinh phục Bí Cảnh Cổ Đại nhận Đan Dược & Công Pháp Cực Phẩm."""
+        """Tổ đội 2-5 Tu Sĩ chinh phục Bí Cảnh Cổ Đại nhận Đan Dược & Linh Thạch."""
         player = self.db.get_player(ctx.author.id)
         if not player:
             await ctx.send("❌ Vui lòng gõ `!nhapmon` trước!")
+            return
+
+        now = time.time()
+        # Cooldown 30 phút giữa các lần mở Bí Cảnh
+        last_bc = self.last_bicanh_time.get(ctx.author.id, 0)
+        if (now - last_bc) < 1800:
+            rem_m = int((1800 - (now - last_bc)) // 60) + 1
+            await ctx.send(f"⏳ **BÍ CẢNH ĐANG ĐÓNG!** Cần nghỉ ngơi `{rem_m} phút` nữa mới có thể mở Bí Cảnh tiếp!")
+            return
+
+        if player.tinh_luc < 30:
+            await ctx.send("❌ Cần tối thiểu **30 Tinh Lực** để mở và tham gia Bí Cảnh Cổ Đại!")
             return
 
         ch_id = ctx.channel.id
@@ -2406,7 +2419,10 @@ class TuTienCog(commands.Cog, name="TuTien"):
             self.active_party_rooms[ch_id] = lobby_view
             embed = discord.Embed(
                 title="🏰 LẬP ĐỘI BÍ CẢNH CỔ ĐẠI — MA LONG ĐỘNG",
-                description=f"Trưởng đội: **{player.dao_hieu}**\nBấm nút bên dưới để chọn vai trò gia nhập đội!\nTrưởng đội bấm **🚀 Bắt Đầu Đột Phá** khi đã sẵn sàng.",
+                description=f"Trưởng đội: **{player.dao_hieu}**\n"
+                            f"⚡ Chi phí: `30` Tinh Lực/người | 👥 Tối thiểu: `2` Tu Sĩ\n"
+                            f"Bấm nút bên dưới để chọn vai trò gia nhập đội!\n"
+                            f"Trưởng đội bấm **🚀 Bắt Đầu Đột Phá** khi đủ thành viên.",
                 color=discord.Color.blue()
             )
             msg_obj = await ctx.send(embed=embed, view=lobby_view)
@@ -2422,19 +2438,27 @@ class TuTienCog(commands.Cog, name="TuTien"):
                 return
 
             mem_count = len(lobby_view.members)
+            if mem_count < 2:
+                if ch_id in self.active_party_rooms:
+                    del self.active_party_rooms[ch_id]
+                await ctx.send("❌ **BÍ CẢNH CỔ ĐẠI CẦN TỐI THIỂU 2 TU SĨ!** Hãy rủ thêm đạo hữu cùng tham gia rồi mới xuất phát!")
+                return
+
+            self.last_bicanh_time[ctx.author.id] = now
             total_realm_sum = 0
             for uid in lobby_view.members.keys():
                 p = self.db.get_player(uid)
                 if p:
                     total_realm_sum += p.realm_index
             avg_realm = total_realm_sum / max(1, mem_count)
-            total_dps = int(mem_count * (3000 + avg_realm * 2000))
-            exp_per_mem = int(10000 + (avg_realm * 5000))
-            lt_per_mem = int(2000 + (avg_realm * 1000))
+            total_dps = int(mem_count * (2000 + avg_realm * 1000))
+            exp_per_mem = int(2500 + (avg_realm * 1000))
+            lt_per_mem = int(500 + (avg_realm * 200))
 
             for uid in lobby_view.members.keys():
                 p = self.db.get_player(uid)
                 if p:
+                    p.tinh_luc = max(0, p.tinh_luc - 30)
                     req_exp = REALM_REQUIRED_EXP.get(p.realm_index, 1000000000)
                     p.exp = min(req_exp, p.exp + exp_per_mem)
                     p.linh_thach += lt_per_mem
@@ -2443,7 +2467,7 @@ class TuTienCog(commands.Cog, name="TuTien"):
             embed_res = discord.Embed(
                 title="🐉 ĐỘT PHÁ BÍ CẢNH MA LONG ĐỘNG THÀNH CÔNG!",
                 description=f"Tổ đội **{mem_count} Tu Sĩ** phối hợp nhịp nhàng, gây `{total_dps:,}` Sát thương tiêu diệt Ma Long!\n"
-                            f"🎁 Mỗi thành viên nhận: `+{exp_per_mem:,}` EXP | `+{lt_per_mem:,}` Linh Thạch!",
+                            f"🎁 Mỗi thành viên (-30 Tinh Lực) nhận: `+{exp_per_mem:,}` EXP | `+{lt_per_mem:,}` Linh Thạch!",
                 color=discord.Color.green()
             )
             await ctx.send(embed=embed_res)

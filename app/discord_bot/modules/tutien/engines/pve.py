@@ -369,7 +369,7 @@ def process_quick_sweep_10x(player: CultivatorProfile, db) -> Dict[str, Any]:
     for _ in range(10):
         monster = generate_pve_monster(player.realm_index)
         base_exp = 1500 + (player.realm_index * 800)
-        base_lt = 300 + (player.realm_index * 150)
+        base_lt = 100 + (player.realm_index * 50)
         
         total_exp += base_exp
         total_linh_thach += base_lt
