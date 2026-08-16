@@ -14,7 +14,8 @@ from app.discord_bot.modules.tutien.db import TuTienDB
 from app.discord_bot.modules.tutien.models import CultivatorProfile
 from app.discord_bot.modules.tutien.constants import (
     REALMS, REALM_REQUIRED_EXP, REALM_REQUIRED_TAM_CANH, SPIRITUAL_ROOT_QUALITY_BUFF, ELEMENTS_NGU_HANH, ELEMENTS_DI_LINH_CAN,
-    TIEN_CAC_SHOP, VIP_LEVELS, GACHA_BANNERS, LINH_BUI_SHOP, PVP_RANKS, get_pvp_rank, TANG_KINH_CAC_SHOP
+    TIEN_CAC_SHOP, VIP_LEVELS, GACHA_BANNERS, LINH_BUI_SHOP, PVP_RANKS, get_pvp_rank, TANG_KINH_CAC_SHOP,
+    PVP_DAILY_FAME_CAP, PVP_MAX_FAME_PER_OPPONENT, PVP_COOLDOWN_SECONDS, PVP_MAX_REALM_GAP_FOR_FAME
 )
 from app.discord_bot.modules.tutien.engines.cultivation import (
     roll_spiritual_root, process_active_cultivation
@@ -266,6 +267,10 @@ class TuTienCog(commands.Cog, name="TuTien"):
         self.world_boss_name = wb.get("name", "👹 Ma Vương Cổ Đại — Vô Cực Thi Cụ")
         self.active_party_rooms = {}  # {channel_id: PartyLobbyView}
         self.last_bicanh_time = {}  # {user_id: last_bicanh_timestamp}
+        self.pvp_cooldowns = {}  # {user_id: last_pvp_timestamp}
+        self.pvp_daily_fame = {}  # {user_id: {"date": "YYYY-MM-DD", "fame": int}}
+        self.pvp_opponent_tracker = {}  # {(min_id, max_id): {"date": "YYYY-MM-DD", "count": int}}
+        self.tram_ma_cooldowns = {}  # {user_id: last_tram_ma_timestamp}
         self.bg_recovery_task.start()
         self.bg_retention_guard.start()
 
@@ -1236,12 +1241,12 @@ class TuTienCog(commands.Cog, name="TuTien"):
 
     @commands.command(
         name="luyen-the",
-        aliases=["luyenthe"],
-        brief="Rèn luyện Thân Thể tiêu hao Linh Thạch để đột phá Tôi Thể.",
+        aliases=["luyenthe", "toithe", "toi-the"],
+        brief="Tôi luyện Nhục Thân tiêu hao Linh Thạch & Thảo Dược để đột phá Luyện Thể.",
         usage="luyen-the"
     )
     async def luyenthe_cmd(self, ctx: commands.Context):
-        """Rèn luyện Thân Thể tiêu hao Linh Thạch & 5 Tinh Lực để đột phá Tôi Thể."""
+        """Tôi luyện Nhục Thân tiêu hao Linh Thạch, Thảo Dược Thô & Tinh Lực để nâng cấp Luyện Thể."""
         player = self.db.get_player(ctx.author.id)
         if not player:
             await ctx.send("❌ Vui lòng gõ `!nhapmon` trước!")
@@ -1258,15 +1263,15 @@ class TuTienCog(commands.Cog, name="TuTien"):
             await ctx.send("🧘 **BẠN ĐANG BẾ QUAN!** Vui lòng gõ `!xuat-quan` trước khi Luyện Thể.")
             return
 
-        if player.tinh_luc < 5:
-            await ctx.send(f"❌ Không đủ Tinh Lực! Cần `5` Tinh Lực để Tôi Thể (Hiện có: `{player.tinh_luc}/100`).")
-            return
+        inv = self.db.get_inventory(player.user_id)
+        herb_item = next((item for item in inv if item.get("item_name") == "Thảo Dược Thô"), None)
+        herb_count = herb_item["quantity"] if herb_item else 0
 
-        cost = 500 * (player.body_realm_index + 1)
-        success, msg, updated_player = upgrade_body_refining(player, cost)
-        if success:
-            updated_player.tinh_luc -= 5
+        success, msg, updated_player, consumed_herbs = upgrade_body_refining(player, herb_count)
+        if consumed_herbs > 0:
+            self.db.consume_item(player.user_id, "Thảo Dược Thô", consumed_herbs)
             self.db.update_player(updated_player)
+
         await ctx.send(msg)
 
 
@@ -1456,13 +1461,19 @@ class TuTienCog(commands.Cog, name="TuTien"):
         usage="luan-dao [@đối_thủ]"
     )
     async def luan_dao_cmd(self, ctx: commands.Context, target: discord.Member = None):
-        """Luận Đạo Đài PVP 1v1 Ranked (Ma trận tính toán 5 tầng)."""
+        """Luận Đạo Đài PVP 1v1 Ranked (Ma trận tính toán 5 tầng, chống farm Danh Vọng)."""
         player1 = self.db.get_player(ctx.author.id)
         if not player1:
             await ctx.send("❌ Vui lòng gõ `!nhapmon` trước!")
             return
 
         now = time.time()
+        last_pvp = self.pvp_cooldowns.get(ctx.author.id, 0)
+        if now - last_pvp < PVP_COOLDOWN_SECONDS:
+            remain = int(PVP_COOLDOWN_SECONDS - (now - last_pvp)) + 1
+            await ctx.send(f"⏳ **HỒI KHÍ ĐIỀU TỨC!** Vui lòng đợi `{remain}s` trước khi tiếp tục Luận Đạo Đài.")
+            return
+
         if player1.kinh_mach_doan_tuyet_until and player1.kinh_mach_doan_tuyet_until > now:
             remain_min = int((player1.kinh_mach_doan_tuyet_until - now) // 60) + 1
             await ctx.send(f"🩸 **BẠN ĐANG BỊ KINH MẠCH ĐOẠN TUYỆT!** (`{remain_min} phút` nữa)\n"
@@ -1510,6 +1521,7 @@ class TuTienCog(commands.Cog, name="TuTien"):
             player2 = self.db.get_player(matched_row["user_id"])
 
         player1.tinh_luc -= 20
+        self.pvp_cooldowns[ctx.author.id] = now
 
         gf1 = self.db.get_gongfa(player1.user_id)
         gf2 = self.db.get_gongfa(player2.user_id)
@@ -1547,12 +1559,8 @@ class TuTienCog(commands.Cog, name="TuTien"):
                 player2.pvp_losses += 1
                 player2.pvp_streak = 0
             
-            p1_dv_gain = p1_rank["win_danh_vong"]
-            p2_dv_gain = 0 if is_auto_matched else p2_rank["loss_danh_vong"]
-            player1.danh_vong += p1_dv_gain
-            player2.danh_vong += p2_dv_gain
-            
             w_player, l_player = player1, player2
+            w_rank, l_rank = p1_rank, p2_rank
             w_gain_str, l_loss_str = f"+{elo_gain}", f"-{elo_loss}"
         else:
             elo_gain, elo_loss = calculate_elo_change(player2.pvp_elo, player1.pvp_elo)
@@ -1566,30 +1574,63 @@ class TuTienCog(commands.Cog, name="TuTien"):
             player1.pvp_losses += 1
             player1.pvp_streak = 0
             
-            p2_dv_gain = 0 if is_auto_matched else p2_rank["win_danh_vong"]
-            p1_dv_gain = p1_rank["loss_danh_vong"]
-            player2.danh_vong += p2_dv_gain
-            player1.danh_vong += p1_dv_gain
-            
             w_player, l_player = player2, player1
+            w_rank, l_rank = p2_rank, p1_rank
             w_gain_str, l_loss_str = f"+{elo_gain}", f"-{elo_loss}"
+
+        # --- TÍNH TOÁN DANH VỌNG & CHỐNG SPAM/FARM ---
+        today_str = time.strftime("%Y-%m-%d", time.localtime(now))
+        w_fame_record = self.pvp_daily_fame.setdefault(w_player.user_id, {"date": today_str, "fame": 0})
+        if w_fame_record["date"] != today_str:
+            w_fame_record["date"] = today_str
+            w_fame_record["fame"] = 0
+
+        # Opponent match tracker
+        opp_key = (min(player1.user_id, player2.user_id), max(player1.user_id, player2.user_id))
+        opp_record = self.pvp_opponent_tracker.setdefault(opp_key, {"date": today_str, "count": 0})
+        if opp_record["date"] != today_str:
+            opp_record["date"] = today_str
+            opp_record["count"] = 0
+
+        realm_gap = abs(player1.realm_index - player2.realm_index)
+        base_fame = w_rank.get("win_danh_vong", 10)
+
+        # Check conditions
+        fame_gain = 0
+        fame_status_note = ""
+
+        if w_fame_record["fame"] >= PVP_DAILY_FAME_CAP:
+            fame_gain = 0
+            fame_status_note = " *(Đạt trần 150 DV/ngày)*"
+        elif not is_auto_matched and opp_record["count"] >= PVP_MAX_FAME_PER_OPPONENT:
+            fame_gain = 0
+            fame_status_note = " *(Hết lượt nhận DV với đối thủ này hôm nay)*"
+        elif realm_gap > PVP_MAX_REALM_GAP_FOR_FAME:
+            fame_gain = 0
+            fame_status_note = " *(Chênh lệch cảnh giới quá lớn)*"
+        else:
+            fame_gain = min(base_fame, PVP_DAILY_FAME_CAP - w_fame_record["fame"])
+            w_fame_record["fame"] += fame_gain
+            if not is_auto_matched:
+                opp_record["count"] += 1
+            fame_status_note = f" *({w_fame_record['fame']}/{PVP_DAILY_FAME_CAP} DV hôm nay)*"
+
+        w_player.danh_vong += fame_gain
 
         self.db.update_player(player1)
         self.db.update_player(player2)
 
         # --- Quest Tracking: Thiên Kiêu Tranh Phong (PVP Wins) ---
-        winner_id = player1.user_id if is_p1_win else player2.user_id
-        completed_pvp_q = self.db.increment_quest_progress(winner_id, "pvp_wins")
+        completed_pvp_q = self.db.increment_quest_progress(w_player.user_id, "pvp_wins")
         if completed_pvp_q:
             try:
-                winner_user = self.bot.get_user(winner_id)
+                winner_user = self.bot.get_user(w_player.user_id)
                 if winner_user:
                     await ctx.send(
                         f"🏆 **ĐẠO VỤ HOÀN THÀNH!** Tu sĩ **{w_player.dao_hieu}** hoàn tất `{completed_pvp_q['quest_name']}`! Gõ `!dao-vu` để nhận thưởng!"
                     )
             except Exception:
                 pass
-
 
         p1_bar = render_progress_bar(match_res["final_hp1"], player1.max_hp)
         p2_bar = render_progress_bar(match_res["final_hp2"], player2.max_hp)
@@ -1610,15 +1651,15 @@ class TuTienCog(commands.Cog, name="TuTien"):
 
         result_embed.add_field(
             name=f"🎉 Thắng Lợi: [{w_player.dao_hieu}]",
-            value=f"> ELO: `{w_player.pvp_elo}` ({w_gain_str})\n> Danh Vọng: `+{p1_dv_gain if is_p1_win else p2_dv_gain}` 🏆 (Chuỗi Thắng: `{w_player.pvp_streak}`)",
+            value=f"> ELO: `{w_player.pvp_elo}` ({w_gain_str})\n> Danh Vọng: `+{fame_gain}` 🏆{fame_status_note}\n> Chuỗi Thắng: `{w_player.pvp_streak}`",
             inline=True
         )
         result_embed.add_field(
             name=f"🛡️ Thất Bại: [{l_player.dao_hieu}]",
-            value=f"> ELO: `{l_player.pvp_elo}` ({l_loss_str})\n> Danh Vọng Tích Lũy: `+{p2_dv_gain if is_p1_win else p1_dv_gain}` 🏆",
+            value=f"> ELO: `{l_player.pvp_elo}` ({l_loss_str})\n> Danh Vọng: `+0` 🏆",
             inline=True
         )
-        result_embed.set_footer(text="Gõ !tang-kinh-cac để đổi điểm Danh Vọng lấy Công Pháp hiếm!")
+        result_embed.set_footer(text="Gõ !tang-kinh-cac để đổi điểm Danh Vọng lấy Công Pháp hiếm! (Cooldown: 45s)")
         await msg_obj.edit(embed=result_embed)
 
     @commands.command(
@@ -1676,8 +1717,30 @@ class TuTienCog(commands.Cog, name="TuTien"):
 
         real_name, item_info = target_item
         cost = item_info["cost"]
+        min_elo = item_info.get("min_elo", 0)
+
+        # 1. Kiểm tra Rank ELO
+        if player.pvp_elo < min_elo:
+            await ctx.send(
+                f"🚫 **CHƯA ĐỦ TƯ CÁCH ĐỔI BẢO ĐIỂN!**\n"
+                f"> Vật phẩm **[{real_name}]** yêu cầu Rank tối thiểu: **{item_info.get('req_rank', '')}**.\n"
+                f"> ELO hiện tại của bạn: `{player.pvp_elo}` (Hãy leo rank tại `!luan-dao`!)."
+            )
+            return
+
+        # 2. Kiểm tra Unique (Công Pháp không được mua trùng lặp)
+        if item_info.get("unique"):
+            inv = self.db.get_inventory(player.user_id)
+            has_in_inv = any(i.get("item_name") == real_name for i in inv)
+            gf = self.db.get_gongfa(player.user_id)
+            has_equipped = (gf.chu_tu == real_name or gf.tam_phap == real_name or gf.luyen_the == real_name or gf.than_phap == real_name)
+            if has_in_inv or has_equipped:
+                await ctx.send(f"❌ Bạn đã sở hữu Công Pháp **[{real_name}]**! Mỗi tu sĩ chỉ có thể sở hữu 1 bản duy nhất.")
+                return
+
+        # 3. Kiểm tra Danh Vọng
         if player.danh_vong < cost:
-            await ctx.send(f"❌ Không đủ Điểm Danh Vọng! Cần `{cost}` Danh Vọng (Hiện có: `{player.danh_vong:,}`).")
+            await ctx.send(f"❌ Không đủ Điểm Danh Vọng! Cần `{cost:,}` Danh Vọng (Hiện có: `{player.danh_vong:,}`).")
             return
 
         player.danh_vong -= cost
@@ -1685,7 +1748,7 @@ class TuTienCog(commands.Cog, name="TuTien"):
             player.chan_thuong_until = None
             player.tau_hoa_nhap_ma_until = None
         elif "Bảo Rương" in real_name:
-            lt_bonus = random.randint(1000, 3000)
+            lt_bonus = random.randint(10000, 30000)
             tien_duyen_bonus = 1 if random.random() < 0.25 else 0
             player.linh_thach += lt_bonus
             player.tien_duyen_phu += tien_duyen_bonus
@@ -1693,7 +1756,7 @@ class TuTienCog(commands.Cog, name="TuTien"):
             self.db.add_item(player.user_id, real_name, item_info["type"], 1)
 
         self.db.update_player(player)
-        await ctx.send(f"✨ **ĐỔI DANH VỌNG THÀNH CÔNG!** Đã đổi thành công **[{real_name}]** (Trừ `{cost}` Danh Vọng)!")
+        await ctx.send(f"✨ **ĐỔI DANH VỌNG THÀNH CÔNG!** Đã đổi thành công **[{real_name}]** (Trừ `{cost:,}` Danh Vọng)!")
 
     @commands.command(
         name="sinh-tu-dai",
@@ -1722,6 +1785,32 @@ class TuTienCog(commands.Cog, name="TuTien"):
             await ctx.send("❌ Mức cược Linh Thạch phải lớn hơn 0!")
             return
 
+        # Check khoảng cách cảnh giới
+        if abs(challenger.realm_index - victim.realm_index) > 5:
+            await ctx.send("❌ Chênh lệch cảnh giới giữa 2 bên quá lớn (> 5 tầng), không thể mở Sinh Tử Đài quyết đấu!")
+            return
+
+        # Check hạn mức cược tối đa theo cảnh giới
+        def get_max_sinhtudai_bet(r_idx: int) -> int:
+            if r_idx < 9:
+                return 50000        # Luyện Khí: 50k
+            elif r_idx < 13:
+                return 200000       # Trúc Cơ: 200k
+            elif r_idx < 17:
+                return 1000000      # Kim Đan: 1M
+            elif r_idx < 21:
+                return 5000000      # Nguyên Anh: 5M
+            else:
+                return 20000000     # Hóa Thần+: 20M
+
+        max_allowed_bet = min(get_max_sinhtudai_bet(challenger.realm_index), get_max_sinhtudai_bet(victim.realm_index))
+        if amount > max_allowed_bet:
+            await ctx.send(
+                f"❌ **MỨC CƯỢC VƯỢT HẠN MỨC!**\n"
+                f"> Căn cứ theo cảnh giới thấp hơn giữa 2 bên, mức cược tối đa là **`{max_allowed_bet:,}` Linh Thạch**."
+            )
+            return
+
         if challenger.linh_thach < amount:
             await ctx.send(f"❌ Bạn không đủ Linh Thạch để đặt cược! Hiện có: `{challenger.linh_thach:,}` Linh Thạch.")
             return
@@ -1741,7 +1830,8 @@ class TuTienCog(commands.Cog, name="TuTien"):
             title="💀 CHIẾN THƯ SINH TỬ ĐÀI — QUYẾT CHIẾN ĐOẠT BẢO 💀",
             description=f"⚔️ Tu sĩ **[{challenger.dao_hieu}]** chính thức phát chiến thư khiêu chiến **[{victim.dao_hieu}]**!\n\n"
                         f"> 💰 **Mức Cược Sinh Tử:** 🌟 **`{amount:,}` Linh Thạch**\n"
-                        f"> 🩸 **Hậu Quả Kẻ Thua:** Mất sạch toàn bộ tiền cược + Dính **Chấn Thương Kinh Mạch (-30% Sát thương trong 12 Giờ)**!\n\n"
+                        f"> 🩸 **Hậu Quả Kẻ Thua:** Mất sạch toàn bộ tiền cược + Dính **Chấn Thương Kinh Mạch (-30% Sát thương trong 12 Giờ)**!\n"
+                        f"> 🏛️ **Thuế Sàn Lôi Đài:** `10%` Tổng Tiền Cược bị thiêu đốt tiêu trừ lạm phát.\n\n"
                         f"⏱️ Đạo hữu **{target.mention}** có **60 Giây** để bấm nút chấp nhận hoặc cự tuyệt!",
             color=discord.Color.dark_red()
         )
@@ -1779,9 +1869,11 @@ class TuTienCog(commands.Cog, name="TuTien"):
         winner = challenger if is_p1_win else victim
         loser = victim if is_p1_win else challenger
 
-        # Settle bet and injury
+        # Settle bet with 10% Tax
         total_pot = amount * 2
-        winner.linh_thach += total_pot
+        tax = int(total_pot * 0.10)
+        winner_gain = total_pot - tax
+        winner.linh_thach += winner_gain
         loser.chan_thuong_until = time.time() + 43200  # 12 Hours
         loser.hp = max(1, int(loser.max_hp * 0.10))
 
@@ -1807,7 +1899,7 @@ class TuTienCog(commands.Cog, name="TuTien"):
         )
         duel_embed.add_field(
             name="🏆 Kẻ Thắng Đoạt Bảo",
-            value=f"> Tu sĩ: **[{winner.dao_hieu}]**\n> Thu hoạch: `+{total_pot:,}` Linh Thạch!",
+            value=f"> Tu sĩ: **[{winner.dao_hieu}]**\n> Thu hoạch: `+{winner_gain:,}` Linh Thạch\n> *(Đã khấu trừ 10% thuế sàn: `{tax:,}` LT)*",
             inline=True
         )
         duel_embed.add_field(
@@ -1819,7 +1911,7 @@ class TuTienCog(commands.Cog, name="TuTien"):
 
         # Server-wide Flex Notification for big stakes
         if amount >= 100000:
-            flex_msg = f"💥 **[SINH TỬ ĐẠI QUYẾT CHIẾN]**: Tu sĩ **{winner.dao_hieu}** vừa đánh bại **{loser.dao_hieu}**, chém rơi đầu đoạt lấy **{total_pot:,} Linh Thạch**! Toàn cõi tu chân chấn động!"
+            flex_msg = f"💥 **[SINH TỬ ĐẠI QUYẾT CHIẾN]**: Tu sĩ **{winner.dao_hieu}** vừa đánh bại **{loser.dao_hieu}**, chém rơi đầu đoạt lấy **{winner_gain:,} Linh Thạch**! Toàn cõi tu chân chấn động!"
             await ctx.send(flex_msg)
 
     @commands.command(
@@ -1865,6 +1957,14 @@ class TuTienCog(commands.Cog, name="TuTien"):
             await ctx.send(f"🛡️ **TRẬN PHÁP BẤT XÂM PHẠM!** Động Phủ của **{victim.dao_hieu}** đang được bảo vệ, cướp phá thất bại!")
             return
 
+        if victim.realm_index < 3:
+            await ctx.send(f"🛡️ Tu sĩ **{victim.dao_hieu}** là tân thủ nhập môn (dưới Luyện Khí Tầng 4), Động Phủ được Thiên Đạo bảo hộ, không thể cướp phá!")
+            return
+
+        if abs(attacker.realm_index - victim.realm_index) > 5:
+            await ctx.send(f"❌ Chênh lệch cảnh giới giữa bạn và tu sĩ **{victim.dao_hieu}** quá lớn (> 5 tầng), không thể xuất thủ cướp phá!")
+            return
+
         if victim.linh_thach < 100:
             await ctx.send(f"❌ Động phủ của **{victim.dao_hieu}** nghèo xơ xác, không có gì để cướp!")
             return
@@ -1878,7 +1978,7 @@ class TuTienCog(commands.Cog, name="TuTien"):
         attacker_won = (match_res["winner_id"] == attacker.user_id)
 
         if attacker_won:
-            stolen = int(victim.linh_thach * random.uniform(0.10, 0.20))
+            stolen = min(500000, int(victim.linh_thach * random.uniform(0.10, 0.20)))
             victim.linh_thach -= stolen
             attacker.linh_thach += stolen
             attacker.nghiep_luc += 15
@@ -1953,28 +2053,33 @@ class TuTienCog(commands.Cog, name="TuTien"):
             await ctx.send("❌ Không thể tự treo thưởng truy nã chính mình!")
             return
 
-        if victim.nghiep_luc < 10:
-            await ctx.send(f"❌ Tu sĩ **{victim.dao_hieu}** là người lương thiện (Nghiệp Lực: `{victim.nghiep_luc}` < 10)! Chỉ có thể treo thưởng Ma Tu tích tụ Nghiệp Lực!")
+        if victim.nghiep_luc < 20:
+            await ctx.send(f"❌ Tu sĩ **{victim.dao_hieu}** chưa đủ tà ác (Nghiệp Lực: `{victim.nghiep_luc}` < 20)! Chỉ có thể treo thưởng Đại Ma Đầu có Nghiệp Lực ≥ 20!")
             return
 
-        if amount < 1000:
-            await ctx.send("❌ Mức tiền thưởng truy nã tối thiểu là `1,000` Linh Thạch!")
+        if amount < 5000:
+            await ctx.send("❌ Mức tiền thưởng truy nã tối thiểu là `5,000` Linh Thạch!")
             return
 
         if issuer.linh_thach < amount:
             await ctx.send(f"❌ Không đủ Linh Thạch! Bạn hiện có `{issuer.linh_thach:,}` Linh Thạch.")
             return
 
+        # 10% Phí thông cáo lệnh truy nã (Server Sink)
+        tax = int(amount * 0.10)
+        bounty_reward = amount - tax
+
         issuer.linh_thach -= amount
         self.db.update_player(issuer)
 
-        bounty_id = self.db.add_bounty(victim.user_id, issuer.user_id, amount, 0, reason)
+        bounty_id = self.db.add_bounty(victim.user_id, issuer.user_id, bounty_reward, 0, reason)
 
         embed = discord.Embed(
             title="🩸 PHÁT LỆNH TRUY NÃ HUYẾT SÁT THÀNH CÔNG! 🩸",
             description=f"Tu sĩ **[{issuer.dao_hieu}]** đã treo thưởng Headshot Ma Đầu **[{victim.dao_hieu}]**!\n"
-                        f"> 💰 **Tiền Thưởng:** 🌟 **`{amount:,}` Linh Thạch**\n"
-                        f"> 📜 *Lý do: {reason}*\n"
+                        f"> 💰 **Tiền Thưởng Thực Nhận:** 🌟 **`{bounty_reward:,}` Linh Thạch**\n"
+                        f"> 📜 *Phí thông cáo 10% (`{tax:,}` LT) đã bị khấu trừ*\n"
+                        f"> 📌 *Lý do: {reason}*\n"
                         f"> ⚔️ Toàn thể tu sĩ gõ `!tram-ma {target.mention}` để đi săn Ma Đầu và nhận thưởng!",
             color=discord.Color.dark_red()
         )
@@ -1999,7 +2104,7 @@ class TuTienCog(commands.Cog, name="TuTien"):
         usage="tram-ma @Ma_Đầu"
     )
     async def tram_ma_cmd(self, ctx: commands.Context, target: discord.Member):
-        """Trảm Ma Đầu theo Lệnh Truy Nã."""
+        """Trảm Ma Đầu theo Lệnh Truy Nã (Chống farm Danh Vọng)."""
         hunter = self.db.get_player(ctx.author.id)
         target_p = self.db.get_player(target.id)
 
@@ -2015,16 +2120,34 @@ class TuTienCog(commands.Cog, name="TuTien"):
             await ctx.send("❌ Không thể tự trảm chính mình!")
             return
 
+        now = time.time()
+        last_tm = self.tram_ma_cooldowns.get(ctx.author.id, 0)
+        if now - last_tm < 60:
+            remain = int(60 - (now - last_tm)) + 1
+            await ctx.send(f"⏳ **HỒI KHÍ TRẢM MA!** Vui lòng đợi `{remain}s` trước khi tiếp tục đi săn Ma Đầu.")
+            return
+
         bounty = self.db.get_bounty_for_target(target_p.user_id)
         if not bounty:
             await ctx.send(f"❌ Tu sĩ **{target_p.dao_hieu}** hiện không có tên trên Bảng Truy Nã!")
             return
 
+        # Chặn người phát lệnh tự trảm để farm
+        if bounty.get("issuer_user_id") == hunter.user_id:
+            await ctx.send("❌ **KHÔNG THỂ TỰ TRẢM MỤC TIÊU CỦA MÌNH!** Bạn chính là người phát Lệnh Truy Nã này, không thể tự nhận tiền thưởng!")
+            return
+
+        # Check khoảng cách cảnh giới
+        if abs(hunter.realm_index - target_p.realm_index) > 5:
+            await ctx.send("❌ Chênh lệch cảnh giới giữa bạn và Ma Đầu quá lớn (> 5 tầng), không thể xuất thủ trảm sát!")
+            return
+
         # Check Miễn Chiến
-        now = time.time()
         if target_p.mien_chien_until and target_p.mien_chien_until > now:
             await ctx.send(f"🛡️ **THẤT NHẬT MIỄN CHIẾN!** Tu sĩ **{target_p.dao_hieu}** đang được phong ấn an toàn bởi Miễn Chiến Phù!")
             return
+
+        self.tram_ma_cooldowns[ctx.author.id] = now
 
         # Execute 5-Tier PVP Duel
         gf_h = self.db.get_gongfa(hunter.user_id)
@@ -2035,7 +2158,20 @@ class TuTienCog(commands.Cog, name="TuTien"):
         if hunter_won:
             reward_lt = bounty["reward_linh_thach"]
             hunter.linh_thach += reward_lt
-            hunter.danh_vong += 50
+
+            # Tính Danh Vọng vào Daily Cap
+            today_str = time.strftime("%Y-%m-%d", time.localtime(now))
+            w_fame_record = self.pvp_daily_fame.setdefault(hunter.user_id, {"date": today_str, "fame": 0})
+            if w_fame_record["date"] != today_str:
+                w_fame_record["date"] = today_str
+                w_fame_record["fame"] = 0
+
+            base_fame = 20
+            fame_gain = min(base_fame, max(0, PVP_DAILY_FAME_CAP - w_fame_record["fame"]))
+            w_fame_record["fame"] += fame_gain
+            hunter.danh_vong += fame_gain
+            fame_note = f"`+{fame_gain}` Danh Vọng 🏆 *({w_fame_record['fame']}/{PVP_DAILY_FAME_CAP} DV hôm nay)*" if fame_gain > 0 else "`+0` Danh Vọng 🏆 *(Đã đạt giới hạn 150 DV/ngày)*"
+
             target_p.chan_thuong_until = now + 43200  # 12h
             target_p.nghiep_luc = max(0, target_p.nghiep_luc - 20)
 
@@ -2047,7 +2183,7 @@ class TuTienCog(commands.Cog, name="TuTien"):
                 title="⚔️ TRẢM MA THÀNH CÔNG! THU HOẠCH TIỀN THƯỞNG ⚔️",
                 description=f"Chính Đạo Tu Sĩ **[{hunter.dao_hieu}]** đã xuất thủ trảm rơi đầu Ma Đầu **[{target_p.dao_hieu}]**!\n"
                             f"> 💰 **Nhận Tiền Thưởng Truy Nã:** 🌟 **`+{reward_lt:,}` Linh Thạch**\n"
-                            f"> 🏆 **Nhận Điểm Danh Vọng:** `+50` Danh Vọng!\n"
+                            f"> 🏆 **Nhận Điểm Danh Vọng:** {fame_note}\n"
                             f"> 🩸 Ma Đầu bị trọng thương Kinh Mạch Đoạn Tuyệt (12h).",
                 color=discord.Color.green()
             )
@@ -3104,8 +3240,10 @@ class TuTienCog(commands.Cog, name="TuTien"):
             await ctx.send("❌ Số lượng và giá bán phải lớn hơn 0!")
             return
 
-        if price > 100000000:
-            await ctx.send("❌ Giá bán không được vượt quá 100,000,000 Linh Thạch!")
+        # Check giới hạn số phiên active
+        active_cnt = self.db.count_user_active_auctions(player.user_id)
+        if active_cnt >= 5:
+            await ctx.send("❌ Bạn đang có `5` phiên đấu giá đang mở trên Chợ Trời! Hãy chờ bán hết hoặc gõ `!huy-ban <Mã_Số>` để rút bớt trước khi đăng thêm.")
             return
 
         inv = self.db.get_inventory(ctx.author.id)
@@ -3118,6 +3256,26 @@ class TuTienCog(commands.Cog, name="TuTien"):
         if not matched_item or matched_item["quantity"] < quantity:
             avail = matched_item["quantity"] if matched_item else 0
             await ctx.send(f"❌ Bạn không đủ vật phẩm **[{item_name}]** trong Túi Đồ! (Hiện có: `{avail}`). Gõ `!ttinv` để kiểm tra.")
+            return
+
+        # Khung giá trần chống chuyển tiền lậu qua item rác
+        def get_max_price_for_item(name: str) -> int:
+            n = name.lower()
+            if "thảo dược" in n or "thần thiết" in n or "khoáng thạch" in n or "quặng" in n:
+                return 50000        # Nguyên liệu: Max 50k / đơn vị
+            elif "đan" in n or "phù" in n or "hoàn" in n or "thuốc" in n:
+                return 500000       # Đan dược: Max 500k / viên
+            else:
+                return 5000000      # Pháp bảo / Khác: Max 5M / món
+
+        max_unit_price = get_max_price_for_item(matched_item["item_name"])
+        max_allowed_total = max_unit_price * quantity
+        if price > max_allowed_total:
+            await ctx.send(
+                f"❌ **GIÁ BÁN VƯỢT KHUNG QUY ĐỊNH!**\n"
+                f"> Vật phẩm **[{matched_item['item_name']}]** có giá trần tối đa là **`{max_unit_price:,}` Linh Thạch / đơn vị**.\n"
+                f"> Mức giá tối đa cho `{quantity}x` là: **`{max_allowed_total:,}` Linh Thạch**."
+            )
             return
 
         auction_id = self.db.create_auction(player.user_id, matched_item["item_name"], quantity, price, duration_hours=24)
@@ -3181,7 +3339,8 @@ class TuTienCog(commands.Cog, name="TuTien"):
             return
 
         current_lvl = player.dong_phu_level
-        upgrade_cost = int(15000 * (current_lvl ** 1.4))
+        upgrade_cost = int(50000 * (current_lvl ** 1.8))
+        req_ores = (current_lvl // 2) if current_lvl >= 10 else 0
 
         if action and action.lower() in ["nangcap", "upgrade", "up", "nang-cap"]:
             if current_lvl >= 50:
@@ -3192,31 +3351,47 @@ class TuTienCog(commands.Cog, name="TuTien"):
                 await ctx.send(f"❌ Không đủ Linh Thạch để nâng cấp Động Phủ! Cần `{upgrade_cost:,}` Linh Thạch (Hiện có: `{player.linh_thach:,}`).")
                 return
 
+            if req_ores > 0:
+                inv = self.db.get_inventory(player.user_id)
+                ore_item = next((it for it in inv if it.get("item_name") == "Thần Thiết Thô"), None)
+                ore_count = ore_item["quantity"] if ore_item else 0
+                if ore_count < req_ores:
+                    await ctx.send(
+                        f"⛏️ **THIẾU KHOÁNG THẠCH GIA CỐ TRẬN PHÁP!**\n"
+                        f"> Cần **`{req_ores}` Thần Thiết Thô** để xây dựng Tụ Linh Trận Cấp {current_lvl + 1} (Hiện có: `{ore_count}`).\n"
+                        f"> ⚔️ Hãy đi Săn Yêu (`!sanyeu`) để đào thêm khoáng thạch!"
+                    )
+                    return
+                self.db.consume_item(player.user_id, "Thần Thiết Thô", req_ores)
+
             player.linh_thach -= upgrade_cost
             player.dong_phu_level += 1
             self.db.update_player(player)
 
             new_lvl = player.dong_phu_level
-            new_exp_buff = int((new_lvl - 1) * 15)
+            new_exp_buff = min(150, (new_lvl - 1) * 3)
+            ore_msg = f", `{req_ores}` Thần Thiết Thô" if req_ores > 0 else ""
             await ctx.send(
                 f"🏰 **NÂNG CẤP ĐỘNG PHỦ THÀNH CÔNG!**\n"
                 f"> 🏡 Động Phủ đã thăng cấp lên: **Cấp {new_lvl}**!\n"
                 f"> ⚡ Hiệu suất Tụ Linh Trận: **+{new_exp_buff}% EXP Bế Quan & Tu Luyện**!\n"
-                f"> 🛡️ Tăng thêm +2 Điểm Hộ Trận Đột Phá Lôi Kiếp!"
+                f"> 🛡️ Tăng thêm +2 Điểm Hộ Trận Đột Phá Lôi Kiếp!\n"
+                f"> *(Tiêu hao: `{upgrade_cost:,}` Linh Thạch{ore_msg})*"
             )
             return
 
         # View Động Phủ status
-        exp_buff = int((current_lvl - 1) * 15)
+        exp_buff = min(150, (current_lvl - 1) * 3)
+        ore_req_str = f" | ⛏️ `{req_ores}` Thần Thiết Thô" if req_ores > 0 else ""
         embed = discord.Embed(
             title=f"🏰 TIÊN GIA ĐỘNG PHỦ — [{player.dao_hieu}]",
             description=f"Cấp độ Động Phủ: **Cấp {current_lvl} / 50**\n"
                         f"💰 **Linh Thạch hiện có:** `{player.linh_thach:,}`\n\n"
                         f"✨ **Hiệu Quả Tụ Linh Trận:**\n"
-                        f"> ⚡ Gia tăng tốc độ Tu Luyện & Bế Quan: **+{exp_buff}% EXP**\n"
+                        f"> ⚡ Gia tăng tốc độ Tu Luyện & Bế Quan: **+{exp_buff}% EXP** (Tối đa +150%)\n"
                         f"> 🛡️ Hộ Thân Đột Phá: **+{min(20, current_lvl * 2)} Điểm Kháng Kiếp**\n\n"
                         f"🛠️ **Nâng cấp lên Cấp {current_lvl + 1}:**\n"
-                        f"> 💰 Chi phí: `{upgrade_cost:,}` Linh Thạch\n"
+                        f"> 💰 Chi phí: `{upgrade_cost:,}` Linh Thạch{ore_req_str}\n"
                         f"> 👉 Gõ `!dong-phu nangcap` để tiến hành nâng cấp!",
             color=discord.Color.green()
         )

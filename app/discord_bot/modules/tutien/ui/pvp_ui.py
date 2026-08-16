@@ -146,17 +146,19 @@ class TangKinhCacShopView(discord.ui.View):
     def build_embed(self) -> discord.Embed:
         embed = discord.Embed(
             title="🏯 TÀNG KINH CÁC — DANH VỌNG BẢO ĐIỂN 🏯",
-            description=f"Tu sĩ: **[{self.player.dao_hieu}]** | Điểm Danh Vọng: 🏆 **`{self.player.danh_vong:,}` Danh Vọng**\n"
+            description=f"Tu sĩ: **[{self.player.dao_hieu}]** (ELO: `{self.player.pvp_elo}`) | 🏆 **`{self.player.danh_vong:,}` Danh Vọng**\n"
                         f"> Cú pháp đổi vật phẩm: `!tang-kinh-cac [Tên_Vật_Phẩm]`",
             color=discord.Color.gold()
         )
 
         for name, item in TANG_KINH_CAC_SHOP.items():
+            req_info = f" | Yêu cầu: `{item.get('req_rank', 'Tất Cả')}`" if item.get("req_rank") else ""
             embed.add_field(
-                name=f"📜 {name} — 🏆 {item['cost']} Danh Vọng",
-                value=f"> Loại: `{item['type']}`\n> *{item['desc']}*",
+                name=f"📜 {name} — 🏆 {item['cost']:,} Danh Vọng",
+                value=f"> Loại: `{item['type']}`{req_info}\n> *{item['desc']}*",
                 inline=False
             )
 
-        embed.set_footer(text="Tham gia Luận Đạo Đài (!luan-dao) để tích lũy Danh Vọng!")
+        embed.set_footer(text="Tham gia Luận Đạo Đài (!luan-dao) để tích lũy Danh Vọng (Tối đa 150 DV/ngày)!")
         return embed
+

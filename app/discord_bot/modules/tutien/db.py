@@ -924,5 +924,18 @@ class TuTienDB:
             conn.execute("DELETE FROM tutien_auctions WHERE auction_id = ?", (auction_id,))
             return True, f"✨ Đã hủy đăng bán phiên `#{auction_id}` và hoàn trả `{auc['quantity']}x` **[{auc['item_name']}]** vào Túi Đồ!"
 
+    def count_user_active_auctions(self, seller_id: int) -> int:
+        """Đếm số lượng phiên đấu giá đang còn hiệu lực của 1 người bán."""
+        now = time.time()
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT COUNT(*) as cnt FROM tutien_auctions WHERE seller_id = ? AND expires_at > ?",
+                (seller_id, now)
+            )
+            row = cursor.fetchone()
+            return row["cnt"] if row else 0
+
+
 
 

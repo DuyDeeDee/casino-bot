@@ -117,11 +117,111 @@ ELEMENTS_DI_LINH_CAN: Dict[str, Dict[str, str]] = {
 }
 
 
-# --- LUYỆN THỂ (BODY REFINING REALMS) ---
+# --- LUYỆN THỂ (BODY REFINING REALMS & CONFIG) ---
 BODY_REALMS: List[str] = [
     "Phàm Thân", "Tôi Thể", "Luyện Bì", "Luyện Nhục", "Luyện Cốt",
     "Luyện Tủy", "Luyện Huyết", "Kim Thân", "Bất Diệt Thể"
 ]
+
+BODY_REALM_CONFIG: Dict[int, Dict[str, Any]] = {
+    1: {  # Phàm Thân -> Tôi Thể
+        "to_realm": "Tôi Thể",
+        "req_realm_index": 2,      # Luyện Khí Tầng 3
+        "req_realm_name": "Luyện Khí Tầng 3",
+        "linh_thach": 5000,
+        "herbs": 5,
+        "tinh_luc": 10,
+        "base_rate": 0.95,
+        "hp_gain_flat": 500,
+        "hp_gain_pct": 0.05,
+        "desc": "Cường hóa gân cốt cơ bản, bài trừ phàm trần tạp chất."
+    },
+    2: {  # Tôi Thể -> Luyện Bì
+        "to_realm": "Luyện Bì",
+        "req_realm_index": 5,      # Luyện Khí Tầng 6
+        "req_realm_name": "Luyện Khí Tầng 6",
+        "linh_thach": 15000,
+        "herbs": 10,
+        "tinh_luc": 15,
+        "base_rate": 0.85,
+        "hp_gain_flat": 1000,
+        "hp_gain_pct": 0.08,
+        "desc": "Làn da cứng như da đồng, chống đỡ đòn đánh ngoại lực."
+    },
+    3: {  # Luyện Bì -> Luyện Nhục
+        "to_realm": "Luyện Nhục",
+        "req_realm_index": 8,      # Luyện Khí Tầng 9
+        "req_realm_name": "Luyện Khí Tầng 9",
+        "linh_thach": 35000,
+        "herbs": 18,
+        "tinh_luc": 15,
+        "base_rate": 0.75,
+        "hp_gain_flat": 2000,
+        "hp_gain_pct": 0.10,
+        "desc": "Cơ bắp dẻo dai như thép, khí huyết cuồn cuộn dâng trào."
+    },
+    4: {  # Luyện Nhục -> Luyện Cốt
+        "to_realm": "Luyện Cốt",
+        "req_realm_index": 9,      # Trúc Cơ Sơ Kỳ
+        "req_realm_name": "Trúc Cơ Sơ Kỳ",
+        "linh_thach": 80000,
+        "herbs": 25,
+        "tinh_luc": 20,
+        "base_rate": 0.65,
+        "hp_gain_flat": 3500,
+        "hp_gain_pct": 0.12,
+        "desc": "Xương cốt cứng cáp, bắt đầu kích hoạt giảm 15% Sát Thương nhận vào trong PVP."
+    },
+    5: {  # Luyện Cốt -> Luyện Tủy
+        "to_realm": "Luyện Tủy",
+        "req_realm_index": 13,     # Kim Đan Sơ Kỳ
+        "req_realm_name": "Kim Đan Sơ Kỳ",
+        "linh_thach": 180000,
+        "herbs": 40,
+        "tinh_luc": 25,
+        "base_rate": 0.55,
+        "hp_gain_flat": 6000,
+        "hp_gain_pct": 0.15,
+        "desc": "Tủy biến thành vàng óng, tái sinh huyết khí nhanh chóng."
+    },
+    6: {  # Luyện Tủy -> Luyện Huyết
+        "to_realm": "Luyện Huyết",
+        "req_realm_index": 17,     # Nguyên Anh Sơ Kỳ
+        "req_realm_name": "Nguyên Anh Sơ Kỳ",
+        "linh_thach": 400000,
+        "herbs": 60,
+        "tinh_luc": 30,
+        "base_rate": 0.50,
+        "hp_gain_flat": 10000,
+        "hp_gain_pct": 0.18,
+        "desc": "Máu hóa thành huyết tinh đậm đặc, sinh cơ vô cùng vô tận."
+    },
+    7: {  # Luyện Huyết -> Kim Thân
+        "to_realm": "Kim Thân",
+        "req_realm_index": 21,     # Hóa Thần Sơ Kỳ
+        "req_realm_name": "Hóa Thần Sơ Kỳ",
+        "linh_thach": 800000,
+        "herbs": 90,
+        "tinh_luc": 30,
+        "base_rate": 0.45,
+        "hp_gain_flat": 16000,
+        "hp_gain_pct": 0.20,
+        "desc": "Đúc thành Kim Thân Bất Hoại, vạn pháp bất xâm, lực áp quần hùng."
+    },
+    8: {  # Kim Thân -> Bất Diệt Thể
+        "to_realm": "Bất Diệt Thể",
+        "req_realm_index": 25,     # Luyện Hư
+        "req_realm_name": "Luyện Hư",
+        "linh_thach": 2000000,
+        "herbs": 150,
+        "tinh_luc": 35,
+        "base_rate": 0.40,
+        "hp_gain_flat": 25000,
+        "hp_gain_pct": 0.25,
+        "desc": "Nhục thân sánh ngang trời đất, Bất Diệt Thể cực hạn cảnh giới tối thượng!"
+    }
+}
+
 
 
 # --- ĐẠO PHỨC HỢP (DAO DOMAINS) ---
@@ -284,11 +384,16 @@ TIEN_CAC_SHOP: Dict[str, Dict[str, Any]] = {
 
 # --- 🥋 PVP LUẬN ĐẠO ĐÀI & TÀNG KINH CÁC CONSTANTS ---
 
+PVP_DAILY_FAME_CAP: int = 150              # Tối đa 150 Danh Vọng mỗi ngày từ Luận Đạo Đài
+PVP_MAX_FAME_PER_OPPONENT: int = 2        # Tối đa 2 lần nhận Danh Vọng từ cùng 1 đối thủ mỗi ngày
+PVP_COOLDOWN_SECONDS: int = 45             # Cooldown 45s giữa 2 trận PVP
+PVP_MAX_REALM_GAP_FOR_FAME: int = 5        # Chênh lệch > 5 cảnh giới không nhận Danh Vọng
+
 PVP_RANKS: List[Dict[str, Any]] = [
-    {"tier": "Đế Cấp (Chí Cao)", "min_elo": 2000, "badge": "👑", "color": 0xFFD700, "win_danh_vong": 30, "loss_danh_vong": 10},
-    {"tier": "Chí Tôn (Đỉnh Phong)", "min_elo": 1600, "badge": "💎", "color": 0x9B59B6, "win_danh_vong": 20, "loss_danh_vong": 7},
-    {"tier": "Tiên Đạo (Thành Thục)", "min_elo": 1200, "badge": "⚔️", "color": 0x3498DB, "win_danh_vong": 15, "loss_danh_vong": 5},
-    {"tier": "Sơ Nhập (Tân Thủ)", "min_elo": 0, "badge": "🥋", "color": 0x2ECC71, "win_danh_vong": 10, "loss_danh_vong": 3}
+    {"tier": "Đế Cấp (Chí Cao)", "min_elo": 2000, "badge": "👑", "color": 0xFFD700, "win_danh_vong": 30, "loss_danh_vong": 0},
+    {"tier": "Chí Tôn (Đỉnh Phong)", "min_elo": 1600, "badge": "💎", "color": 0x9B59B6, "win_danh_vong": 20, "loss_danh_vong": 0},
+    {"tier": "Tiên Đạo (Thành Thục)", "min_elo": 1200, "badge": "⚔️", "color": 0x3498DB, "win_danh_vong": 15, "loss_danh_vong": 0},
+    {"tier": "Sơ Nhập (Tân Thủ)", "min_elo": 0, "badge": "🥋", "color": 0x2ECC71, "win_danh_vong": 10, "loss_danh_vong": 0}
 ]
 
 def get_pvp_rank(elo: int) -> Dict[str, Any]:
@@ -300,28 +405,43 @@ def get_pvp_rank(elo: int) -> Dict[str, Any]:
 # Shop Tàng Kinh Các (Đổi Điểm Danh Vọng)
 TANG_KINH_CAC_SHOP: Dict[str, Dict[str, Any]] = {
     "《Thái Hư Kiếm Điển》": {
-        "cost": 150,
+        "cost": 1200,
         "type": "Công Pháp (Thiên Cấp)",
+        "min_elo": 1200,
+        "req_rank": "Tiên Đạo (ELO ≥ 1200)",
+        "unique": True,
         "desc": "Bí kíp Kiếm Đạo tối thượng, tăng +25% Sát Thương Kiếm Đạo & +10% Bạo Kích PVP."
     },
     "《Bất Diệt Chân Kinh》": {
-        "cost": 300,
+        "cost": 2500,
         "type": "Công Pháp Luyện Thể (Đế Cấp)",
+        "min_elo": 1600,
+        "req_rank": "Chí Tôn (ELO ≥ 1600)",
+        "unique": True,
         "desc": "Công pháp rèn luyện Thần Thể, tăng +5,000 Max HP và giảm 15% Sát Thương PVP gánh chịu."
     },
     "Mảnh Thần Binh Thượng Cổ": {
-        "cost": 80,
+        "cost": 450,
         "type": "Nguyên Liệu Hiếm",
+        "min_elo": 0,
+        "req_rank": "Tất Cả Tu Sĩ",
+        "unique": False,
         "desc": "Tích lũy 3 mảnh để hợp thành Thần Khí Đế Cấp tự chọn."
     },
     "Định Thần Hoàn": {
-        "cost": 40,
+        "cost": 120,
         "type": "Đan Dược Đặc Biệt",
+        "min_elo": 0,
+        "req_rank": "Tất Cả Tu Sĩ",
+        "unique": False,
         "desc": "Tẩy trừ trạng thái Chấn Thương Kinh Mạch hoặc Tẩu Hỏa Nhập Ma tức thì."
     },
     "Bảo Rương Danh Vọng": {
-        "cost": 60,
+        "cost": 200,
         "type": "Bảo Rương",
+        "min_elo": 0,
+        "req_rank": "Tất Cả Tu Sĩ",
+        "unique": False,
         "desc": "Mở nhận ngẫu nhiên 10,000 - 50,000 Linh Thạch và 1-3 Vé Tiên Duyên Phù."
     }
 }
