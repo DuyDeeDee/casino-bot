@@ -4,6 +4,7 @@ import asyncio
 import io
 import os
 import random
+import re
 import time
 from typing import Optional, Dict, Any, List, Tuple
 import discord
