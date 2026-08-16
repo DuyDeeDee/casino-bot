@@ -195,12 +195,12 @@ class GachaInteractiveView(discord.ui.View):
 
         has_ur = False
         ur_items = []
-        for idx, res in enumerate(roll_results, 1):
+        for idx, res in enumerate(roll_results[:20], 1):
             val_str = f"> Phẩm cấp: `{res['grade']}`"
             if res.get("duplicate_converted"):
                 val_str += f" *(Trùng! Chuyển thành +{res['duplicate_converted']} Linh Bụi)*"
 
-            res_embed.add_field(name=f"[{idx}] {res['item_name']}", value=val_str, inline=False)
+            res_embed.add_field(name=f"[{idx}] {res['item_name']}"[:250], value=val_str[:1000], inline=False)
             if res.get("is_ur"):
                 has_ur = True
                 ur_items.append(res["item_name"])
@@ -404,11 +404,11 @@ class TuTienCog(commands.Cog, name="TuTien"):
             )
             has_ur = False
             ur_items = []
-            for idx, res in enumerate(roll_results, 1):
+            for idx, res in enumerate(roll_results[:20], 1):
                 val_str = f"> Phẩm cấp: `{res['grade']}`"
                 if res.get("duplicate_converted"):
                     val_str += f" *(Trùng! +{res['duplicate_converted']} Linh Bụi)*"
-                embed.add_field(name=f"[{idx}] {res['item_name']}", value=val_str, inline=False)
+                embed.add_field(name=f"[{idx}] {res['item_name']}"[:250], value=val_str[:1000], inline=False)
                 if res.get("is_ur"):
                     has_ur = True
                     ur_items.append(res["item_name"])
@@ -2433,7 +2433,7 @@ class TuTienCog(commands.Cog, name="TuTien"):
             if room["type"] == "MONSTER":
                 monster = generate_pve_monster(player.realm_index)
                 log, monster = process_turn_action(player, monster, "ATTACK")
-                r_embed.add_field(name="⚔️ Trận Chiến Yêu Thú", value=f"> {log['message']}", inline=False)
+                r_embed.add_field(name="⚔️ Trận Chiến Yêu Thú", value=f"> {log['message']}"[:1000], inline=False)
 
             elif room["type"] == "TRAP":
                 trap_view = TrapSacrificeView(ctx.author.id)
@@ -2463,7 +2463,7 @@ class TuTienCog(commands.Cog, name="TuTien"):
                 boss = generate_pve_monster(player.realm_index, floor_offset=3)
                 boss["name"] = "🐉 THÁI CỔ MÃNG HOÀNG (BOSS CẤM ĐỊA)"
                 log, boss = process_turn_action(player, boss, "GONGFA")
-                r_embed.add_field(name="🐉 Trảm Boss Cấm Địa", value=f"> {log['message']}", inline=False)
+                r_embed.add_field(name="🐉 Trảm Boss Cấm Địa", value=f"> {log['message']}"[:1000], inline=False)
 
             self.db.update_player(player)
             await msg_obj.edit(embed=r_embed, view=None)
@@ -2665,12 +2665,22 @@ class TuTienCog(commands.Cog, name="TuTien"):
 
         # 4. Tẩy Tủy Phù
         if "tẩy tủy" in item_name_clean or "tay tuy" in item_name_clean:
-            if player.tay_tuy_phu > 0 or self.db.consume_item(player.user_id, "Tẩy Tủy Phù", 1):
-                from app.discord_bot.modules.tutien.engines.gacha import process_gacha_rolls
+            from app.discord_bot.modules.tutien.engines.gacha import process_gacha_rolls
+            # Check if user has ticket either on profile or in inventory DB
+            has_ticket = player.tay_tuy_phu > 0
+            if not has_ticket and self.db.has_item(player.user_id, "Tẩy Tủy Phù"):
+                if self.db.consume_item(player.user_id, "Tẩy Tủy Phù", 1):
+                    player.tay_tuy_phu += 1
+                    has_ticket = True
+
+            if has_ticket or player.tien_ngoc >= 100:
                 ok, msg, res, updated_player = process_gacha_rolls(self.db, player, "caimenh", 1)
-                await ctx.send(f"{msg}\n> 🔮 **Linh Căn mới:** `{updated_player.linh_can_quality}` ({updated_player.linh_can_element})")
+                if ok:
+                    await ctx.send(f"{msg}\n> 🔮 **Linh Căn mới:** `{updated_player.linh_can_quality}` ({updated_player.linh_can_element})")
+                else:
+                    await ctx.send(msg)
             else:
-                await ctx.send("❌ Bạn không có **Tẩy Tủy Phù** trong túi đồ! Luyện tại `!luyen-dan` hoặc quay gacha.")
+                await ctx.send("❌ Bạn không có **Tẩy Tủy Phù** trong túi đồ và không đủ 100 Tiên Ngọc!")
             return
 
         # 5. Niết Bàn Đan
