@@ -300,13 +300,18 @@ class TuTienCog(commands.Cog, name="TuTien"):
                         linh_thach_gain = int(800 * duration_h * (1 + realm_idx * 0.05))
                         tam_canh_gain = min(100.0, duration_h * 2.0)
                         can_co_gain = round(duration_h * 10.0, 1)
+                        hp_ratio = min(1.0, duration_h / 4.0)
 
-                        conn.execute(
+                        res_cursor = conn.execute(
                             "UPDATE tutien_players SET is_meditating = 0, meditate_start_time = NULL, meditate_duration_hours = 0, "
-                            "hp = max_hp, mana = max_mana, can_co = MIN(100.0, can_co + ?), exp = exp + ?, linh_thach = linh_thach + ?, tam_canh = MIN(100.0, tam_canh + ?) WHERE user_id = ?",
-                            (can_co_gain, exp_gain, linh_thach_gain, tam_canh_gain, u_id)
+                            "last_meditation_end = ?, "
+                            "hp = MIN(max_hp, hp + CAST(max_hp * ? AS INTEGER)), mana = MIN(max_mana, mana + CAST(max_mana * ? AS INTEGER)), "
+                            "can_co = MIN(100.0, can_co + ?), exp = exp + ?, linh_thach = linh_thach + ?, tam_canh = MIN(100.0, tam_canh + ?) "
+                            "WHERE user_id = ? AND is_meditating = 1",
+                            (now, hp_ratio, hp_ratio, can_co_gain, exp_gain, linh_thach_gain, tam_canh_gain, u_id)
                         )
-                        finished_notifications.append((u_id, duration_h, exp_gain, linh_thach_gain, tam_canh_gain))
+                        if res_cursor.rowcount > 0:
+                            finished_notifications.append((u_id, duration_h, exp_gain, linh_thach_gain, tam_canh_gain))
                         continue
 
                     # 2. Tu sĩ đang bế quan được thưởng thêm +5 Tinh Lực mỗi 5 phút
@@ -879,6 +884,10 @@ class TuTienCog(commands.Cog, name="TuTien"):
                            f"> 💊 Hãy nhờ đạo hữu dùng `!cuu-thuong @user` hoặc mua Cửu Chuyển Tái Tạo Đan tại `!tiencac` để phục hồi trước khi tu luyện!")
             return
 
+        if player.is_meditating:
+            await ctx.send("🧘 **BẠN ĐANG BẾ QUAN!** Vui lòng gõ `!xuat-quan` trước khi tu luyện chủ động.")
+            return
+
         gongfa = self.db.get_gongfa(ctx.author.id)
         channel_id = ctx.channel.id
         channel_linh_khi = self.db.get_channel_linh_khi(channel_id)
@@ -913,14 +922,28 @@ class TuTienCog(commands.Cog, name="TuTien"):
         usage="nhap-dinh [số_giờ]"
     )
     async def nhapdinh_cmd(self, ctx: commands.Context, hours: int = 1):
-        """Bế quan AFK tích lũy tài nguyên (1h, 4h, 8h)."""
+        """Bế quan AFK tích lũy tài nguyên (1h, 4h, 8h, 12h, 16h, 24h)."""
         player = self.db.get_player(ctx.author.id)
         if not player:
             await ctx.send("❌ Vui lòng gõ `!nhapmon` trước!")
             return
 
+        now = time.time()
+        if player.kinh_mach_doan_tuyet_until and player.kinh_mach_doan_tuyet_until > now:
+            remain_min = int((player.kinh_mach_doan_tuyet_until - now) // 60) + 1
+            await ctx.send(f"🩸 **BẠN ĐANG BỊ KINH MẠCH ĐOẠN TUYỆT!** (`{remain_min} phút` nữa)\n"
+                           f"> 💊 Hãy phục hồi trước khi bế quan!")
+            return
+
         if player.is_meditating:
             await ctx.send("⚠️ **BẠN ĐANG TRONG TRẠNG THÁI BẾ QUAN!** Vui lòng gõ `!xuat-quan` để thu công nhận quà AFK trước khi bắt đầu lượt bế quan mới!")
+            return
+
+        # Cooldown 10 phút giữa các lần bế quan
+        MEDITATION_COOLDOWN = 600
+        if player.last_meditation_end and (now - player.last_meditation_end) < MEDITATION_COOLDOWN:
+            remain_min = int((MEDITATION_COOLDOWN - (now - player.last_meditation_end)) // 60) + 1
+            await ctx.send(f"⏳ **CHƯA HỒI PHỤC ĐẠO TÂM!** Bạn vừa xuất quan, cần nghỉ ngơi `{remain_min} phút` nữa mới có thể nhập định tiếp.")
             return
 
         if hours not in [1, 4, 8, 12, 16, 24]:
@@ -928,11 +951,11 @@ class TuTienCog(commands.Cog, name="TuTien"):
             return
 
         player.is_meditating = True
-        player.meditate_start_time = time.time()
+        player.meditate_start_time = now
         player.meditate_duration_hours = hours
         self.db.update_player(player)
 
-        await ctx.send(f"🧘 Tu sĩ **{player.dao_hieu}** đã bắt đầu nhập định bế quan trong **{hours} Giờ**! Hệ thống sẽ tự động bảo vệ nếu sở hữu Thẻ Tháng VIP.")
+        await ctx.send(f"🧘 Tu sĩ **{player.dao_hieu}** đã bắt đầu nhập định bế quan trong **{hours} Giờ**! (Tối thiểu 30 phút để nhận thưởng xuất quan).")
 
     @commands.command(
         name="xuat-quan",
@@ -954,7 +977,26 @@ class TuTienCog(commands.Cog, name="TuTien"):
         now = time.time()
         start_t = player.meditate_start_time or now
         elapsed_hours = (now - start_t) / 3600.0
-        actual_hours = max(0.05, min(elapsed_hours, float(player.meditate_duration_hours or 1)))
+
+        # Anti-exploit: Yêu cầu bế quan tối thiểu 30 phút (0.5 giờ)
+        MIN_MEDITATION_HOURS = 0.5
+        if elapsed_hours < MIN_MEDITATION_HOURS:
+            player.is_meditating = False
+            player.meditate_start_time = None
+            player.meditate_duration_hours = 0
+            player.last_meditation_end = now
+            self.db.update_player(player)
+
+            elapsed_mins = int(elapsed_hours * 60)
+            remain_mins = int((MIN_MEDITATION_HOURS - elapsed_hours) * 60) + 1
+            await ctx.send(
+                f"⚠️ **XUẤT QUAN QUÁ SỚM!** Bạn mới bế quan được **{elapsed_mins} phút**.\n"
+                f"> Cần bế quan tối thiểu **30 phút** để hấp thu linh khí và nhận phần thưởng!\n"
+                f"> ⏳ Lần nhập định này đã hủy bỏ mà không nhận được tu vi hay hồi máu."
+            )
+            return
+
+        actual_hours = min(elapsed_hours, float(player.meditate_duration_hours or 1))
 
         # AFK EXP scale cùng formula exponential với active cultivation
         # VIP 7 nhận thêm +30% tốc độ AFK (thêm 30% EXP)
@@ -968,23 +1010,31 @@ class TuTienCog(commands.Cog, name="TuTien"):
             tam_canh_gain = round(tam_canh_gain * 1.10, 1)
         can_co_gain = round(actual_hours * 10.0, 1)
 
+        # Hồi phục HP/Mana tỷ lệ theo số giờ bế quan thực tế (4 giờ thật mới full 100%)
+        FULL_HP_HOURS = 4.0
+        hp_ratio = min(1.0, actual_hours / FULL_HP_HOURS)
+        hp_gain = int(player.max_hp * hp_ratio)
+        mana_gain = int(player.max_mana * hp_ratio)
+        player.hp = min(player.max_hp, player.hp + hp_gain)
+        player.mana = min(player.max_mana, player.mana + mana_gain)
+
         req_exp = REALM_REQUIRED_EXP.get(player.realm_index, 1000000000)
         player.exp = min(req_exp, player.exp + exp_gain)
         player.linh_thach += linh_thach_gain
         player.tam_canh = min(100.0, player.tam_canh + tam_canh_gain)
         player.can_co = min(100.0, player.can_co + can_co_gain)
-        player.hp = player.max_hp  # Hồi phục toàn bộ Máu HP khi xuất quan!
-        player.mana = player.max_mana
         player.is_meditating = False
         player.meditate_start_time = None
         player.meditate_duration_hours = 0
+        player.last_meditation_end = now
 
         self.db.update_player(player)
 
+        hp_pct = int(hp_ratio * 100)
         embed = discord.Embed(
             title=f"🧘 XUẤT QUAN THÀNH CÔNG — {player.dao_hieu}",
             description=f"Tu sĩ **{player.dao_hieu}** đã thu công xuất quan sau **{actual_hours:.1f} Giờ** nhập định!\n"
-                        f"✨ Khí Huyết (HP) & Chân Nguyên (MP) đã được hồi phục **100%** đầy bình!",
+                        f"✨ Khí Huyết & Chân Nguyên hồi phục **+{hp_pct}%** (`+{hp_gain:,}` HP | `+{mana_gain:,}` MP)!",
             color=discord.Color.green()
         )
         embed.add_field(
@@ -992,6 +1042,7 @@ class TuTienCog(commands.Cog, name="TuTien"):
             value=f"> ✨ Tu Vi: `+{exp_gain:,}`\n> 💰 Linh Thạch: `+{linh_thach_gain:,}`\n> 🧘 Tâm Cảnh: `+{tam_canh_gain}%`\n> ◈ Căn Cơ: `+{can_co_gain}%`",
             inline=False
         )
+        embed.set_footer(text="Nghỉ ngơi 10 phút trước khi bắt đầu lượt bế quan tiếp theo.")
         await ctx.send(embed=embed)
 
     @commands.command(
@@ -1018,12 +1069,10 @@ class TuTienCog(commands.Cog, name="TuTien"):
             await ctx.send("🧘 **BẠN ĐANG TRONG TRẠNG THÁI BẾ QUAN!** Gõ `!xuat-quan` trước!")
             return
 
-        # Cooldown 24h cho nhapdinh-nhanh (dùng last_daily_fortune tạm thời như proxy)
+        # Cooldown 24h persistent trong DB
         now = time.time()
-        cooldown_key = f"nhapdinh_nhanh_{ctx.author.id}"
-        last_used = getattr(self, '_nhapdinh_nhanh_cooldowns', {}).get(ctx.author.id, 0)
-        if now - last_used < 86400:
-            remain_h = int((86400 - (now - last_used)) / 3600)
+        if player.last_nhapdinh_nhanh and (now - player.last_nhapdinh_nhanh < 86400):
+            remain_h = int((86400 - (now - player.last_nhapdinh_nhanh)) / 3600) + 1
             await ctx.send(f"⏳ **ĐÃ DÙNG HÔM NAY!** Lệnh `!nhapdinh-nhanh` hồi trong `{remain_h}` giờ nữa.")
             return
 
@@ -1040,12 +1089,8 @@ class TuTienCog(commands.Cog, name="TuTien"):
         player.linh_thach += linh_thach_gain
         player.tam_canh = min(100.0, player.tam_canh + tam_canh_gain)
         player.can_co = min(100.0, player.can_co + can_co_gain)
+        player.last_nhapdinh_nhanh = now
         self.db.update_player(player)
-
-        # Lưu cooldown vào memory (đủ cho session)
-        if not hasattr(self, '_nhapdinh_nhanh_cooldowns'):
-            self._nhapdinh_nhanh_cooldowns = {}
-        self._nhapdinh_nhanh_cooldowns[ctx.author.id] = now
 
         embed = discord.Embed(
             title="⚡ [VIP 5] NHẬP ĐỊNH NHANH — TỨC THÌ THU CÔNG!",
@@ -1068,15 +1113,31 @@ class TuTienCog(commands.Cog, name="TuTien"):
         usage="luyen-the"
     )
     async def luyenthe_cmd(self, ctx: commands.Context):
-        """Rèn luyện Thân Thể tiêu hao Linh Thạch để đột phá Tôi Thể."""
+        """Rèn luyện Thân Thể tiêu hao Linh Thạch & 5 Tinh Lực để đột phá Tôi Thể."""
         player = self.db.get_player(ctx.author.id)
         if not player:
             await ctx.send("❌ Vui lòng gõ `!nhapmon` trước!")
             return
 
+        now = time.time()
+        if player.kinh_mach_doan_tuyet_until and player.kinh_mach_doan_tuyet_until > now:
+            remain_min = int((player.kinh_mach_doan_tuyet_until - now) // 60) + 1
+            await ctx.send(f"🩸 **BẠN ĐANG BỊ KINH MẠCH ĐOẠN TUYỆT!** (`{remain_min} phút` nữa)\n"
+                           f"> 💊 Hãy phục hồi trước khi Tôi Thể!")
+            return
+
+        if player.is_meditating:
+            await ctx.send("🧘 **BẠN ĐANG BẾ QUAN!** Vui lòng gõ `!xuat-quan` trước khi Luyện Thể.")
+            return
+
+        if player.tinh_luc < 5:
+            await ctx.send(f"❌ Không đủ Tinh Lực! Cần `5` Tinh Lực để Tôi Thể (Hiện có: `{player.tinh_luc}/100`).")
+            return
+
         cost = 500 * (player.body_realm_index + 1)
         success, msg, updated_player = upgrade_body_refining(player, cost)
         if success:
+            updated_player.tinh_luc -= 5
             self.db.update_player(updated_player)
         await ctx.send(msg)
 
@@ -1242,6 +1303,17 @@ class TuTienCog(commands.Cog, name="TuTien"):
             await ctx.send("❌ Vui lòng gõ `!nhapmon` trước!")
             return
 
+        now = time.time()
+        if player1.kinh_mach_doan_tuyet_until and player1.kinh_mach_doan_tuyet_until > now:
+            remain_min = int((player1.kinh_mach_doan_tuyet_until - now) // 60) + 1
+            await ctx.send(f"🩸 **BẠN ĐANG BỊ KINH MẠCH ĐOẠN TUYỆT!** (`{remain_min} phút` nữa)\n"
+                           f"> 💊 Hãy phục hồi trước khi tham gia Luận Đạo Đài!")
+            return
+
+        if player1.is_meditating:
+            await ctx.send("🧘 **BẠN ĐANG BẾ QUAN!** Vui lòng gõ `!xuat-quan` trước khi Luận Đạo.")
+            return
+
         if target and target.bot:
             await ctx.send("❌ Không thể luận đạo với Bot!")
             return
@@ -1262,10 +1334,16 @@ class TuTienCog(commands.Cog, name="TuTien"):
             if not player2:
                 await ctx.send(f"❌ Tu sĩ **{target.display_name}** chưa gia nhập giới Tu Tiên!")
                 return
+            if player2.is_meditating:
+                await ctx.send(f"🧘 Tu sĩ **{player2.dao_hieu}** đang bế quan nhập định, không thể tiếp chiến!")
+                return
+            if player2.mien_chien_until and player2.mien_chien_until > now:
+                await ctx.send(f"🛡️ **THẤT NHẬT MIỄN CHIẾN!** Tu sĩ **{player2.dao_hieu}** đang được bảo vệ bởi Miễn Chiến Phù!")
+                return
         else:
             # Auto matchmaker from DB
             top_players = self.db.get_pvp_leaderboard(20)
-            eligible = [p for p in top_players if p["user_id"] != ctx.author.id]
+            eligible = [p for p in top_players if p["user_id"] != ctx.author.id and not p.get("is_meditating", 0)]
             if not eligible:
                 await ctx.send("❌ Chưa có đủ đạo hữu trên Luận Đạo Đài để tự động ghép cặp! Hãy chỉ định `@user` đối thủ.")
                 return
@@ -1301,16 +1379,17 @@ class TuTienCog(commands.Cog, name="TuTien"):
         if is_p1_win:
             elo_gain, elo_loss = calculate_elo_change(player1.pvp_elo, player2.pvp_elo)
             if is_auto_matched:
-                elo_loss = 0  # Protecting unprovoked auto-matched defender from losing ELO
+                elo_loss = 0  # Bảo vệ đối thủ auto-match không bị trừ ELO
             player1.pvp_elo += elo_gain
             player2.pvp_elo = max(100, player2.pvp_elo - elo_loss)
             player1.pvp_wins += 1
             player1.pvp_streak += 1
-            player2.pvp_losses += 1
-            player2.pvp_streak = 0
+            if not is_auto_matched:
+                player2.pvp_losses += 1
+                player2.pvp_streak = 0
             
             p1_dv_gain = p1_rank["win_danh_vong"]
-            p2_dv_gain = p2_rank["loss_danh_vong"]
+            p2_dv_gain = 0 if is_auto_matched else p2_rank["loss_danh_vong"]
             player1.danh_vong += p1_dv_gain
             player2.danh_vong += p2_dv_gain
             
@@ -1318,14 +1397,17 @@ class TuTienCog(commands.Cog, name="TuTien"):
             w_gain_str, l_loss_str = f"+{elo_gain}", f"-{elo_loss}"
         else:
             elo_gain, elo_loss = calculate_elo_change(player2.pvp_elo, player1.pvp_elo)
+            if is_auto_matched:
+                elo_gain = 0  # Ngăn chặn farm ELO bằng cách cho alt account thua auto-match
             player2.pvp_elo += elo_gain
             player1.pvp_elo = max(100, player1.pvp_elo - elo_loss)
-            player2.pvp_wins += 1
-            player2.pvp_streak += 1
+            if not is_auto_matched:
+                player2.pvp_wins += 1
+                player2.pvp_streak += 1
             player1.pvp_losses += 1
             player1.pvp_streak = 0
             
-            p2_dv_gain = p2_rank["win_danh_vong"]
+            p2_dv_gain = 0 if is_auto_matched else p2_rank["win_danh_vong"]
             p1_dv_gain = p1_rank["loss_danh_vong"]
             player2.danh_vong += p2_dv_gain
             player1.danh_vong += p1_dv_gain
@@ -2046,6 +2128,21 @@ class TuTienCog(commands.Cog, name="TuTien"):
             await ctx.send("❌ Vui lòng gõ `!nhapmon` trước!")
             return
 
+        now = time.time()
+        if player.kinh_mach_doan_tuyet_until and player.kinh_mach_doan_tuyet_until > now:
+            remain_min = int((player.kinh_mach_doan_tuyet_until - now) // 60) + 1
+            await ctx.send(f"🩸 **BẠN ĐANG BỊ KINH MẠCH ĐOẠN TUYỆT!** (`{remain_min} phút` nữa)\n"
+                           f"> 💊 Hãy phục hồi trước khi Leo Tháp!")
+            return
+
+        if player.is_meditating:
+            await ctx.send("🧘 **BẠN ĐANG BẾ QUAN!** Vui lòng gõ `!xuat-quan` trước khi Leo Tháp.")
+            return
+
+        if player.hp <= 0:
+            await ctx.send("💀 **BẠN ĐANG TRỌNG THƯƠNG (0 HP)!** Vui lòng hồi phục HP trước khi Leo Tháp!")
+            return
+
         pve = self.db.get_pve_progress(player.user_id)
         if pve["daily_tower_keys"] <= 0:
             await ctx.send("❌ Bạn đã dùng hết `3/3` lượt leo tháp hôm nay! Hãy quay lại vào ngày mai hoặc mua thêm Thiên Cực Lệnh!")
@@ -2090,6 +2187,12 @@ class TuTienCog(commands.Cog, name="TuTien"):
                 player.tien_ngoc += 50
                 self.db.update_player(player)
                 bonus_str = "\n🎉 **MỐC TẦNG ĐẶC BIỆT!** Nhận ngay `+1` Tiên Duyên Phù 🎟️ + `50` Tiên Ngọc 🌟!"
+
+            win_embed = discord.Embed(
+                title=f"🏛️ VƯỢT THÁP THÀNH CÔNG — TẦNG [{floor}/100]!",
+                description=f"Tu sĩ **[{player.dao_hieu}]** đã đánh bại **{monster['name']}** và bước lên **Tầng {new_floor}**!{bonus_str}",
+                color=discord.Color.green()
+            )
 
             # --- Quest Tracking: Diệt Yêu Trừ Ma (Vượt Tháp) ---
             completed_tower_q = self.db.increment_quest_progress(player.user_id, "pve_kills", 1)
@@ -2190,11 +2293,40 @@ class TuTienCog(commands.Cog, name="TuTien"):
         usage="diet-boss"
     )
     async def dietboss_cmd(self, ctx: commands.Context):
-        """Xông vào Ma Vương Giáng Lâm (World Boss Toàn Server)."""
+        """Xông vào Ma Vương Giáng Lâm (World Boss Toàn Server, tiêu 10 Tinh Lực, hồi 10 phút)."""
         player = self.db.get_player(ctx.author.id)
         if not player:
             await ctx.send("❌ Vui lòng gõ `!nhapmon` trước!")
             return
+
+        now = time.time()
+        if player.kinh_mach_doan_tuyet_until and player.kinh_mach_doan_tuyet_until > now:
+            remain_min = int((player.kinh_mach_doan_tuyet_until - now) // 60) + 1
+            await ctx.send(f"🩸 **BẠN ĐANG BỊ KINH MẠCH ĐOẠN TUYỆT!** (`{remain_min} phút` nữa)\n"
+                           f"> 💊 Hãy phục hồi trước khi khiêu chiến Ma Vương!")
+            return
+
+        if player.is_meditating:
+            await ctx.send("🧘 **BẠN ĐANG BẾ QUAN!** Vui lòng gõ `!xuat-quan` trước khi khiêu chiến Ma Vương.")
+            return
+
+        if player.hp <= 0:
+            await ctx.send("💀 **BẠN ĐANG TRỌNG THƯƠNG (0 HP)!** Vui lòng hồi phục HP trước khi khiêu chiến Ma Vương!")
+            return
+
+        BOSS_COOLDOWN = 600  # 10 phút
+        if player.last_boss_attack and (now - player.last_boss_attack < BOSS_COOLDOWN):
+            remain_min = int((BOSS_COOLDOWN - (now - player.last_boss_attack)) // 60) + 1
+            await ctx.send(f"⏳ **CHƯA THỂ KHIÊU CHIẾN!** Cần tĩnh dưỡng `{remain_min} phút` nữa mới có thể tiếp tục công kích Ma Vương.")
+            return
+
+        if player.tinh_luc < 10:
+            await ctx.send(f"❌ Không đủ Tinh Lực! Cần `10` Tinh Lực để khiêu chiến Ma Vương (Hiện có: `{player.tinh_luc}/100`).")
+            return
+
+        player.tinh_luc -= 10
+        player.last_boss_attack = now
+        self.db.update_player(player)
 
         p_atk, crit_chance = calculate_player_pve_atk(player)
         dmg = int(p_atk * random.uniform(2.5, 4.0))
@@ -2206,7 +2338,8 @@ class TuTienCog(commands.Cog, name="TuTien"):
         embed = discord.Embed(
             title=f"🔥 THÁI CỔ MA VƯƠNG GIÁNG LÂM 🔥",
             description=f"⚔️ Tu sĩ **{player.dao_hieu}** dốc toàn lực tung ra đòn chí mạng gây **`{dmg:,}` Sát Thương** lên **{self.world_boss_name}**!\n"
-                        f"> 🐍 Máu Ma Vương còn: `{self.world_boss_hp:,} / {self.world_boss_max_hp:,}` HP",
+                        f"> 🐍 Máu Ma Vương còn: `{self.world_boss_hp:,} / {self.world_boss_max_hp:,}` HP\n"
+                        f"> ⚡ Tinh Lực còn lại: `{player.tinh_luc}/100` | Hồi lượt sau: `10 phút`",
             color=discord.Color.dark_purple()
         )
         await ctx.send(embed=embed)
@@ -2379,13 +2512,16 @@ class TuTienCog(commands.Cog, name="TuTien"):
             await ctx.send("❌ Vui lòng gõ `!nhapmon` trước!")
             return
 
-        has_dan = player.cuu_chuyen_dan > 0 or self.db.consume_item(player.user_id, "Cửu Chuyển Tái Tạo Đan", 1)
-        if not has_dan:
-            await ctx.send("❌ Bạn không sở hữu **Cửu Chuyển Tái Tạo Đan**! Mua tại `!tiencac` với 150 Tiên Ngọc.")
-            return
-
+        consumed = False
         if player.cuu_chuyen_dan > 0:
             player.cuu_chuyen_dan -= 1
+            consumed = True
+        elif self.db.consume_item(player.user_id, "Cửu Chuyển Tái Tạo Đan", 1):
+            consumed = True
+
+        if not consumed:
+            await ctx.send("❌ Bạn không sở hữu **Cửu Chuyển Tái Tạo Đan**! Mua tại `!tiencac` với 150 Tiên Ngọc hoặc luyện tại `!luyen-dan`.")
+            return
 
         player.hp = player.max_hp
         player.mana = player.max_mana
@@ -2452,6 +2588,7 @@ class TuTienCog(commands.Cog, name="TuTien"):
 
         recipe = ALCHEMY_RECIPES[target_recipe_key]
         req_herbs = recipe["herbs"]
+        req_lt = recipe["linh_thach"]
 
         # Kiểm tra thảo dược
         if herb_count < req_herbs:
@@ -2461,7 +2598,14 @@ class TuTienCog(commands.Cog, name="TuTien"):
             )
             return
 
-        # Trừ thảo dược trước
+        # Kiểm tra Linh Thạch trước khi trừ thảo dược
+        if player.linh_thach < req_lt:
+            await ctx.send(
+                f"❌ Không đủ **Linh Thạch**! Cần `{req_lt:,}` Linh Thạch (Hiện có: `{player.linh_thach:,}`)."
+            )
+            return
+
+        # Trừ thảo dược
         self.db.consume_item(player.user_id, herb_item["item_name"], req_herbs)
 
         # Tiến hành luyện đan
@@ -2535,11 +2679,18 @@ class TuTienCog(commands.Cog, name="TuTien"):
 
         recipe = FORGING_RECIPES[target_recipe_key]
         req_ore = recipe["ore"]
+        req_lt = recipe["linh_thach"]
 
         if ore_count < req_ore:
             await ctx.send(
                 f"❌ Không đủ **Thần Thiết Thô**! Cần `{req_ore}` khối (Hiện có: `{ore_count}`).\n"
                 f"> ⛏️ Hãy đi Săn Yêu (`!sanyeu`) để khai thác thêm khoáng thạch!"
+            )
+            return
+
+        if player.linh_thach < req_lt:
+            await ctx.send(
+                f"❌ Không đủ **Linh Thạch**! Cần `{req_lt:,}` Linh Thạch (Hiện có: `{player.linh_thach:,}`)."
             )
             return
 

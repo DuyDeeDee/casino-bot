@@ -71,6 +71,9 @@ class CultivatorProfile(BaseModel):
     is_meditating: bool = False
     meditate_start_time: Optional[float] = None
     meditate_duration_hours: int = 0
+    last_meditation_end: Optional[float] = None
+    last_nhapdinh_nhanh: Optional[float] = None
+    last_boss_attack: Optional[float] = None
     tau_hoa_nhap_ma_until: Optional[float] = None
     
     # Hardcore PVE & Rescue schema
