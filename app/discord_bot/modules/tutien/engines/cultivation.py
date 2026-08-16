@@ -75,8 +75,8 @@ def calculate_cultivation_gain(
     # Dong Phu Level buff
     dong_phu_mult = 1.0 + (player.dong_phu_level - 1) * 0.15
 
-    # Channel Linh Khi ratio (if < 20%, mult = 0.3)
-    channel_mult = 1.0 if channel_linh_khi_percent >= 0.2 else 0.3
+    # Channel Linh Khi ratio (nếu < 20% thì địa mạch khô cạn, chỉ nhận 20% EXP)
+    channel_mult = 1.0 if channel_linh_khi_percent >= 0.2 else 0.2
 
     # Tam Canh coefficient (0.5 to 1.5)
     tam_canh_mult = max(0.5, min(1.5, player.tam_canh / 70.0))
@@ -87,8 +87,11 @@ def calculate_cultivation_gain(
     # VIP 1: +10% Thần Thức → tăng hiệu suất tu luyện thêm 10%
     vip1_bonus = 1.10 if player.vip_level >= 1 else 1.0
 
+    # Linh Lực Tạp Chất debuff: Giảm 50% hiệu suất tu vi
+    tap_chat_penalty = 0.50 if getattr(player, 'linh_luc_tap_chat', False) else 1.0
+
     total_exp = int(
-        base_exp * gongfa_mult * root_mult * dong_phu_mult * channel_mult * tam_canh_mult * ngo_tinh_mult * vip1_bonus
+        base_exp * gongfa_mult * root_mult * dong_phu_mult * channel_mult * tam_canh_mult * ngo_tinh_mult * vip1_bonus * tap_chat_penalty
     )
     return max(10, total_exp)
 
@@ -104,7 +107,7 @@ def process_active_cultivation(
     Returns result metadata dictionary and updated player object.
     """
     if player.tinh_luc < 15:
-        return {"success": False, "reason": "Không đủ Tinh Lực! Cần 15 Tinh Lực (Hồi 10 điểm mỗi giờ)."}, player
+        return {"success": False, "reason": "Không đủ Tinh Lực! Cần 15 Tinh Lực (Hồi 2 điểm mỗi 5 phút)."}, player
 
     # Deduct Stamina
     player.tinh_luc -= 15

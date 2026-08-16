@@ -82,6 +82,8 @@ class TuTienDB:
                     last_meditation_end REAL,
                     last_nhapdinh_nhanh REAL,
                     last_boss_attack REAL,
+                    continuous_cultivation_count INTEGER DEFAULT 0,
+                    linh_luc_tap_chat INTEGER DEFAULT 0,
                     tau_hoa_nhap_ma_until REAL,
                     active_dao_domain TEXT
                 )
@@ -111,6 +113,8 @@ class TuTienDB:
                 "last_meditation_end": "REAL",
                 "last_nhapdinh_nhanh": "REAL",
                 "last_boss_attack": "REAL",
+                "continuous_cultivation_count": "INTEGER DEFAULT 0",
+                "linh_luc_tap_chat": "INTEGER DEFAULT 0",
                 "tau_hoa_nhap_ma_until": "REAL",
                 "active_dao_domain": "TEXT",
                 "kinh_mach_doan_tuyet_until": "REAL",
@@ -377,6 +381,7 @@ class TuTienDB:
                     is_vip_pass = ?, vip_pass_expires = ?, array_protection_until = ?,
                     gacha_pity_count = ?, is_meditating = ?, meditate_start_time = ?,
                     meditate_duration_hours = ?, last_meditation_end = ?, last_nhapdinh_nhanh = ?, last_boss_attack = ?,
+                    continuous_cultivation_count = ?, linh_luc_tap_chat = ?,
                     tau_hoa_nhap_ma_until = ?, active_dao_domain = ?,
                     kinh_mach_doan_tuyet_until = ?, lingering_debuff = ?, thanh_the_phu = ?,
                     van_linh_dan = ?, cuu_chuyen_dan = ?, last_cuop_time = ?,
@@ -397,6 +402,7 @@ class TuTienDB:
                 1 if player.is_vip_pass else 0, player.vip_pass_expires, player.array_protection_until,
                 player.gacha_pity_count, 1 if player.is_meditating else 0, player.meditate_start_time,
                 player.meditate_duration_hours, player.last_meditation_end, player.last_nhapdinh_nhanh, player.last_boss_attack,
+                player.continuous_cultivation_count, 1 if player.linh_luc_tap_chat else 0,
                 player.tau_hoa_nhap_ma_until, player.active_dao_domain,
                 player.kinh_mach_doan_tuyet_until, player.lingering_debuff, player.thanh_the_phu,
                 player.van_linh_dan, player.cuu_chuyen_dan, player.last_cuop_time,
@@ -441,8 +447,8 @@ class TuTienDB:
     def get_inventory(self, user_id: int) -> List[Dict[str, Any]]:
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT item_name, item_type, quantity FROM tutien_inventory WHERE user_id = ? AND quantity > 0", (user_id,))
-            return [dict(row) for row in cursor.fetchall()]
+            cursor.execute("SELECT item_name, item_type, quantity FROM tutien_inventory WHERE user_id = ?", (user_id,))
+            return [dict(r) for r in cursor.fetchall()]
 
     # --- GONGFA METHODS ---
     def get_gongfa(self, user_id: int) -> GongfaEquipment:
@@ -467,30 +473,26 @@ class TuTienDB:
                 json.dumps(gongfa.bi_thuat), gongfa.user_id
             ))
 
-    # --- CHANNEL LINH KHI METHODS ---
+    # --- CHANNEL ENERGY & STAMINA RECOVERY METHODS ---
     def get_channel_linh_khi(self, channel_id: int) -> int:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT current_linh_khi FROM tutien_channel_energy WHERE channel_id = ?", (channel_id,))
             row = cursor.fetchone()
-            if row:
-                return row["current_linh_khi"]
-            else:
-                conn.execute("INSERT INTO tutien_channel_energy (channel_id, current_linh_khi) VALUES (?, 100000)", (channel_id,))
+            if not row:
+                conn.execute("INSERT INTO tutien_channel_energy (channel_id) VALUES (?)", (channel_id,))
                 return 100000
+            return row["current_linh_khi"]
 
-    def consume_channel_linh_khi(self, channel_id: int, amount: int = 50) -> int:
-        current = self.get_channel_linh_khi(channel_id)
-        new_val = max(0, current - amount)
+    def consume_channel_linh_khi(self, channel_id: int, amount: int = 50):
         with self.get_connection() as conn:
-            conn.execute("UPDATE tutien_channel_energy SET current_linh_khi = ? WHERE channel_id = ?", (new_val, channel_id))
-        return new_val
+            conn.execute("UPDATE tutien_channel_energy SET current_linh_khi = MAX(0, current_linh_khi - ?) WHERE channel_id = ?", (amount, channel_id))
 
-    def recover_all_channels_linh_khi(self, amount: int = 5000):
+    def recover_channel_linh_khi(self, amount: int = 5000):
         with self.get_connection() as conn:
             conn.execute("UPDATE tutien_channel_energy SET current_linh_khi = MIN(max_linh_khi, current_linh_khi + ?)", (amount,))
 
-    def recover_all_players_tinh_luc(self, amount: int = 5):
+    def recover_all_players_tinh_luc(self, amount: int = 2):
         with self.get_connection() as conn:
             conn.execute(
                 "UPDATE tutien_players SET tinh_luc = CASE WHEN (tinh_luc + ?) > max_tinh_luc THEN max_tinh_luc ELSE (tinh_luc + ?) END",

@@ -39,6 +39,47 @@ ALCHEMY_RECIPES: Dict[str, Dict[str, Any]] = {
         "base_rate": 0.50,
         "type": "Tiên Đan",
         "desc": "Phục hồi 100% HP, Mana, 100% Căn Cơ và xóa toàn bộ debuff nguy kịch (!dung-dan)."
+    },
+    # --- ĐAN DƯỢC ĐỘT PHÁ ĐẠI CẢNH GIỚI (BREAKTHROUGH PILLS) ---
+    "Trúc Cơ Đan": {
+        "name": "Trúc Cơ Đan",
+        "herbs": 8,
+        "linh_thach": 2000,
+        "base_rate": 0.65,
+        "type": "Phá Cảnh Đan",
+        "desc": "Đan dược phá cảnh bắt buộc khi xung kích Luyện Khí Tầng 9 ➔ Trúc Cơ Sơ Kỳ."
+    },
+    "Kim Đan Sa": {
+        "name": "Kim Đan Sa",
+        "herbs": 15,
+        "linh_thach": 5000,
+        "base_rate": 0.55,
+        "type": "Phá Cảnh Đan",
+        "desc": "Đan dược phá cảnh bắt buộc khi xung kích Trúc Cơ Viên Mãn ➔ Kim Đan Sơ Kỳ."
+    },
+    "Ngưng Anh Đan": {
+        "name": "Ngưng Anh Đan",
+        "herbs": 25,
+        "linh_thach": 15000,
+        "base_rate": 0.45,
+        "type": "Phá Cảnh Đan",
+        "desc": "Đan dược phá cảnh bắt buộc khi xung kích Kim Đan Viên Mãn ➔ Nguyên Anh Sơ Kỳ."
+    },
+    "Hóa Thần Đan": {
+        "name": "Hóa Thần Đan",
+        "herbs": 40,
+        "linh_thach": 40000,
+        "base_rate": 0.35,
+        "type": "Phá Cảnh Đan",
+        "desc": "Đan dược phá cảnh bắt buộc khi xung kích Nguyên Anh Viên Mãn ➔ Hóa Thần Sơ Kỳ."
+    },
+    "Phá Hư Đan": {
+        "name": "Phá Hư Đan",
+        "herbs": 60,
+        "linh_thach": 80000,
+        "base_rate": 0.25,
+        "type": "Phá Cảnh Đan",
+        "desc": "Đan dược phá cảnh bắt buộc khi xung kích Hóa Thần Viên Mãn ➔ Luyện Hư."
     }
 }
 

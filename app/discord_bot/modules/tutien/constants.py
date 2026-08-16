@@ -42,6 +42,40 @@ REALM_BASE_CHANCE: Dict[int, float] = {
     idx: max(15.0, 95.0 - idx * 2.5) for idx in range(len(REALMS))
 }
 
+# Đan Dược Đột Phá Bắt Buộc cho các mốc Đại Cảnh Giới (Major Bottlenecks)
+REALM_BREAKTHROUGH_PILLS: Dict[int, Dict[str, Any]] = {
+    8: {
+        "pill_name": "Trúc Cơ Đan",
+        "from_realm": "Luyện Khí Tầng 9",
+        "to_realm": "Trúc Cơ Sơ Kỳ",
+        "desc": "Thanh tẩy phàm căn, đúc tạo Tiên Thiên Đạo Thể."
+    },
+    12: {
+        "pill_name": "Kim Đan Sa",
+        "from_realm": "Trúc Cơ Viên Mãn",
+        "to_realm": "Kim Đan Sơ Kỳ",
+        "desc": "Ngưng kết Cửu Chuyển Kim Đan, bất hủ bất diệt."
+    },
+    16: {
+        "pill_name": "Ngưng Anh Đan",
+        "from_realm": "Kim Đan Viên Mãn",
+        "to_realm": "Nguyên Anh Sơ Kỳ",
+        "desc": "Phá đan hóa anh, thần thức xuất khiếu."
+    },
+    20: {
+        "pill_name": "Hóa Thần Đan",
+        "from_realm": "Nguyên Anh Viên Mãn",
+        "to_realm": "Hóa Thần Sơ Kỳ",
+        "desc": "Dung hợp thiên địa quy tắc, chân thân hóa thần."
+    },
+    24: {
+        "pill_name": "Phá Hư Đan",
+        "from_realm": "Hóa Thần Viên Mãn",
+        "to_realm": "Luyện Hư",
+        "desc": "Xuyên phá hư không, lĩnh ngộ đại đạo pháp tắc."
+    }
+}
+
 
 # --- LINH CĂN (SPIRITUAL ROOTS) ---
 SPIRITUAL_ROOT_QUALITIES: List[Tuple[str, float]] = [

@@ -75,6 +75,8 @@ class CultivatorProfile(BaseModel):
     last_nhapdinh_nhanh: Optional[float] = None
     last_boss_attack: Optional[float] = None
     tau_hoa_nhap_ma_until: Optional[float] = None
+    continuous_cultivation_count: int = 0  # Đếm số lần tu luyện liên tục không bế quan
+    linh_luc_tap_chat: bool = False        # Debuff Tạp Chất Linh Lực (-50% EXP, -20% tỷ lệ đột phá)
     
     # Hardcore PVE & Rescue schema
     kinh_mach_doan_tuyet_until: Optional[float] = None

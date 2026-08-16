@@ -407,6 +407,7 @@ def process_hardcore_defeat(player: CultivatorProfile, db, location_name: str = 
     Process Permadeath Injury & Loot Loss on defeat.
     - Kinh Mạch Đoạn Tuyệt (10-minute timer).
     - 20% Spirit Stones dropped if no Thánh Thể Phù.
+    - 15-25% Raw Materials (Herbs & Ore) dropped if no Thánh Thể Phù.
     - Applies Lingering Debuffs.
     """
     now = time.time()
@@ -418,9 +419,24 @@ def process_hardcore_defeat(player: CultivatorProfile, db, location_name: str = 
         has_protection = True
 
     stolen_lt = 0
-    if not has_protection and player.linh_thach > 0:
-        stolen_lt = int(player.linh_thach * 0.20)
-        player.linh_thach -= stolen_lt
+    dropped_herbs = 0
+    dropped_ores = 0
+
+    if not has_protection:
+        if player.linh_thach > 0:
+            stolen_lt = int(player.linh_thach * 0.20)
+            player.linh_thach -= stolen_lt
+
+        inv = db.get_inventory(player.user_id)
+        herb_item = next((i for i in inv if "Thảo Dược" in i["item_name"]), None)
+        if herb_item and herb_item["quantity"] > 0:
+            dropped_herbs = max(1, int(herb_item["quantity"] * random.uniform(0.15, 0.25)))
+            db.consume_item(player.user_id, herb_item["item_name"], dropped_herbs)
+
+        ore_item = next((i for i in inv if "Thần Thiết" in i["item_name"]), None)
+        if ore_item and ore_item["quantity"] > 0:
+            dropped_ores = max(1, int(ore_item["quantity"] * random.uniform(0.15, 0.25)))
+            db.consume_item(player.user_id, ore_item["item_name"], dropped_ores)
 
     # Apply Kinh Mạch Đoạn Tuyệt (10 minutes)
     player.kinh_mach_doan_tuyet_until = now + 600
@@ -435,6 +451,8 @@ def process_hardcore_defeat(player: CultivatorProfile, db, location_name: str = 
     return {
         "has_protection": has_protection,
         "stolen_lt": stolen_lt,
+        "dropped_herbs": dropped_herbs,
+        "dropped_ores": dropped_ores,
         "debuff_type": debuff_type,
         "timer_minutes": 10,
         "player": player

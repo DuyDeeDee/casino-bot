@@ -263,10 +263,10 @@ class TuTienCog(commands.Cog, name="TuTien"):
     # --- BACKGROUND TASKS ---
     @tasks.loop(minutes=5)
     async def bg_recovery_task(self):
-        """Phục hồi Tinh Lực (+5/5p = +60/h) & Linh Khí Kênh (+416/5p = +5000/h) định kỳ."""
+        """Phục hồi Tinh Lực (+2/5p = +24/h) & Linh Khí Kênh (+416/5p = +5000/h) định kỳ."""
         await self.bot.wait_until_ready()
         try:
-            self.db.recover_all_players_tinh_luc(5)
+            self.db.recover_all_players_tinh_luc(2)
             self.db.recover_all_channels_linh_khi(416)
         except Exception as e:
             print(f"[TuTien] Error in recovery task: {e}")
@@ -304,7 +304,7 @@ class TuTienCog(commands.Cog, name="TuTien"):
 
                         res_cursor = conn.execute(
                             "UPDATE tutien_players SET is_meditating = 0, meditate_start_time = NULL, meditate_duration_hours = 0, "
-                            "last_meditation_end = ?, "
+                            "last_meditation_end = ?, continuous_cultivation_count = 0, linh_luc_tap_chat = 0, "
                             "hp = MIN(max_hp, hp + CAST(max_hp * ? AS INTEGER)), mana = MIN(max_mana, mana + CAST(max_mana * ? AS INTEGER)), "
                             "can_co = MIN(100.0, can_co + ?), exp = exp + ?, linh_thach = linh_thach + ?, tam_canh = MIN(100.0, tam_canh + ?) "
                             "WHERE user_id = ? AND is_meditating = 1",
@@ -897,7 +897,16 @@ class TuTienCog(commands.Cog, name="TuTien"):
             await ctx.send(f"❌ {res['reason']}")
             return
 
-        self.db.consume_channel_linh_khi(channel_id, 50)
+        # Tiêu hao 1,000 Linh Khí Kênh (Khai thác địa mạch)
+        self.db.consume_channel_linh_khi(channel_id, 1000)
+
+        # Tích tụ Tạp Chất Linh Lực nếu tu luyện liên tục > 10 lần không bế quan
+        updated_player.continuous_cultivation_count = getattr(updated_player, 'continuous_cultivation_count', 0) + 1
+        is_new_tap_chat = False
+        if updated_player.continuous_cultivation_count >= 10 and not updated_player.linh_luc_tap_chat:
+            updated_player.linh_luc_tap_chat = True
+            is_new_tap_chat = True
+
         self.db.update_player(updated_player)
 
         # --- Quest Tracking: Chuyên Tâm Tu Đạo ---
@@ -909,6 +918,12 @@ class TuTienCog(commands.Cog, name="TuTien"):
 
         msg = f"🧘 **[{player.dao_hieu}]** tiến hành bế quan vận công...\n> {res['message']}\n"
         msg += f"📊 **Tu Vi:** `{updated_player.exp:,}` / `{res['required_exp']:,}` | 🔥 **Tinh Lực còn:** `{updated_player.tinh_luc}/100`"
+
+        if updated_player.linh_luc_tap_chat:
+            msg += "\n⚠️ **LINH LỰC TẠP CHẤT!** Bạn đã tu luyện quá nhiều liên tục mà chưa bế quan thanh lọc (-50% EXP, -20% Đột Phá)! Hãy gõ `!nhap-dinh` để bài trừ tạp chất."
+        elif is_new_tap_chat:
+            msg += "\n⚠️ **CẢNH BÁO:** Cơ thể bắt đầu tích tụ **Linh Lực Tạp Chất**! Hãy bế quan hoặc dùng đan dược để thanh lọc."
+
         if res["can_breakthrough"]:
             msg += "\n⚡ **TU VI ĐÃ MÃN!** Hãy gõ `!dotpha` để xung kích bình cảnh!"
 
@@ -1027,6 +1042,8 @@ class TuTienCog(commands.Cog, name="TuTien"):
         player.meditate_start_time = None
         player.meditate_duration_hours = 0
         player.last_meditation_end = now
+        player.continuous_cultivation_count = 0
+        player.linh_luc_tap_chat = False
 
         self.db.update_player(player)
 
@@ -1178,6 +1195,23 @@ class TuTienCog(commands.Cog, name="TuTien"):
             await ctx.send("❌ **TÂM CẢNH KHÔNG ĐỦ!** Tỷ lệ đột phá thành công của bạn hiện là `0%`! Hãy thiền định tăng Tâm Cảnh!")
             return
 
+        from app.discord_bot.modules.tutien.constants import REALM_BREAKTHROUGH_PILLS
+        bottleneck_info = REALM_BREAKTHROUGH_PILLS.get(player.realm_index)
+        has_breakthrough_pill = False
+        pill_status_msg = ""
+
+        if bottleneck_info:
+            req_pill = bottleneck_info["pill_name"]
+            has_breakthrough_pill = self.db.consume_item(player.user_id, req_pill, 1)
+            if has_breakthrough_pill:
+                pill_status_msg = f"\n💊 **Dược Lực Hộ Trì:** Đã tự động dùng **[{req_pill}]** để bảo vệ đan điền!"
+            else:
+                chance = max(5.0, chance - 50.0)
+                pill_status_msg = (
+                    f"\n⚠️ **BÌNH CẢNH ĐẠI CẢNH GIỚI!** Bạn chưa có **[{req_pill}]**!\n"
+                    f"> *Cưỡng ép đột phá không đan dược: Tỷ lệ thành công bị phạt `-50%` & nguy cơ rạn nứt đan điền tụt cảnh giới!*"
+                )
+
         is_blood_tribulation = (player.nghiep_luc > 100)
         total_waves = 3 + (player.realm_index // 3)
         current_hp = player.hp
@@ -1188,7 +1222,7 @@ class TuTienCog(commands.Cog, name="TuTien"):
             if is_blood_tribulation else
             f"Tu sĩ **[{player.dao_hieu}]** bắt đầu xung kích bình cảnh đột phá lên **[{REALMS[min(player.realm_index + 1, len(REALMS) - 1)]}]**!\n"
         )
-        tribulation_desc += f"📊 Tỷ lệ thành công cơ bản: **{chance:.1f}%** | Mật độ: **{total_waves} Đạo Lôi Kiếp**"
+        tribulation_desc += f"📊 Tỷ lệ thành công cơ bản: **{chance:.1f}%** | Mật độ: **{total_waves} Đạo Lôi Kiếp**{pill_status_msg}"
 
         embed = discord.Embed(
             title=tribulation_title,
@@ -1245,21 +1279,35 @@ class TuTienCog(commands.Cog, name="TuTien"):
                     color=discord.Color.gold()
                 )
             else:
-                player.exp = int(player.exp * 0.7)
-                player.can_co = max(0.0, player.can_co - 20.0)
-                player.hp = max(1, player.hp)  # Không để chết hẳn
-                
+                realm_drop_msg = ""
+                # Phạt rơi 1 tiểu cảnh giới nếu Căn Cơ < 40%
+                if player.can_co < 40.0 and player.realm_index > 0:
+                    old_realm = player.realm_name
+                    player.realm_index -= 1
+                    player.realm_name = REALMS[player.realm_index]
+                    player.exp = 0
+                    player.can_co = max(0.0, player.can_co - 15.0)
+                    realm_drop_msg = f"\n📉 **CĂN CƠ QUÁ YẾU (<40%) — ĐAN ĐIỀN NỨT VỠ!** Bạn bị **tụt cảnh giới** từ `{old_realm}` xuống **`{player.realm_name}`**!"
+                else:
+                    player.exp = int(player.exp * 0.7)
+                    player.can_co = max(0.0, player.can_co - 20.0)
+
+                player.hp = max(1, player.hp)
+                if failed:
+                    player.kinh_mach_doan_tuyet_until = time.time() + 600
+                    realm_drop_msg += "\n🩸 **Kinh Mạch Đoạn Tuyệt (10 Phút)** do Lôi Kiếp phá hủy!"
+
                 loss_extra_msg = ""
                 if is_blood_tribulation:
                     lost_lt = int(player.linh_thach * 0.50)
                     player.linh_thach -= lost_lt
-                    loss_extra_msg = f"\n🩸 **Huyết Lôi xé rách túi trữ vật!** Bị hủy diệt `{lost_lt:,}` Linh Thạch và rớt bảo vật!"
+                    loss_extra_msg = f"\n🩸 **Huyết Lôi xé rách túi trữ vật!** Bị hủy diệt `{lost_lt:,}` Linh Thạch!"
 
                 self.db.update_player(player)
                 fail_embed = discord.Embed(
                     title="💀 ĐỘ KIẾP THẤT BẠI!",
-                    description=f"Thiên lôi oanh kích tan tành! Tu sĩ **{player.dao_hieu}** bị rớt tu vi và tổn hại `-20%` Căn Cơ!\n> {reason_msg}{loss_extra_msg}\n"
-                                f"🔥 *Gói Phục Hồi Thánh Đan / Thần Phù Bảo Mệnh đang giảm giá trong Shop !tiencac!*",
+                    description=f"Thiên lôi oanh kích tan tành! Tu sĩ **{player.dao_hieu}** độ kiếp thất bại!\n> {reason_msg}{realm_drop_msg}{loss_extra_msg}\n"
+                                f"🔥 *Hãy luyện chế Đan Dược Phá Cảnh tại `!luyen-dan` hoặc mua Thần Phù Bảo Mệnh tại `!tiencac`!*",
                     color=discord.Color.red()
                 )
             await msg_obj.edit(embed=fail_embed, view=None)
@@ -2110,6 +2158,13 @@ class TuTienCog(commands.Cog, name="TuTien"):
                 )
                 if hardcore_res["stolen_lt"] > 0:
                     fail_embed.add_field(name="💸 Tổn Thất Linh Thạch", value=f"Bị rơi mất `{hardcore_res['stolen_lt']:,}` Linh Thạch!", inline=False)
+                if hardcore_res.get("dropped_herbs", 0) > 0 or hardcore_res.get("dropped_ores", 0) > 0:
+                    loss_mats = []
+                    if hardcore_res.get("dropped_herbs", 0) > 0:
+                        loss_mats.append(f"`{hardcore_res['dropped_herbs']}` Thảo Dược Thô 🌿")
+                    if hardcore_res.get("dropped_ores", 0) > 0:
+                        loss_mats.append(f"`{hardcore_res['dropped_ores']}` Thần Thiết Thô ⛏️")
+                    fail_embed.add_field(name="🎒 Tổn Thất Túi Đồ", value=f"Túi trữ vật rách toang, rơi mất: " + " | ".join(loss_mats), inline=False)
                 await ctx.send(embed=fail_embed)
                 return
 
@@ -2425,6 +2480,13 @@ class TuTienCog(commands.Cog, name="TuTien"):
                 )
                 if hardcore_res["stolen_lt"] > 0:
                     death_embed.add_field(name="💸 Tổn Thất", value=f"Bị rơi mất `{hardcore_res['stolen_lt']:,}` Linh Thạch!", inline=False)
+                if hardcore_res.get("dropped_herbs", 0) > 0 or hardcore_res.get("dropped_ores", 0) > 0:
+                    loss_mats = []
+                    if hardcore_res.get("dropped_herbs", 0) > 0:
+                        loss_mats.append(f"`{hardcore_res['dropped_herbs']}` Thảo Dược Thô 🌿")
+                    if hardcore_res.get("dropped_ores", 0) > 0:
+                        loss_mats.append(f"`{hardcore_res['dropped_ores']}` Thần Thiết Thô ⛏️")
+                    death_embed.add_field(name="🎒 Tổn Thất Túi Đồ", value=f"Túi trữ vật rách toang, rơi mất: " + " | ".join(loss_mats), inline=False)
                 await ctx.send(embed=death_embed)
                 break
 
@@ -2530,9 +2592,11 @@ class TuTienCog(commands.Cog, name="TuTien"):
         player.tau_hoa_nhap_ma_until = None
         player.kinh_mach_doan_tuyet_until = None
         player.lingering_debuff = None
+        player.continuous_cultivation_count = 0
+        player.linh_luc_tap_chat = False
         self.db.update_player(player)
 
-        await ctx.send(f"💊 **SỬ DỤNG CỬU CHUYỂN TÁI TẠO ĐAN THÀNH CÔNG!** Tu sĩ **{player.dao_hieu}** đã hồi phục 100% HP, Mana, 100% Căn Cơ và tẩy sạch toàn bộ Chấn Thương, Tẩu Hỏa Nhập Ma & Độc Tố!")
+        await ctx.send(f"💊 **SỬ DỤNG CỬU CHUYỂN TÁI TẠO ĐAN THÀNH CÔNG!** Tu sĩ **{player.dao_hieu}** đã hồi phục 100% HP, Mana, 100% Căn Cơ và tẩy sạch toàn bộ Chấn Thương, Tạp Chất Linh Lực, Tẩu Hỏa Nhập Ma & Độc Tố!")
 
     @commands.command(
         name="luyen-dan",

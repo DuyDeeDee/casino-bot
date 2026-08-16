@@ -34,6 +34,10 @@ def calculate_breakthrough_chance(player: CultivatorProfile) -> float:
     if player.nghiep_luc > 20:
         total_chance -= (player.nghiep_luc - 20) * 0.2
 
+    # Linh Lực Tạp Chất debuff: Phạt -20% tỷ lệ đột phá
+    if getattr(player, 'linh_luc_tap_chat', False):
+        total_chance -= 20.0
+
     # VIP 4: +5% breakthrough rate vĩnh viễn
     if player.vip_level >= 4:
         total_chance += 5.0
