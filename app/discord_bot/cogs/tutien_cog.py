@@ -1481,8 +1481,8 @@ class TuTienCog(commands.Cog, name="TuTien"):
             await ctx.send("❌ Không thể tự luận đạo với chính mình!")
             return
 
-        if player1.tinh_luc < 5:
-            await ctx.send(f"❌ Không đủ Tinh Lực! Cần `5` Tinh Lực để tham gia Luận Đạo Đài (Hiện có: `{player1.tinh_luc}/100`).")
+        if player1.tinh_luc < 20:
+            await ctx.send(f"❌ Không đủ Tinh Lực! Cần `20` Tinh Lực để tham gia Luận Đạo Đài (Hiện có: `{player1.tinh_luc}/100`).")
             return
 
         is_auto_matched = (target is None)
@@ -1509,7 +1509,7 @@ class TuTienCog(commands.Cog, name="TuTien"):
             matched_row = random.choice(eligible)
             player2 = self.db.get_player(matched_row["user_id"])
 
-        player1.tinh_luc -= 5
+        player1.tinh_luc -= 20
 
         gf1 = self.db.get_gongfa(player1.user_id)
         gf2 = self.db.get_gongfa(player2.user_id)
