@@ -180,17 +180,17 @@ GACHA_ITEMS_TUBAO: List[Tuple[str, str, str, float]] = [
     ("🟡 [THIÊN CẤP] Thần Binh: Thái Cổ Linh Thuẫn", "Pháp Bảo", "Thiên Cấp (SR)", 0.5),
     ("🟡 [THIÊN CẤP] Thần Thú: Huyết Lang Cổ Xưa", "Thú Cưỡi", "Thiên Cấp (SR)", 0.5),
     
-    # Địa Cấp (18.5%)
+    # Địa Cấp (11.0%)
     ("🟣 [ĐỊA CẤP] Đan Dược: Trúc Cơ Đan x1", "Đan Dược", "Địa Cấp", 10.0),
-    ("🟣 [ĐỊA CẤP] Thần Phù: Tẩy Tủy Phù x1", "Thần Phù", "Địa Cấp", 8.5),
+    ("🟣 [ĐỊA CẤP] Thần Phù: Tẩy Tủy Phù x1", "Thần Phù", "Địa Cấp", 1.0),
     
     # Huyền Cấp (35.0%)
     ("🔵 [HUYỀN CẤP] Khoáng Thạch: Thần Thiết Thô x5", "Nguyên Liệu", "Huyền Cấp", 20.0),
     ("🔵 [HUYỀN CẤP] Thảo Dược: Thảo Dược Thô x10", "Nguyên Liệu", "Huyền Cấp", 15.0),
     
-    # Phàm Cấp (45.0%)
-    ("🟢 [PHÀM CẤP] Thảo Dược: Thảo Dược Thô x3", "Nguyên Liệu", "Phàm Cấp", 25.0),
-    ("🟢 [PHÀM CẤP] Khoáng Thạch: Thần Thiết Thô x2", "Nguyên Liệu", "Phàm Cấp", 20.0)
+    # Phàm Cấp (52.5%)
+    ("🟢 [PHÀM CẤP] Thảo Dược: Thảo Dược Thô x3", "Nguyên Liệu", "Phàm Cấp", 28.5),
+    ("🟢 [PHÀM CẤP] Khoáng Thạch: Thần Thiết Thô x2", "Nguyên Liệu", "Phàm Cấp", 24.0)
 ]
 
 # 2. Pool Banner VIP (Cửu Thiên Tiên Các - Premium)
