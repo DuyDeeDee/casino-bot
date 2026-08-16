@@ -315,7 +315,11 @@ class TuTienCog(commands.Cog, name="TuTien"):
 
             with self.db.get_connection() as conn:
                 cursor = conn.cursor()
-                cursor.execute("SELECT user_id, meditate_start_time, meditate_duration_hours, is_vip_pass, realm_index FROM tutien_players WHERE is_meditating = 1")
+                cursor.execute("""
+                    SELECT user_id, dao_hieu, meditate_start_time, meditate_duration_hours, is_vip_pass, realm_index,
+                           vip_level, dong_phu_level, linh_can_element, max_hp, max_mana, can_co, exp, linh_thach, tam_canh
+                    FROM tutien_players WHERE is_meditating = 1
+                """)
                 meditating_players = [dict(r) for r in cursor.fetchall()]
 
                 for row in meditating_players:
@@ -324,28 +328,45 @@ class TuTienCog(commands.Cog, name="TuTien"):
                     duration_h = row["meditate_duration_hours"] or 1
                     is_vip_pass = row["is_vip_pass"]
                     realm_idx = row["realm_index"]
+                    vip_lvl = row["vip_level"] or 0
+                    dong_phu_lvl = row["dong_phu_level"] or 1
+                    linh_can = row["linh_can_element"] or ""
+                    cur_exp = row["exp"] or 0
+                    cur_can_co = row["can_co"] or 0.0
+                    cur_tam_canh = row["tam_canh"] or 0.0
 
                     # 1. Kiểm tra hoàn thành bế quan AFK khi đủ thời gian
                     if start_t and (now - start_t >= duration_h * 3600):
                         # AFK EXP scale cùng formula exponential với active cultivation
-                        # ~30 lần tu luyện/giờ, có bonus VIP 7 (+30%) sẽ apply sau
+                        # Bonus VIP 7 (+30%) & Tụ Linh Trận Động Phủ (+3% -> +147%)
                         base_afk_per_hour = int(200 * (1.4 ** realm_idx) * 30)
-                        exp_gain = int(base_afk_per_hour * duration_h)
+                        vip7_bonus = 1.30 if vip_lvl >= 7 else 1.0
+                        dong_phu_buff = min(150, (dong_phu_lvl - 1) * 3)
+                        dong_phu_mult = 1.0 + (dong_phu_buff / 100.0)
+
+                        exp_gain = int(base_afk_per_hour * duration_h * vip7_bonus * dong_phu_mult)
                         linh_thach_gain = int(800 * duration_h * (1 + realm_idx * 0.05))
-                        tam_canh_gain = min(100.0, duration_h * 2.0)
+                        tam_canh_gain = round(duration_h * 2.0, 1)
+                        if "Thủy" in linh_can:
+                            tam_canh_gain = round(tam_canh_gain * 1.10, 1)
                         can_co_gain = round(duration_h * 10.0, 1)
                         hp_ratio = min(1.0, duration_h / 4.0)
+
+                        req_exp = REALM_REQUIRED_EXP.get(realm_idx, 1000000000)
+                        new_exp = min(req_exp, cur_exp + exp_gain)
+                        new_tam_canh = min(100.0, cur_tam_canh + tam_canh_gain)
+                        new_can_co = min(100.0, cur_can_co + can_co_gain)
 
                         res_cursor = conn.execute(
                             "UPDATE tutien_players SET is_meditating = 0, meditate_start_time = NULL, meditate_duration_hours = 0, "
                             "last_meditation_end = ?, continuous_cultivation_count = 0, linh_luc_tap_chat = 0, "
                             "hp = MIN(max_hp, hp + CAST(max_hp * ? AS INTEGER)), mana = MIN(max_mana, mana + CAST(max_mana * ? AS INTEGER)), "
-                            "can_co = MIN(100.0, can_co + ?), exp = exp + ?, linh_thach = linh_thach + ?, tam_canh = MIN(100.0, tam_canh + ?) "
+                            "can_co = ?, exp = ?, linh_thach = linh_thach + ?, tam_canh = ? "
                             "WHERE user_id = ? AND is_meditating = 1",
-                            (now, hp_ratio, hp_ratio, can_co_gain, exp_gain, linh_thach_gain, tam_canh_gain, u_id)
+                            (now, hp_ratio, hp_ratio, new_can_co, new_exp, linh_thach_gain, new_tam_canh, u_id)
                         )
                         if res_cursor.rowcount > 0:
-                            finished_notifications.append((u_id, duration_h, exp_gain, linh_thach_gain, tam_canh_gain))
+                            finished_notifications.append((u_id, duration_h, exp_gain, linh_thach_gain, tam_canh_gain, dong_phu_buff))
                         continue
 
                     # 2. Tu sĩ đang bế quan được thưởng thêm +5 Tinh Lực mỗi 5 phút
@@ -360,13 +381,14 @@ class TuTienCog(commands.Cog, name="TuTien"):
             # DB context closed and committed here BEFORE async network calls
 
             # Send finished meditation DMs
-            for u_id, duration_h, exp_gain, linh_thach_gain, tam_canh_gain in finished_notifications:
+            for u_id, duration_h, exp_gain, linh_thach_gain, tam_canh_gain, dong_phu_buff in finished_notifications:
                 try:
                     user = self.bot.get_user(u_id) or await self.bot.fetch_user(u_id)
                     if user:
+                        dp_str = f" *(+{dong_phu_buff}% Động Phủ)*" if dong_phu_buff > 0 else ""
                         await user.send(
                             f"🎉 **VIÊN MÃN XUẤT QUAN!** Bạn đã hoàn tất **{duration_h} Giờ** bế quan nhập định!\n"
-                            f"🎁 Phần thưởng AFK: `+{exp_gain:,}` Tu Vi | `+{linh_thach_gain:,}` Linh Thạch | `+{tam_canh_gain:.1f}%` Tâm Cảnh!"
+                            f"🎁 Phần thưởng AFK: `+{exp_gain:,}` Tu Vi{dp_str} | `+{linh_thach_gain:,}` Linh Thạch | `+{tam_canh_gain:.1f}%` Tâm Cảnh!"
                         )
                 except Exception:
                     pass
@@ -1130,10 +1152,13 @@ class TuTienCog(commands.Cog, name="TuTien"):
         actual_hours = min(elapsed_hours, float(player.meditate_duration_hours or 1))
 
         # AFK EXP scale cùng formula exponential với active cultivation
-        # VIP 7 nhận thêm +30% tốc độ AFK (thêm 30% EXP)
+        # VIP 7 nhận thêm +30% tốc độ AFK (thêm 30% EXP) + Buff Động Phủ Tụ Linh Trận (+3% -> +147%)
         base_afk_per_hour = int(200 * (1.4 ** player.realm_index) * 30)
         vip7_bonus = 1.30 if player.vip_level >= 7 else 1.0
-        exp_gain = int(base_afk_per_hour * actual_hours * vip7_bonus)
+        dong_phu_buff = min(150, (player.dong_phu_level - 1) * 3)
+        dong_phu_mult = 1.0 + (dong_phu_buff / 100.0)
+
+        exp_gain = int(base_afk_per_hour * actual_hours * vip7_bonus * dong_phu_mult)
         linh_thach_gain = int(800 * actual_hours * (1 + player.realm_index * 0.05))
         tam_canh_gain = round(actual_hours * 2.0, 1)
         # Thủy element: +10% Tâm Cảnh hiệu quả khi AFK (bonus thêm 10%)
@@ -1164,6 +1189,7 @@ class TuTienCog(commands.Cog, name="TuTien"):
         self.db.update_player(player)
 
         hp_pct = int(hp_ratio * 100)
+        dp_note = f" *(+{dong_phu_buff}% Động Phủ)*" if dong_phu_buff > 0 else ""
         embed = discord.Embed(
             title=f"🧘 XUẤT QUAN THÀNH CÔNG — {player.dao_hieu}",
             description=f"Tu sĩ **{player.dao_hieu}** đã thu công xuất quan sau **{actual_hours:.1f} Giờ** nhập định!\n"
@@ -1172,7 +1198,7 @@ class TuTienCog(commands.Cog, name="TuTien"):
         )
         embed.add_field(
             name="🎁 Phần Thưởng Tích Lũy",
-            value=f"> ✨ Tu Vi: `+{exp_gain:,}`\n> 💰 Linh Thạch: `+{linh_thach_gain:,}`\n> 🧘 Tâm Cảnh: `+{tam_canh_gain}%`\n> ◈ Căn Cơ: `+{can_co_gain}%`",
+            value=f"> ✨ Tu Vi: `+{exp_gain:,}`{dp_note}\n> 💰 Linh Thạch: `+{linh_thach_gain:,}`\n> 🧘 Tâm Cảnh: `+{tam_canh_gain}%`\n> ◈ Căn Cơ: `+{can_co_gain}%`",
             inline=False
         )
         embed.set_footer(text="Nghỉ ngơi 10 phút trước khi bắt đầu lượt bế quan tiếp theo.")
@@ -1212,7 +1238,10 @@ class TuTienCog(commands.Cog, name="TuTien"):
         # Trao phần thưởng tương đương 4h AFK
         afk_hours = 4.0
         base_afk_per_hour = int(200 * (1.4 ** player.realm_index) * 30)
-        exp_gain = int(base_afk_per_hour * afk_hours * 1.30)  # VIP 5+ tự động có VIP 7 bonus spirit
+        dong_phu_buff = min(150, (player.dong_phu_level - 1) * 3)
+        dong_phu_mult = 1.0 + (dong_phu_buff / 100.0)
+
+        exp_gain = int(base_afk_per_hour * afk_hours * 1.30 * dong_phu_mult)  # VIP 5+ tự động có VIP 7 bonus spirit
         linh_thach_gain = int(800 * afk_hours * (1 + player.realm_index * 0.05))
         tam_canh_gain = round(afk_hours * 2.0, 1)
         can_co_gain = round(afk_hours * 10.0, 1)
@@ -1225,6 +1254,7 @@ class TuTienCog(commands.Cog, name="TuTien"):
         player.last_nhapdinh_nhanh = now
         self.db.update_player(player)
 
+        dp_note = f" *(+{dong_phu_buff}% Động Phủ)*" if dong_phu_buff > 0 else ""
         embed = discord.Embed(
             title="⚡ [VIP 5] NHẬP ĐỊNH NHANH — TỨC THÌ THU CÔNG!",
             description=f"Tu sĩ **{player.dao_hieu}** kích hoạt bí thuật **Thời Không Định Tâm** của Tôn Giả!\n"
@@ -1233,7 +1263,7 @@ class TuTienCog(commands.Cog, name="TuTien"):
         )
         embed.add_field(
             name="🎁 Phần Thưởng",
-            value=f"> ✨ Tu Vi: `+{exp_gain:,}`\n> 💰 Linh Thạch: `+{linh_thach_gain:,}`\n> 🧘 Tâm Cảnh: `+{tam_canh_gain}%`\n> ◈ Căn Cơ: `+{can_co_gain}%`",
+            value=f"> ✨ Tu Vi: `+{exp_gain:,}`{dp_note}\n> 💰 Linh Thạch: `+{linh_thach_gain:,}`\n> 🧘 Tâm Cảnh: `+{tam_canh_gain}%`\n> ◈ Căn Cơ: `+{can_co_gain}%`",
             inline=False
         )
         embed.set_footer(text="Lệnh này hồi lại sau 24 Giờ. VIP 5 đặc quyền!")
