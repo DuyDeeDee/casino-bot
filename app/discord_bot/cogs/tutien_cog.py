@@ -509,7 +509,7 @@ class TuTienCog(commands.Cog, name="TuTien"):
         brief="Xem & Đổi Linh Bụi Tiên Các lấy vật phẩm UR/SR tự chọn.",
         usage="linhbui-shop [tên_vật_phẩm]"
     )
-    async def linhbui_shop_cmd(self, ctx: commands.Context, item_name: str = None):
+    async def linhbui_shop_cmd(self, ctx: commands.Context, *, item_name: str = None):
         """Xem & Đổi Linh Bụi Tiên Các lấy vật phẩm UR/SR tự chọn."""
         player = self.db.get_player(ctx.author.id)
         if not player:
@@ -527,20 +527,27 @@ class TuTienCog(commands.Cog, name="TuTien"):
             await ctx.send(embed=embed)
             return
 
-        if item_name not in LINH_BUI_SHOP:
-            await ctx.send(f"❌ Vật phẩm **[{item_name}]** không có trong Shop Linh Bụi!")
+        # Find matching key in LINH_BUI_SHOP (case-insensitive & substring)
+        target_key = None
+        for name in LINH_BUI_SHOP.keys():
+            if item_name.lower().strip() in name.lower():
+                target_key = name
+                break
+
+        if not target_key:
+            await ctx.send(f"❌ Vật phẩm **[{item_name}]** không có trong Shop Linh Bụi! Gõ `!linhbui-shop` để xem danh sách.")
             return
 
-        info = LINH_BUI_SHOP[item_name]
+        info = LINH_BUI_SHOP[target_key]
         if player.linh_bui < info["cost"]:
             await ctx.send(f"❌ Không đủ Linh Bụi! Cần `{info['cost']}` Linh Bụi (Hiện có: `{player.linh_bui}`).")
             return
 
         player.linh_bui -= info["cost"]
-        self.db.add_item(player.user_id, item_name, info["type"], 1)
+        self.db.add_item(player.user_id, target_key, info["type"], 1)
         self.db.update_player(player)
 
-        await ctx.send(f"✨ **ĐỔI LINH BỤI THÀNH CÔNG!** Đã đổi thành công **[{item_name}]** vào Túi Đồ!")
+        await ctx.send(f"✨ **ĐỔI LINH BỤI THÀNH CÔNG!** Đã đổi thành công **[{target_key}]** vào Túi Đồ!")
 
     # --- 📂 MONETIZATION & SHOP TIÊN CÁC COMMANDS ---
 
@@ -700,15 +707,28 @@ class TuTienCog(commands.Cog, name="TuTien"):
         name="give-item",
         aliases=["chodo", "chovatpham", "additem"],
         brief="[Admin/Owner] Ban tặng vật phẩm / bùa cho người chơi.",
-        usage="give-item @user [tên_item] [số_lượng]"
+        usage="give-item @user <tên_item> [số_lượng]"
     )
     @commands.is_owner()
-    async def give_item_cmd(self, ctx: commands.Context, target: discord.Member, item_name: str, amount: int = 1):
+    async def give_item_cmd(self, ctx: commands.Context, target: discord.Member, *args):
         """[Owner Admin] Ban tặng vật phẩm cho người chơi."""
         player = self.db.get_player(target.id)
         if not player:
             await ctx.send(f"❌ Tu sĩ **{target.display_name}** chưa nhập môn!")
             return
+
+        if not args:
+            await ctx.send("❌ Vui lòng nhập tên vật phẩm! Cú pháp: `!give-item @user <Tên Item> [Số lượng]`")
+            return
+
+        # Check if last arg is integer amount
+        amount = 1
+        item_words = list(args)
+        if len(args) > 1 and args[-1].isdigit():
+            amount = max(1, int(args[-1]))
+            item_words = list(args[:-1])
+
+        item_name = " ".join(item_words).strip().strip('"\'')
 
         name_lower = item_name.lower()
         if "van linh" in name_lower or "vanlinh" in name_lower:
@@ -731,6 +751,10 @@ class TuTienCog(commands.Cog, name="TuTien"):
             player.tien_duyen_phu += amount
             self.db.update_player(player)
             item_desc = f"x{amount} Tiên Duyên Phù"
+        elif "tay tuy" in name_lower or "taytuy" in name_lower:
+            player.tay_tuy_phu += amount
+            self.db.update_player(player)
+            item_desc = f"x{amount} Tẩy Tủy Phù"
         else:
             self.db.add_item(target.id, item_name, "Bảo Vật Admin Ban Tặng", amount)
             item_desc = f"x{amount} {item_name}"
@@ -3024,13 +3048,29 @@ class TuTienCog(commands.Cog, name="TuTien"):
         name="dang-ban",
         aliases=["dangban", "sell-item", "rao-ban"],
         brief="Đăng bán vật phẩm từ Túi Đồ lên Sàn Đấu Giá.",
-        usage="dang-ban [tên_vật_phẩm] [số_lượng] [giá_linh_thạch]"
+        usage="dang-ban <tên_vật_phẩm> <số_lượng> <giá_linh_thạch>"
     )
-    async def dangban_cmd(self, ctx: commands.Context, item_name: str, quantity: int, price: int):
+    async def dangban_cmd(self, ctx: commands.Context, *args):
         """Đăng bán vật phẩm từ Túi Đồ lên Sàn Đấu Giá (!dang-ban)."""
         player = self.db.get_player(ctx.author.id)
         if not player:
             await ctx.send("❌ Vui lòng gõ `!nhapmon` trước!")
+            return
+
+        if len(args) < 3:
+            await ctx.send(
+                "❌ Thiếu tham số! Cú pháp:\n"
+                "> `!dang-ban <Tên Vật Phẩm> <Số Lượng> <Giá Linh Thạch>`\n"
+                "> Ví dụ: `!dang-ban Thao Duoc Tho 5 10000` hoặc `!dang-ban \"Trúc Cơ Đan\" 1 50000`"
+            )
+            return
+
+        try:
+            price = int(args[-1])
+            quantity = int(args[-2])
+            item_name = " ".join(args[:-2]).strip().strip('"\'')
+        except ValueError:
+            await ctx.send("❌ Số lượng và Giá bán phải là các số nguyên hợp lệ! Ví dụ: `!dang-ban Thao Duoc Tho 5 10000`")
             return
 
         if quantity <= 0 or price <= 0:

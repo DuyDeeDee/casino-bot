@@ -48,11 +48,22 @@ def buy_tiencac_item(db: TuTienDB, player: CultivatorProfile, item_name: str) ->
     """
     Purchases items from Tiên Các Shop using Tiên Ngọc.
     """
-    if item_name not in TIEN_CAC_SHOP:
-        return False, f"❌ Vật phẩm **[{item_name}]** không tồn tại trong Tiên Các!", player
+    # Find matching key in TIEN_CAC_SHOP
+    target_key = None
+    if item_name in TIEN_CAC_SHOP:
+        target_key = item_name
+    else:
+        for name in TIEN_CAC_SHOP.keys():
+            if item_name.lower().strip() in name.lower():
+                target_key = name
+                break
 
-    item_info = TIEN_CAC_SHOP[item_name]
+    if not target_key:
+        return False, f"❌ Vật phẩm **[{item_name}]** không tồn tại trong Tiên Các! Gõ `!tiencac` để xem danh sách.", player
+
+    item_info = TIEN_CAC_SHOP[target_key]
     price = item_info["price"]
+    item_name = target_key
 
     if player.tien_ngoc < price:
         return False, f"❌ Không đủ Tiên Ngọc! Vật phẩm **[{item_name}]** giá `{price}` Tiên Ngọc (Hiện có: `{player.tien_ngoc}` Tiên Ngọc).", player

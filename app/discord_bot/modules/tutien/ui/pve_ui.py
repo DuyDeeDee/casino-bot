@@ -589,7 +589,7 @@ class TutienGuidePaginatorView(discord.ui.View):
             self._update_buttons()
             await interaction.response.edit_message(embed=self.build_embed(), view=self)
 
-    @discord.ui.button(label="Trang 1/5", style=discord.ButtonStyle.secondary, disabled=True, custom_id="btn_guide_indicator")
+    @discord.ui.button(label="Trang 1/7", style=discord.ButtonStyle.secondary, disabled=True, custom_id="btn_guide_indicator")
     async def btn_page_indicator(self, interaction: discord.Interaction, button: discord.ui.Button):
         pass
 
