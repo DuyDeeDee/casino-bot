@@ -2599,6 +2599,120 @@ class TuTienCog(commands.Cog, name="TuTien"):
         await ctx.send(f"💊 **SỬ DỤNG CỬU CHUYỂN TÁI TẠO ĐAN THÀNH CÔNG!** Tu sĩ **{player.dao_hieu}** đã hồi phục 100% HP, Mana, 100% Căn Cơ và tẩy sạch toàn bộ Chấn Thương, Tạp Chất Linh Lực, Tẩu Hỏa Nhập Ma & Độc Tố!")
 
     @commands.command(
+        name="su-dung",
+        aliases=["sudung", "use", "dung-item", "dung"],
+        brief="Sử dụng vật phẩm/đan dược có trong Túi Trữ Vật (!ttinv).",
+        usage="su-dung [tên_vật_phẩm]"
+    )
+    async def sudung_cmd(self, ctx: commands.Context, *, item_name: str = None):
+        """Sử dụng vật phẩm/đan dược trong Túi Trữ Vật."""
+        player = self.db.get_player(ctx.author.id)
+        if not player:
+            await ctx.send("❌ Vui lòng gõ `!nhapmon` trước!")
+            return
+
+        if not item_name:
+            await ctx.send(
+                "❌ Vui lòng nhập tên vật phẩm muốn dùng!\n"
+                "> 💡 Cú pháp: `!su-dung <Tên Vật Phẩm>` (Ví dụ: `!su-dung Dinh Than Dan`, `!su-dung Cuu Chuyen Tai Tao Dan`)\n"
+                "> 🎒 Gõ `!ttinv` hoặc `!tui-do` để kiểm tra túi đồ."
+            )
+            return
+
+        item_name_clean = item_name.strip().lower()
+
+        # 1. Cửu Chuyển Tái Tạo Đan
+        if "cửu chuyển" in item_name_clean or "cuu chuyen" in item_name_clean or "tái tạo đan" in item_name_clean or "tai tao dan" in item_name_clean:
+            await self.dungdan_cmd(ctx)
+            return
+
+        # 2. Định Thần Đan
+        if "định thần" in item_name_clean or "dinh than" in item_name_clean:
+            if not self.db.consume_item(player.user_id, "Định Thần Đan", 1):
+                await ctx.send("❌ Bạn không có **Định Thần Đan** trong túi đồ! Luyện tại `!luyen-dan`.")
+                return
+            player.chan_thuong_until = None
+            player.tau_hoa_nhap_ma_until = None
+            player.lingering_debuff = None
+            player.continuous_cultivation_count = 0
+            player.linh_luc_tap_chat = False
+            heal_hp = int(player.max_hp * 0.30)
+            heal_mana = int(player.max_mana * 0.30)
+            player.hp = min(player.max_hp, player.hp + heal_hp)
+            player.mana = min(player.max_mana, player.mana + heal_mana)
+            self.db.update_player(player)
+            await ctx.send(f"💊 **SỬ DỤNG ĐỊNH THẦN ĐAN THÀNH CÔNG!** Đã hồi `+{heal_hp:,}` HP, `+{heal_mana:,}` Mana và xóa bỏ toàn bộ Chấn Thương, Tẩu Hỏa & Tạp Chất Linh Lực!")
+            return
+
+        # 3. Vạn Linh Đan (Tự dùng cứu thân)
+        if "vạn linh" in item_name_clean or "van linh" in item_name_clean:
+            consumed = False
+            if player.van_linh_dan > 0:
+                player.van_linh_dan -= 1
+                consumed = True
+            elif self.db.consume_item(player.user_id, "Vạn Linh Đan", 1):
+                consumed = True
+
+            if not consumed:
+                await ctx.send("❌ Bạn không có **Vạn Linh Đan** trong túi đồ! Luyện tại `!luyen-dan`.")
+                return
+
+            player.kinh_mach_doan_tuyet_until = None
+            player.hp = max(player.hp, int(player.max_hp * 0.50))
+            self.db.update_player(player)
+            await ctx.send(f"✨ **SỬ DỤNG VẠN LINH ĐAN THÀNH CÔNG!** Đã cứu chữa Kinh Mạch Đoạn Tuyệt và hồi phục 50% HP!")
+            return
+
+        # 4. Tẩy Tủy Phù
+        if "tẩy tủy" in item_name_clean or "tay tuy" in item_name_clean:
+            if player.tay_tuy_phu > 0 or self.db.consume_item(player.user_id, "Tẩy Tủy Phù", 1):
+                from app.discord_bot.modules.tutien.engines.gacha import process_gacha_rolls
+                ok, msg, res, updated_player = process_gacha_rolls(self.db, player, "caimenh", 1)
+                await ctx.send(f"{msg}\n> 🔮 **Linh Căn mới:** `{updated_player.linh_can_quality}` ({updated_player.linh_can_element})")
+            else:
+                await ctx.send("❌ Bạn không có **Tẩy Tủy Phù** trong túi đồ! Luyện tại `!luyen-dan` hoặc quay gacha.")
+            return
+
+        # 5. Niết Bàn Đan
+        if "niết bàn" in item_name_clean or "niet ban" in item_name_clean:
+            if not self.db.consume_item(player.user_id, "Niết Bàn Đan", 1):
+                await ctx.send("❌ Bạn không có **Niết Bàn Đan** trong túi đồ!")
+                return
+            player.hp = player.max_hp
+            player.mana = player.max_mana
+            player.can_co = min(100.0, player.can_co + 5.0)
+            self.db.update_player(player)
+            await ctx.send(f"🔥 **SỬ DỤNG NIẾT BÀN ĐAN THÀNH CÔNG!** Toàn thân dục hỏa trùng sinh, hồi đầy 100% HP/Mana và tăng `+5%` Căn Cơ!")
+            return
+
+        # 6. Các loại Đan Phá Cảnh (Trúc Cơ Đan, Kim Đan Sa, Ngưng Anh Đan...)
+        if any(w in item_name_clean for w in ["trúc cơ", "truc co", "kim đan", "kim dan", "ngưng anh", "ngung anh", "hóa thần", "hoa than", "phá hư", "pha hu"]):
+            await ctx.send(
+                f"💊 **{item_name.title()}** là **Đan Dược Phá Cảnh**!\n"
+                f"> ✨ Đan dược này sẽ **tự động kích hoạt & tiêu thụ** khi bạn gõ `!dotpha` lúc Tu Vi đã đạt 100% để bảo vệ đan điền khỏi nổ tung!"
+            )
+            return
+
+        # 7. Các loại Bùa Bảo Hiểm Bị Động
+        if any(w in item_name_clean for w in ["bảo mệnh", "bao menh", "thánh thể", "thanh the", "hộ thân", "ho than"]):
+            await ctx.send(
+                f"🛡️ **{item_name.title()}** là **Pháp Bảo/Bùa Hộ Thân Tự Động**!\n"
+                f"> ✨ Vật phẩm này sẽ tự động kích hoạt bảo vệ tính mạng khi bạn Độ Kiếp thất bại hoặc tử trận PVE mà không cần dùng thủ công!"
+            )
+            return
+
+        # 8. Vật phẩm khác hoặc không hỗ trợ
+        inv = self.db.get_inventory(player.user_id)
+        matched_item = next((i for i in inv if item_name_clean in i["item_name"].lower()), None)
+        if matched_item:
+            await ctx.send(
+                f"📦 Bạn đang sở hữu `{matched_item['quantity']}x` **{matched_item['item_name']}** ({matched_item['item_type']}).\n"
+                f"> ℹ️ Đây là vật phẩm nguyên liệu hoặc trang bị bị động. Hãy dùng trong `!luyen-dan`, `!luyen-khi` hoặc đăng bán tại `!cho-troi`!"
+            )
+        else:
+            await ctx.send(f"❌ Không tìm thấy vật phẩm **[{item_name}]** trong túi đồ! Gõ `!ttinv` để xem danh sách.")
+
+    @commands.command(
         name="luyen-dan",
         aliases=["luyendan", "alchemy", "che-dan"],
         brief="Luyện chế Linh Đan, Thần Phù từ Thảo Dược Thô và Linh Thạch.",
