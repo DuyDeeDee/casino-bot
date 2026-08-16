@@ -84,23 +84,25 @@ class GachaInteractiveView(discord.ui.View):
         wish_str = f"🎯 Wishlist: **[{player.wishlist_item or 'Chưa cài đặt (!wishlist)'}]**"
 
         if self.current_banner == "tubao":
+            tubao_cost = GACHA_BANNERS.get("tubao", {}).get("cost_1x", 25000)
             embed = discord.Embed(
                 title="🏮 TỤ BẢO CÁC — BANNER THƯỜNG (F2P)",
                 description=f"Tu sĩ: **[{player.dao_hieu}]** | Lượt Bảo Hiểm (Pity): {pity_str}\n\n"
                             f"🎟️ **Vé Linh Duyên Phù:** `{player.linh_duyen_phu}` vé\n"
                             f"💰 **Linh Thạch có sẵn:** `{player.linh_thach:,}`\n\n"
-                            f"📜 **Chi phí:** `1x Linh Duyên Phù` hoặc `10,000 Linh Thạch` / lượt\n"
+                            f"📜 **Chi phí:** `1x Linh Duyên Phù` hoặc `{tubao_cost:,} Linh Thạch` / lượt\n"
                             f"🎁 **Vật phẩm:** Đan Dược Cực Phẩm, Thảo Dược, Linh Bụi, Pháp Bảo Huyền Cấp, Vé Tiên Duyên...",
                 color=discord.Color.teal()
             )
         elif self.current_banner == "tiencac":
+            tiencac_cost = GACHA_BANNERS.get("tiencac", {}).get("cost_1x", 50)
             embed = discord.Embed(
                 title="🌟 CỬU THIÊN TIÊN CÁC — BANNER VIP (PREMIUM)",
                 description=f"Tu sĩ: **[{player.dao_hieu}]** | Lượt Bảo Hiểm (Pity): {pity_str}\n"
                             f"> {wish_str}\n\n"
                             f"🌟 **Vé Tiên Duyên Phù:** `{player.tien_duyen_phu}` vé\n"
                             f"💎 **Tiên Ngọc có sẵn:** `{player.tien_ngoc:,}`\n\n"
-                            f"📜 **Chi phí:** `1x Tiên Duyên Phù` hoặc `50 Tiên Ngọc` / lượt\n"
+                            f"📜 **Chi phí:** `1x Tiên Duyên Phù` hoặc `{tiencac_cost:,} Tiên Ngọc` / lượt\n"
                             f"🎁 **Bảo vật:** **Đế Cấp (UR 0.7%)** (《Thôn Thiên Ma Công》, Trảm Tiên Kiếm, Cửu Vĩ Thiên Hồ), **Thiên Cấp (SR 4.3%)**\n"
                             f"🛡️ **Cơ chế:** Soft Pity 60 lượt (+5%/lượt) | Hard Pity 80 lượt chắc chắn ra UR!",
                 color=discord.Color.gold()
