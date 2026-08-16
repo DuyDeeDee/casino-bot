@@ -476,12 +476,12 @@ class TuTienCog(commands.Cog, name="TuTien"):
 
         player.last_daily_fortune = now
         player.linh_duyen_phu += 1
-        player.tien_ngoc += 20
+        player.tien_ngoc += 6
         self.db.update_player(player)
 
         embed = discord.Embed(title="🔮 BỐC QUẺ KHÍ VẬN HÀNG NGÀY 🔮", color=discord.Color.purple())
         embed.add_field(name="📜 Quẻ Số", value="**ĐẠI CÁT** — *Linh quang hội tụ, hành trình tu tiên vạn sự như ý!*", inline=False)
-        embed.add_field(name="🎁 Phần Thưởng", value="`+1` Linh Duyên Phù (Vé quay Gacha F2P) | `+20` Tiên Ngọc", inline=False)
+        embed.add_field(name="🎁 Phần Thưởng", value="`+1` Linh Duyên Phù (Vé quay Gacha F2P) | `+6` Tiên Ngọc", inline=False)
         await ctx.send(embed=embed)
 
     @commands.command(
@@ -2217,7 +2217,7 @@ class TuTienCog(commands.Cog, name="TuTien"):
                 if ore_drop > 0:
                     self.db.add_item(player.user_id, "Thần Thiết Thô", "Khoáng Thạch Luyện Khí", ore_drop)
 
-                tien_ngoc_drop = random.randint(10, 30) if (is_mutant and random.random() < 0.35) else 0
+                tien_ngoc_drop = random.randint(3, 9) if (is_mutant and random.random() < 0.35) else 0
                 linh_bui_drop = random.randint(10, 40) if (is_mutant and random.random() < 0.25) else 0
 
                 req_exp = REALM_REQUIRED_EXP.get(player.realm_index, 1000000000)
@@ -2349,9 +2349,9 @@ class TuTienCog(commands.Cog, name="TuTien"):
             bonus_str = ""
             if is_milestone:
                 player.tien_duyen_phu += 1
-                player.tien_ngoc += 50
+                player.tien_ngoc += 15
                 self.db.update_player(player)
-                bonus_str = "\n🎉 **MỐC TẦNG ĐẶC BIỆT!** Nhận ngay `+1` Tiên Duyên Phù 🎟️ + `50` Tiên Ngọc 🌟!"
+                bonus_str = "\n🎉 **MỐC TẦNG ĐẶC BIỆT!** Nhận ngay `+1` Tiên Duyên Phù 🎟️ + `15` Tiên Ngọc 🌟!"
 
             win_embed = discord.Embed(
                 title=f"🏛️ VƯỢT THÁP THÀNH CÔNG — TẦNG [{floor}/100]!",
@@ -2580,8 +2580,8 @@ class TuTienCog(commands.Cog, name="TuTien"):
 
             elif room["type"] == "MIMIC":
                 if random.random() < 0.50:
-                    player.tien_ngoc += 30
-                    r_embed.add_field(name="✨ Rương Thần", value="Mở rương thật! Nhận `+30` Tiên Ngọc 🌟!", inline=False)
+                    player.tien_ngoc += 10
+                    r_embed.add_field(name="✨ Rương Thần", value="Mở rương thật! Nhận `+10` Tiên Ngọc 🌟!", inline=False)
                 else:
                     m_dmg = int(player.max_hp * 0.25)
                     player.hp = max(1, player.hp - m_dmg)

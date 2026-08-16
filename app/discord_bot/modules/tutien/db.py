@@ -710,7 +710,7 @@ class TuTienDB:
                     "quest_name": f"Diệt Yêu Trừ Ma ({pve_target} trận PVE thắng)",
                     "target_count": pve_target,
                     "reward_type": random.choice(["tien_ngoc", "linh_duyen_phu"]),
-                    "reward_amount": 30 if "tien_ngoc" else 1,
+                    "reward_amount": 10 if "tien_ngoc" else 1,
                 },
                 {
                     "quest_type": "pvp_wins",
@@ -721,7 +721,7 @@ class TuTienDB:
                 },
             ]
             # Fix reward_amount cho pve_kills
-            quests_to_create[1]["reward_amount"] = 30 if quests_to_create[1]["reward_type"] == "tien_ngoc" else 2
+            quests_to_create[1]["reward_amount"] = 10 if quests_to_create[1]["reward_type"] == "tien_ngoc" else 2
 
             for q in quests_to_create:
                 conn.execute("""
