@@ -312,9 +312,27 @@ class TutienTopLeaderboardView(discord.ui.View):
         embed.set_footer(text="Bấm nút sang trang phía dưới để xem các Bảng Xếp Hạng khác")
         return embed
 
-    @discord.ui.button(label="🏆 Top Tu Vi", style=discord.ButtonStyle.primary, custom_id="btn_top_tuvi")
+    @discord.ui.button(label="🏆 Top Tu Vi", style=discord.ButtonStyle.primary, custom_id="btn_top_tuvi", row=0)
     async def btn_tuvi(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.current_tab = "tu-vi"
+        self._update_button_styles()
+        await interaction.response.edit_message(embed=self.build_embed(), view=self)
+
+    @discord.ui.button(label="💰 Top Gia Tài", style=discord.ButtonStyle.secondary, custom_id="btn_top_giatai", row=0)
+    async def btn_giatai(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.current_tab = "gia-tai"
+        self._update_button_styles()
+        await interaction.response.edit_message(embed=self.build_embed(), view=self)
+
+    @discord.ui.button(label="🏛️ Top Leo Tháp", style=discord.ButtonStyle.secondary, custom_id="btn_top_thap", row=0)
+    async def btn_thap(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.current_tab = "thap"
+        self._update_button_styles()
+        await interaction.response.edit_message(embed=self.build_embed(), view=self)
+
+    @discord.ui.button(label="🔥 Top Boss", style=discord.ButtonStyle.secondary, custom_id="btn_top_boss", row=0)
+    async def btn_boss(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.current_tab = "boss"
         self._update_button_styles()
         await interaction.response.edit_message(embed=self.build_embed(), view=self)
 
