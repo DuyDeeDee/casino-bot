@@ -330,6 +330,23 @@ class TuTienDB:
             conn.execute("DELETE FROM tutien_inventory WHERE user_id = ?", (user_id,))
             conn.execute("DELETE FROM tutien_pve_progress WHERE user_id = ?", (user_id,))
 
+    def reset_all_players(self) -> int:
+        """Xóa toàn bộ hồ sơ tu sĩ và tất cả dữ liệu liên quan (Inventory, Gongfa, PVE, Quests, Bounties, Auctions)."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) as count FROM tutien_players")
+            row = cursor.fetchone()
+            count = row["count"] if row else 0
+            conn.execute("DELETE FROM tutien_players")
+            conn.execute("DELETE FROM tutien_gongfa")
+            conn.execute("DELETE FROM tutien_inventory")
+            conn.execute("DELETE FROM tutien_pve_progress")
+            conn.execute("DELETE FROM tutien_daily_quests")
+            conn.execute("DELETE FROM tutien_bounties")
+            conn.execute("DELETE FROM tutien_causality")
+            conn.execute("DELETE FROM tutien_auctions")
+            return count
+
     def get_top_cultivators(self, limit: int = 10) -> List[Dict[str, Any]]:
         with self.get_connection() as conn:
             cursor = conn.cursor()

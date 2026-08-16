@@ -219,6 +219,31 @@ class GachaInteractiveView(discord.ui.View):
             await interaction.followup.send(flex_msg)
 
 
+class ResetAllConfirmView(discord.ui.View):
+    def __init__(self, owner_id: int, timeout: float = 30.0):
+        super().__init__(timeout=timeout)
+        self.owner_id = owner_id
+        self.confirmed = False
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.owner_id:
+            await interaction.response.send_message("❌ Chỉ Chủ Bot mới có quyền thao tác nút này!", ephemeral=True)
+            return False
+        return True
+
+    @discord.ui.button(label="XÁC NHẬN RESET TOÀN BỘ SERVER", style=discord.ButtonStyle.danger, emoji="💥")
+    async def btn_confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.confirmed = True
+        self.stop()
+        await interaction.response.defer()
+
+    @discord.ui.button(label="HỦY BỎ", style=discord.ButtonStyle.secondary, emoji="❌")
+    async def btn_cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.confirmed = False
+        self.stop()
+        await interaction.response.defer()
+
+
 class TuTienCog(commands.Cog, name="TuTien"):
 
     """
@@ -564,6 +589,64 @@ class TuTienCog(commands.Cog, name="TuTien"):
             color=discord.Color.red()
         )
         await ctx.send(embed=embed)
+
+    @commands.command(
+        name="tutien-reset-all",
+        aliases=["ttresetall", "reset-all-tutien", "resetalltutien", "reset-all-players"],
+        brief="[Admin/Owner] Reset toàn bộ dữ liệu Tu Tiên của TẤT CẢ người chơi.",
+        usage="tutien-reset-all [confirm]"
+    )
+    @commands.is_owner()
+    async def reset_all_players_cmd(self, ctx: commands.Context, confirm_arg: str = None):
+        """[Owner Admin] Reset toàn bộ cơ sở dữ liệu Tu Tiên (Xóa sạch tất cả tu sĩ)."""
+        if confirm_arg and confirm_arg.lower() in ["confirm", "xacnhan", "yes", "force"]:
+            count = self.db.reset_all_players()
+            embed = discord.Embed(
+                title="💥 [OWNER ADMIN] ĐÃ RESET TOÀN BỘ DỮ LIỆU TU TIÊN!",
+                description=f"Đã xóa sạch hồ sơ của **{count:,}** tu sĩ cùng toàn bộ Túi đồ, Công Pháp, Bí Cảnh, Nhiệm vụ và Sàn đấu giá!\n"
+                            f"> 📜 Mọi người chơi có thể gõ `!nhapmon` để bắt đầu lại thế giới Tu Tiên mới.",
+                color=discord.Color.dark_red()
+            )
+            await ctx.send(embed=embed)
+            return
+
+        view = ResetAllConfirmView(ctx.author.id, timeout=30.0)
+        warning_embed = discord.Embed(
+            title="⚠️ CẢNH BÁO NGUY HIỂM: RESET TOÀN BỘ HỆ THỐNG TU TIÊN ⚠️",
+            description="Thao tác này sẽ **XÓA VĨNH VIỄN**:\n"
+                        "- Tất cả hồ sơ tu sĩ & tu vi của mọi người chơi\n"
+                        "- Toàn bộ Túi trữ vật (Linh Thạch, Tiên Ngọc, Vé Gacha, Vật phẩm)\n"
+                        "- Toàn bộ Công pháp, Pháp bảo, Thú cưỡi, Tiến trình PVE & Leo tháp\n"
+                        "- Nhiệm vụ hàng ngày, Lệnh truy nã & Sàn đấu giá\n\n"
+                        "> 🛑 **Hành động này KHÔNG THỂ HOÀN TÁC!**\n"
+                        "> Bấm nút bên dưới trong 30s hoặc gõ `!tutien-reset-all confirm` để thực hiện.",
+            color=discord.Color.red()
+        )
+        msg_obj = await ctx.send(embed=warning_embed, view=view)
+        await view.wait()
+
+        if view.confirmed:
+            count = self.db.reset_all_players()
+            done_embed = discord.Embed(
+                title="💥 [OWNER ADMIN] ĐÃ RESET TOÀN BỘ DỮ LIỆU TU TIÊN!",
+                description=f"Đã xóa sạch hồ sơ của **{count:,}** tu sĩ cùng toàn bộ Túi đồ, Công Pháp, Bí Cảnh, Nhiệm vụ và Sàn đấu giá!\n"
+                            f"> 📜 Mọi người chơi có thể gõ `!nhapmon` để bắt đầu lại thế giới Tu Tiên mới.",
+                color=discord.Color.dark_red()
+            )
+            try:
+                await msg_obj.edit(embed=done_embed, view=None)
+            except Exception:
+                await ctx.send(embed=done_embed)
+        else:
+            cancel_embed = discord.Embed(
+                title="🛡️ ĐÃ HỦY LỆNH RESET ALL",
+                description="Toàn bộ dữ liệu Tu Tiên được giữ nguyên an toàn.",
+                color=discord.Color.green()
+            )
+            try:
+                await msg_obj.edit(embed=cancel_embed, view=None)
+            except Exception:
+                pass
 
     @commands.command(
         name="set-linh-thach",
