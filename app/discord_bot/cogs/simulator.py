@@ -748,7 +748,9 @@ class ControlPanelView(discord.ui.View):
             p_info = PICKAXE_CONFIG.get(pickaxe_level, PICKAXE_CONFIG[eff_lvl])
             cooldown = p_info["cooldown_hours"] * 3600
             
-            if now - last_mine < cooldown:
+            if self.author.id in getattr(self.cog, "active_miners", set()):
+                mine_status = "⛏️ Đang trong chuyến khai thác (Kiểm tra tin nhắn đào mỏ)!"
+            elif now - last_mine < cooldown:
                 time_left = cooldown - (now - last_mine)
                 hours = time_left // 3600
                 minutes = (time_left % 3600) // 60
@@ -950,7 +952,10 @@ class OreMineVeinButton(discord.ui.Button):
         if interaction.user.id != self.view.user_id:
             await interaction.response.send_message("❌ Đây không phải chuyến khai thác của bạn!", ephemeral=True)
             return
-        await interaction.response.defer()
+        try:
+            await interaction.response.defer()
+        except Exception:
+            pass
         await self.view.mine_vein(interaction, self.index)
 
 
@@ -966,7 +971,10 @@ class OreMineQuickButton(discord.ui.Button):
         if interaction.user.id != self.view.user_id:
             await interaction.response.send_message("❌ Đây không phải chuyến khai thác của bạn!", ephemeral=True)
             return
-        await interaction.response.defer()
+        try:
+            await interaction.response.defer()
+        except Exception:
+            pass
         await self.view.quick_mine_all(interaction)
 
 
@@ -981,6 +989,8 @@ class OreMineExpeditionView(discord.ui.View):
         self.message: Optional[discord.Message] = None
         self.finished = False
         self.final_embed: Optional[discord.Embed] = None
+        self.lock = asyncio.Lock()
+        self.created_at = int(time.time())
 
         eff_lvl = min(max(0, pickaxe_level), 6)
         self.pickaxe_info = PICKAXE_CONFIG.get(pickaxe_level, PICKAXE_CONFIG[eff_lvl])
@@ -1025,51 +1035,14 @@ class OreMineExpeditionView(discord.ui.View):
         return embed
 
     async def mine_vein(self, interaction: discord.Interaction, index: int):
-        if self.finished or self.mined[index]:
-            return
+        async with self.lock:
+            if self.finished or self.mined[index]:
+                return
 
-        self.mined[index] = True
-        ore = self.vein_ores[index]
+            self.mined[index] = True
+            ore = self.vein_ores[index]
 
-        btn = self.vein_buttons[index]
-        btn.disabled = True
-        try:
-            btn.emoji = discord.PartialEmoji.from_str(ore["emoji"])
-        except Exception:
-            btn.emoji = ore["emoji"]
-        btn.label = ore["name"]
-        btn.style = discord.ButtonStyle.success
-
-        if all(self.mined):
-            await self.finalize_expedition(interaction)
-        else:
-            mined_count = sum(self.mined)
-            desc = (
-                f"👤 **Thợ mỏ:** {self.user.mention}\n"
-                f"🛠️ **Trang bị:** **{self.pickaxe_info['name']}**\n"
-                f"⛏️ **Tiến độ khai thác:** `{mined_count}/{self.vein_count}` Mạch Quặng\n\n"
-                f"✨ Vừa đào trúng: **{ore['emoji']} {ore['name']}** (`{ore['rarity']}`)!\n"
-                f"Tiếp tục mở các mạch quặng còn lại..."
-            )
-            embed = make_embed(
-                title="⛏️ CHUYẾN KHAI THÁC MỎ QUẶNG VIP ⛏️",
-                description=desc,
-                color=discord.Color.green()
-            )
-            embed.set_thumbnail(url=self.user.display_avatar.url)
-            
-            try:
-                await interaction.message.edit(embed=embed, view=self)
-            except Exception:
-                pass
-
-    async def quick_mine_all(self, interaction: discord.Interaction = None):
-        if self.finished:
-            return
-        for idx in range(self.vein_count):
-            self.mined[idx] = True
-            ore = self.vein_ores[idx]
-            btn = self.vein_buttons[idx]
+            btn = self.vein_buttons[index]
             btn.disabled = True
             try:
                 btn.emoji = discord.PartialEmoji.from_str(ore["emoji"])
@@ -1078,15 +1051,91 @@ class OreMineExpeditionView(discord.ui.View):
             btn.label = ore["name"]
             btn.style = discord.ButtonStyle.success
 
-        await self.finalize_expedition(interaction)
+            if all(self.mined):
+                await self._finalize_expedition_locked(interaction)
+            else:
+                mined_count = sum(self.mined)
+                desc = (
+                    f"👤 **Thợ mỏ:** {self.user.mention}\n"
+                    f"🛠️ **Trang bị:** **{self.pickaxe_info['name']}**\n"
+                    f"⛏️ **Tiến độ khai thác:** `{mined_count}/{self.vein_count}` Mạch Quặng\n\n"
+                    f"✨ Vừa đào trúng: **{ore['emoji']} {ore['name']}** (`{ore['rarity']}`)!\n"
+                    f"Tiếp tục mở các mạch quặng còn lại..."
+                )
+                embed = make_embed(
+                    title="⛏️ CHUYẾN KHAI THÁC MỎ QUẶNG VIP ⛏️",
+                    description=desc,
+                    color=discord.Color.green()
+                )
+                embed.set_thumbnail(url=self.user.display_avatar.url)
+                
+                try:
+                    await interaction.message.edit(embed=embed, view=self)
+                except Exception:
+                    pass
+
+    async def quick_mine_all(self, interaction: discord.Interaction = None):
+        async with self.lock:
+            if self.finished:
+                return
+            for idx in range(self.vein_count):
+                self.mined[idx] = True
+                ore = self.vein_ores[idx]
+                btn = self.vein_buttons[idx]
+                btn.disabled = True
+                try:
+                    btn.emoji = discord.PartialEmoji.from_str(ore["emoji"])
+                except Exception:
+                    btn.emoji = ore["emoji"]
+                btn.label = ore["name"]
+                btn.style = discord.ButtonStyle.success
+
+            await self._finalize_expedition_locked(interaction)
 
     async def finalize_expedition(self, interaction: discord.Interaction = None):
+        async with self.lock:
+            await self._finalize_expedition_locked(interaction)
+
+    async def _finalize_expedition_locked(self, interaction: discord.Interaction = None):
         if self.finished:
             return
         self.finished = True
         self.stop()
 
-        self.quick_btn.disabled = True
+        # Always remove user from active mining sessions
+        if hasattr(self.cog, "active_miners"):
+            self.cog.active_miners.discard(self.user_id)
+
+        # Disable all buttons
+        for item in self.children:
+            if isinstance(item, discord.ui.Button):
+                item.disabled = True
+
+        # Safety check: ensure cooldown / session wasn't already fulfilled by a newer or concurrent session
+        stats = self.cog.economy.get_simulator_stats(self.user_id)
+        last_mine = stats[1]
+        now = int(time.time())
+
+        if last_mine > self.created_at:
+            desc = "❌ Phiên khai thác mỏ này đã hết hạn hoặc bạn đã hoàn thành một chuyến khai thác khác gần đây."
+            embed = make_embed(
+                title="⛏️ PHIÊN KHAI THÁC KHÔNG HỢP LỆ ⛏️",
+                description=desc,
+                color=discord.Color.red()
+            )
+            embed.set_thumbnail(url=self.user.display_avatar.url)
+            self.final_embed = embed
+            if interaction:
+                try:
+                    await interaction.message.edit(embed=embed, view=self)
+                except Exception:
+                    pass
+            elif self.message:
+                try:
+                    await self.message.edit(embed=embed, view=self)
+                except Exception:
+                    pass
+            return
 
         total_money = 0
         total_gold_dropped = 0.0
@@ -1108,7 +1157,6 @@ class OreMineExpeditionView(discord.ui.View):
 
         self.cog.economy.add_money(self.user_id, total_money)
 
-        stats = self.cog.economy.get_simulator_stats(self.user_id)
         current_frac = stats[3]
         new_total_frac = current_frac + total_gold_dropped
         int_gold = int(new_total_frac)
@@ -1117,7 +1165,6 @@ class OreMineExpeditionView(discord.ui.View):
         if int_gold > 0:
             self.cog.economy.add_credits(self.user_id, int_gold)
 
-        now = int(time.time())
         self.cog.economy.set_simulator_stats(self.user_id, last_mine=now, fractional_gold=final_frac)
 
         log_wallet_change(
@@ -1178,8 +1225,12 @@ class OreMineExpeditionView(discord.ui.View):
                 pass
 
     async def on_timeout(self):
-        if not self.finished:
-            await self.quick_mine_all(None)
+        try:
+            if not self.finished:
+                await self.quick_mine_all(None)
+        finally:
+            if hasattr(self.cog, "active_miners"):
+                self.cog.active_miners.discard(self.user_id)
 
 
 class MineButton(discord.ui.Button):
@@ -1189,8 +1240,13 @@ class MineButton(discord.ui.Button):
     async def callback(self, interaction: discord.Interaction):
         embed, view = await self.view.cog.start_mine_session(interaction.user)
         if view:
-            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
-            view.message = await interaction.original_response()
+            try:
+                await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+                view.message = await interaction.original_response()
+            except Exception:
+                if hasattr(self.view.cog, "active_miners"):
+                    self.view.cog.active_miners.discard(interaction.user.id)
+                raise
         else:
             await interaction.response.send_message(embed=embed, ephemeral=True)
         try:
@@ -1393,6 +1449,7 @@ class Simulator(commands.Cog):
     def __init__(self, client: commands.Bot):
         self.client = client
         self.economy = getattr(client, "economy", Economy())
+        self.active_miners: set[int] = set()
         self.update_stock_prices_task.start()
 
     def cog_unload(self) -> None:
@@ -1501,6 +1558,14 @@ class Simulator(commands.Cog):
             )
             return embed, None
 
+        if user_id in self.active_miners:
+            embed = make_embed(
+                title="⚠️ CHUYẾN KHAI THÁC ĐANG DIỄN RA ⚠️",
+                description="Bạn đang có một chuyến đào mỏ chưa hoàn tất! Vui lòng bấm đào ở tin nhắn hiện tại hoặc đợi hết thời gian chờ (90s).",
+                color=discord.Color.orange()
+            )
+            return embed, None
+
         upgrades = self.economy.get_upgrades(user_id)
         pickaxe_level = upgrades[3]
         eff_lvl = min(max(0, pickaxe_level), 6)
@@ -1524,6 +1589,7 @@ class Simulator(commands.Cog):
             )
             return embed, None
 
+        self.active_miners.add(user_id)
         view = OreMineExpeditionView(self, user, pickaxe_level, ctx)
         embed = view.get_initial_embed()
         return embed, view
@@ -3191,8 +3257,12 @@ class Simulator(commands.Cog):
     async def mine(self, ctx: commands.Context):
         embed, view = await self.start_mine_session(ctx.author, ctx)
         if view:
-            msg = await ctx.send(embed=embed, view=view)
-            view.message = msg
+            try:
+                msg = await ctx.send(embed=embed, view=view)
+                view.message = msg
+            except Exception:
+                self.active_miners.discard(ctx.author.id)
+                raise
         else:
             await ctx.send(embed=embed)
 
