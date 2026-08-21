@@ -115,6 +115,13 @@ def craft_alchemy_pill(player: CultivatorProfile, recipe_key: str) -> Tuple[bool
         msg = f"💥 **NỔ LÒ LUYỆN ĐAN!** Hỏa hầu mất kiểm soát! Đan dược hóa tro tàn, bạn bị linh hỏa phản phệ `- {hp_loss:,}` HP và `-2%` Căn Cơ!"
         return False, msg, recipe, player
 
+    # Luyện đan thành công
+    if random.random() < 0.25:
+        player.ngo_tinh += 1
+
+    msg = f"✅ **LUYỆN ĐAN THÀNH CÔNG!** Đã luyện chế thành công **[{recipe['name']}]**! (Tỷ lệ thành công: `{int(success_rate * 100)}%`)"
+    return True, msg, recipe, player
+
 # Danh Mục Công Thức Luyện Khí (Đúc Trang Bị & Pháp Bảo)
 FORGING_RECIPES: Dict[str, Dict[str, Any]] = {
     "Hộ Thân Phù": {

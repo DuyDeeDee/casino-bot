@@ -518,6 +518,10 @@ class TuTienDB:
         with self.get_connection() as conn:
             conn.execute("UPDATE tutien_channel_energy SET current_linh_khi = MIN(max_linh_khi, current_linh_khi + ?)", (amount,))
 
+    def recover_all_channels_linh_khi(self, amount: int = 5000):
+        """Alias for recover_channel_linh_khi — recovers linh khi for ALL channels."""
+        self.recover_channel_linh_khi(amount)
+
     def recover_all_players_tinh_luc(self, amount: int = 2):
         with self.get_connection() as conn:
             conn.execute(
@@ -706,6 +710,7 @@ class TuTienDB:
             pve_target = max(3, 3 + realm_index // 5)
             pvp_target = max(1, 1 + realm_index // 10)
 
+            pve_reward_type = random.choice(["tien_ngoc", "linh_duyen_phu"])
             quests_to_create = [
                 {
                     "quest_type": "tu_luyen",
@@ -718,8 +723,8 @@ class TuTienDB:
                     "quest_type": "pve_kills",
                     "quest_name": f"Diệt Yêu Trừ Ma ({pve_target} trận PVE thắng)",
                     "target_count": pve_target,
-                    "reward_type": random.choice(["tien_ngoc", "linh_duyen_phu"]),
-                    "reward_amount": 10 if "tien_ngoc" else 1,
+                    "reward_type": pve_reward_type,
+                    "reward_amount": 10 if pve_reward_type == "tien_ngoc" else 2,
                 },
                 {
                     "quest_type": "pvp_wins",
@@ -729,8 +734,6 @@ class TuTienDB:
                     "reward_amount": 1000 + realm_index * 100,
                 },
             ]
-            # Fix reward_amount cho pve_kills
-            quests_to_create[1]["reward_amount"] = 10 if quests_to_create[1]["reward_type"] == "tien_ngoc" else 2
 
             for q in quests_to_create:
                 conn.execute("""

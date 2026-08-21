@@ -349,7 +349,7 @@ class TuTienCog(commands.Cog, name="TuTien"):
                         tam_canh_gain = round(duration_h * 2.0, 1)
                         if "Thủy" in linh_can:
                             tam_canh_gain = round(tam_canh_gain * 1.10, 1)
-                        can_co_gain = round(duration_h * 10.0, 1)
+                        can_co_gain = round(duration_h * 2.5, 1)
                         hp_ratio = min(1.0, duration_h / 4.0)
 
                         req_exp = REALM_REQUIRED_EXP.get(realm_idx, 1000000000)
@@ -888,7 +888,7 @@ class TuTienCog(commands.Cog, name="TuTien"):
 
         # --- Apply Element Buff ngay khi nhập môn ---
         elem_bonuses = []
-        if "Ộc" in element or "Moc" in element:
+        if "Mộc" in element:
             # Mộc: +25% Max HP ngay từ đầu
             bonus_hp = int(player.max_hp * 0.25)
             player.max_hp += bonus_hp
@@ -1164,7 +1164,7 @@ class TuTienCog(commands.Cog, name="TuTien"):
         # Thủy element: +10% Tâm Cảnh hiệu quả khi AFK (bonus thêm 10%)
         if "Thủy" in player.linh_can_element:
             tam_canh_gain = round(tam_canh_gain * 1.10, 1)
-        can_co_gain = round(actual_hours * 10.0, 1)
+        can_co_gain = round(actual_hours * 2.5, 1)
 
         # Hồi phục HP/Mana tỷ lệ theo số giờ bế quan thực tế (4 giờ thật mới full 100%)
         FULL_HP_HOURS = 4.0
@@ -1244,7 +1244,7 @@ class TuTienCog(commands.Cog, name="TuTien"):
         exp_gain = int(base_afk_per_hour * afk_hours * 1.30 * dong_phu_mult)  # VIP 5+ tự động có VIP 7 bonus spirit
         linh_thach_gain = int(800 * afk_hours * (1 + player.realm_index * 0.05))
         tam_canh_gain = round(afk_hours * 2.0, 1)
-        can_co_gain = round(afk_hours * 10.0, 1)
+        can_co_gain = round(afk_hours * 2.5, 1)
 
         req_exp = REALM_REQUIRED_EXP.get(player.realm_index, 1000000000)
         player.exp = min(req_exp, player.exp + exp_gain)

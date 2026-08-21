@@ -75,8 +75,8 @@ def calculate_cultivation_gain(
     # Dong Phu Level buff
     dong_phu_mult = 1.0 + (player.dong_phu_level - 1) * 0.15
 
-    # Channel Linh Khi ratio (nếu < 20% thì địa mạch khô cạn, chỉ nhận 20% EXP)
-    channel_mult = 1.0 if channel_linh_khi_percent >= 0.2 else 0.2
+    # Channel Linh Khi ratio (smooth gradient min 0.2 to max 1.0)
+    channel_mult = max(0.2, min(1.0, channel_linh_khi_percent))
 
     # Tam Canh coefficient (0.5 to 1.5)
     tam_canh_mult = max(0.5, min(1.5, player.tam_canh / 70.0))
@@ -147,7 +147,8 @@ def process_active_cultivation(
         hp_loss = int(player.max_hp * 0.10)
         player.hp = max(1, player.hp - hp_loss)
         player.tam_canh = max(0.0, player.tam_canh - 5.0)
-        message = f"⚠️ **Linh Khí Bạo Động!** Mạch máu tắc nghẽn, bị trừ `{hp_loss}` HP, `-5%` Tâm Cảnh và chỉ nhận `+{gained_exp:,}` Tu Vi."
+        player.tau_hoa_nhap_ma_until = now + 1800  # Debuff Tẩu Hỏa Nhập Ma trong 30 phút (-50% EXP)
+        message = f"⚠️ **Linh Khí Bạo Động!** Mạch máu tắc nghẽn, bị trừ `{hp_loss}` HP, `-5%` Tâm Cảnh, dính Tẩu Hỏa Nhập Ma (30p) và chỉ nhận `+{gained_exp:,}` Tu Vi."
 
     # Add EXP (cap at max 100% required exp until breakthrough)
     req_exp = REALM_REQUIRED_EXP.get(player.realm_index, 1000000000)

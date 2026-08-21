@@ -34,7 +34,7 @@ REALM_REQUIRED_TAM_CANH: Dict[int, int] = {
 
 # Base Tribulation Damage per realm
 REALM_BASE_DAMAGE: Dict[int, int] = {
-    idx: 500 * (idx + 1) * (1 + idx * 0.25) for idx in range(len(REALMS))
+    idx: int(500 * (idx + 1) * (1 + idx * 0.25)) for idx in range(len(REALMS))
 }
 
 # Base breakthrough chance %
@@ -79,7 +79,7 @@ REALM_BREAKTHROUGH_PILLS: Dict[int, Dict[str, Any]] = {
 
 # --- LINH CĂN (SPIRITUAL ROOTS) ---
 SPIRITUAL_ROOT_QUALITIES: List[Tuple[str, float]] = [
-    ("Phàm Phẩm", 45.0),
+    ("Phàm Phẩm", 50.0),
     ("Hạ Phẩm", 25.0),
     ("Trung Phẩm", 15.0),
     ("Thượng Phẩm", 8.0),
