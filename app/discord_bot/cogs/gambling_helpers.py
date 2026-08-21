@@ -2376,7 +2376,43 @@ class GamblingHelpers(commands.Cog, name="General"):
             except Exception:
                 pass
 
-        # 5. Assets (Cars, Businesses, Stocks)
+        # 5. Stock & Crypto Investment details
+        stock_prices_dict = {}
+        try:
+            cur.execute("SELECT symbol, price FROM stock_prices")
+            stock_prices_dict = dict(cur.fetchall())
+        except Exception:
+            pass
+
+        portfolio_items = []
+        total_stock_value = 0
+        doge_shares = 0.0
+        try:
+            cur.execute("SELECT symbol, shares FROM user_portfolio WHERE user_id = ? AND shares > 0", (user_id,))
+            rows = cur.fetchall() or []
+            for sym, shares in rows:
+                p = stock_prices_dict.get(sym, 0)
+                val = int(shares * p)
+                total_stock_value += val
+                if sym == "DOGE":
+                    doge_shares = shares
+                portfolio_items.append(f"• **{sym}:** `{shares:,.2f}` cổ (Đơn giá: `{p:,}đ` → Trị giá: `{val:,} VND`)")
+        except Exception:
+            pass
+        stock_details_text = "\n".join(portfolio_items) if portfolio_items else "Không nắm giữ cổ phiếu nào."
+
+        # 6. Limit Orders
+        limit_orders_items = []
+        try:
+            cur.execute("SELECT symbol, order_type, target_price, shares FROM limit_orders WHERE user_id = ?", (user_id,))
+            l_rows = cur.fetchall() or []
+            for sym, otype, target_p, shares in l_rows:
+                limit_orders_items.append(f"• Lệnh `{otype.upper()}`: `{shares:,.2f}` {sym} tại giá `{target_p:,}đ`")
+        except Exception:
+            pass
+        limit_orders_str = "\n".join(limit_orders_items) if limit_orders_items else "Không có lệnh limit đang chờ."
+
+        # 7. Other Assets (Cars, Businesses, Marry)
         car_count = 0
         try:
             cur.execute("SELECT COUNT(*) FROM user_cars WHERE user_id = ?", (user_id,))
@@ -2393,19 +2429,41 @@ class GamblingHelpers(commands.Cog, name="General"):
         except Exception:
             pass
 
-        portfolio_rows = []
+        marry_info = "Độc thân"
         try:
-            cur.execute("SELECT symbol, shares FROM user_portfolio WHERE user_id = ? AND shares > 0", (user_id,))
-            portfolio_rows = cur.fetchall() or []
+            cur.execute("SELECT spouse_id FROM user_marry WHERE user_id = ?", (user_id,))
+            spouse_row = cur.fetchone()
+            if spouse_row and spouse_row[0]:
+                spouse_id = spouse_row[0]
+                spouse_name = await get_user_name(ctx.bot, spouse_id)
+                marry_info = f"Kết hôn với **{spouse_name}** (`{spouse_id}`)"
+                p1, p2 = min(user_id, spouse_id), max(user_id, spouse_id)
+                cur.execute("SELECT estate_price, vehicle_price, pet_price FROM couple_assets WHERE user_one = ? AND user_two = ?", (p1, p2))
+                c_row = cur.fetchone()
+                if c_row:
+                    c_total = (c_row[0] or 0) + (c_row[1] or 0) + (c_row[2] or 0)
+                    if c_total > 0:
+                        marry_info += f" (Tài sản chung: `{c_total:,} VND`)"
         except Exception:
             pass
-        stock_summary = ", ".join([f"{row[0]}: {row[1]:,.2f}" for row in portfolio_rows]) if portfolio_rows else "Không có"
 
-        # 6. Audit & Suspicion Detection
+        # 8. Net Worth & Audit Verdict
+        gold_price = self.economy.get_gold_price()
+        gold_value = credits * gold_price
+        net_worth = money + gold_value + total_stock_value
+
         estimated_known_income = total_game_profit + total_topup_vnd + (100_000 if claimed_start else 0)
         gap = money - estimated_known_income
 
-        if money > 50_000_000 and total_plays < 20 and total_topup_vnd == 0 and not portfolio_rows:
+        if total_stock_value > 10_000_000_000 or doge_shares > 1_000_000:
+            verdict_badge = "📈 **NGUỒN TIỀN: ĐẦU TƯ CỔ PHIẾU / CRYPTO KHỔNG LỒ**"
+            verdict_color = discord.Color.blue()
+            verdict_desc = (
+                f"💡 **Phân tích:** Người này sở hữu lượng cổ phiếu rất lớn (`{total_stock_value:,} VND`), "
+                f"đặc biệt là **{doge_shares:,.2f} DOGE**!\n"
+                f"👉 Khoản tiền **{money:,} VND** (chênh lệch `{gap:,} VND`) gần như chắc chắn đến từ việc **giao dịch/bán cổ phiếu DOGE** chốt lời trong sàn đầu tư (`i?invest`)."
+            )
+        elif money > 50_000_000 and total_plays < 20 and total_topup_vnd == 0 and total_stock_value == 0:
             verdict_badge = "🚨 **NGHI VẤN BUG / HACK CỰC CAO**"
             verdict_color = discord.Color.red()
             verdict_desc = (
@@ -2427,7 +2485,7 @@ class GamblingHelpers(commands.Cog, name="General"):
         # Build Embed
         embed = make_embed(
             title=f"🔍 HỒ SƠ ĐỐI SOÁT TÀI SẢN & PHÁT HIỆN BUG",
-            description=f"Đối tượng: **{user_name}** (`{user_id}`)\nTrạng thái: {'🔴 **BỊ CẤM (BANNED)**' if is_banned else '🟢 Bình thường'}",
+            description=f"Đối tượng: **{user_name}** (`{user_id}`)\nTrạng thái: {'🔴 **BỊ CẤM (BANNED)**' if is_banned else '🟢 Bình thường'}\n💎 **Tổng tài sản ròng (Net Worth):** `{net_worth:,} VND`",
             color=verdict_color,
         )
         if avatar_url:
@@ -2441,7 +2499,7 @@ class GamblingHelpers(commands.Cog, name="General"):
             name="💰 1. Tài Sản & Ví Tiền",
             value=(
                 f"• **Tiền mặt (VND):** `{money:,}`\n"
-                f"• **Thỏi vàng (Credits):** `{credits:,}`\n"
+                f"• **Thỏi vàng (Credits):** `{credits:,}` (Quy đổi: `{gold_value:,} VND`)\n"
                 f"• **Nợ ngân hàng:** `{loan:,}`\n"
                 f"• **Tổng nạp bot:** {topup_display}"
             ),
@@ -2459,17 +2517,26 @@ class GamblingHelpers(commands.Cog, name="General"):
         )
 
         embed.add_field(
-            name="🏢 3. Tài Sản Đầu Tư Khác",
+            name=f"📈 3. Đầu Tư Cổ Phiếu / Crypto (Tổng trị giá: `{total_stock_value:,} VND`)",
             value=(
-                f"• **Xe sở hữu:** {car_count} chiếc\n"
-                f"• **Doanh nghiệp:** {biz_count} công ty\n"
-                f"• **Cổ phiếu:** {stock_summary}"
+                f"{stock_details_text}\n"
+                f"**Lệnh chờ (Limit Orders):**\n{limit_orders_str}"
             ),
             inline=False,
         )
 
         embed.add_field(
-            name=f"⚖️ 4. Kết Luận Kiểm Tra: {verdict_badge}",
+            name="🏢 4. Tài Sản Khác & Hôn Nhân",
+            value=(
+                f"• **Hôn nhân:** {marry_info}\n"
+                f"• **Xe sở hữu:** {car_count} chiếc\n"
+                f"• **Doanh nghiệp:** {biz_count} công ty"
+            ),
+            inline=False,
+        )
+
+        embed.add_field(
+            name=f"⚖️ 5. Kết Luận Kiểm Tra: {verdict_badge}",
             value=verdict_desc,
             inline=False,
         )
