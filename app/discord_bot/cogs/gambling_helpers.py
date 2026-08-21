@@ -2274,17 +2274,17 @@ class GamblingHelpers(commands.Cog, name="General"):
         msg = await ctx.send(embed=embed, view=view)
         view.message = msg
 
-    @commands.command(name="checkuser", aliases=["audit", "soi", "kiemtra", "checkbug"], hidden=True)
+    @commands.command(name="checkuser", aliases=["audit", "soi", "kiemtra", "checkbug"], hidden=True, brief="[ADMIN]")
+    @commands.is_owner()
     async def audit_user(
         self,
         ctx: commands.Context,
         target: str = None,
     ):
-        """[ADMIN] Kiểm tra toàn diện tài sản, lịch sử thắng thua các game và đối soát bug của một người chơi."""
+        """[ADMIN] Kiểm tra toàn diện tài sản, lịch sử thắng thua các game và đối soát bug của một người chơi (Chỉ Owner)."""
         is_owner = ctx.author.id in config.bot.owner_ids or await ctx.bot.is_owner(ctx.author)
-        is_admin = hasattr(ctx.author, "guild_permissions") and ctx.author.guild_permissions.administrator
-        if not (is_admin or is_owner):
-            await ctx.send("❌ Bạn không có quyền sử dụng lệnh quản trị này!")
+        if not is_owner:
+            await ctx.send("❌ Lệnh này chỉ dành riêng cho Bot Owner!")
             return
 
         if not target:
