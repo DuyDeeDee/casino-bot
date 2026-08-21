@@ -2635,6 +2635,218 @@ class GamblingHelpers(commands.Cog, name="General"):
 
         await ctx.send(embed=embed)
 
+    @commands.command(name="auditall", aliases=["scanbug", "scanall", "quetbug", "checkall"], hidden=True, brief="[ADMIN]")
+    @commands.is_owner()
+    async def audit_all_users(self, ctx: commands.Context, filter_mode: str = "all"):
+        """[ADMIN] Quét và phân tích rủi ro bug / gian lận của toàn bộ người chơi trong bot (chỉ Owner)."""
+        is_owner = ctx.author.id in config.bot.owner_ids or await ctx.bot.is_owner(ctx.author)
+        if not is_owner:
+            await ctx.send("❌ Lệnh này chỉ dành riêng cho Bot Owner!")
+            return
+
+        loading_msg = await ctx.send("⏳ **Đang quét và đối soát dữ liệu toàn bộ người chơi... Vui lòng đợi trong giây lát!**")
+
+        cur = self.economy.cur
+        
+        # 1. Fetch stock prices & gold price
+        stock_prices = {}
+        try:
+            cur.execute("SELECT symbol, price FROM stock_prices")
+            stock_prices = dict(cur.fetchall())
+        except Exception:
+            pass
+        gold_price = self.economy.get_gold_price()
+
+        # 2. Fetch all economy accounts
+        cur.execute("SELECT user_id, money, credits, loan_amount FROM economy WHERE money > 0 OR credits > 0 ORDER BY money DESC")
+        eco_rows = cur.fetchall()
+
+        if not eco_rows:
+            await loading_msg.edit(content="❌ Database chưa có dữ liệu người chơi nào.")
+            return
+
+        # 3. Pre-fetch portfolios
+        user_portfolios = {}
+        try:
+            cur.execute("SELECT user_id, symbol, shares FROM user_portfolio WHERE shares > 0")
+            for uid, sym, shares in cur.fetchall():
+                if uid not in user_portfolios:
+                    user_portfolios[uid] = {}
+                user_portfolios[uid][sym] = shares
+        except Exception:
+            pass
+
+        # 4. Pre-fetch topups
+        user_topups = {}
+        try:
+            cur.execute("SELECT user_id, total_vnd, total_gold FROM user_topups")
+            for uid, tvnd, tgold in cur.fetchall():
+                user_topups[uid] = tvnd or 0
+        except Exception:
+            pass
+
+        # 5. Pre-fetch minigame stats
+        user_game_stats = {}
+        game_tables = [
+            ("user_roulette", "SELECT user_id, plays, profit FROM user_roulette"),
+            ("user_coinflip", "SELECT user_id, plays, profit FROM user_coinflip"),
+            ("user_bkb", "SELECT user_id, plays, profit FROM user_bkb"),
+            ("user_mines", "SELECT user_id, plays, profit FROM user_mines"),
+            ("user_plinko", "SELECT user_id, plays, profit FROM user_plinko"),
+            ("user_highlow", "SELECT user_id, plays, profit FROM user_highlow"),
+            ("user_tower", "SELECT user_id, plays, profit FROM user_tower"),
+            ("user_baito", "SELECT user_id, plays, profit FROM user_baito"),
+        ]
+
+        for tbl, q in game_tables:
+            try:
+                cur.execute(q)
+                for uid, plays, profit in cur.fetchall():
+                    if uid not in user_game_stats:
+                        user_game_stats[uid] = {"plays": 0, "profit": 0}
+                    user_game_stats[uid]["plays"] += (plays or 0)
+                    user_game_stats[uid]["profit"] += (profit or 0)
+            except Exception:
+                pass
+
+        # 6. Analyze and classify users
+        records = []
+        for uid, money, credits, loan in eco_rows:
+            money = money or 0
+            credits = credits or 0
+            
+            portfolio = user_portfolios.get(uid, {})
+            stock_value = sum(shares * stock_prices.get(sym, 0) for sym, shares in portfolio.items())
+            max_stock_shares = max(portfolio.values()) if portfolio else 0.0
+            
+            topup_vnd = user_topups.get(uid, 0)
+            g_stats = user_game_stats.get(uid, {"plays": 0, "profit": 0})
+            total_plays = g_stats["plays"]
+            total_profit = g_stats["profit"]
+            
+            net_worth = money + (credits * gold_price) + stock_value
+            estimated_income = max(0, total_profit) + topup_vnd
+            gap = money - estimated_income
+
+            # Risk Classification
+            risk_score = 0
+            reasons = []
+
+            if max_stock_shares >= 1_000_000:
+                risk_score = 2
+                reasons.append(f"Ôm `{max_stock_shares:,.0f}` cổ phiếu")
+            
+            if money >= 50_000_000 and total_plays < 15 and topup_vnd == 0 and not portfolio:
+                risk_score = 2
+                reasons.append(f"Tiền `{money:,}đ` nhưng chơi {total_plays} ván & 0 nạp")
+            elif gap >= 500_000_000 and topup_vnd == 0:
+                risk_score = 2
+                reasons.append(f"Tiền ví lệch `{gap:,} VND` so với game & nạp")
+            elif gap >= 50_000_000:
+                if risk_score < 2:
+                    risk_score = 1
+                reasons.append(f"Chênh lệch `{gap:,} VND`")
+            elif money >= 10_000_000 and total_plays < 10 and topup_vnd == 0:
+                if risk_score < 2:
+                    risk_score = 1
+                reasons.append(f"Số dư lớn, ít chơi ({total_plays} ván)")
+
+            records.append({
+                "uid": uid,
+                "money": money,
+                "credits": credits,
+                "portfolio": portfolio,
+                "stock_value": stock_value,
+                "net_worth": net_worth,
+                "total_plays": total_plays,
+                "total_profit": total_profit,
+                "topup_vnd": topup_vnd,
+                "gap": gap,
+                "risk_score": risk_score,
+                "reasons": reasons,
+            })
+
+        # Apply filter if requested
+        filter_mode = filter_mode.lower().strip()
+        if filter_mode in ["red", "bug", "high", "nghivanso", "nghivan"]:
+            records = [r for r in records if r["risk_score"] == 2]
+        elif filter_mode in ["warn", "yellow", "medium", "canhbao"]:
+            records = [r for r in records if r["risk_score"] >= 1]
+
+        # Sort by: risk_score DESC, net_worth DESC
+        records.sort(key=lambda r: (r["risk_score"], r["net_worth"]), reverse=True)
+
+        if not records:
+            await loading_msg.edit(content=f"✅ Không tìm thấy người chơi nào khớp với bộ lọc `{filter_mode}`!")
+            return
+
+        # Paginator rendering (5 users per page)
+        PER_PAGE = 5
+        total_pages = (len(records) + PER_PAGE - 1) // PER_PAGE
+
+        async def get_page_content(page_num: int) -> discord.Embed:
+            start = (page_num - 1) * PER_PAGE
+            end = start + PER_PAGE
+            page_records = records[start:end]
+
+            embed = make_embed(
+                title="🔍 BÁO CÁO QUÉT TÀI SẢN & BUG TOÀN SERVER 🔍",
+                description=(
+                    f"📊 **Tổng số tài khoản phân tích:** `{len(records)}` người chơi\n"
+                    f"🏷️ **Quy ước:** 🚨 Đỏ (Nghi vấn cao) • ⚠️ Vàng (Cần theo dõi) • 🟢 Xanh (Hợp lệ)\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                ),
+                color=discord.Color.red() if any(r["risk_score"] == 2 for r in page_records) else discord.Color.gold(),
+            )
+
+            for i, r in enumerate(page_records, start=start + 1):
+                uid = r["uid"]
+                uname = await get_user_name(ctx.bot, uid)
+                
+                badge = "🚨" if r["risk_score"] == 2 else "⚠️" if r["risk_score"] == 1 else "🟢"
+                
+                stock_desc = ""
+                if r["portfolio"]:
+                    top_stock = sorted(r["portfolio"].items(), key=lambda x: x[1], reverse=True)[0]
+                    stock_desc = f" | CP: `{top_stock[1]:,.0f} {top_stock[0]}`"
+                
+                reason_str = f"\n  👉 *Lý do:* {'; '.join(r['reasons'])}" if r["reasons"] else ""
+                
+                embed.add_field(
+                    name=f"{badge} #{i}. {uname} (`{uid}`)",
+                    value=(
+                        f"• **Tiền mặt:** `{r['money']:,} VND` | **Vàng:** `{r['credits']:,}`\n"
+                        f"• **Net Worth:** `{r['net_worth']:,} VND`{stock_desc}\n"
+                        f"• **Game:** {r['total_plays']} ván (Lời: `{r['total_profit']:,}đ`) | **Nạp:** `{r['topup_vnd']:,}đ`"
+                        f"{reason_str}"
+                    ),
+                    inline=False,
+                )
+
+            embed.set_footer(text=f"Trang {page_num}/{total_pages} • Lọc: {filter_mode} • Dùng: !auditall [all/bug/warn]")
+            return embed
+
+        view = PaginatorView(ctx, total_pages, get_page_content)
+        
+        async def custom_check(interaction: discord.Interaction) -> bool:
+            if interaction.user.id != ctx.author.id:
+                await interaction.response.send_message("❌ Bạn không phải admin thực hiện lệnh này!", ephemeral=True)
+                return False
+            return True
+        view.interaction_check = custom_check
+
+        first_embed = await get_page_content(1)
+        for child in view.children:
+            if isinstance(child, discord.ui.Button) and child.label == "◀️ Trước":
+                child.disabled = True
+            if total_pages == 1 and isinstance(child, discord.ui.Button) and child.label == "Sau ▶️":
+                child.disabled = True
+
+        await loading_msg.delete()
+        msg = await ctx.send(embed=first_embed, view=view)
+        view.message = msg
+
+
 
 
 class BegConfirmView(discord.ui.View):
