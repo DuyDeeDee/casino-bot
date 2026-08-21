@@ -2846,6 +2846,326 @@ class GamblingHelpers(commands.Cog, name="General"):
         msg = await ctx.send(embed=first_embed, view=view)
         view.message = msg
 
+    @commands.command(name="moneysource", aliases=["inflow", "nguontien", "dongtien", "checkinflow"], hidden=True, brief="[ADMIN]")
+    @commands.is_owner()
+    async def money_source_analysis(self, ctx: commands.Context, target: str):
+        """[ADMIN] Bóc tách 100% dòng tiền VÀO & RA chi tiết của một người chơi (chỉ Owner)."""
+        is_owner = ctx.author.id in config.bot.owner_ids or await ctx.bot.is_owner(ctx.author)
+        if not is_owner:
+            await ctx.send("❌ Lệnh này chỉ dành riêng cho Bot Owner!")
+            return
+
+        clean_target = target.strip("<@!> ").strip()
+        try:
+            user_id = int(clean_target)
+        except ValueError:
+            await ctx.send("❌ User ID hoặc tag người dùng không hợp lệ!")
+            return
+
+        try:
+            user_obj = ctx.bot.get_user(user_id) or await ctx.bot.fetch_user(user_id)
+            user_name = user_obj.name if user_obj else f"User {user_id}"
+            avatar_url = user_obj.display_avatar.url if user_obj else None
+        except Exception:
+            user_name = f"User {user_id}"
+            avatar_url = None
+
+        cur = self.economy.cur
+
+        # Get balance
+        cur.execute("SELECT money, credits, loan_amount, claimed_start FROM economy WHERE user_id = ?", (user_id,))
+        eco = cur.fetchone()
+        if not eco:
+            await ctx.send(f"❌ Không tìm thấy dữ liệu ví của **{user_name}** (`{user_id}`)!")
+            return
+
+        current_money = eco[0] or 0
+        current_gold = eco[1] or 0
+        claimed_start = bool(eco[3])
+
+        # 1. Inflow from Topups
+        topup_vnd = 0
+        try:
+            cur.execute("SELECT total_vnd FROM user_topups WHERE user_id = ?", (user_id,))
+            r = cur.fetchone()
+            topup_vnd = r[0] if (r and r[0]) else 0
+        except Exception:
+            pass
+
+        # 2. Inflow & Outflow from Minigames
+        games = [
+            ("Tài Xỉu / Roulette", "SELECT plays, wins, losses, profit FROM user_roulette WHERE user_id = ?"),
+            ("Coinflip", "SELECT plays, wins, losses, profit FROM user_coinflip WHERE user_id = ?"),
+            ("Bao Kéo Búa", "SELECT plays, wins, losses, profit FROM user_bkb WHERE user_id = ?"),
+            ("Mines (Dò mìn)", "SELECT plays, wins, losses, profit FROM user_mines WHERE user_id = ?"),
+            ("Plinko", "SELECT plays, wins, losses, profit FROM user_plinko WHERE user_id = ?"),
+            ("HighLow", "SELECT plays, wins, losses, profit FROM user_highlow WHERE user_id = ?"),
+            ("Tower", "SELECT plays, wins, losses, profit FROM user_tower WHERE user_id = ?"),
+            ("Baito (Làm thêm)", "SELECT plays, wins, 0, profit FROM user_baito WHERE user_id = ?"),
+        ]
+
+        game_inflows = 0
+        game_outflows = 0
+        game_breakdowns = []
+        for gname, q in games:
+            try:
+                cur.execute(q, (user_id,))
+                row = cur.fetchone()
+                if row and (row[0] or row[3]):
+                    plays = row[0] or 0
+                    profit = row[3] or 0
+                    if profit > 0:
+                        game_inflows += profit
+                        game_breakdowns.append(f"• **{gname}:** `+{profit:,} VND` (Thắng ròng)")
+                    elif profit < 0:
+                        game_outflows += abs(profit)
+                        game_breakdowns.append(f"• **{gname}:** `-{abs(profit):,} VND` (Thua ròng)")
+            except Exception:
+                pass
+
+        # 3. Inflow & Outflow from Transactions table (Transfers, Stock sells, etc.)
+        transfers_received = 0
+        transfers_sent = 0
+        stock_sells = 0
+        stock_buys = 0
+        top_senders = {}
+        top_recipients = {}
+
+        try:
+            cur.execute("SELECT event, money_delta, details FROM wallet_transactions WHERE user_id = ?", (user_id,))
+            for evt, delta, details_str in cur.fetchall():
+                import json
+                det = {}
+                if details_str:
+                    try:
+                        det = json.loads(details_str)
+                    except Exception:
+                        pass
+                
+                if evt == "transfer_money_receive":
+                    transfers_received += delta
+                    sid = det.get("sender_id")
+                    if sid:
+                        top_senders[sid] = top_senders.get(sid, 0) + delta
+                elif evt == "transfer_money_send":
+                    transfers_sent += abs(delta)
+                    rid = det.get("recipient_id")
+                    if rid:
+                        top_recipients[rid] = top_recipients.get(rid, 0) + abs(delta)
+                elif evt == "invest_sell_shares":
+                    stock_sells += delta
+                elif evt == "invest_buy_shares":
+                    stock_buys += abs(delta)
+        except Exception:
+            pass
+
+        # 4. Stock holdings current valuation
+        stock_prices = {}
+        try:
+            cur.execute("SELECT symbol, price FROM stock_prices")
+            stock_prices = dict(cur.fetchall())
+        except Exception:
+            pass
+        cur.execute("SELECT symbol, shares FROM user_portfolio WHERE user_id = ? AND shares > 0", (user_id,))
+        portfolio_rows = cur.fetchall()
+        stock_val = sum(shares * stock_prices.get(sym, 0) for sym, shares in portfolio_rows)
+
+        # Build Inflow lines
+        inflow_lines = []
+        if topup_vnd > 0:
+            inflow_lines.append(f"💳 **Nạp tiền bot:** `+{topup_vnd:,} VND`")
+        if game_inflows > 0:
+            inflow_lines.append(f"🎮 **Thắng Minigame:** `+{game_inflows:,} VND`")
+        if stock_sells > 0:
+            inflow_lines.append(f"📈 **Bán cổ phiếu:** `+{stock_sells:,} VND`")
+        if transfers_received > 0:
+            inflow_lines.append(f"💸 **Nhận từ người khác (`give/pay`):** `+{transfers_received:,} VND`")
+            if top_senders:
+                for sid, amt in sorted(top_senders.items(), key=lambda x: x[1], reverse=True)[:3]:
+                    sname = await get_user_name(ctx.bot, sid)
+                    inflow_lines.append(f"  ↳ *Từ {sname} (`{sid}`):* `+{amt:,} VND`")
+        if claimed_start:
+            inflow_lines.append(f"🎁 **Quà khởi đầu:** `+100,000 VND`")
+
+        # Build Outflow lines
+        outflow_lines = []
+        if game_outflows > 0:
+            outflow_lines.append(f"🎲 **Thua Minigame:** `-{game_outflows:,} VND`")
+        if stock_buys > 0:
+            outflow_lines.append(f"📉 **Mua cổ phiếu:** `-{stock_buys:,} VND`")
+        if transfers_sent > 0:
+            outflow_lines.append(f"💸 **Chuyển cho người khác:** `-{transfers_sent:,} VND`")
+            if top_recipients:
+                for rid, amt in sorted(top_recipients.items(), key=lambda x: x[1], reverse=True)[:3]:
+                    rname = await get_user_name(ctx.bot, rid)
+                    outflow_lines.append(f"  ↳ *Cho {rname} (`{rid}`):* `-{amt:,} VND`")
+
+        total_inflow = topup_vnd + game_inflows + stock_sells + transfers_received + (100_000 if claimed_start else 0)
+        total_outflow = game_outflows + stock_buys + transfers_sent
+        net_flow = total_inflow - total_outflow
+        unaccounted = current_money - net_flow
+
+        embed = make_embed(
+            title=f"📊 PHÂN TÍCH NGUỒN TIỀN & DÒNG TIỀN VÀO/RA",
+            description=f"Đối tượng: **{user_name}** (`{user_id}`)\n💰 **Số dư ví thực tế hiện tại:** `{current_money:,} VND`",
+            color=discord.Color.blue(),
+        )
+        if avatar_url:
+            embed.set_thumbnail(url=avatar_url)
+
+        in_text = "\n".join(inflow_lines) if inflow_lines else "Không có nguồn tiền vào ghi nhận."
+        out_text = "\n".join(outflow_lines) if outflow_lines else "Chưa có nguồn tiền ra ghi nhận."
+
+        embed.add_field(
+            name=f"📥 1. TỔNG DÒNG TIỀN VÀO (+{total_inflow:,} VND)",
+            value=in_text,
+            inline=False,
+        )
+
+        embed.add_field(
+            name=f"📤 2. TỔNG DÒNG TIỀN RA (-{total_outflow:,} VND)",
+            value=out_text,
+            inline=False,
+        )
+
+        if game_breakdowns:
+            embed.add_field(
+                name="🎮 3. Chi Tiết Từng Minigame",
+                value="\n".join(game_breakdowns[:6]),
+                inline=False,
+            )
+
+        if portfolio_rows:
+            stock_str = ", ".join([f"{sym}: {shares:,.0f}" for sym, shares in portfolio_rows])
+            embed.add_field(
+                name=f"📈 4. Cổ Phiếu Đang Giữ (Trị giá: `{stock_val:,} VND`)",
+                value=f"• {stock_str}",
+                inline=False,
+            )
+
+        if stock_val > 10_000_000_000 or current_money > 100_000_000_000:
+            conclusion_text = (
+                f"🚨 **Kết luận nguồn gốc:** Người này sở hữu tài sản cực lớn (`{current_money:,} VND`). "
+                f"Nguồn tiền chủ yếu xuất phát từ **thao tác thị trường cổ phiếu (DOGE / Sàn invest)**."
+            )
+        elif abs(unaccounted) > 100_000_000 and total_inflow == 0:
+            conclusion_text = (
+                f"⚠️ **Kết luận nguồn gốc:** Số tiền `{current_money:,} VND` trong ví không đến từ Minigame hay Nạp thẻ. "
+                f"Có thể đã được chuyển tiền trong quá khứ hoặc dùng lỗi bug."
+            )
+        else:
+            conclusion_text = f"🟢 **Kết luận:** Dòng tiền vào/ra tương thích với các hoạt động trong hệ thống bot."
+
+        embed.add_field(
+            name="⚖️ 5. Đánh Giá Đối Soát",
+            value=conclusion_text,
+            inline=False,
+        )
+
+        embed.set_footer(text=f"Yêu cầu bởi Admin: {ctx.author.name} • Lệnh: !moneysource <@user>")
+        await ctx.send(embed=embed)
+
+    @commands.command(name="serverlogs", aliases=["txlogs", "alllogs", "logsgiaodich"], hidden=True, brief="[ADMIN]")
+    @commands.is_owner()
+    async def server_transaction_logs(self, ctx: commands.Context, filter_type: str = "all"):
+        """[ADMIN] Xem nhật ký giao dịch và biến động ví trên toàn hệ thống server (chỉ Owner)."""
+        is_owner = ctx.author.id in config.bot.owner_ids or await ctx.bot.is_owner(ctx.author)
+        if not is_owner:
+            await ctx.send("❌ Lệnh này chỉ dành riêng cho Bot Owner!")
+            return
+
+        cur = self.economy.cur
+        cur.execute(
+            """CREATE TABLE IF NOT EXISTS wallet_transactions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                event TEXT NOT NULL,
+                money_delta INTEGER NOT NULL DEFAULT 0,
+                credits_delta INTEGER NOT NULL DEFAULT 0,
+                command TEXT,
+                details TEXT,
+                created_at INTEGER NOT NULL
+            )"""
+        )
+
+        filter_type = filter_type.lower().strip()
+        if filter_type in ["transfer", "give", "pay"]:
+            cur.execute("SELECT id, user_id, event, money_delta, credits_delta, command, details, created_at FROM wallet_transactions WHERE event LIKE '%transfer%' ORDER BY id DESC LIMIT 50")
+        elif filter_type in ["invest", "stock", "cp"]:
+            cur.execute("SELECT id, user_id, event, money_delta, credits_delta, command, details, created_at FROM wallet_transactions WHERE event LIKE '%invest%' ORDER BY id DESC LIMIT 50")
+        else:
+            cur.execute("SELECT id, user_id, event, money_delta, credits_delta, command, details, created_at FROM wallet_transactions ORDER BY id DESC LIMIT 50")
+        
+        rows = cur.fetchall()
+        if not rows:
+            await ctx.send("📜 Hiện chưa có bản ghi giao dịch mới nào được lưu trữ trong database.")
+            return
+
+        PER_PAGE = 8
+        total_pages = (len(rows) + PER_PAGE - 1) // PER_PAGE
+
+        async def get_page_content(page_num: int) -> discord.Embed:
+            start = (page_num - 1) * PER_PAGE
+            end = start + PER_PAGE
+            page_rows = rows[start:end]
+
+            embed = make_embed(
+                title="📜 NHẬT KÝ GIAO DỊCH TOÀN SERVER (LIVE FEED)",
+                description=f"Hiển thị các giao dịch mới nhất trên hệ thống (Lọc: `{filter_type}`):",
+                color=discord.Color.gold(),
+            )
+
+            for tid, uid, evt, m_delta, c_delta, cmd, details_json, created_at in page_rows:
+                uname = await get_user_name(ctx.bot, uid)
+                time_str = f"<t:{created_at}:R>"
+                
+                delta_str = f"`{'+' if m_delta > 0 else ''}{m_delta:,}đ`" if m_delta != 0 else (f"`{'+' if c_delta > 0 else ''}{c_delta:,} vàng`" if c_delta != 0 else "`0`")
+                
+                det_str = ""
+                if details_json:
+                    import json
+                    try:
+                        det = json.loads(details_json)
+                        if "sender_id" in det:
+                            sname = await get_user_name(ctx.bot, det["sender_id"])
+                            det_str += f" (Nhận từ {sname})"
+                        elif "recipient_id" in det:
+                            rname = await get_user_name(ctx.bot, det["recipient_id"])
+                            det_str += f" (Chuyển cho {rname})"
+                        elif "symbol" in det:
+                            det_str += f" (Mã {det['symbol']})"
+                    except Exception:
+                        pass
+
+                embed.add_field(
+                    name=f"#{tid} • {uname} • {evt.upper()} ({time_str})",
+                    value=f"• Biến động: {delta_str}\n• Lệnh: `{cmd or 'N/A'}`{det_str}",
+                    inline=False
+                )
+
+            embed.set_footer(text=f"Trang {page_num}/{total_pages} • Dùng: !serverlogs [all/transfer/invest]")
+            return embed
+
+        view = PaginatorView(ctx, total_pages, get_page_content)
+        
+        async def custom_check(interaction: discord.Interaction) -> bool:
+            if interaction.user.id != ctx.author.id:
+                await interaction.response.send_message("❌ Bạn không phải admin thực hiện lệnh này!", ephemeral=True)
+                return False
+            return True
+        view.interaction_check = custom_check
+
+        first_embed = await get_page_content(1)
+        for child in view.children:
+            if isinstance(child, discord.ui.Button) and child.label == "◀️ Trước":
+                child.disabled = True
+            if total_pages == 1 and isinstance(child, discord.ui.Button) and child.label == "Sau ▶️":
+                child.disabled = True
+
+        msg = await ctx.send(embed=first_embed, view=view)
+        view.message = msg
+
+
 
 
 
