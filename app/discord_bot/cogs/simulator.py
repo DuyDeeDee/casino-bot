@@ -4353,6 +4353,94 @@ class Simulator(commands.Cog):
         )
         await ctx.send(embed=embed)
 
+    @commands.command(
+        name="setshares",
+        aliases=["setstock", "chinhcophieu", "setcp"],
+        brief="[ADMIN] Thiết lập hoặc đặt lại số cổ phiếu của người chơi về 0.",
+        usage="setshares <@user/user_id> <ticker/all> <số_lượng>",
+        hidden=True,
+    )
+    @commands.is_owner()
+    async def set_shares_cmd(self, ctx: commands.Context, target: str, symbol: str, shares: float = 0.0):
+        """[ADMIN] Thiết lập số cổ phiếu của một người chơi (chỉ Owner)."""
+        is_owner = ctx.author.id in config.bot.owner_ids or await ctx.bot.is_owner(ctx.author)
+        if not is_owner:
+            await ctx.send("❌ Lệnh này chỉ dành riêng cho Bot Owner!")
+            return
+
+        clean_target = target.strip("<@!> ").strip()
+        try:
+            user_id = int(clean_target)
+        except ValueError:
+            await ctx.send("❌ User ID hoặc tag người dùng không hợp lệ!")
+            return
+
+        try:
+            user_obj = ctx.bot.get_user(user_id) or await ctx.bot.fetch_user(user_id)
+            user_name = user_obj.name if user_obj else f"User {user_id}"
+        except Exception:
+            user_name = f"User {user_id}"
+
+        symbol = symbol.upper().strip()
+        
+        if symbol in ["ALL", "TATCA", "ALLSHARES", "*"]:
+            if shares <= 0:
+                self.economy.cur.execute("DELETE FROM user_portfolio WHERE user_id = ?", (user_id,))
+                self.economy.cur.execute("DELETE FROM limit_orders WHERE user_id = ?", (user_id,))
+                self.economy.conn.commit()
+                await ctx.send(f"✅ Đã xóa toàn bộ cổ phiếu và hủy tất cả lệnh limit của **{user_name}** (`{user_id}`) về **0**.")
+            else:
+                await ctx.send("❌ Với tùy chọn `ALL`, chỉ hỗ trợ đặt số lượng về 0.")
+            return
+
+        prices = dict((row[0], row[1]) for row in self.economy.get_stock_prices())
+        if symbol not in prices:
+            await ctx.send(f"❌ Mã đầu tư `{symbol}` không tồn tại. Các mã hợp lệ: `USDT`, `AGV`, `CASINO`, `ETH`, `BTC`, `SOL`, `DOGE`, hoặc `ALL`.")
+            return
+
+        shares = max(0.0, float(shares))
+        if shares == 0:
+            self.economy.cur.execute("DELETE FROM user_portfolio WHERE user_id = ? AND symbol = ?", (user_id, symbol))
+            self.economy.cur.execute("DELETE FROM limit_orders WHERE user_id = ? AND symbol = ?", (user_id, symbol))
+            self.economy.conn.commit()
+            await ctx.send(f"✅ Đã đặt số lượng cổ phiếu **{symbol}** của **{user_name}** (`{user_id}`) về **0**.")
+        else:
+            self.economy.set_portfolio_shares(user_id, symbol, shares)
+            await ctx.send(f"✅ Đã đặt số lượng cổ phiếu **{symbol}** của **{user_name}** (`{user_id}`) thành **{shares:,.2f}**.")
+
+    @commands.command(
+        name="clearshares",
+        aliases=["resetshares", "xoacophieu", "xoacp"],
+        brief="[ADMIN] Xóa toàn bộ cổ phiếu của người chơi về 0.",
+        usage="clearshares <@user/user_id>",
+        hidden=True,
+    )
+    @commands.is_owner()
+    async def clear_shares_cmd(self, ctx: commands.Context, target: str):
+        """[ADMIN] Xóa sạch toàn bộ cổ phiếu của người chơi về 0 (chỉ Owner)."""
+        is_owner = ctx.author.id in config.bot.owner_ids or await ctx.bot.is_owner(ctx.author)
+        if not is_owner:
+            await ctx.send("❌ Lệnh này chỉ dành riêng cho Bot Owner!")
+            return
+
+        clean_target = target.strip("<@!> ").strip()
+        try:
+            user_id = int(clean_target)
+        except ValueError:
+            await ctx.send("❌ User ID hoặc tag người dùng không hợp lệ!")
+            return
+
+        try:
+            user_obj = ctx.bot.get_user(user_id) or await ctx.bot.fetch_user(user_id)
+            user_name = user_obj.name if user_obj else f"User {user_id}"
+        except Exception:
+            user_name = f"User {user_id}"
+
+        self.economy.cur.execute("DELETE FROM user_portfolio WHERE user_id = ?", (user_id,))
+        self.economy.cur.execute("DELETE FROM limit_orders WHERE user_id = ?", (user_id,))
+        self.economy.conn.commit()
+        await ctx.send(f"🧹 Đã xóa sạch toàn bộ cổ phiếu và hủy mọi lệnh limit của **{user_name}** (`{user_id}`) về **0** thành công!")
+
     def get_stock_chart_file(self, symbol: str) -> discord.File:
         prices = dict((row[0], row[1]) for row in self.economy.get_stock_prices())
         current_price = prices.get(symbol, 1000)
