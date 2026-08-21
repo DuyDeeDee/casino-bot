@@ -2322,15 +2322,25 @@ class GamblingHelpers(commands.Cog, name="General"):
         claimed_start = bool(eco_row[4])
 
         # 2. Check if banned
-        cur.execute("SELECT banned_at FROM banned_users WHERE user_id = ?", (user_id,))
-        banned_row = cur.fetchone()
-        is_banned = banned_row is not None
+        is_banned = False
+        try:
+            cur.execute("SELECT banned_at FROM banned_users WHERE user_id = ?", (user_id,))
+            banned_row = cur.fetchone()
+            is_banned = banned_row is not None
+        except Exception:
+            pass
 
         # 3. Topup info
-        cur.execute("SELECT SUM(amount), COUNT(*) FROM user_topups WHERE user_id = ?", (user_id,))
-        topup_row = cur.fetchone()
-        total_topup = topup_row[0] if (topup_row and topup_row[0]) else 0
-        topup_count = topup_row[1] if (topup_row and topup_row[1]) else 0
+        total_topup_vnd = 0
+        total_topup_gold = 0
+        try:
+            cur.execute("SELECT total_vnd, total_gold FROM user_topups WHERE user_id = ?", (user_id,))
+            topup_row = cur.fetchone()
+            if topup_row:
+                total_topup_vnd = topup_row[0] or 0
+                total_topup_gold = topup_row[1] or 0
+        except Exception:
+            pass
 
         # 4. Game statistics
         game_lines = []
@@ -2339,17 +2349,17 @@ class GamblingHelpers(commands.Cog, name="General"):
         total_wins = 0
 
         game_queries = [
-            ("Tài Xỉu / Roulette", "user_roulette", "SELECT plays, wins, losses, profit FROM user_roulette WHERE user_id = ?"),
-            ("Coinflip", "user_coinflip", "SELECT plays, wins, losses, profit FROM user_coinflip WHERE user_id = ?"),
-            ("Bao Kéo Búa", "user_bkb", "SELECT plays, wins, losses, profit FROM user_bkb WHERE user_id = ?"),
-            ("Mines (Dò mìn)", "user_mines", "SELECT plays, wins, losses, profit FROM user_mines WHERE user_id = ?"),
-            ("Plinko", "user_plinko", "SELECT plays, wins, losses, profit FROM user_plinko WHERE user_id = ?"),
-            ("HighLow", "user_highlow", "SELECT plays, wins, losses, profit FROM user_highlow WHERE user_id = ?"),
-            ("Tower", "user_tower", "SELECT plays, wins, losses, profit FROM user_tower WHERE user_id = ?"),
-            ("Baito (Làm thêm)", "user_baito", "SELECT plays, wins, 0, profit FROM user_baito WHERE user_id = ?"),
+            ("Tài Xỉu / Roulette", "SELECT plays, wins, losses, profit FROM user_roulette WHERE user_id = ?"),
+            ("Coinflip", "SELECT plays, wins, losses, profit FROM user_coinflip WHERE user_id = ?"),
+            ("Bao Kéo Búa", "SELECT plays, wins, losses, profit FROM user_bkb WHERE user_id = ?"),
+            ("Mines (Dò mìn)", "SELECT plays, wins, losses, profit FROM user_mines WHERE user_id = ?"),
+            ("Plinko", "SELECT plays, wins, losses, profit FROM user_plinko WHERE user_id = ?"),
+            ("HighLow", "SELECT plays, wins, losses, profit FROM user_highlow WHERE user_id = ?"),
+            ("Tower", "SELECT plays, wins, losses, profit FROM user_tower WHERE user_id = ?"),
+            ("Baito (Làm thêm)", "SELECT plays, wins, 0, profit FROM user_baito WHERE user_id = ?"),
         ]
 
-        for game_name, tbl, query in game_queries:
+        for game_name, query in game_queries:
             try:
                 cur.execute(query, (user_id,))
                 r = cur.fetchone()
@@ -2367,28 +2377,42 @@ class GamblingHelpers(commands.Cog, name="General"):
                 pass
 
         # 5. Assets (Cars, Businesses, Stocks)
-        cur.execute("SELECT COUNT(*) FROM user_cars WHERE user_id = ?", (user_id,))
-        car_count = cur.fetchone()[0] or 0
+        car_count = 0
+        try:
+            cur.execute("SELECT COUNT(*) FROM user_cars WHERE user_id = ?", (user_id,))
+            car_row = cur.fetchone()
+            car_count = car_row[0] if car_row else 0
+        except Exception:
+            pass
 
-        cur.execute("SELECT COUNT(*) FROM user_businesses WHERE user_id = ?", (user_id,))
-        biz_count = cur.fetchone()[0] or 0
+        biz_count = 0
+        try:
+            cur.execute("SELECT COUNT(*) FROM user_businesses WHERE user_id = ?", (user_id,))
+            biz_row = cur.fetchone()
+            biz_count = biz_row[0] if biz_row else 0
+        except Exception:
+            pass
 
-        cur.execute("SELECT symbol, shares FROM user_portfolio WHERE user_id = ? AND shares > 0", (user_id,))
-        portfolio_rows = cur.fetchall()
+        portfolio_rows = []
+        try:
+            cur.execute("SELECT symbol, shares FROM user_portfolio WHERE user_id = ? AND shares > 0", (user_id,))
+            portfolio_rows = cur.fetchall() or []
+        except Exception:
+            pass
         stock_summary = ", ".join([f"{row[0]}: {row[1]:,.2f}" for row in portfolio_rows]) if portfolio_rows else "Không có"
 
         # 6. Audit & Suspicion Detection
-        estimated_known_income = total_game_profit + total_topup + (100_000 if claimed_start else 0)
+        estimated_known_income = total_game_profit + total_topup_vnd + (100_000 if claimed_start else 0)
         gap = money - estimated_known_income
 
-        if money > 50_000_000 and total_plays < 20 and total_topup == 0 and not portfolio_rows:
+        if money > 50_000_000 and total_plays < 20 and total_topup_vnd == 0 and not portfolio_rows:
             verdict_badge = "🚨 **NGHI VẤN BUG / HACK CỰC CAO**"
             verdict_color = discord.Color.red()
             verdict_desc = (
                 f"⚠️ **Cảnh báo bất thường:** Người chơi này sở hữu **{money:,} VND** nhưng chỉ chơi `{total_plays}` ván minigame, "
                 f"không có lịch sử nạp thẻ và không đầu tư cổ phiếu! Rất có thể đã dùng **Bug/Exploit** hoặc nhận tiền lậu từ người khác."
             )
-        elif gap > 100_000_000 and total_topup == 0:
+        elif gap > 100_000_000 and total_topup_vnd == 0:
             verdict_badge = "⚠️ **CÓ DẤU HIỆU CHÊNH LỆCH LỚN**"
             verdict_color = discord.Color.gold()
             verdict_desc = (
@@ -2409,13 +2433,17 @@ class GamblingHelpers(commands.Cog, name="General"):
         if avatar_url:
             embed.set_thumbnail(url=avatar_url)
 
+        topup_display = f"`{total_topup_vnd:,} VND`"
+        if total_topup_gold > 0:
+            topup_display += f" + `{total_topup_gold:,} thỏi vàng`"
+
         embed.add_field(
             name="💰 1. Tài Sản & Ví Tiền",
             value=(
                 f"• **Tiền mặt (VND):** `{money:,}`\n"
                 f"• **Thỏi vàng (Credits):** `{credits:,}`\n"
                 f"• **Nợ ngân hàng:** `{loan:,}`\n"
-                f"• **Tổng nạp bot:** `{total_topup:,} VND` ({topup_count} lần)"
+                f"• **Tổng nạp bot:** {topup_display}"
             ),
             inline=False,
         )
