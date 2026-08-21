@@ -7,6 +7,7 @@ from typing import Optional
 import discord
 from discord.ext import commands
 
+from app.config import config
 from app.discord_bot.modules.economy import Economy
 from app.discord_bot.modules.helpers import make_embed
 from app.discord_bot.modules.wallet_logging import log_wallet_change
@@ -18,7 +19,7 @@ CARDS_CONFIG = {
     "bronze": {
         "id": "bronze",
         "name": "🥉 Thẻ Cào Đồng",
-        "price": 10_000,
+        "price": 100_000,
         "win_rate": 0.10,
         "symbols": ["🍀", "⭐", "💰", "🎰", "💎"],
         "multipliers": {"🍀": 2, "⭐": 3, "💰": 4, "🎰": 5, "💎": 8},
@@ -26,7 +27,7 @@ CARDS_CONFIG = {
     "silver": {
         "id": "silver",
         "name": "🥈 Thẻ Cào Bạc",
-        "price": 50_000,
+        "price": 500_000,
         "win_rate": 0.07,
         "symbols": ["🍀", "⭐", "💰", "🎰", "💎"],
         "multipliers": {"🍀": 3, "⭐": 4, "💰": 5, "🎰": 8, "💎": 15},
@@ -34,7 +35,7 @@ CARDS_CONFIG = {
     "gold": {
         "id": "gold",
         "name": "🥇 Thẻ Cào Vàng",
-        "price": 200_000,
+        "price": 2_000_000,
         "win_rate": 0.04,
         "symbols": ["🍀", "⭐", "💰", "🎰", "💎"],
         "multipliers": {"🍀": 5, "⭐": 8, "💰": 10, "🎰": 15, "💎": 25},
@@ -42,7 +43,7 @@ CARDS_CONFIG = {
     "diamond": {
         "id": "diamond",
         "name": "💎 Thẻ Cào Kim Cương",
-        "price": 1_000_000,
+        "price": 10_000_000,
         "win_rate": 0.015,
         "symbols": ["🍀", "⭐", "💰", "🎰", "💎"],
         "multipliers": {"🍀": 8, "⭐": 15, "💰": 20, "🎰": 30, "💎": 50},
@@ -54,7 +55,7 @@ EVENT_CARDS = {
     "halloween": {
         "id": "halloween",
         "name": "🎃 Thẻ Halloween",
-        "price": 300_000,
+        "price": 3_000_000,
         "win_rate": 0.05,
         "symbols": ["🍬", "🦇", "👻", "🎃", "💀"],
         "multipliers": {"🍬": 2, "🦇": 4, "👻": 6, "🎃": 10, "💀": 20},
@@ -62,7 +63,7 @@ EVENT_CARDS = {
     "christmas": {
         "id": "christmas",
         "name": "🎄 Thẻ Giáng Sinh",
-        "price": 800_000,
+        "price": 8_000_000,
         "win_rate": 0.03,
         "symbols": ["❄️", "🔔", "🎄", "🦌", "🎅"],
         "multipliers": {"❄️": 3, "🔔": 5, "🎄": 8, "🦌": 12, "🎅": 25},
@@ -70,7 +71,7 @@ EVENT_CARDS = {
     "tet": {
         "id": "tet",
         "name": "🧧 Thẻ Tết",
-        "price": 1_500_000,
+        "price": 15_000_000,
         "win_rate": 0.015,
         "symbols": ["🍊", "🦁", "🧧", "🪙", "🌸"],
         "multipliers": {"🍊": 3, "🦁": 5, "🧧": 10, "🪙": 15, "🌸": 30},
@@ -95,12 +96,31 @@ def get_active_event_card() -> Optional[dict]:
     return None
 
 
-def get_all_available_cards() -> dict:
-    """Returns standard cards + any currently active event card."""
-    cards = dict(CARDS_CONFIG)
+def get_all_available_cards(economy: Optional[Economy] = None) -> dict:
+    """Returns standard cards + any currently active event card with optional dynamic price overrides."""
+    cards = {}
+    for cid, raw in CARDS_CONFIG.items():
+        cfg = dict(raw)
+        if economy:
+            p_override = economy.get_setting(f"scratch_price_{cid}")
+            if p_override:
+                try:
+                    cfg["price"] = int(p_override)
+                except ValueError:
+                    pass
+        cards[cid] = cfg
+
     event = get_active_event_card()
     if event:
-        cards[event["id"]] = event
+        cfg = dict(event)
+        if economy:
+            p_override = economy.get_setting(f"scratch_price_{cfg['id']}")
+            if p_override:
+                try:
+                    cfg["price"] = int(p_override)
+                except ValueError:
+                    pass
+        cards[cfg["id"]] = cfg
     return cards
 
 
@@ -360,14 +380,19 @@ class ScratchCardPlayView(discord.ui.View):
         payout = 0
         result_lines = []
         is_card_jackpot = False
-        won_shared_jackpot = random.random() < 0.0005  # 0.05% chance
+        rate_str = self.cog.economy.get_setting("scratchcard_jackpot_rate")
+        jackpot_rate = float(rate_str) if rate_str else 0.0005
+        won_shared_jackpot = random.random() < jackpot_rate
         shared_jackpot_amount = 0
 
         if won_shared_jackpot:
             jackpot_str = self.cog.economy.get_setting("scratchcard_jackpot")
-            shared_jackpot_amount = int(jackpot_str) if jackpot_str else 0
+            shared_jackpot_amount = int(jackpot_str) if jackpot_str else 50_000_000
             self.cog.economy.add_money(self.author.id, shared_jackpot_amount)
-            self.cog.economy.set_setting("scratchcard_jackpot", "0")  # Reset setting
+            
+            seed_str = self.cog.economy.get_setting("scratch_jackpot_seed")
+            seed_val = int(seed_str) if seed_str else 50_000_000
+            self.cog.economy.set_setting("scratchcard_jackpot", str(seed_val))
             
             log_wallet_change(
                 logger,
@@ -416,14 +441,18 @@ class ScratchCardPlayView(discord.ui.View):
                 f"(hoàn `+{self.card_cfg['price']:,} VND`)"
             )
 
-        # Update shared jackpot with the net loss of this scratchcard
+        # Update shared jackpot with a percentage of the net loss
         if not won_shared_jackpot:
             total_return = payout + (self.card_cfg["price"] if self.has_bonus else 0)
             lost_amount = self.card_cfg["price"] - total_return
             if lost_amount > 0:
-                current_jackpot_str = self.cog.economy.get_setting("scratchcard_jackpot")
-                current_jackpot = int(current_jackpot_str) if current_jackpot_str else 0
-                self.cog.economy.set_setting("scratchcard_jackpot", str(current_jackpot + lost_amount))
+                cut_str = self.cog.economy.get_setting("scratch_jackpot_cut")
+                cut_rate = float(cut_str) if cut_str else 0.15
+                added_to_jackpot = int(lost_amount * cut_rate)
+                if added_to_jackpot > 0:
+                    current_jackpot_str = self.cog.economy.get_setting("scratchcard_jackpot")
+                    current_jackpot = int(current_jackpot_str) if current_jackpot_str else 50_000_000
+                    self.cog.economy.set_setting("scratchcard_jackpot", str(current_jackpot + added_to_jackpot))
 
         balance = self.cog.economy.get_entry(self.author.id)[1]
         result_lines.append(f"\n💳 Số dư ví: **{balance:,} VND**")
@@ -642,7 +671,7 @@ class ScratchCard(commands.Cog, name="ScratchCard"):
         qty_str: Optional[str] = None,
     ):
         user_id = ctx.author.id
-        available = get_all_available_cards()
+        available = get_all_available_cards(self.economy)
 
         # Direct card name shortcut: i?scratch silver
         if action and action.lower() not in ("buy", "mua") and action.lower() in available:
@@ -724,13 +753,15 @@ class ScratchCard(commands.Cog, name="ScratchCard"):
 
     def _catalog_embed(self, available: dict) -> discord.Embed:
         jackpot_str = self.economy.get_setting("scratchcard_jackpot")
-        jackpot_val = int(jackpot_str) if jackpot_str else 0
+        jackpot_val = int(jackpot_str) if jackpot_str else 50_000_000
+        rate_str = self.economy.get_setting("scratchcard_jackpot_rate")
+        jackpot_rate = float(rate_str) if rate_str else 0.0005
 
         embed = make_embed(
             title="🎴 THÈ CÀO MAY MẮN — DANH MỤC 🎴",
             description=(
                 f"🎰 **HŨ JACKPOT TÍCH LŨY CHUNG:** `{jackpot_val:,} VND` 🎰\n"
-                f"🔥 *Mỗi thẻ cào đều có **0.05%** cơ hội trúng trọn hũ Jackpot trên!*\n\n"
+                f"🔥 *Mỗi thẻ cào đều có **{jackpot_rate * 100:.3f}%** cơ hội trúng trọn hũ Jackpot trên!*\n\n"
                 "Cào ô tìm **3 biểu tượng giống nhau** để nhận thưởng nhân gấp bội!\n\n"
                 "👉 `i?scratch buy <tên>` — mua 1 thẻ\n"
                 "👉 `i?scratch buy <tên> x5` — combo (giảm 10%)\n"
@@ -771,17 +802,24 @@ class ScratchCard(commands.Cog, name="ScratchCard"):
         jackpot_count = 0
         shared_jackpot_count = 0
 
+        rate_str = self.economy.get_setting("scratchcard_jackpot_rate")
+        jackpot_rate = float(rate_str) if rate_str else 0.0005
+        cut_str = self.economy.get_setting("scratch_jackpot_cut")
+        cut_rate = float(cut_str) if cut_str else 0.15
+        seed_str = self.economy.get_setting("scratch_jackpot_seed")
+        seed_val = int(seed_str) if seed_str else 50_000_000
+
         jackpot_str = self.economy.get_setting("scratchcard_jackpot")
-        current_jackpot_val = int(jackpot_str) if jackpot_str else 0
+        current_jackpot_val = int(jackpot_str) if jackpot_str else seed_val
         price_per_card = total_price / quantity
 
         for i in range(1, quantity + 1):
-            won_shared = random.random() < 0.0005  # 0.05% chance
+            won_shared = random.random() < jackpot_rate
             shared_amount = 0
             if won_shared:
                 shared_amount = current_jackpot_val
                 self.economy.add_money(user_id, shared_amount)
-                current_jackpot_val = 0
+                current_jackpot_val = seed_val
                 total_payout += shared_amount
                 shared_jackpot_count += 1
                 
@@ -824,7 +862,7 @@ class ScratchCard(commands.Cog, name="ScratchCard"):
                 total_return_this_card = payout + (card_cfg["price"] if has_bonus else 0)
                 lost_this_card = price_per_card - total_return_this_card
                 if lost_this_card > 0:
-                    current_jackpot_val += int(lost_this_card)
+                    current_jackpot_val += int(lost_this_card * cut_rate)
 
             lines.append(f"• **#{i:02d}**: {desc}")
 
@@ -883,6 +921,142 @@ class ScratchCard(commands.Cog, name="ScratchCard"):
                 )
             except Exception:
                 pass
+
+    @commands.command(name="setscratch", aliases=["scratchconfig", "setscratchcard", "sethu"], hidden=True, brief="[ADMIN]")
+    @commands.is_owner()
+    async def set_scratch_config(
+        self,
+        ctx: commands.Context,
+        key: str = "view",
+        value: str | None = None,
+        extra_val: str | None = None,
+    ):
+        """[ADMIN] Cấu hình hũ Jackpot, tỷ lệ nổ hũ, tỷ lệ trích hũ và giá vé Thẻ Cào (chỉ Owner)."""
+        is_owner = ctx.author.id in config.bot.owner_ids or await ctx.bot.is_owner(ctx.author)
+        if not is_owner:
+            await ctx.send("❌ Lệnh này chỉ dành riêng cho Bot Owner!")
+            return
+
+        key = key.lower().strip()
+        if key in ("view", "info", "status", "xem"):
+            jackpot_str = self.economy.get_setting("scratchcard_jackpot")
+            jackpot_val = int(jackpot_str) if jackpot_str else 50_000_000
+            
+            rate_str = self.economy.get_setting("scratchcard_jackpot_rate")
+            rate_val = float(rate_str) if rate_str else 0.0005
+            
+            cut_str = self.economy.get_setting("scratch_jackpot_cut")
+            cut_val = float(cut_str) if cut_str else 0.15
+            
+            seed_str = self.economy.get_setting("scratch_jackpot_seed")
+            seed_val = int(seed_str) if seed_str else 50_000_000
+            
+            available = get_all_available_cards(self.economy)
+            prices_str = "\n".join(f"• **{cfg['name']}:** `{cfg['price']:,} VND` (ID: `{cid}`)" for cid, cfg in available.items())
+
+            embed = make_embed(
+                title="⚙️ CẤU HÌNH THẺ CÀO & HŨ JACKPOT (ADMIN ONLY)",
+                description=(
+                    f"🎰 **Giá trị Hũ Jackpot hiện tại:** `{jackpot_val:,} VND`\n"
+                    f"🎯 **Tỷ lệ nổ hũ chung:** `{rate_val * 100:.4f}%` (mỗi thẻ)\n"
+                    f"✂️ **Tỷ lệ trích tiền thua vào hũ:** `{cut_val * 100:.1f}%`\n"
+                    f"🌱 **Mức hũ khởi tạo sau khi nổ (Seed):** `{seed_val:,} VND`\n\n"
+                    f"🏷️ **BẢNG GIÁ VÉ HIỆN TẠI:**\n{prices_str}\n\n"
+                    f"💡 **Các lệnh điều chỉnh:**\n"
+                    f"• `!setscratch jackpot <số_tiền>` — Đặt giá trị hũ hiện tại\n"
+                    f"• `!setscratch rate <tỷ_lệ_%>` — Đặt tỷ lệ nổ hũ (vd: `0.01%` hoặc `0.0001`)\n"
+                    f"• `!setscratch cut <tỷ_lệ_%>` — Đặt % trích vào hũ (vd: `15%` hoặc `0.15`)\n"
+                    f"• `!setscratch seed <số_tiền>` — Đặt hũ khởi tạo sau khi nổ\n"
+                    f"• `!setscratch price <id_thẻ> <giá>` — Đổi giá vé của thẻ (vd: `!setscratch price diamond 15000000`)"
+                ),
+                color=discord.Color.gold()
+            )
+            await ctx.send(embed=embed)
+            return
+
+        if key in ("jackpot", "hu", "sethu"):
+            if not value:
+                await ctx.send("❌ Vui lòng nhập số tiền hũ mới! Ví dụ: `!setscratch jackpot 100000000`")
+                return
+            try:
+                val = max(0, int(value.replace(",", "").replace(".", "").replace("đ", "").replace("VND", "")))
+                self.economy.set_setting("scratchcard_jackpot", str(val))
+                await ctx.send(f"✅ Đã đặt lại giá trị **Hũ Jackpot Thẻ Cào** thành: **{val:,} VND**.")
+            except ValueError:
+                await ctx.send("❌ Số tiền hũ không hợp lệ!")
+                return
+
+        elif key in ("rate", "tyleno", "jackpot_rate", "nohu"):
+            if not value:
+                await ctx.send("❌ Vui lòng nhập tỷ lệ! Ví dụ: `!setscratch rate 0.01%` hoặc `!setscratch rate 0.0001`")
+                return
+            try:
+                val_str = value.strip()
+                if val_str.endswith("%"):
+                    target_rate = float(val_str[:-1].strip()) / 100.0
+                else:
+                    target_rate = float(val_str)
+                if target_rate < 0 or target_rate > 1:
+                    raise ValueError()
+                self.economy.set_setting("scratchcard_jackpot_rate", str(target_rate))
+                await ctx.send(f"✅ Đã đặt tỷ lệ nổ hũ Thẻ Cào thành: **{target_rate * 100:.4f}%**.")
+            except ValueError:
+                await ctx.send("❌ Tỷ lệ không hợp lệ! (Ví dụ: `0.01%` hoặc `0.0001`)")
+                return
+
+        elif key in ("cut", "trich", "jackpot_cut"):
+            if not value:
+                await ctx.send("❌ Vui lòng nhập tỷ lệ trích! Ví dụ: `!setscratch cut 15%` hoặc `0.15`")
+                return
+            try:
+                val_str = value.strip()
+                if val_str.endswith("%"):
+                    target_cut = float(val_str[:-1].strip()) / 100.0
+                else:
+                    target_cut = float(val_str)
+                if target_cut < 0 or target_cut > 1:
+                    raise ValueError()
+                self.economy.set_setting("scratch_jackpot_cut", str(target_cut))
+                await ctx.send(f"✅ Đã đặt tỷ lệ trích tiền thua vào hũ thành: **{target_cut * 100:.1f}%**.")
+            except ValueError:
+                await ctx.send("❌ Tỷ lệ trích không hợp lệ!")
+                return
+
+        elif key in ("seed", "khoitao", "reset_val"):
+            if not value:
+                await ctx.send("❌ Vui lòng nhập số tiền khởi tạo! Ví dụ: `!setscratch seed 50000000`")
+                return
+            try:
+                val = max(0, int(value.replace(",", "").replace(".", "")))
+                self.economy.set_setting("scratch_jackpot_seed", str(val))
+                await ctx.send(f"✅ Đã đặt mức hũ khởi tạo sau khi nổ thành: **{val:,} VND**.")
+            except ValueError:
+                await ctx.send("❌ Số tiền không hợp lệ!")
+                return
+
+        elif key in ("price", "gia", "setprice"):
+            cid = value.lower().strip() if value else ""
+            if not cid or not extra_val:
+                await ctx.send("❌ Cú pháp: `!setscratch price <id_thẻ> <giá>`\nVí dụ: `!setscratch price diamond 15000000` hoặc `!setscratch price bronze reset`")
+                return
+            all_c = get_all_available_cards()
+            if cid not in all_c:
+                await ctx.send(f"❌ ID thẻ `{cid}` không tồn tại. Danh sách: `bronze`, `silver`, `gold`, `diamond`, `halloween`, `christmas`, `tet`.")
+                return
+            if extra_val.lower() in ("reset", "default", "mac_dinh"):
+                self.economy.set_setting(f"scratch_price_{cid}", "")
+                await ctx.send(f"✅ Đã đặt lại giá vé thẻ `{cid}` về mặc định.")
+            else:
+                try:
+                    p = max(1000, int(extra_val.replace(",", "").replace(".", "")))
+                    self.economy.set_setting(f"scratch_price_{cid}", str(p))
+                    await ctx.send(f"✅ Đã đổi giá vé thẻ **{all_c[cid]['name']}** (`{cid}`) thành: **{p:,} VND**.")
+                except ValueError:
+                    await ctx.send("❌ Giá vé không hợp lệ!")
+                    return
+        else:
+            await ctx.send("❌ Lệnh cấu hình không hợp lệ. Gõ `!setscratch` để xem menu hướng dẫn.")
+
 
 
 async def setup(client: commands.Bot):
