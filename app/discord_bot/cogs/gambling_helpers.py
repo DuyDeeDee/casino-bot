@@ -2544,6 +2544,98 @@ class GamblingHelpers(commands.Cog, name="General"):
         embed.set_footer(text=f"Yêu cầu bởi Admin: {ctx.author.name} • Lệnh: !checkuser / !audit")
         await ctx.send(embed=embed)
 
+    @commands.command(name="checkgive", aliases=["transhistory", "history", "soitien", "lichsugd"], hidden=True, brief="[ADMIN]")
+    @commands.is_owner()
+    async def check_give_history(self, ctx: commands.Context, target: str):
+        """[ADMIN] Tra cứu lịch sử chuyển nhận tiền, bán cổ phiếu và biến động ví gần đây của người chơi (chỉ Owner)."""
+        is_owner = ctx.author.id in config.bot.owner_ids or await ctx.bot.is_owner(ctx.author)
+        if not is_owner:
+            await ctx.send("❌ Lệnh này chỉ dành riêng cho Bot Owner!")
+            return
+
+        clean_target = target.strip("<@!> ").strip()
+        try:
+            user_id = int(clean_target)
+        except ValueError:
+            await ctx.send("❌ User ID hoặc tag người dùng không hợp lệ!")
+            return
+
+        try:
+            user_obj = ctx.bot.get_user(user_id) or await ctx.bot.fetch_user(user_id)
+            user_name = user_obj.name if user_obj else f"User {user_id}"
+        except Exception:
+            user_name = f"User {user_id}"
+
+        cur = self.economy.cur
+        cur.execute(
+            """CREATE TABLE IF NOT EXISTS wallet_transactions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                event TEXT NOT NULL,
+                money_delta INTEGER NOT NULL DEFAULT 0,
+                credits_delta INTEGER NOT NULL DEFAULT 0,
+                command TEXT,
+                details TEXT,
+                created_at INTEGER NOT NULL
+            )"""
+        )
+        cur.execute(
+            "SELECT event, money_delta, credits_delta, command, details, created_at FROM wallet_transactions WHERE user_id = ? ORDER BY id DESC LIMIT 15",
+            (user_id,)
+        )
+        rows = cur.fetchall()
+
+        if not rows:
+            embed = make_embed(
+                title=f"📜 LỊCH SỬ BIẾN ĐỘNG VÍ: {user_name}",
+                description=(
+                    f"Chưa có bản ghi giao dịch mới trong database cho **{user_name}** (`{user_id}`).\n\n"
+                    f"💡 *Đối với các giao dịch cũ trước khi cập nhật, bạn có thể tra trực tiếp trên VPS bằng lệnh:*\n"
+                    f"`pm2 logs --lines 1000 | grep {user_id}`"
+                ),
+                color=discord.Color.blue()
+            )
+            await ctx.send(embed=embed)
+            return
+
+        embed = make_embed(
+            title=f"📜 LỊCH SỬ BIẾN ĐỘNG VÍ & CHUYỂN TIỀN: {user_name}",
+            description=f"15 giao dịch gần đây nhất của **{user_name}** (`{user_id}`):",
+            color=discord.Color.gold()
+        )
+
+        for event, m_delta, c_delta, cmd, details_json, created_at in rows:
+            time_str = f"<t:{created_at}:R>"
+            delta_parts = []
+            if m_delta != 0:
+                delta_parts.append(f"`{'+' if m_delta > 0 else ''}{m_delta:,} VND`")
+            if c_delta != 0:
+                delta_parts.append(f"`{'+' if c_delta > 0 else ''}{c_delta:,} thỏi vàng`")
+            delta_str = " | ".join(delta_parts) if delta_parts else "`0`"
+
+            det_str = ""
+            try:
+                if details_json:
+                    import json
+                    det = json.loads(details_json)
+                    if "sender_id" in det:
+                        det_str += f" từ User `{det['sender_id']}`"
+                    if "recipient_id" in det:
+                        det_str += f" cho User `{det['recipient_id']}`"
+                    if "symbol" in det:
+                        det_str += f" (Mã {det['symbol']})"
+            except Exception:
+                pass
+
+            embed.add_field(
+                name=f"🔹 {event.upper()} ({time_str})",
+                value=f"• Biến động: {delta_str}\n• Lệnh: `{cmd or 'N/A'}`{det_str}",
+                inline=False
+            )
+
+        await ctx.send(embed=embed)
+
+
 
 class BegConfirmView(discord.ui.View):
     def __init__(self, beggar: discord.Member, target: discord.Member, amount: int, economy: Economy, timeout: float = 60.0):
