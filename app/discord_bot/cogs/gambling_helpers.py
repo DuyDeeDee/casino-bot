@@ -2274,6 +2274,181 @@ class GamblingHelpers(commands.Cog, name="General"):
         msg = await ctx.send(embed=embed, view=view)
         view.message = msg
 
+    @commands.command(name="checkuser", aliases=["audit", "soi", "kiemtra", "checkbug"], hidden=True)
+    async def audit_user(
+        self,
+        ctx: commands.Context,
+        target: str = None,
+    ):
+        """[ADMIN] Kiểm tra toàn diện tài sản, lịch sử thắng thua các game và đối soát bug của một người chơi."""
+        is_owner = ctx.author.id in config.bot.owner_ids or await ctx.bot.is_owner(ctx.author)
+        is_admin = hasattr(ctx.author, "guild_permissions") and ctx.author.guild_permissions.administrator
+        if not (is_admin or is_owner):
+            await ctx.send("❌ Bạn không có quyền sử dụng lệnh quản trị này!")
+            return
+
+        if not target:
+            await ctx.send("⚠️ Vui lòng tag người dùng hoặc nhập User ID.\n👉 **Cú pháp:** `!checkuser @NgườiDùng` hoặc `!checkuser <USER_ID>`")
+            return
+
+        # Parse user ID
+        clean_target = target.strip("<@!> ").strip()
+        try:
+            user_id = int(clean_target)
+        except ValueError:
+            await ctx.send("❌ User ID hoặc tag người dùng không hợp lệ!")
+            return
+
+        try:
+            user_obj = ctx.bot.get_user(user_id) or await ctx.bot.fetch_user(user_id)
+        except Exception:
+            user_obj = None
+
+        user_name = user_obj.name if user_obj else f"User {user_id}"
+        avatar_url = user_obj.display_avatar.url if user_obj else None
+
+        cur = self.economy.cur
+
+        # 1. Economy base
+        cur.execute("SELECT money, credits, loan_amount, loan_due, claimed_start FROM economy WHERE user_id = ?", (user_id,))
+        eco_row = cur.fetchone()
+        if not eco_row:
+            await ctx.send(f"❌ Không tìm thấy dữ liệu người dùng **{user_name}** (`{user_id}`) trong database!")
+            return
+
+        money = eco_row[0] or 0
+        credits = eco_row[1] or 0
+        loan = eco_row[2] or 0
+        claimed_start = bool(eco_row[4])
+
+        # 2. Check if banned
+        cur.execute("SELECT banned_at FROM banned_users WHERE user_id = ?", (user_id,))
+        banned_row = cur.fetchone()
+        is_banned = banned_row is not None
+
+        # 3. Topup info
+        cur.execute("SELECT SUM(amount), COUNT(*) FROM user_topups WHERE user_id = ?", (user_id,))
+        topup_row = cur.fetchone()
+        total_topup = topup_row[0] if (topup_row and topup_row[0]) else 0
+        topup_count = topup_row[1] if (topup_row and topup_row[1]) else 0
+
+        # 4. Game statistics
+        game_lines = []
+        total_game_profit = 0
+        total_plays = 0
+        total_wins = 0
+
+        game_queries = [
+            ("Tài Xỉu / Roulette", "user_roulette", "SELECT plays, wins, losses, profit FROM user_roulette WHERE user_id = ?"),
+            ("Coinflip", "user_coinflip", "SELECT plays, wins, losses, profit FROM user_coinflip WHERE user_id = ?"),
+            ("Bao Kéo Búa", "user_bkb", "SELECT plays, wins, losses, profit FROM user_bkb WHERE user_id = ?"),
+            ("Mines (Dò mìn)", "user_mines", "SELECT plays, wins, losses, profit FROM user_mines WHERE user_id = ?"),
+            ("Plinko", "user_plinko", "SELECT plays, wins, losses, profit FROM user_plinko WHERE user_id = ?"),
+            ("HighLow", "user_highlow", "SELECT plays, wins, losses, profit FROM user_highlow WHERE user_id = ?"),
+            ("Tower", "user_tower", "SELECT plays, wins, losses, profit FROM user_tower WHERE user_id = ?"),
+            ("Baito (Làm thêm)", "user_baito", "SELECT plays, wins, 0, profit FROM user_baito WHERE user_id = ?"),
+        ]
+
+        for game_name, tbl, query in game_queries:
+            try:
+                cur.execute(query, (user_id,))
+                r = cur.fetchone()
+                if r and (r[0] or r[3]):
+                    plays = r[0] or 0
+                    wins = r[1] or 0
+                    profit = r[3] or 0
+                    total_plays += plays
+                    total_wins += wins
+                    total_game_profit += profit
+                    
+                    profit_str = f"+{profit:,}" if profit > 0 else f"{profit:,}"
+                    game_lines.append(f"• **{game_name}:** {plays:,} ván (Thắng: {wins:,}) | Lời/Lỗ: `{profit_str} VND`")
+            except Exception:
+                pass
+
+        # 5. Assets (Cars, Businesses, Stocks)
+        cur.execute("SELECT COUNT(*) FROM user_cars WHERE user_id = ?", (user_id,))
+        car_count = cur.fetchone()[0] or 0
+
+        cur.execute("SELECT COUNT(*) FROM user_businesses WHERE user_id = ?", (user_id,))
+        biz_count = cur.fetchone()[0] or 0
+
+        cur.execute("SELECT symbol, shares FROM user_portfolio WHERE user_id = ? AND shares > 0", (user_id,))
+        portfolio_rows = cur.fetchall()
+        stock_summary = ", ".join([f"{row[0]}: {row[1]:,.2f}" for row in portfolio_rows]) if portfolio_rows else "Không có"
+
+        # 6. Audit & Suspicion Detection
+        estimated_known_income = total_game_profit + total_topup + (100_000 if claimed_start else 0)
+        gap = money - estimated_known_income
+
+        if money > 50_000_000 and total_plays < 20 and total_topup == 0 and not portfolio_rows:
+            verdict_badge = "🚨 **NGHI VẤN BUG / HACK CỰC CAO**"
+            verdict_color = discord.Color.red()
+            verdict_desc = (
+                f"⚠️ **Cảnh báo bất thường:** Người chơi này sở hữu **{money:,} VND** nhưng chỉ chơi `{total_plays}` ván minigame, "
+                f"không có lịch sử nạp thẻ và không đầu tư cổ phiếu! Rất có thể đã dùng **Bug/Exploit** hoặc nhận tiền lậu từ người khác."
+            )
+        elif gap > 100_000_000 and total_topup == 0:
+            verdict_badge = "⚠️ **CÓ DẤU HIỆU CHÊNH LỆCH LỚN**"
+            verdict_color = discord.Color.gold()
+            verdict_desc = (
+                f"• Số dư thực tế vượt quá tổng lợi nhuận minigame + nạp thẻ khoảng **{gap:,} VND**.\n"
+                f"• Nguồn tiền có thể đến từ: Được người khác tặng (`give`), trúng sự kiện/lì xì, hoặc bug chưa đối soát."
+            )
+        else:
+            verdict_badge = "🟢 **TÀI SẢN HỢP LỆ / BÌNH THƯỜNG**"
+            verdict_color = discord.Color.green()
+            verdict_desc = "• Số dư hiện tại khớp và hợp lý với lịch sử cược, nạp tiền và làm việc."
+
+        # Build Embed
+        embed = make_embed(
+            title=f"🔍 HỒ SƠ ĐỐI SOÁT TÀI SẢN & PHÁT HIỆN BUG",
+            description=f"Đối tượng: **{user_name}** (`{user_id}`)\nTrạng thái: {'🔴 **BỊ CẤM (BANNED)**' if is_banned else '🟢 Bình thường'}",
+            color=verdict_color,
+        )
+        if avatar_url:
+            embed.set_thumbnail(url=avatar_url)
+
+        embed.add_field(
+            name="💰 1. Tài Sản & Ví Tiền",
+            value=(
+                f"• **Tiền mặt (VND):** `{money:,}`\n"
+                f"• **Thỏi vàng (Credits):** `{credits:,}`\n"
+                f"• **Nợ ngân hàng:** `{loan:,}`\n"
+                f"• **Tổng nạp bot:** `{total_topup:,} VND` ({topup_count} lần)"
+            ),
+            inline=False,
+        )
+
+        games_text = "\n".join(game_lines) if game_lines else "Chưa tham gia minigame nào."
+        embed.add_field(
+            name=f"🎮 2. Thống Kê Minigame ({total_plays:,} ván | Thắng {total_wins:,})",
+            value=(
+                f"{games_text}\n"
+                f"👉 **Tổng lời/lỗ từ Game:** `{(f'+{total_game_profit:,}' if total_game_profit > 0 else f'{total_game_profit:,}')} VND`"
+            ),
+            inline=False,
+        )
+
+        embed.add_field(
+            name="🏢 3. Tài Sản Đầu Tư Khác",
+            value=(
+                f"• **Xe sở hữu:** {car_count} chiếc\n"
+                f"• **Doanh nghiệp:** {biz_count} công ty\n"
+                f"• **Cổ phiếu:** {stock_summary}"
+            ),
+            inline=False,
+        )
+
+        embed.add_field(
+            name=f"⚖️ 4. Kết Luận Kiểm Tra: {verdict_badge}",
+            value=verdict_desc,
+            inline=False,
+        )
+
+        embed.set_footer(text=f"Yêu cầu bởi Admin: {ctx.author.name} • Lệnh: !checkuser / !audit")
+        await ctx.send(embed=embed)
+
 
 class BegConfirmView(discord.ui.View):
     def __init__(self, beggar: discord.Member, target: discord.Member, amount: int, economy: Economy, timeout: float = 60.0):
