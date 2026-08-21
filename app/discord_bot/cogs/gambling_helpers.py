@@ -2923,17 +2923,24 @@ class GamblingHelpers(commands.Cog, name="General"):
             except Exception:
                 pass
 
-        # 3. Inflow & Outflow from Transactions table (Transfers, Stock sells, etc.)
+        # 3. Inflow & Outflow from Transactions table (Transfers, Stock sells, Biz, Mine, Rob, etc.)
         transfers_received = 0
         transfers_sent = 0
         stock_sells = 0
         stock_buys = 0
+        biz_collected_money = 0
+        biz_collected_gold = 0
+        mine_earned_money = 0
+        mine_earned_gold = 0
+        rob_stolen_money = 0
+        rob_lost_money = 0
+        item_sold_money = 0
         top_senders = {}
         top_recipients = {}
 
         try:
-            cur.execute("SELECT event, money_delta, details FROM wallet_transactions WHERE user_id = ?", (user_id,))
-            for evt, delta, details_str in cur.fetchall():
+            cur.execute("SELECT event, money_delta, credits_delta, details FROM wallet_transactions WHERE user_id = ?", (user_id,))
+            for evt, m_delta, c_delta, details_str in cur.fetchall():
                 import json
                 det = {}
                 if details_str:
@@ -2943,23 +2950,56 @@ class GamblingHelpers(commands.Cog, name="General"):
                         pass
                 
                 if evt == "transfer_money_receive":
-                    transfers_received += delta
+                    transfers_received += m_delta
                     sid = det.get("sender_id")
                     if sid:
-                        top_senders[sid] = top_senders.get(sid, 0) + delta
+                        top_senders[sid] = top_senders.get(sid, 0) + m_delta
                 elif evt == "transfer_money_send":
-                    transfers_sent += abs(delta)
+                    transfers_sent += abs(m_delta)
                     rid = det.get("recipient_id")
                     if rid:
-                        top_recipients[rid] = top_recipients.get(rid, 0) + abs(delta)
+                        top_recipients[rid] = top_recipients.get(rid, 0) + abs(m_delta)
                 elif evt == "invest_sell_shares":
-                    stock_sells += delta
+                    stock_sells += m_delta
                 elif evt == "invest_buy_shares":
-                    stock_buys += abs(delta)
+                    stock_buys += abs(m_delta)
+                elif evt == "collect_passive_income":
+                    biz_collected_money += m_delta
+                    biz_collected_gold += c_delta
+                elif evt in ("mine_mini_game", "mine_vein"):
+                    mine_earned_money += m_delta
+                    mine_earned_gold += c_delta
+                elif evt in ("rob_success", "robgold_success"):
+                    rob_stolen_money += m_delta
+                elif evt in ("rob_victim", "robgold_victim", "rob_failed", "robgold_failed"):
+                    rob_lost_money += abs(m_delta)
+                elif evt == "sell_inventory_item":
+                    item_sold_money += m_delta
         except Exception:
             pass
 
-        # 4. Stock holdings current valuation
+        # 4. Businesses ownership details
+        biz_details = []
+        biz_hourly_vnd = 0
+        biz_daily_gold = 0.0
+        try:
+            from app.discord_bot.cogs.simulator import BUSINESSES
+            cur.execute("SELECT biz_id, level FROM user_businesses WHERE user_id = ? AND level > 0", (user_id,))
+            for bid, lvl in cur.fetchall():
+                if bid in BUSINESSES:
+                    binfo = BUSINESSES[bid]
+                    if binfo.get("currency") == "money":
+                        h_rev = binfo["base_revenue"] * lvl
+                        biz_hourly_vnd += h_rev
+                        biz_details.append(f"• **{binfo['name']}** (Cấp {lvl}): `{h_rev:,} VND/giờ`")
+                    else:
+                        d_rev = binfo["base_revenue"] * lvl * 24
+                        biz_daily_gold += d_rev
+                        biz_details.append(f"• **{binfo['name']}** (Cấp {lvl}): `{d_rev:.2f} Vàng/ngày`")
+        except Exception:
+            pass
+
+        # 5. Stock holdings current valuation
         stock_prices = {}
         try:
             cur.execute("SELECT symbol, price FROM stock_prices")
@@ -2978,6 +3018,16 @@ class GamblingHelpers(commands.Cog, name="General"):
             inflow_lines.append(f"🎮 **Thắng Minigame:** `+{game_inflows:,} VND`")
         if stock_sells > 0:
             inflow_lines.append(f"📈 **Bán cổ phiếu:** `+{stock_sells:,} VND`")
+        if biz_collected_money > 0 or biz_collected_gold > 0:
+            gold_str = f" & `+{biz_collected_gold} vàng`" if biz_collected_gold > 0 else ""
+            inflow_lines.append(f"🏢 **Thu hoạch Doanh nghiệp (`biz`):** `+{biz_collected_money:,} VND`{gold_str}")
+        if mine_earned_money > 0 or mine_earned_gold > 0:
+            gold_str = f" & `+{mine_earned_gold} vàng`" if mine_earned_gold > 0 else ""
+            inflow_lines.append(f"⛏️ **Khai thác mỏ (`mine`):** `+{mine_earned_money:,} VND`{gold_str}")
+        if rob_stolen_money > 0:
+            inflow_lines.append(f"🥷 **Cướp thành công (`rob`):** `+{rob_stolen_money:,} VND`")
+        if item_sold_money > 0:
+            inflow_lines.append(f"🎒 **Bán vật phẩm / Cổ vật:** `+{item_sold_money:,} VND`")
         if transfers_received > 0:
             inflow_lines.append(f"💸 **Nhận từ người khác (`give/pay`):** `+{transfers_received:,} VND`")
             if top_senders:
@@ -2993,6 +3043,8 @@ class GamblingHelpers(commands.Cog, name="General"):
             outflow_lines.append(f"🎲 **Thua Minigame:** `-{game_outflows:,} VND`")
         if stock_buys > 0:
             outflow_lines.append(f"📉 **Mua cổ phiếu:** `-{stock_buys:,} VND`")
+        if rob_lost_money > 0:
+            outflow_lines.append(f"🥷 **Bị cướp / Phạt cướp thất bại:** `-{rob_lost_money:,} VND`")
         if transfers_sent > 0:
             outflow_lines.append(f"💸 **Chuyển cho người khác:** `-{transfers_sent:,} VND`")
             if top_recipients:
@@ -3000,8 +3052,8 @@ class GamblingHelpers(commands.Cog, name="General"):
                     rname = await get_user_name(ctx.bot, rid)
                     outflow_lines.append(f"  ↳ *Cho {rname} (`{rid}`):* `-{amt:,} VND`")
 
-        total_inflow = topup_vnd + game_inflows + stock_sells + transfers_received + (100_000 if claimed_start else 0)
-        total_outflow = game_outflows + stock_buys + transfers_sent
+        total_inflow = topup_vnd + game_inflows + stock_sells + biz_collected_money + mine_earned_money + rob_stolen_money + item_sold_money + transfers_received + (100_000 if claimed_start else 0)
+        total_outflow = game_outflows + stock_buys + rob_lost_money + transfers_sent
         net_flow = total_inflow - total_outflow
         unaccounted = current_money - net_flow
 
@@ -3035,10 +3087,17 @@ class GamblingHelpers(commands.Cog, name="General"):
                 inline=False,
             )
 
+        if biz_details:
+            embed.add_field(
+                name=f"🏢 4. Doanh Nghiệp Đang Sở Hữu ({biz_hourly_vnd:,}đ/h | {biz_daily_gold:.2f} vàng/ngày)",
+                value="\n".join(biz_details),
+                inline=False,
+            )
+
         if portfolio_rows:
             stock_str = ", ".join([f"{sym}: {shares:,.0f}" for sym, shares in portfolio_rows])
             embed.add_field(
-                name=f"📈 4. Cổ Phiếu Đang Giữ (Trị giá: `{stock_val:,} VND`)",
+                name=f"📈 5. Cổ Phiếu Đang Giữ (Trị giá: `{stock_val:,} VND`)",
                 value=f"• {stock_str}",
                 inline=False,
             )
