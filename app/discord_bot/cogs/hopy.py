@@ -365,7 +365,7 @@ class Hopy(commands.Cog, name="Hopy"):
         name="hopy",
         aliases=["tamdauyhop", "mindmeld", "hop-y"],
         invoke_without_command=True,
-        brief="✨ Party minigame Tâm Đầu Ý Hợp",
+        brief="✨ Party minigame Tâm Đầu Ý Hợp (Đoán ý đồng đội)",
     )
     async def hopy_cmd(self, ctx: commands.Context):
         """Khởi tạo phòng chơi HỢP Ý (Tâm Đầu Ý Hợp)"""
