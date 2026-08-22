@@ -33,7 +33,7 @@ INTERIM_DELAY = 7       # Giây chờ trước khi tự động qua vòng mới
 
 class HopyAnswerModal(discord.ui.Modal, title="💡 Câu Trả Lời Hợp Ý"):
     def __init__(self, cog: "Hopy", game: HopyGame, user_id: int):
-        super().__init__()
+        super().__init__(custom_id=f"hopy_modal_{user_id}_{game.current_round}")
         self.cog = cog
         self.game = game
         self.user_id = user_id
@@ -109,7 +109,14 @@ class DifficultySelect(discord.ui.Select):
                 default=(current_diff == "mix")
             ),
         ]
-        super().__init__(placeholder="⚙️ Chọn độ khó...", min_values=1, max_values=1, options=options)
+        super().__init__(
+            placeholder="⚙️ Chọn độ khó...",
+            min_values=1,
+            max_values=1,
+            options=options,
+            custom_id="hopy_diff_select",
+            row=0
+        )
 
     async def callback(self, interaction: discord.Interaction):
         view: HopyLobbyView = self.view
@@ -121,8 +128,8 @@ class DifficultySelect(discord.ui.Select):
         for opt in self.options:
             opt.default = (opt.value == self.values[0])
 
-        await interaction.response.defer()
-        await view.cog.refresh_lobby_embed(view.game)
+        embed = view.cog.build_lobby_embed(view.game)
+        await interaction.response.edit_message(embed=embed, view=view)
 
 
 class RoundsSelect(discord.ui.Select):
@@ -150,7 +157,14 @@ class RoundsSelect(discord.ui.Select):
                 default=(current_rounds == 7)
             ),
         ]
-        super().__init__(placeholder="🎯 Chọn số vòng đấu...", min_values=1, max_values=1, options=options)
+        super().__init__(
+            placeholder="🎯 Chọn số vòng đấu...",
+            min_values=1,
+            max_values=1,
+            options=options,
+            custom_id="hopy_rounds_select",
+            row=1
+        )
 
     async def callback(self, interaction: discord.Interaction):
         view: HopyLobbyView = self.view
@@ -162,20 +176,20 @@ class RoundsSelect(discord.ui.Select):
         for opt in self.options:
             opt.default = (opt.value == self.values[0])
 
-        await interaction.response.defer()
-        await view.cog.refresh_lobby_embed(view.game)
+        embed = view.cog.build_lobby_embed(view.game)
+        await interaction.response.edit_message(embed=embed, view=view)
 
 
 class HopyLobbyView(discord.ui.View):
     def __init__(self, cog: "Hopy", game: HopyGame):
-        super().__init__(timeout=180.0)
+        super().__init__(timeout=300.0)
         self.cog = cog
         self.game = game
 
         self.add_item(DifficultySelect(game.difficulty))
         self.add_item(RoundsSelect(game.total_rounds))
 
-    @discord.ui.button(label="Tham Gia", style=discord.ButtonStyle.success, emoji="🟢", row=2)
+    @discord.ui.button(label="Tham Gia", style=discord.ButtonStyle.success, emoji="🟢", custom_id="hopy_join", row=2)
     async def join_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         user = interaction.user
         if user.id in self.game.players and self.game.players[user.id].active:
@@ -190,7 +204,7 @@ class HopyLobbyView(discord.ui.View):
         await interaction.response.send_message("✅ Bạn đã tham gia phòng **HỢP Ý**!", ephemeral=True)
         await self.cog.refresh_lobby_embed(self.game)
 
-    @discord.ui.button(label="Rời Phòng", style=discord.ButtonStyle.secondary, emoji="🚪", row=2)
+    @discord.ui.button(label="Rời Phòng", style=discord.ButtonStyle.secondary, emoji="🚪", custom_id="hopy_leave", row=2)
     async def leave_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         user = interaction.user
         if user.id not in self.game.players:
@@ -198,7 +212,6 @@ class HopyLobbyView(discord.ui.View):
             return
 
         self.game.remove_player(user.id)
-        await interaction.response.send_message("🚪 Bạn đã rời khỏi phòng chờ.", ephemeral=True)
 
         if not self.game.players:
             # Không còn ai trong phòng -> Hủy phòng
@@ -209,18 +222,13 @@ class HopyLobbyView(discord.ui.View):
                 description="Phòng chơi đã tự động đóng vì không còn ai trong phòng.",
                 color=discord.Color.dark_grey()
             )
-            try:
-                channel = self.cog.client.get_channel(self.game.channel_id)
-                if channel and self.game.message_id:
-                    msg = await channel.fetch_message(self.game.message_id)
-                    await msg.edit(embed=embed, view=None)
-            except Exception:
-                pass
+            await interaction.response.edit_message(embed=embed, view=None)
             return
 
+        await interaction.response.send_message("🚪 Bạn đã rời khỏi phòng chờ.", ephemeral=True)
         await self.cog.refresh_lobby_embed(self.game)
 
-    @discord.ui.button(label="Bắt Đầu", style=discord.ButtonStyle.primary, emoji="🚀", row=2)
+    @discord.ui.button(label="Bắt Đầu", style=discord.ButtonStyle.primary, emoji="🚀", custom_id="hopy_start", row=2)
     async def start_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user.id != self.game.host_id:
             await interaction.response.send_message("❌ Chỉ chủ phòng mới có quyền bắt đầu ván đấu!", ephemeral=True)
@@ -228,7 +236,7 @@ class HopyLobbyView(discord.ui.View):
 
         if self.game.player_count < self.game.MIN_PLAYERS:
             await interaction.response.send_message(
-                f"❌ Cần ít nhất **{self.game.MIN_PLAYERS} người chơi** để bắt đầu!",
+                f"❌ Cần ít nhất **{self.game.MIN_PLAYERS} người chơi** để bắt đầu!\nHãy rủ thêm bạn bè bấm nút **🟢 Tham Gia**.",
                 ephemeral=True
             )
             return
@@ -237,7 +245,7 @@ class HopyLobbyView(discord.ui.View):
         await interaction.response.defer()
         asyncio.create_task(self.cog.start_game_session(self.game))
 
-    @discord.ui.button(label="Hủy Phòng", style=discord.ButtonStyle.danger, emoji="❌", row=2)
+    @discord.ui.button(label="Hủy Phòng", style=discord.ButtonStyle.danger, emoji="❌", custom_id="hopy_cancel", row=2)
     async def cancel_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user.id != self.game.host_id:
             await interaction.response.send_message("❌ Chỉ chủ phòng mới có quyền hủy phòng!", ephemeral=True)
@@ -245,19 +253,12 @@ class HopyLobbyView(discord.ui.View):
 
         self.stop()
         self.cog.active_games.pop(self.game.channel_id, None)
-        await interaction.response.defer()
         embed = make_embed(
             title="✨ PHÒNG HỢP Ý ĐÃ HỦY",
             description=f"Chủ phòng **{interaction.user.display_name}** đã hủy phòng chờ.",
             color=discord.Color.red()
         )
-        try:
-            channel = self.cog.client.get_channel(self.game.channel_id)
-            if channel and self.game.message_id:
-                msg = await channel.fetch_message(self.game.message_id)
-                await msg.edit(embed=embed, view=None)
-        except Exception:
-            pass
+        await interaction.response.edit_message(embed=embed, view=None)
 
 
 class HopyQuestionView(discord.ui.View):
@@ -266,7 +267,7 @@ class HopyQuestionView(discord.ui.View):
         self.cog = cog
         self.game = game
 
-    @discord.ui.button(label="✍️ Trả Lời / Đổi Đáp Án", style=discord.ButtonStyle.primary)
+    @discord.ui.button(label="✍️ Trả Lời / Đổi Đáp Án", style=discord.ButtonStyle.primary, custom_id="hopy_answer")
     async def answer_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user.id not in self.game.players or not self.game.players[interaction.user.id].active:
             await interaction.response.send_message("❌ Bạn không tham gia ván chơi này!", ephemeral=True)
@@ -279,7 +280,7 @@ class HopyQuestionView(discord.ui.View):
         modal = HopyAnswerModal(self.cog, self.game, interaction.user.id)
         await interaction.response.send_modal(modal)
 
-    @discord.ui.button(label="⏩ Chốt Giờ Sớm", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="⏩ Chốt Giờ Sớm", style=discord.ButtonStyle.secondary, custom_id="hopy_early_reveal")
     async def early_reveal_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user.id != self.game.host_id:
             await interaction.response.send_message("❌ Chỉ chủ phòng mới có quyền chốt giờ sớm!", ephemeral=True)
@@ -291,7 +292,6 @@ class HopyQuestionView(discord.ui.View):
             return
 
         await interaction.response.send_message("⏩ Chủ phòng đã kích hoạt chốt giờ sớm!", ephemeral=True)
-        # Đánh dấu cờ force reveal
         self.cog.force_reveal_flags[self.game.channel_id] = True
 
 
@@ -301,13 +301,13 @@ class HopyNextRoundView(discord.ui.View):
         self.cog = cog
         self.game = game
 
-    @discord.ui.button(label="⏩ Vòng Tiếp Theo", style=discord.ButtonStyle.success)
+    @discord.ui.button(label="⏩ Vòng Tiếp Theo", style=discord.ButtonStyle.success, custom_id="hopy_next_round")
     async def next_round_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user.id != self.game.host_id:
             await interaction.response.send_message("❌ Chỉ chủ phòng mới có quyền chuyển vòng ngay!", ephemeral=True)
             return
 
-        await interaction.response.defer()
+        await interaction.response.send_message("⏩ Chủ phòng đã chuyển sang vòng tiếp theo!", ephemeral=True)
         self.cog.skip_wait_flags[self.game.channel_id] = True
 
 
@@ -317,7 +317,7 @@ class HopyGameEndView(discord.ui.View):
         self.cog = cog
         self.game = game
 
-    @discord.ui.button(label="🔄 Chơi Ván Mới", style=discord.ButtonStyle.primary, emoji="🎉")
+    @discord.ui.button(label="🔄 Chơi Ván Mới", style=discord.ButtonStyle.primary, emoji="🎉", custom_id="hopy_new_game")
     async def new_game_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.channel.id in self.cog.active_games:
             await interaction.response.send_message("❌ Kênh này đang có một phòng chơi khác đang hoạt động!", ephemeral=True)
@@ -614,8 +614,7 @@ class Hopy(commands.Cog, name="Hopy"):
         try:
             msg = await channel.fetch_message(game.message_id)
             embed = self.build_lobby_embed(game)
-            view = HopyLobbyView(self, game)
-            await msg.edit(embed=embed, view=view)
+            await msg.edit(embed=embed)
         except Exception as e:
             logger.warning(f"Hopy: Lỗi khi refresh lobby embed: {e}")
 
