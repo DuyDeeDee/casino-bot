@@ -321,7 +321,7 @@ SHOP_ITEMS = {
         "name": "Bằng Siêu Trộm Vàng 🥷",
         "cost": 1500,
         "currency": "gold",
-        "description": "Mở khóa kỹ năng trộm thỏi vàng của người khác bằng lệnh i?robgold @user (Tỷ lệ 50%, trộm từ 1-10 Thỏi Vàng/lần, cooldown 12 giờ)."
+        "description": "Mở khóa kỹ năng trộm thỏi vàng của người khác bằng lệnh i?robgold @user (Tỷ lệ 50%, trộm 1-10 Thỏi Vàng/lần, thất bại bị phạt 5-15% ví đền bù cho nạn nhân, cooldown 12 giờ)."
     },
     "banner_aesthetic": {
         "name": "Banner Aesthetic Động ✨",
@@ -3629,6 +3629,14 @@ class Simulator(commands.Cog):
             await ctx.send(f"⏳ **Cảnh sát đang ráo riết truy nã:** Bạn cần lẩn trốn thêm **{hours} giờ {minutes} phút** trước khi đi trộm thỏi vàng tiếp!")
             return
 
+        # Check robber money (must have at least 5,000,000 VND)
+        robber_profile = self.economy.get_entry(user_id)
+        robber_money = robber_profile[1]
+        min_required_money = 5_000_000
+        if robber_money < min_required_money:
+            await ctx.send(f"❌ **Bạn không đủ tiền thực hiện phi vụ:** Cần có ít nhất **{min_required_money:,} VND** trong ví để bồi thường nếu bị bắt quả tang!")
+            return
+
         # Check target gold
         target_profile = self.economy.get_entry(target.id)
         target_gold = target_profile[2]
@@ -3684,9 +3692,10 @@ class Simulator(commands.Cog):
             embed.set_thumbnail(url=ctx.author.display_avatar.url)
             await ctx.send(embed=embed)
         else:
-            # Failure: fine in money VND (3,000,000 VND compensate to target)
-            fine = 3_000_000
-            robber_money = self.economy.get_entry(user_id)[1]
+            # Failure: fine 5% to 15% of robber's money (minimum 5,000,000 VND) compensate to target
+            fine_pct = random.uniform(0.05, 0.15)
+            calc_fine = int(robber_money * fine_pct)
+            fine = max(5_000_000, calc_fine)
             actual_fine = min(robber_money, fine)
             
             if actual_fine > 0:
@@ -3695,11 +3704,12 @@ class Simulator(commands.Cog):
                 
             log_wallet_change(logger, event="robgold_failed", user_id=user_id, money_delta=-actual_fine, victim_id=target.id, ctx=ctx)
             
+            pct_display = fine_pct * 100
             embed = make_embed(
                 title="🚨 TRỘM VÀNG BỊ BẮT QUẢ TANG! 🚨",
                 description=(
                     f"**{ctx.author.mention}** cố gắng bẻ khóa két thỏi vàng của **{target.mention}** nhưng bị bắt quả tang!\n\n"
-                    f"👮 **Bị cảnh sát tóm gọn & phạt đền bù cho nạn nhân:** `-{actual_fine:,} VND`"
+                    f"👮 **Bị cảnh sát tóm gọn & phạt đền bù cho nạn nhân ({pct_display:.1f}% ví):** `-{actual_fine:,} VND`"
                 ),
                 color=discord.Color.red()
             )
