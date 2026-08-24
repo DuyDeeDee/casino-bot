@@ -2783,7 +2783,7 @@ class Economy:
             "ring_sunburst": (1.20, 0.020),
             "ring_gothic": (1.25, 0.025),
             "ring_angel": (1.30, 0.030),
-            "ring_divine": (1.40, 0.040),
+            "ring_divine": (1.40, 0.005, 1.50),
             "ring_eternal_butterfly": (1.12, 0.010),
         }
         
@@ -2793,8 +2793,12 @@ class Economy:
             love_level = love_points // 100
             
             if ring_type in ring_buffs:
-                base, step = ring_buffs[ring_type]
+                buff_info = ring_buffs[ring_type]
+                base = buff_info[0]
+                step = buff_info[1]
                 mult = base + (love_level * step)
+                if len(buff_info) > 2:
+                    mult = min(mult, buff_info[2])
             elif ring_type == "ring_silver":
                 mult = 1.02 + (love_level * 0.005)
             elif ring_type == "ring_gold":
