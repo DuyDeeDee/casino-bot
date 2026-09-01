@@ -166,11 +166,11 @@ class GiveawayBasicInfoModal(discord.ui.Modal, title="🎨 Thông Tin Cơ Bản"
             required=False
         )
         self.custom_desc = discord.ui.TextInput(
-            label="Mô tả phụ / Ghi chú của Host",
+            label="Bố Cục Mô Tả / Ghi Chú (Placeholders)",
             style=discord.TextStyle.paragraph,
-            placeholder="Nhập ghi chú thể lệ, nhà tài trợ, lời nhắn...",
+            placeholder="Dùng biến: {prize}, {host}, {winner_count}, {ends_at}, {prize_bonus}...\nHoặc để trống nếu dùng mẫu chuẩn.",
             default=cfg.get("custom_desc", ""),
-            max_length=1000,
+            max_length=1500,
             required=False
         )
 
@@ -999,6 +999,57 @@ class Giveaway(commands.Cog, name="Giveaway"):
         if host and host.display_avatar:
             embed.set_thumbnail(url=host.display_avatar.url)
 
+    def format_embed_description(self, template_str: str, giveaway: dict, participants_count: int, is_ended: bool = False, winners: Optional[list] = None) -> str:
+        prize = giveaway.get('prize', '')
+        host_id = giveaway.get('host_id', 0)
+        winner_count = giveaway.get('winner_count', 1)
+        ends_at = giveaway.get('ends_at', int(time.time()))
+        guild_id = giveaway.get('guild_id', 0)
+        guild = self.bot.get_guild(guild_id)
+        server_name = str(guild.name) if (guild and hasattr(guild, "name") and isinstance(guild.name, str)) else ""
+
+        # Required roles
+        req_roles_raw = giveaway.get('required_roles')
+        required_roles = json.loads(req_roles_raw) if isinstance(req_roles_raw, str) else (req_roles_raw or [])
+        req_str = ", ".join(f"<@&{r_id}>" for r_id in required_roles) if required_roles else "Không có"
+
+        # Bonus tickets
+        bonus_roles_raw = giveaway.get('bonus_roles') or {}
+        bonus_roles = json.loads(bonus_roles_raw) if isinstance(bonus_roles_raw, str) else (bonus_roles_raw or {})
+        bonus_ticket_str = ", ".join(f"<@&{r_id}> (+{extra} vé)" for r_id, extra in bonus_roles.items()) if bonus_roles else "Không có"
+
+        # Role bonus prizes
+        role_prizes_raw = giveaway.get('role_bonus_prizes') or {}
+        role_prizes = json.loads(role_prizes_raw) if isinstance(role_prizes_raw, str) else (role_prizes_raw or {})
+        role_prize_str = ", ".join(f"<@&{r_id}>: **{b_text}**" for r_id, b_text in role_prizes.items()) if role_prizes else "Không có"
+
+        winners_mentions = ", ".join(f"<@{w_id}>" for w_id in (winners or [])) if winners else "Chưa có"
+
+        host_user = self.bot.get_user(host_id)
+        host_name = str(host_user.name) if (host_user and hasattr(host_user, "name") and isinstance(host_user.name, str)) else str(host_id)
+
+        res = template_str
+        res = res.replace("{prize}", str(prize))
+        res = res.replace("{host}", f"<@{host_id}>")
+        res = res.replace("{host_name}", host_name)
+        res = res.replace("{host_id}", str(host_id))
+        res = res.replace("{winner_count}", str(winner_count))
+        res = res.replace("{win}", str(winner_count))
+        res = res.replace("{winners}", winners_mentions)
+        res = res.replace("{result}", winners_mentions)
+        res = res.replace("{ends_at}", f"<t:{ends_at}:R>")
+        res = res.replace("{end}", f"<t:{ends_at}:R>")
+        res = res.replace("{end_time}", f"<t:{ends_at}:F>")
+        res = res.replace("{role_req}", req_str)
+        res = res.replace("{roles}", req_str)
+        res = res.replace("{bonus_roles}", bonus_ticket_str)
+        res = res.replace("{prize_bonus}", role_prize_str)
+        res = res.replace("{server_name}", server_name)
+        res = res.replace("{guild_name}", server_name)
+        res = res.replace("{participants_count}", str(participants_count))
+        res = res.replace("{participants}", str(participants_count))
+        return res
+
     def build_active_embed(self, giveaway: dict, participants_count: int) -> discord.Embed:
         prize = giveaway['prize']
         host_id = giveaway['host_id']
@@ -1032,37 +1083,42 @@ class Giveaway(commands.Cog, name="Giveaway"):
                 author_kwargs["url"] = author_url
             embed.set_author(**author_kwargs)
 
-        desc_lines = [
-            f"**{prize}**",
-            f"<a:timden:1526230943478845450> *host:* <@{host_id}>",
-            f"<:ss:1526230022787043348>*Win:* {winner_count}"
-        ]
-
-        if required_roles:
-            req_lines = ", ".join(f"<@&{r_id}>" for r_id in required_roles)
-            desc_lines.append(f"<a:kcden:1526231212887380108> *Giới hạn:* {req_lines}")
-
-        # Bonus tickets
-        bonus_roles_raw = giveaway.get('bonus_roles') or {}
-        bonus_roles = json.loads(bonus_roles_raw) if isinstance(bonus_roles_raw, str) else (bonus_roles_raw or {})
-        if bonus_roles:
-            ticket_lines = [f"<@&{r_id}> (+{extra} vé)" for r_id, extra in bonus_roles.items()]
-            desc_lines.append(f"<:ss:1526230022787043348>*Cộng vé:* " + ", ".join(ticket_lines))
-
-        # Role bonus prizes
-        role_prizes_raw = giveaway.get('role_bonus_prizes') or {}
-        role_prizes = json.loads(role_prizes_raw) if isinstance(role_prizes_raw, str) else (role_prizes_raw or {})
-        if role_prizes:
-            prize_bonus_lines = [f"<@&{r_id}>: **{b_text}**" for r_id, b_text in role_prizes.items()]
-            desc_lines.append(f"🎁 *Bonus role:* " + ", ".join(prize_bonus_lines))
-
-        desc_lines.append(f"<:ss:1526230022787043348>*End:* <t:{ends_at}:R>")
-
         custom_desc = embed_cfg.get('custom_desc')
-        if custom_desc:
-            desc_lines.append(f"\n📝 *Ghi chú:* {custom_desc}")
+        has_placeholders = custom_desc and any(ph in custom_desc for ph in ["{prize}", "{host}", "{winner_count}", "{win}", "{ends_at}", "{end}", "{role_req}", "{roles}", "{bonus_roles}", "{prize_bonus}"])
 
-        embed.description = "\n".join(desc_lines)
+        if has_placeholders:
+            embed.description = self.format_embed_description(custom_desc, giveaway, participants_count, is_ended=False)
+        else:
+            desc_lines = [
+                f"**{prize}**",
+                f"<a:timden:1526230943478845450> *host:* <@{host_id}>",
+                f"<:ss:1526230022787043348>*Win:* {winner_count}"
+            ]
+
+            if required_roles:
+                req_lines = ", ".join(f"<@&{r_id}>" for r_id in required_roles)
+                desc_lines.append(f"<a:kcden:1526231212887380108> *Giới hạn:* {req_lines}")
+
+            # Bonus tickets
+            bonus_roles_raw = giveaway.get('bonus_roles') or {}
+            bonus_roles = json.loads(bonus_roles_raw) if isinstance(bonus_roles_raw, str) else (bonus_roles_raw or {})
+            if bonus_roles:
+                ticket_lines = [f"<@&{r_id}> (+{extra} vé)" for r_id, extra in bonus_roles.items()]
+                desc_lines.append(f"<:ss:1526230022787043348>*Cộng vé:* " + ", ".join(ticket_lines))
+
+            # Role bonus prizes
+            role_prizes_raw = giveaway.get('role_bonus_prizes') or {}
+            role_prizes = json.loads(role_prizes_raw) if isinstance(role_prizes_raw, str) else (role_prizes_raw or {})
+            if role_prizes:
+                prize_bonus_lines = [f"<@&{r_id}>: **{b_text}**" for r_id, b_text in role_prizes.items()]
+                desc_lines.append(f"🎁 *Bonus role:* " + ", ".join(prize_bonus_lines))
+
+            desc_lines.append(f"<:ss:1526230022787043348>*End:* <t:{ends_at}:R>")
+
+            if custom_desc:
+                desc_lines.append(f"\n📝 *Ghi chú:* {custom_desc}")
+
+            embed.description = "\n".join(desc_lines)
 
         # Footer
         footer_text = embed_cfg.get('footer_text') or "Sylus Meow • Giveaway System"
@@ -1117,8 +1173,13 @@ class Giveaway(commands.Cog, name="Giveaway"):
                 author_kwargs["url"] = author_url
             embed.set_author(**author_kwargs)
 
+        custom_desc = embed_cfg.get('custom_desc')
+        has_placeholders = custom_desc and any(ph in custom_desc for ph in ["{prize}", "{host}", "{winner_count}", "{win}", "{ends_at}", "{end}", "{winners}", "{result}"])
+
         if status_note:
             embed.description = f"### {prize}\n\n{status_note}"
+        elif has_placeholders:
+            embed.description = self.format_embed_description(custom_desc, giveaway, 0, is_ended=True, winners=winners)
         elif winners:
             winners_mentions = ", ".join(f"<@{w_id}>" for w_id in winners)
             desc_lines = [
