@@ -586,9 +586,11 @@ class GiveawayEditorView(discord.ui.View):
             except Exception:
                 cfg = {}
         ping_header = cfg.get("ping_content") or f"# <a:w1:1526231439425667093> Giveaway {self.guild.name} <a:w2:1526231455422877798>"
+        is_template = (self.giveaway.get('id') == 0)
+        mode_title = "THIẾT KẾ MẪU EMBED GIVEAWAY MẶC ĐỊNH" if is_template else f"BẢNG ĐIỀU KHIỂN CHỈNH SỬA GIVEAWAY (ID: `{self.giveaway.get('id')}`)"
 
         await interaction.response.edit_message(
-            content=f"🛠️ **[LIVE PREVIEW - BẢNG ĐIỀU KHIỂN CHỈNH SỬA GIVEAWAY]**\n{ping_header}",
+            content=f"🛠️ **[LIVE PREVIEW - {mode_title}]**\n{ping_header}",
             embed=embed,
             view=self
         )
@@ -648,6 +650,20 @@ class GiveawayEditorView(discord.ui.View):
         embed_config = self.giveaway.get('embed_config', {})
         role_bonus_prizes = self.giveaway.get('role_bonus_prizes', {})
 
+        if msg_id == 0:
+            if isinstance(embed_config, str):
+                try:
+                    embed_config = json.loads(embed_config)
+                except Exception:
+                    embed_config = {}
+            self.cog.save_template(self.guild.id, self.user.id, "default", embed_config)
+            await interaction.response.send_message(
+                "💾 **Đã lưu thành công toàn bộ thiết kế này làm Mẫu Giveaway Mặc Định của bạn!**\n"
+                "👉 Từ nay, mỗi khi bạn gõ `i?ga ...` tạo Giveaway mới, bot sẽ **tự động áp dụng** giao diện đẹp mắt này!",
+                ephemeral=True
+            )
+            return
+
         self.cog.update_giveaway_full(
             msg_id=msg_id,
             prize=prize,
@@ -702,8 +718,11 @@ class OpenEditorTriggerView(discord.ui.View):
                 cfg = {}
         ping_header = cfg.get("ping_content") or f"# <a:w1:1526231439425667093> Giveaway {self.guild.name} <a:w2:1526231455422877798>"
 
+        is_template = (self.giveaway.get('id') == 0)
+        mode_title = "THIẾT KẾ MẪU EMBED GIVEAWAY MẶC ĐỊNH" if is_template else f"BẢNG ĐIỀU KHIỂN CHỈNH SỬA GIVEAWAY (ID: `{self.giveaway.get('id')}`)"
+
         await interaction.response.send_message(
-            content=f"🛠️ **[LIVE PREVIEW - BẢNG ĐIỀU KHIỂN CHỈNH SỬA GIVEAWAY]**\n{ping_header}",
+            content=f"🛠️ **[LIVE PREVIEW - {mode_title}]**\n{ping_header}",
             embed=preview_embed,
             view=editor_view,
             ephemeral=True
@@ -1604,44 +1623,81 @@ class Giveaway(commands.Cog, name="Giveaway"):
         embed.set_footer(text="Sylus Meow • Giveaway System")
         await ctx.send(embed=embed)
 
-    @giveaway_group.command(name="edit", aliases=["sua", "chinhsua"], brief="Mở bảng điều khiển tương tác (Mimu-style) để chỉnh sửa Giveaway")
+    @giveaway_group.command(name="edit", aliases=["sua", "chinhsua", "custom", "studio"], brief="Mở bảng điều khiển tương tác (Mimu-style) để chỉnh sửa Giveaway hoặc Mẫu Mặc Định")
     async def giveaway_edit(self, ctx: commands.Context, message_id: Optional[int] = None):
         try:
             await ctx.message.delete()
         except Exception:
             pass
 
+        # 1. Nếu không có message_id, thử lấy từ tin nhắn đang Reply
         if message_id is None:
             if ctx.message.reference and ctx.message.reference.message_id:
                 message_id = ctx.message.reference.message_id
 
+        # 2. Nếu vẫn không có message_id, tự động tìm Giveaway đang chạy trong kênh / server của Host
         if message_id is None:
-            await ctx.send(
-                f"❌ Vui lòng nhập ID tin nhắn Giveaway hoặc Reply vào tin nhắn Giveaway cần sửa: `{ctx.prefix}ga edit <id_tin_nhắn>`",
-                delete_after=10
+            self.economy.cur.execute(
+                "SELECT id FROM giveaways WHERE guild_id = ? AND channel_id = ? AND ended = 0 ORDER BY id DESC LIMIT 1",
+                (ctx.guild.id, ctx.channel.id)
             )
-            return
+            row = self.economy.cur.fetchone()
+            if not row:
+                self.economy.cur.execute(
+                    "SELECT id FROM giveaways WHERE guild_id = ? AND host_id = ? AND ended = 0 ORDER BY id DESC LIMIT 1",
+                    (ctx.guild.id, ctx.author.id)
+                )
+                row = self.economy.cur.fetchone()
+            if not row:
+                self.economy.cur.execute(
+                    "SELECT id FROM giveaways WHERE guild_id = ? AND ended = 0 ORDER BY id DESC LIMIT 1",
+                    (ctx.guild.id,)
+                )
+                row = self.economy.cur.fetchone()
+            
+            if row:
+                message_id = row[0]
 
-        giveaway = self.get_giveaway(message_id)
-        if not giveaway:
-            await ctx.send("❌ Không tìm thấy dữ liệu giveaway với ID tin nhắn này.", delete_after=10)
-            return
+        # 3. Nếu tìm thấy Giveaway đang chạy -> Mở bảng chỉnh sửa Giveaway đó
+        if message_id is not None:
+            giveaway = self.get_giveaway(message_id)
+            if giveaway and giveaway['ended'] == 0:
+                if not self.can_manage_giveaway(ctx.author, giveaway):
+                    await ctx.send(
+                        "❌ Bạn không có quyền quản lý để chỉnh sửa Giveaway này. (Yêu cầu quyền Quản lý Server hoặc là Host của Giveaway)",
+                        delete_after=10
+                    )
+                    return
 
-        if giveaway['ended'] != 0:
-            await ctx.send("❌ Không thể chỉnh sửa giveaway đã kết thúc hoặc đã bị hủy.", delete_after=10)
-            return
+                trigger_view = OpenEditorTriggerView(self, giveaway, ctx.author, ctx.guild)
+                await ctx.send(
+                    f"🛠️ **Bảng Chỉnh Sửa Giveaway ID `{message_id}`** (Dành riêng cho <@{ctx.author.id}>):\n"
+                    f"👉 *Nhấn nút bên dưới để mở Bảng Điều Khiển Riêng Tư (Live Preview & Tùy chỉnh Embed)*:",
+                    view=trigger_view,
+                    delete_after=60
+                )
+                return
 
-        if not self.can_manage_giveaway(ctx.author, giveaway):
-            await ctx.send(
-                "❌ Bạn không có quyền quản lý để chỉnh sửa Giveaway này. (Yêu cầu quyền Quản lý Server hoặc là Host của Giveaway)",
-                delete_after=10
-            )
-            return
-
-        trigger_view = OpenEditorTriggerView(self, giveaway, ctx.author, ctx.guild)
-        prompt_msg = await ctx.send(
-            f"🛠️ **Bảng Chỉnh Sửa Giveaway ID `{message_id}`** (Dành riêng cho <@{ctx.author.id}>):\n"
-            f"*Nhấn nút bên dưới để mở Bảng Điều Khiển Riêng Tư (Ephemeral):*",
+        # 4. Nếu không có Giveaway nào đang chạy -> Mở Design Studio tùy chỉnh Mẫu Embed Mặc Định
+        saved_template = self.get_template(ctx.guild.id, ctx.author.id) or {}
+        now = int(time.time())
+        giveaway_template_obj = {
+            'id': 0,
+            'guild_id': ctx.guild.id,
+            'channel_id': ctx.channel.id,
+            'prize': "🎁 100.000 Xu / Discord Nitro (Mẫu Mặc Định)",
+            'host_id': ctx.author.id,
+            'winner_count': 1,
+            'ends_at': now + 3600,
+            'required_roles': [],
+            'bonus_roles': {},
+            'role_bonus_prizes': {},
+            'embed_config': saved_template
+        }
+        trigger_view = OpenEditorTriggerView(self, giveaway_template_obj, ctx.author, ctx.guild)
+        await ctx.send(
+            f"🎨 **Bảng Thiết Kế Mẫu Embed Giveaway Mặc Định** (Dành riêng cho <@{ctx.author.id}>):\n"
+            f"👉 *Nhấn nút bên dưới để mở Bảng Tùy Chỉnh Toàn Bộ Giao Diện Embed theo ý muốn:*",
             view=trigger_view,
             delete_after=60
         )
