@@ -633,15 +633,17 @@ class GiveawayEditorView(discord.ui.View):
                 cfg = {}
 
         self.cog.save_template(self.guild.id, self.user.id, "default", cfg)
-        await interaction.response.send_message(
-            "💾 **Đã lưu thành công phong cách này làm mẫu mặc định của bạn!**\n"
-            "👉 Từ nay, mỗi khi bạn tạo Giveaway mới trong Server, bot sẽ **tự động áp dụng** giao diện này mà không cần chỉnh lại từ đầu.",
-            ephemeral=True
+        embed = self.build_preview_embed()
+        ping_header = cfg.get("ping_content") or f"# <a:w1:1526231439425667093> Giveaway {self.guild.name} <a:w2:1526231455422877798>"
+        await interaction.response.edit_message(
+            content=f"💾 **[ĐÃ LƯU THÀNH CÔNG MẪU GIVEAWAY MẶC ĐỊNH!]**\n{ping_header}\n\n*(Từ nay, mỗi khi bạn gõ `i?ga ...` tạo Giveaway mới, bot sẽ tự động áp dụng giao diện này!)*",
+            embed=embed,
+            view=self
         )
 
     @discord.ui.button(label="Apply & Sync", style=discord.ButtonStyle.primary, emoji="✅", row=2)
     async def btn_apply_sync(self, interaction: discord.Interaction, button: discord.ui.Button):
-        msg_id = self.giveaway['id']
+        msg_id = self.giveaway.get('id', 0)
         prize = self.giveaway['prize']
         winner_count = self.giveaway['winner_count']
         ends_at = self.giveaway['ends_at']
@@ -650,17 +652,20 @@ class GiveawayEditorView(discord.ui.View):
         embed_config = self.giveaway.get('embed_config', {})
         role_bonus_prizes = self.giveaway.get('role_bonus_prizes', {})
 
+        if isinstance(embed_config, str):
+            try:
+                embed_config = json.loads(embed_config)
+            except Exception:
+                embed_config = {}
+
         if msg_id == 0:
-            if isinstance(embed_config, str):
-                try:
-                    embed_config = json.loads(embed_config)
-                except Exception:
-                    embed_config = {}
             self.cog.save_template(self.guild.id, self.user.id, "default", embed_config)
-            await interaction.response.send_message(
-                "💾 **Đã lưu thành công toàn bộ thiết kế này làm Mẫu Giveaway Mặc Định của bạn!**\n"
-                "👉 Từ nay, mỗi khi bạn gõ `i?ga ...` tạo Giveaway mới, bot sẽ **tự động áp dụng** giao diện đẹp mắt này!",
-                ephemeral=True
+            embed = self.build_preview_embed()
+            ping_header = embed_config.get("ping_content") or f"# <a:w1:1526231439425667093> Giveaway {self.guild.name} <a:w2:1526231455422877798>"
+            await interaction.response.edit_message(
+                content=f"💾 **[ĐÃ LƯU THÀNH CÔNG MẪU GIVEAWAY MẶC ĐỊNH!]**\n{ping_header}\n\n*(Từ nay, mỗi khi bạn gõ `i?ga ...` tạo Giveaway mới, bot sẽ tự động áp dụng giao diện này!)*",
+                embed=embed,
+                view=self
             )
             return
 
