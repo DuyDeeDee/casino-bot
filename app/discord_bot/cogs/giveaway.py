@@ -967,12 +967,6 @@ class Giveaway(commands.Cog, name="Giveaway"):
             perms = user_or_member.guild_permissions
             if perms.administrator or perms.manage_guild or perms.manage_messages:
                 return True
-        # Roles with management names
-        if hasattr(user_or_member, "roles"):
-            for r in user_or_member.roles:
-                r_name = r.name.lower()
-                if any(kw in r_name for kw in ["giveaway", "quản lý", "quan ly", "admin", "mod", "host"]):
-                    return True
         # Giveaway Host (chỉ đối với giveaway cụ thể đang chạy)
         if giveaway and giveaway.get('id', 0) != 0 and user_or_member.id == giveaway.get('host_id'):
             return True
@@ -1735,9 +1729,9 @@ class Giveaway(commands.Cog, name="Giveaway"):
         except Exception:
             pass
 
-        # Kiểm tra quyền quản lý (Admin / Quản lý Server / Quản lý Giveaway)
+        # Kiểm tra quyền quản lý (Admin / Quản lý Server / Quản lý Tin nhắn)
         if not self.can_manage_giveaway(ctx.author):
-            await ctx.send("❌ **Bạn không có quyền quản lý để sử dụng lệnh này!** (Yêu cầu quyền Quản trị viên, Quản lý Server hoặc Quản lý Giveaway)", delete_after=10)
+            await ctx.send("❌ **Bạn không có quyền quản lý để sử dụng lệnh này!** (Yêu cầu quyền Quản trị viên, Quản lý Server hoặc Quản lý Tin nhắn)", delete_after=10)
             return
 
         # 1. Nếu không có message_id, thử lấy từ tin nhắn đang Reply
