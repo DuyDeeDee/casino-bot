@@ -23,6 +23,32 @@ def parse_role_mention(text: str) -> Optional[int]:
     return None
 
 
+def resolve_role_input(guild: Optional[discord.Guild], text: str) -> Optional[int]:
+    """Resolves role from mention (<@&123>), digits (123), @RoleName, or RoleName."""
+    if not text:
+        return None
+    text = text.strip()
+    
+    # 1. Mention format <@&123456> or <@123456>
+    match = re.match(r"<@&?(\d+)>", text)
+    if match:
+        return int(match.group(1))
+    
+    # 2. Pure digits
+    if text.isdigit():
+        return int(text)
+    
+    # 3. Role Name lookup in guild
+    if guild:
+        clean_name = text.lstrip("@").strip().lower()
+        for role in guild.roles:
+            if role.name.lower() == clean_name:
+                return role.id
+            if role.name.lower() == text.lower():
+                return role.id
+    return None
+
+
 def parse_user_mention(text: str) -> Optional[int]:
     """Parses user mention or ID to get integer ID."""
     match = re.match(r"<@!?(\d+)>", text)
@@ -379,6 +405,7 @@ class GiveawayRequirementsModal(discord.ui.Modal, title="🔒 Cài Đặt Điề
         super().__init__()
         self.editor_view = editor_view
         ga = self.editor_view.giveaway
+        guild = self.editor_view.guild
 
         req_roles = ga.get("required_roles") or []
         if isinstance(req_roles, str):
@@ -387,7 +414,16 @@ class GiveawayRequirementsModal(discord.ui.Modal, title="🔒 Cài Đặt Điề
             except Exception:
                 req_roles = []
 
-        req_str = " ".join(str(r) for r in req_roles)
+        req_names = []
+        for r in req_roles:
+            r_str = str(r)
+            if guild and r_str.isdigit():
+                role_obj = guild.get_role(int(r_str))
+                if role_obj:
+                    req_names.append(f"@{role_obj.name}")
+                    continue
+            req_names.append(r_str)
+        req_str = ", ".join(req_names)
 
         bonus_roles = ga.get("bonus_roles") or {}
         if isinstance(bonus_roles, str):
@@ -396,18 +432,27 @@ class GiveawayRequirementsModal(discord.ui.Modal, title="🔒 Cài Đặt Điề
             except Exception:
                 bonus_roles = {}
 
-        bonus_str = " ".join(f"{r}:{extra}" for r, extra in bonus_roles.items())
+        bonus_names = []
+        for r, extra in bonus_roles.items():
+            r_str = str(r)
+            if guild and r_str.isdigit():
+                role_obj = guild.get_role(int(r_str))
+                if role_obj:
+                    bonus_names.append(f"@{role_obj.name}:{extra}")
+                    continue
+            bonus_names.append(f"{r}:{extra}")
+        bonus_str = ", ".join(bonus_names)
 
         self.required_roles_input = discord.ui.TextInput(
             label="Role Bắt Buộc (@Role hoặc Role ID)",
-            placeholder="VD: 123456789 987654321 (cách nhau khoảng trắng)",
+            placeholder="VD: @Member, @VIP hoặc 123456789 (cách nhau dấu phẩy hoặc khoảng trắng)",
             default=req_str,
             max_length=300,
             required=False
         )
         self.bonus_roles_input = discord.ui.TextInput(
-            label="Role Cộng Vé Bonus (RoleID:Vé)",
-            placeholder="VD: 123456789:2 987654321:3",
+            label="Role Cộng Vé Bonus (Role:Vé)",
+            placeholder="VD: @Booster:2, @VIP:3 hoặc 123456789:2",
             default=bonus_str,
             max_length=300,
             required=False
@@ -417,25 +462,30 @@ class GiveawayRequirementsModal(discord.ui.Modal, title="🔒 Cài Đặt Điề
         self.add_item(self.bonus_roles_input)
 
     async def on_submit(self, interaction: discord.Interaction):
-        req_tokens = self.required_roles_input.value.strip().split()
+        req_raw = self.required_roles_input.value.strip()
         req_list = []
-        for tok in req_tokens:
-            rid = parse_role_mention(tok)
-            if rid:
-                req_list.append(rid)
+        if req_raw:
+            tokens = [t.strip() for t in re.split(r"[,;\n]+|\s+", req_raw) if t.strip()]
+            for tok in tokens:
+                rid = resolve_role_input(interaction.guild, tok)
+                if rid and rid not in req_list:
+                    req_list.append(rid)
 
-        bonus_tokens = self.bonus_roles_input.value.strip().split()
+        bonus_raw = self.bonus_roles_input.value.strip()
         bonus_dict = {}
-        for tok in bonus_tokens:
-            if ":" in tok:
-                parts = tok.split(":")
-                rid = parse_role_mention(parts[0])
-                if rid and parts[1].isdigit():
-                    bonus_dict[rid] = int(parts[1])
-            else:
-                rid = parse_role_mention(tok)
-                if rid:
-                    bonus_dict[rid] = 1
+        if bonus_raw:
+            tokens = [t.strip() for t in re.split(r"[,;\n]+", bonus_raw) if t.strip()]
+            for tok in tokens:
+                if ":" in tok:
+                    parts = tok.split(":", 1)
+                    rid = resolve_role_input(interaction.guild, parts[0].strip())
+                    multiplier_str = parts[1].strip().lstrip("+")
+                    if rid and multiplier_str.isdigit():
+                        bonus_dict[rid] = int(multiplier_str)
+                else:
+                    rid = resolve_role_input(interaction.guild, tok)
+                    if rid:
+                        bonus_dict[rid] = 1
 
         self.editor_view.giveaway['required_roles'] = req_list
         self.editor_view.giveaway['bonus_roles'] = bonus_dict
@@ -448,6 +498,7 @@ class GiveawayPrizeBonusModal(discord.ui.Modal, title="🎁 Đặc Quyền Bonus
         super().__init__()
         self.editor_view = editor_view
         ga = self.editor_view.giveaway
+        guild = self.editor_view.guild
 
         role_prizes = ga.get("role_bonus_prizes") or {}
         if isinstance(role_prizes, str):
@@ -458,7 +509,12 @@ class GiveawayPrizeBonusModal(discord.ui.Modal, title="🎁 Đặc Quyền Bonus
 
         lines = []
         for rid_str, prize_text in role_prizes.items():
-            lines.append(f"{rid_str}: {prize_text}")
+            role_label = rid_str
+            if guild and str(rid_str).isdigit():
+                role_obj = guild.get_role(int(rid_str))
+                if role_obj:
+                    role_label = f"@{role_obj.name}"
+            lines.append(f"{role_label}: {prize_text}")
         default_val = "\n".join(lines)
 
         self.bonus_prizes_input = discord.ui.TextInput(
@@ -480,8 +536,9 @@ class GiveawayPrizeBonusModal(discord.ui.Modal, title="🎁 Đặc Quyền Bonus
                 if not line or ":" not in line:
                     continue
                 parts = line.split(":", 1)
-                rid = parse_role_mention(parts[0].strip())
+                role_query = parts[0].strip()
                 bonus_desc = parts[1].strip()
+                rid = resolve_role_input(interaction.guild, role_query)
                 if rid and bonus_desc:
                     parsed_dict[str(rid)] = bonus_desc
 
@@ -958,6 +1015,20 @@ class Giveaway(commands.Cog, name="Giveaway"):
         if required_roles:
             req_lines = ", ".join(f"<@&{r_id}>" for r_id in required_roles)
             desc_lines.append(f"<a:kcden:1526231212887380108> *Giới hạn:* {req_lines}")
+
+        # Bonus tickets
+        bonus_roles_raw = giveaway.get('bonus_roles') or {}
+        bonus_roles = json.loads(bonus_roles_raw) if isinstance(bonus_roles_raw, str) else (bonus_roles_raw or {})
+        if bonus_roles:
+            ticket_lines = [f"<@&{r_id}> (+{extra} vé)" for r_id, extra in bonus_roles.items()]
+            desc_lines.append(f"<:ss:1526230022787043348>*Cộng vé:* " + ", ".join(ticket_lines))
+
+        # Role bonus prizes
+        role_prizes_raw = giveaway.get('role_bonus_prizes') or {}
+        role_prizes = json.loads(role_prizes_raw) if isinstance(role_prizes_raw, str) else (role_prizes_raw or {})
+        if role_prizes:
+            prize_bonus_lines = [f"<@&{r_id}>: **{b_text}**" for r_id, b_text in role_prizes.items()]
+            desc_lines.append(f"🎁 *Bonus role:* " + ", ".join(prize_bonus_lines))
 
         desc_lines.append(f"<:ss:1526230022787043348>*End:* <t:{ends_at}:R>")
 
