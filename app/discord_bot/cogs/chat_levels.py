@@ -56,20 +56,43 @@ class ChatLevels(commands.Cog, name="ChatLevels"):
     async def on_message(self, message: discord.Message):
         if message.author.bot or message.guild is None:
             return
+
+        # 1. Kiểm tra Server: Nếu bot có danh sách Server cho phép (allowed_guild_ids)
+        # Server không thuộc danh sách -> bỏ qua hoàn toàn (không tích XP, không gửi tin)
+        allowed_guilds = getattr(config.bot, "allowed_guild_ids", None)
+        if allowed_guilds and message.guild.id not in allowed_guilds:
+            return
+
+        # 2. Tích XP chat
         try:
             leveled_up, level, _ = grant_chat_xp(self.economy, message.author.id)
         except Exception:
             logger.exception("grant_chat_xp failed for user %s", message.author.id)
             return
-        if leveled_up:
-            try:
-                await message.channel.send(
-                    f"🎉 Chúc mừng **{message.author.display_name}** đã đạt **Cấp độ {level}**! "
-                    f"Hạn mức cho/nhận tiền đã được nâng lên.",
-                    delete_after=15,
-                )
-            except Exception:
-                pass
+
+        if not leveled_up:
+            return
+
+        # 3. Phương án 1: Kiểm tra Kênh bị cấm (camkenh / blocked_channels)
+        # Vẫn được tích XP nhưng KHÔNG gửi tin nhắn thông báo lên cấp vào kênh bị cấm
+        guild_id = message.guild.id
+        channel_id = message.channel.id
+        db_blocked = self.economy.get_blocked_channels(guild_id) if self.economy else []
+        global_blocked = getattr(config.bot, "blocked_channels", None) or []
+        all_blocked = set(db_blocked).union(global_blocked)
+
+        if channel_id in all_blocked:
+            return
+
+        # 4. Gửi thông báo lên cấp tại các kênh hợp lệ (tự xóa sau 15s)
+        try:
+            await message.channel.send(
+                f"🎉 Chúc mừng **{message.author.display_name}** đã đạt **Cấp độ {level}**! "
+                f"Hạn mức cho/nhận tiền đã được nâng lên.",
+                delete_after=15,
+            )
+        except Exception:
+            pass
 
     # ─────────────────────────────────────────────
     # Command: $level [@thành_viên]

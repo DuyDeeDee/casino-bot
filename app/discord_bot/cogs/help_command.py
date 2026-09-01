@@ -238,22 +238,37 @@ def _admin_help_embeds(client: commands.Bot, prefix: str, only_discord_perms: bo
     embeds: list[discord.Embed] = []
     cur: discord.Embed | None = None
     cur_len = 0
+    title_text = "🛡️ DANH SÁCH LỆNH QUẢN TRỊ SERVER 🛡️" if only_discord_perms else "👑 DANH SÁCH LỆNH OWNER / ADMIN 👑"
+
     for name, value in fields:
-        if cur is None or cur_len + len(name) + len(value) > 5700 or len(cur.fields) >= 25:
+        # Giới hạn an toàn: <= 3500 ký tự và <= 10 field mỗi trang để hiển thị đẹp mắt và không vượt giới hạn Discord
+        if cur is None or cur_len + len(name) + len(value) > 3500 or len(cur.fields) >= 10:
+            page = len(embeds) + 1
             cur = make_embed(
-                title="👑 DANH SÁCH LỆNH OWNER / ADMIN 👑",
+                title=f"{title_text}" if page == 1 else f"{title_text} (Trang {page})",
                 description=header_desc,
                 color=discord.Color.from_rgb(255, 215, 0),
             )
-            if embeds:
-                cur.title = "👑 DANH SÁCH LỆNH OWNER / ADMIN 👑 (tiếp)"
             embeds.append(cur)
             cur_len = len(header_desc) + len(cur.title)
         cur.add_field(name=name, value=value, inline=False)
         cur_len += len(name) + len(value)
 
-    for emb in embeds:
-        emb.set_footer(text=f"Dùng {prefix}help <tên_lệnh> để xem chi tiết lệnh thường • Lệnh này ẩn với người chơi")
+    if not embeds:
+        cur = make_embed(
+            title=title_text,
+            description=header_desc + "\n\n_Không có lệnh nào._",
+            color=discord.Color.from_rgb(255, 215, 0),
+        )
+        embeds.append(cur)
+
+    total_pages = len(embeds)
+    for idx, emb in enumerate(embeds, 1):
+        if total_pages > 1:
+            emb.title = f"{title_text} (Trang {idx}/{total_pages})"
+        emb.set_footer(
+            text=f"Trang {idx}/{total_pages} • Dùng {prefix}help <tên_lệnh> để xem chi tiết • Lệnh này ẩn với người chơi"
+        )
     return embeds
 
 
@@ -463,6 +478,68 @@ class HelpView(View):
             item.disabled = True
 
 
+class AdminHelpPaginationView(View):
+    def __init__(self, embeds: list[discord.Embed], author_id: int):
+        super().__init__(timeout=180)
+        self.embeds = embeds
+        self.author_id = author_id
+        self.current_page = 0
+        self.message: discord.Message | None = None
+        self._update_buttons()
+
+    def _update_buttons(self):
+        self.first_btn.disabled = (self.current_page == 0)
+        self.prev_btn.disabled = (self.current_page == 0)
+        self.next_btn.disabled = (self.current_page == len(self.embeds) - 1)
+        self.last_btn.disabled = (self.current_page == len(self.embeds) - 1)
+        self.page_indicator.label = f"Trang {self.current_page + 1}/{len(self.embeds)}"
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.author_id:
+            await interaction.response.send_message("❌ Bạn không có quyền thao tác trên menu này.", ephemeral=True)
+            return False
+        return True
+
+    @discord.ui.button(emoji="⏮️", style=discord.ButtonStyle.secondary, custom_id="admin_help:first")
+    async def first_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.current_page = 0
+        self._update_buttons()
+        await interaction.response.edit_message(embed=self.embeds[self.current_page], view=self)
+
+    @discord.ui.button(emoji="◀️", style=discord.ButtonStyle.primary, custom_id="admin_help:prev")
+    async def prev_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.current_page > 0:
+            self.current_page -= 1
+        self._update_buttons()
+        await interaction.response.edit_message(embed=self.embeds[self.current_page], view=self)
+
+    @discord.ui.button(label="Trang 1/1", style=discord.ButtonStyle.secondary, disabled=True, custom_id="admin_help:page")
+    async def page_indicator(self, interaction: discord.Interaction, button: discord.ui.Button):
+        pass
+
+    @discord.ui.button(emoji="▶️", style=discord.ButtonStyle.primary, custom_id="admin_help:next")
+    async def next_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.current_page < len(self.embeds) - 1:
+            self.current_page += 1
+        self._update_buttons()
+        await interaction.response.edit_message(embed=self.embeds[self.current_page], view=self)
+
+    @discord.ui.button(emoji="⏭️", style=discord.ButtonStyle.secondary, custom_id="admin_help:last")
+    async def last_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.current_page = len(self.embeds) - 1
+        self._update_buttons()
+        await interaction.response.edit_message(embed=self.embeds[self.current_page], view=self)
+
+    async def on_timeout(self):
+        for item in self.children:
+            item.disabled = True
+        if self.message:
+            try:
+                await self.message.edit(view=self)
+            except Exception:
+                pass
+
+
 # ──────────────────────────────────────────────
 #  Cog
 # ──────────────────────────────────────────────
@@ -547,9 +624,11 @@ class Help(commands.Cog, name="help"):
             prefix = prefix[0]
 
         embeds = _admin_help_embeds(self.client, prefix, only_discord_perms=not is_bot_admin)
-        if not is_bot_admin:
-            embeds[0].title = "🛡️ DANH SÁCH LỆNH QUẢN TRỊ SERVER 🛡️"
-        await ctx.send(embeds=embeds)
+        if len(embeds) == 1:
+            await ctx.send(embed=embeds[0])
+        else:
+            view = AdminHelpPaginationView(embeds, author_id=ctx.author.id)
+            view.message = await ctx.send(embed=embeds[0], view=view)
 
     @commands.command(hidden=True)
     @commands.is_owner()
