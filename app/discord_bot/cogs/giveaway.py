@@ -1925,17 +1925,17 @@ class Giveaway(commands.Cog, name="Giveaway"):
         role_prizes = json.loads(role_prizes_raw) if isinstance(role_prizes_raw, str) else (role_prizes_raw or {})
 
         embed = discord.Embed(
-            title=f"🎁 Danh Sách Role Bonus - Giveaway `{message_id}`",
-            color=discord.Color.gold()
+            title=f"Danh Sách Role Bonus (ID: `{message_id}`)",
+            color=discord.Color.dark_embed()
         )
         embed.description = f"**Giải thưởng chính:** {giveaway['prize']}\n\n"
         if role_prizes:
             lines = []
             for rid_str, prize_text in role_prizes.items():
                 lines.append(f"• <@&{rid_str}>: **{prize_text}**")
-            embed.description += "### 🌟 Đặc quyền phần thưởng Role:\n" + "\n".join(lines)
+            embed.description += "**Đặc quyền Role:**\n" + "\n".join(lines)
         else:
-            embed.description += "*Chưa có Role nào được cấu hình bonus phần thưởng thêm cho giveaway này.*"
+            embed.description += "*Chưa có Role nào được cấu hình bonus cho giveaway này.*"
 
         embed.set_footer(text="Sylus Meow • Giveaway System")
         await ctx.send(embed=embed)
@@ -1993,13 +1993,8 @@ class Giveaway(commands.Cog, name="Giveaway"):
                 await ctx.send("ℹ️ Giveaway này chưa có người thắng. Bạn có thể tag trực tiếp người chơi để kiểm tra: `i?ga check <id> @User`.", delete_after=12)
                 return
 
-        # Build separate response embed
-        embed = discord.Embed(
-            title="🔍 KẾT QUẢ KIỂM TRA ROLE BONUS GIVEAWAY",
-            color=discord.Color.blue()
-        )
-        embed.description = f"📌 **Giveaway:** {prize} (ID: `{message_id}`)\n👑 **Tổ chức bởi:** <@{giveaway['host_id']}>\n\n"
-
+        # Build clean, minimal embed
+        lines = []
         for uid in target_ids:
             member = guild.get_member(uid)
             if not member:
@@ -2008,8 +2003,6 @@ class Giveaway(commands.Cog, name="Giveaway"):
                 except Exception:
                     member = None
 
-            member_name = member.display_name if member else f"User ID {uid}"
-            
             matched_bonuses = []
             if member:
                 for rid_str, bonus_desc in role_prizes.items():
@@ -2020,30 +2013,28 @@ class Giveaway(commands.Cog, name="Giveaway"):
                     except ValueError:
                         pass
 
-            block_lines = [
-                f"👤 **Người chơi:** <@{uid}> (`{member_name}`)",
-                f"🎁 **Giải thưởng gốc:** {prize}"
-            ]
-
             if matched_bonuses:
-                block_lines.append("🌟 **Đặc quyền Role hợp lệ:**")
-                for r_id, b_desc in matched_bonuses:
-                    block_lines.append(f"  ├─ 💎 <@&{r_id}>: **{b_desc}**")
-                
+                bonus_str = ", ".join(f"<@&{r_id}> (**{b_desc}**)" for r_id, b_desc in matched_bonuses)
                 all_rewards = [prize] + [b[1] for b in matched_bonuses]
                 total_str = " + ".join(f"**{r}**" for r in all_rewards)
-                block_lines.append(f"\n📦 **TỔNG PHẦN THƯỞNG CẦN TRAO:**\n👉 {total_str}")
+                lines.append(
+                    f"**Người chơi:** <@{uid}>\n"
+                    f"• **Bonus Role:** {bonus_str}\n"
+                    f"• **Tổng nhận:** {total_str}"
+                )
             else:
-                block_lines.append("🌟 **Đặc quyền Role:** Không có bonus thêm.")
-                block_lines.append(f"\n📦 **TỔNG PHẦN THƯỞNG CẦN TRAO:**\n👉 **{prize}**")
+                lines.append(
+                    f"**Người chơi:** <@{uid}>\n"
+                    f"• **Bonus Role:** Không có\n"
+                    f"• **Tổng nhận:** **{prize}**"
+                )
 
-            embed.add_field(
-                name=f"🏆 Kiểm tra: {member_name}",
-                value="\n".join(block_lines),
-                inline=False
-            )
-
-        embed.set_footer(text="Sylus Meow • Giveaway System (Embed GA gốc không bị thay đổi)")
+        embed = discord.Embed(
+            title=f"Kết Quả Kiểm Tra Bonus (ID: `{message_id}`)",
+            description="\n\n───────────────────\n\n".join(lines),
+            color=discord.Color.dark_embed()
+        )
+        embed.set_footer(text=f"Giải gốc: {prize}")
         await ctx.send(embed=embed)
 
     @giveaway_group.command(name="ketthuc", aliases=["end"], brief="Kết thúc sớm một giveaway đang chạy")
