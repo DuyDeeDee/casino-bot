@@ -591,8 +591,7 @@ class GiveawayEditorView(discord.ui.View):
 
         await interaction.response.edit_message(
             content=f"🛠️ **[LIVE PREVIEW - {mode_title}]**\n{ping_header}",
-            embed=embed,
-            view=self
+            embed=embed
         )
 
     @discord.ui.button(label="Basic Info", style=discord.ButtonStyle.secondary, emoji="🎨", row=0)
@@ -637,8 +636,7 @@ class GiveawayEditorView(discord.ui.View):
         ping_header = cfg.get("ping_content") or f"# <a:w1:1526231439425667093> Giveaway {self.guild.name} <a:w2:1526231455422877798>"
         await interaction.response.edit_message(
             content=f"💾 **[ĐÃ LƯU THÀNH CÔNG MẪU GIVEAWAY MẶC ĐỊNH!]**\n{ping_header}\n\n*(Từ nay, mỗi khi bạn gõ `i?ga ...` tạo Giveaway mới, bot sẽ tự động áp dụng giao diện này!)*",
-            embed=embed,
-            view=self
+            embed=embed
         )
 
     @discord.ui.button(label="Apply & Sync", style=discord.ButtonStyle.primary, emoji="✅", row=2)
@@ -664,8 +662,7 @@ class GiveawayEditorView(discord.ui.View):
             ping_header = embed_config.get("ping_content") or f"# <a:w1:1526231439425667093> Giveaway {self.guild.name} <a:w2:1526231455422877798>"
             await interaction.response.edit_message(
                 content=f"💾 **[ĐÃ LƯU THÀNH CÔNG MẪU GIVEAWAY MẶC ĐỊNH!]**\n{ping_header}\n\n*(Từ nay, mỗi khi bạn gõ `i?ga ...` tạo Giveaway mới, bot sẽ tự động áp dụng giao diện này!)*",
-                embed=embed,
-                view=self
+                embed=embed
             )
             return
 
