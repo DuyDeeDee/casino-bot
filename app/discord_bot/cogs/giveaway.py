@@ -1023,7 +1023,12 @@ class Giveaway(commands.Cog, name="Giveaway"):
             if author_icon and "{host_avatar}" in author_icon and host_user and host_user.display_avatar:
                 author_icon = host_user.display_avatar.url
             author_url = embed_cfg.get('author_url')
-            embed.set_author(name=formatted_name, icon_url=author_icon or discord.Embed.Empty, url=author_url or discord.Embed.Empty)
+            author_kwargs = {"name": formatted_name}
+            if author_icon:
+                author_kwargs["icon_url"] = author_icon
+            if author_url:
+                author_kwargs["url"] = author_url
+            embed.set_author(**author_kwargs)
 
         desc_lines = [
             f"**{prize}**",
@@ -1093,6 +1098,22 @@ class Giveaway(commands.Cog, name="Giveaway"):
 
         color = parse_color(embed_cfg.get('color')) or discord.Color.purple()
         embed = discord.Embed(title="<a:thanhgia:1526231085221023845> **Giveaway Kết Thúc** <a:thanhgia:1526231085221023845>", color=color)
+
+        # Author
+        author_name = embed_cfg.get('author_name')
+        if author_name:
+            host_user = self.bot.get_user(host_id)
+            formatted_name = author_name.replace("{host_name}", host_user.name if host_user else str(host_id))
+            author_icon = embed_cfg.get('author_icon')
+            if author_icon and "{host_avatar}" in author_icon and host_user and host_user.display_avatar:
+                author_icon = host_user.display_avatar.url
+            author_url = embed_cfg.get('author_url')
+            author_kwargs = {"name": formatted_name}
+            if author_icon:
+                author_kwargs["icon_url"] = author_icon
+            if author_url:
+                author_kwargs["url"] = author_url
+            embed.set_author(**author_kwargs)
 
         if status_note:
             embed.description = f"### {prize}\n\n{status_note}"
