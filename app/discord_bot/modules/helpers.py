@@ -84,13 +84,13 @@ def parse_amount(text: str) -> int | None:
 
 
 def calc_gold(vnd: int) -> tuple[int, int, int, int]:
-    """Top-up exchange rate: 1,000 VND = 3 Gold, plus 2% bonus Gold per full
+    """Top-up exchange rate: 1,000 VND = 1 Gold, plus 2% bonus Gold per full
     100,000 VND deposited (capped at 40%).
 
     Returns (base_gold, bonus_gold, bonus_pct, total_gold). The single source
     of truth for both the i?nap price display and i?addtopup crediting.
     """
-    base_gold = (vnd // 1000) * 3
+    base_gold = (vnd // 1000) * 1
     bonus_tier = vnd // 100_000
     bonus_pct = min(40, bonus_tier * 2)
     bonus_gold = int(base_gold * (bonus_pct / 100))

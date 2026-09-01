@@ -402,7 +402,7 @@ class Slots(commands.Cog):
     )
     async def nap(self, ctx: commands.Context, amount_str: str = None):
         """
-        Base rate: 1k VND (1,000 VND) = 3 Gold
+        Base rate: 1k VND (1,000 VND) = 1 Gold
         Discount / Bonus: Every 100k VND grants +2% bonus Gold (capped at 40%).
         """
         vnd_amount = parse_amount(amount_str)
@@ -421,7 +421,7 @@ class Slots(commands.Cog):
             embed = make_embed(
                 title="💳 BẢNG GIÁ NẠP THỎI VÀNG (TIỀN MẶT NGOÀI ĐỜI) 💳",
                 description=(
-                    f"✨ **Tỷ giá cơ bản:** `1,000 VND (1k)` = **`3 Thỏi Vàng`** <:32100goldbarsfortnite:1514192020921651251>\n"
+                    f"✨ **Tỷ giá cơ bản:** `1,000 VND (1k)` = **`1 Thỏi Vàng`** <:32100goldbarsfortnite:1514192020921651251>\n"
                     f"🎁 **Ưu đãi nạp lớn:** Cứ mỗi **`100,000 VND (100k)`** nạp vào ➔ **Tặng thêm +2% Gold** (tối đa 40%).\n\n"
                     f"### 📋 BẢNG GIÁ QUY ĐỔI MẪU:\n"
                     f"{table_text}\n\n"
@@ -462,7 +462,7 @@ class Slots(commands.Cog):
             desc = (
                 f"👤 **Người nạp:** {ctx.author.mention}\n"
                 f"💵 **Số tiền nạp:** `{vnd_formatted}`\n"
-                f"🪙 **Số Gold gốc (1k = 3 Gold):** `{base_g:,}` Thỏi Vàng\n"
+                f"🪙 **Số Gold gốc (1k = 1 Gold):** `{base_g:,}` Thỏi Vàng\n"
                 f"🎁 **Ưu đãi chiết khấu (+{disc_p}%):** `+{bonus_g:,}` Thỏi Vàng\n"
                 f"─────────────────────────────\n"
                 f"👑 **TỔNG GOLD SẼ NHẬN:** **`{tot_g:,}` Thỏi Vàng** <:32100goldbarsfortnite:1514192020921651251>\n\n"
@@ -674,7 +674,7 @@ class Slots(commands.Cog):
 
         new_price = parse_amount(price_str)
         if not new_price or new_price < 1_000_000:
-            await ctx.send("❌ Giá vàng không hợp lệ! Mức tối thiểu là 1,000,000 VND. Ví dụ: `i?setgoldprice 30m` hoặc `i?setgoldprice 30000000`.")
+            await ctx.send("❌ Giá vàng không hợp lệ! Mức tối thiểu là 1,000,000 VND. Ví dụ: `i?setgoldprice 10m` hoặc `i?setgoldprice 10000000`.")
             return
 
         current_price = self.economy.get_gold_price()
@@ -708,7 +708,7 @@ class Slots(commands.Cog):
             current_price = self.economy.get_gold_price()
             
             # Mean-reverting random walk
-            base_price = 30_000_000
+            base_price = 10_000_000
             drift = 0.05 * (base_price - current_price) / base_price
             
             # High volatility: random shock up to 25%
@@ -730,8 +730,8 @@ class Slots(commands.Cog):
                 )
 
             new_price = int(current_price * (1 + drift + random_shock + supply_pressure))
-            # Clamp between 3,000,000 and 150,000,000
-            new_price = max(3_000_000, min(150_000_000, new_price))
+            # Clamp between 1,000,000 and 100,000,000
+            new_price = max(1_000_000, min(100_000_000, new_price))
             # Round to nearest 1,000
             new_price = (new_price // 1000) * 1000
             

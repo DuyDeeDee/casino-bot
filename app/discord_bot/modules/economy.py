@@ -16,7 +16,7 @@ from app.config import config
 Entry = Tuple[int, int, int]
 DATABASE_PATH = Path(config.storage.database_path)
 LEGACY_DATABASE_PATH = Path(__file__).resolve().parents[3] / "economy.db"
-SCHEMA_VERSION = 50
+SCHEMA_VERSION = 51
 
 
 logger = logging.getLogger(__name__)
@@ -74,10 +74,10 @@ def _migration_5_add_market_table(cur: sqlite3.Cursor) -> None:
         )"""
         )
         cur.execute(
-            "INSERT OR IGNORE INTO system_settings(key, value) VALUES('gold_price', '30000000')"
+            "INSERT OR IGNORE INTO system_settings(key, value) VALUES('gold_price', '10000000')"
         )
         cur.execute(
-            "INSERT OR IGNORE INTO system_settings(key, value) VALUES('gold_price_prev', '30000000')"
+            "INSERT OR IGNORE INTO system_settings(key, value) VALUES('gold_price_prev', '10000000')"
         )
     except sqlite3.OperationalError:
         pass
@@ -894,6 +894,13 @@ def _migration_50_portfolio_avg_cost(cur: sqlite3.Cursor) -> None:
         pass
 
 
+def _migration_51_update_gold_price_to_10m(cur: sqlite3.Cursor) -> None:
+    try:
+        cur.execute("UPDATE system_settings SET value = '10000000' WHERE key IN ('gold_price', 'gold_price_prev')")
+    except sqlite3.OperationalError:
+        pass
+
+
 MIGRATIONS: dict[int, Callable[[sqlite3.Cursor], None]] = {
     1: _migration_1_create_economy,
     2: _migration_2_add_indexes,
@@ -945,6 +952,7 @@ MIGRATIONS: dict[int, Callable[[sqlite3.Cursor], None]] = {
     48: _migration_48_add_gift_code_tables,
     49: _migration_49_add_member_levels,
     50: _migration_50_portfolio_avg_cost,
+    51: _migration_51_update_gold_price_to_10m,
 }
 
 
@@ -1128,11 +1136,13 @@ class Economy:
             except sqlite3.OperationalError:
                 pass
 
-        # Reset giá cổ phiếu về mức cơ sở
+        # Reset giá vàng, giá cổ phiếu và lượt dùng giftcode về mức cơ sở
         try:
+            self.cur.execute("UPDATE system_settings SET value='10000000' WHERE key IN ('gold_price', 'gold_price_prev')")
             self.cur.execute("UPDATE stock_prices SET price=1000000, prev_price=1000000, change_percent=0.0 WHERE symbol='BTC'")
             self.cur.execute("UPDATE stock_prices SET price=100000, prev_price=100000, change_percent=0.0 WHERE symbol='CASINO'")
             self.cur.execute("UPDATE stock_prices SET price=10000, prev_price=10000, change_percent=0.0 WHERE symbol='AGV'")
+            self.cur.execute("UPDATE gift_codes SET used_count=0")
         except sqlite3.OperationalError:
             pass
 
@@ -1464,12 +1474,12 @@ class Economy:
     def get_gold_price(self) -> int:
         self.cur.execute("SELECT value FROM system_settings WHERE key='gold_price'")
         row = self.cur.fetchone()
-        return int(row[0]) if row else 30_000_000
+        return int(row[0]) if row else 10_000_000
 
     def get_prev_gold_price(self) -> int:
         self.cur.execute("SELECT value FROM system_settings WHERE key='gold_price_prev'")
         row = self.cur.fetchone()
-        return int(row[0]) if row else 30_000_000
+        return int(row[0]) if row else 10_000_000
 
     def set_gold_prices(self, current_price: int, prev_price: int) -> None:
         self.cur.execute(
