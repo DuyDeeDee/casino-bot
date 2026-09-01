@@ -120,7 +120,7 @@ class ChatLevels(commands.Cog, name="ChatLevels"):
             bar = "█" * filled + "░" * (10 - filled)
             progress = f"`{bar}` `{xp:,}/{need:,} XP`"
 
-        embed = make_embed(
+            embed = make_embed(
             title="📊 CẤP ĐỘ THÀNH VIÊN",
             description=(
                 f"👤 **Thành viên:** {member.mention}\n"
@@ -130,8 +130,8 @@ class ChatLevels(commands.Cog, name="ChatLevels"):
                 f"**📤 Quỹ cho hôm nay:** `{info['sent']:,}/{info['give_cap']:,}` VND — còn `{info['sent_remaining']:,}`\n"
                 f"**📥 Quỹ nhận hôm nay:** `{info['received']:,}/{info['receive_cap']:,}` VND — còn `{info['received_remaining']:,}`\n\n"
                 f"**🥇 Hạn mức vàng (mỗi lần):** `{info_gold['transfer_cap']:,}` thỏi vàng\n"
-                f"**📤 Đã cho vàng hôm nay:** còn `{info_gold['sent_remaining']:,}`\n"
-                f"**📥 Đã nhận vàng hôm nay:** còn `{info_gold['received_remaining']:,}`\n\n"
+                f"**📤 Quỹ cho vàng hôm nay:** `{info_gold['sent']:,}/{info_gold['give_cap']:,}` thỏi — còn `{info_gold['sent_remaining']:,}`\n"
+                f"**📥 Quỹ nhận vàng hôm nay:** `{info_gold['received']:,}/{info_gold['receive_cap']:,}` thỏi — còn `{info_gold['received_remaining']:,}`\n\n"
                 f"💡 *Chat nhiều để tăng cấp — càng lên cấp hạn mức cho/nhận càng lớn!*"
             ),
             color=discord.Color.blurple(),
@@ -148,80 +148,96 @@ class ChatLevels(commands.Cog, name="ChatLevels"):
 
     @commands.command(
         brief="[Owner] Đặt hạn mức chuyển tiền MỖI LẦN cho một cấp độ (ghi đè công thức).",
-        usage="setgivecap <cấp> <số_tiền|clear>",
+        usage="setgivecap <cấp> <số_tiền|clear> [money|gold]",
         aliases=["setgivecaptransfer"],
         hidden=True,
     )
-    async def setgivecap(self, ctx: commands.Context, level: int = None, amount: str = None):
-        await self._handle_set_limit(ctx, "transfer", level, amount)
+    async def setgivecap(self, ctx: commands.Context, level: int = None, amount: str = None, currency: str = "money"):
+        kind = "transfer_gold" if currency.lower() in ("gold", "vang", "vàng") else "transfer"
+        await self._handle_set_limit(ctx, kind, level, amount)
 
     @commands.command(
         brief="[Owner] Đặt hạn mức tổng cho/nhận MỖI NGÀY cho một cấp độ (ghi đè công thức).",
-        usage="setgivedaily <cấp> <số_tiền|clear>",
+        usage="setgivedaily <cấp> <số_tiền|clear> [money|gold]",
         hidden=True,
     )
-    async def setgivedaily(self, ctx: commands.Context, level: int = None, amount: str = None):
-        await self._handle_set_limit(ctx, "daily", level, amount)
+    async def setgivedaily(self, ctx: commands.Context, level: int = None, amount: str = None, currency: str = "money"):
+        kind = "daily_gold" if currency.lower() in ("gold", "vang", "vàng") else "daily"
+        await self._handle_set_limit(ctx, kind, level, amount)
 
     async def _handle_set_limit(self, ctx, kind: str, level: int, amount: str):
         if not (self._is_owner(ctx) or await ctx.bot.is_owner(ctx.author)):
             await ctx.send("❌ **Lỗi:** Chỉ có Admin/Owner mới có quyền sử dụng lệnh này!")
             return
 
-        label = "mỗi lần" if kind == "transfer" else "cho mỗi ngày"
+        is_gold = "gold" in kind
+        unit = "thỏi vàng" if is_gold else "VND"
+        label = f"mỗi lần ({unit})" if "transfer" in kind else f"cho mỗi ngày ({unit})"
         if level is None:
+            cmd = "setgivecap" if "transfer" in kind else "setgivedaily"
             await ctx.send(
-                f"❌ **Cú pháp:** `{ctx.prefix}set{'givecap' if kind == 'transfer' else 'givedaily'} "
-                f"<cấp 0-{MAX_MEMBER_LEVEL}> <số_tiền|clear>` — ví dụ: `50k`, `2m`, `clear`."
+                f"❌ **Cú pháp:** `{ctx.prefix}{cmd} <cấp 0-{MAX_MEMBER_LEVEL}> <số_lượng|clear> [money|gold]` — ví dụ: `50k`, `2m`, `5 gold`, `clear`."
             )
             return
         if not (0 <= level <= MAX_MEMBER_LEVEL):
             await ctx.send(f"❌ **Lỗi:** Cấp độ phải trong khoảng `0`–`{MAX_MEMBER_LEVEL}`.")
             return
         if amount is None:
-            current = transfer_cap(level, self.economy) if kind == "transfer" else daily_give_cap(level, self.economy)
+            curr_type = "gold" if is_gold else "money"
+            current = transfer_cap(level, self.economy, curr_type) if "transfer" in kind else daily_give_cap(level, self.economy, curr_type)
             await ctx.send(
-                f"⚙️ Hạn mức hiện tại của cấp **{level}** ({label}): `{current:,} VND`."
+                f"⚙️ Hạn mức hiện tại của cấp **{level}** ({label}): `{current:,} {unit}`."
             )
             return
 
         value = _parse_limit_val(amount)
         if value == "invalid":
-            await ctx.send("❌ **Lỗi:** Số tiền không hợp lệ. Ví dụ: `10k`, `500k`, `2m` hoặc `clear`.")
+            await ctx.send(f"❌ **Lỗi:** Số lượng không hợp lệ. Ví dụ: `10k`, `500k`, `2m`, `5` hoặc `clear`.")
             return
         if value is not None and value < 0:
-            await ctx.send("❌ **Lỗi:** Số tiền không được âm. Dùng `0` để tắt cho/nhận ở cấp này, `clear` để về bảng mặc định.")
+            await ctx.send("❌ **Lỗi:** Số lượng không được âm. Dùng `0` để tắt cho/nhận ở cấp này, `clear` để về mặc định.")
             return
 
         set_override(self.economy, kind, level, value)
         if value is None:
-            await ctx.send(f"✅ Đã xoá override — cấp **{level}** dùng lại bảng mặc định ({label}).")
+            await ctx.send(f"✅ Đã xoá override — cấp **{level}** dùng lại công thức mặc định ({label}).")
         else:
-            note = " (quỹ nhận của cấp này tự = 1,5×)" if kind == "daily" else ""
-            await ctx.send(f"✅ Đã đặt hạn mức {label} của cấp **{level}** thành `{value:,} VND`{note}.")
+            note = " (quỹ nhận của cấp này tự = 1,5×)" if "daily" in kind else ""
+            await ctx.send(f"✅ Đã đặt hạn mức {label} của cấp **{level}** thành `{value:,} {unit}`{note}.")
 
     @commands.command(
-        brief="Xem bảng hạn mức cho/nhận tiền theo cấp độ.",
+        brief="Xem bảng hạn mức cho/nhận tiền và vàng theo cấp độ.",
         usage="givelimits",
         aliases=["givelimit", "hanhmuc"],
     )
     async def givelimits(self, ctx: commands.Context):
         overrides = _get_overrides(self.economy)
+        gold_price = self.economy.get_gold_price()
         rows = []
         for idx, (start, _) in enumerate(GIVE_CAP_BANDS):
             end = GIVE_CAP_BANDS[idx + 1][0] - 1 if idx + 1 < len(GIVE_CAP_BANDS) else MAX_MEMBER_LEVEL
-            tcap = transfer_cap(start, self.economy)
-            gcap = daily_give_cap(start, self.economy)
-            rcap = daily_receive_cap(start, self.economy)
+            tcap = transfer_cap(start, self.economy, "money")
+            gcap = daily_give_cap(start, self.economy, "money")
+            rcap = daily_receive_cap(start, self.economy, "money")
+
+            tcap_gold = transfer_cap(start, self.economy, "gold")
+            gcap_gold = daily_give_cap(start, self.economy, "gold")
+            rcap_gold = daily_receive_cap(start, self.economy, "gold")
+
             marked = " ⚙️" if (str(start) in overrides.get("transfer", {}) or str(start) in overrides.get("daily", {})) else ""
-            rows.append(f"Cấp **{start}–{end}**{marked}: `{tcap:,} VND/lần` — cho `{gcap:,}/ngày` — nhận `{rcap:,}/ngày`")
+            rows.append(
+                f"• Cấp **{start}–{end}**{marked}:\n"
+                f"  💵 **VND:** `{tcap:,}/lần` — Cho `{gcap:,}/ngày` — Nhận `{rcap:,}/ngày`\n"
+                f"  🥇 **Vàng:** `{tcap_gold:,} thỏi/lần` — Cho `{gcap_gold:,}/ngày` — Nhận `{rcap_gold:,}/ngày`"
+            )
 
         embed = make_embed(
-            title="⚖️ GIỚI HẠN CHO/NHẬN TIỀN THEO CẤP ĐỘ",
+            title="⚖️ GIỚI HẠN CHO/NHẬN TIỀN & VÀNG THEO CẤP ĐỘ",
             description=(
                 f"Mỗi lần chuyển tối đa = **min**(hạn mức người cho, hạn mức người nhận).\n"
-                f"Mỗi ngày: tổng **cho** ≤ quỹ cho, tổng **nhận** ≤ quỹ nhận (= 1,5× quỹ cho) của từng bên.\n\n"
-                + "\n".join(rows)
+                f"Mỗi ngày: tổng **cho** ≤ quỹ cho, tổng **nhận** ≤ quỹ nhận (= 1,5× quỹ cho) của từng bên.\n"
+                f"*(Hạn mức vàng được tự động quy đổi theo giá vàng hiện tại: `{gold_price:,} VND/thỏi`)*\n\n"
+                + "\n\n".join(rows)
                 + "\n\n💡 *Chat để tăng cấp. ⚙️ = cấp đầu khung bị owner ghi đè thủ công.*"
             ),
             color=discord.Color.gold(),

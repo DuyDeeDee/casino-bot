@@ -98,8 +98,8 @@ def _get_override(economy: "Economy", kind: str, level: int) -> Optional[int]:
 
 def set_override(economy: "Economy", kind: str, level: int, amount: Optional[int]) -> None:
     """Lưu override cho một cấp; amount=None để xoá override (dùng lại công thức)."""
-    if kind not in ("transfer", "daily"):
-        raise ValueError("kind must be 'transfer' or 'daily'")
+    if kind not in ("transfer", "daily", "transfer_gold", "daily_gold"):
+        raise ValueError("kind must be 'transfer', 'daily', 'transfer_gold' or 'daily_gold'")
     data: dict[str, Any] = _get_overrides(economy)
     bucket = data.setdefault(kind, {})
     if amount is None:
@@ -111,9 +111,19 @@ def set_override(economy: "Economy", kind: str, level: int, amount: Optional[int
     economy.set_setting(GIVE_LIMIT_OVERRIDES_KEY, json.dumps(data) if data else "")
 
 
-def transfer_cap(level: int, economy: Optional["Economy"] = None) -> int:
+def transfer_cap(level: int, economy: Optional["Economy"] = None, currency: str = "money") -> int:
     """Hạn mức tối đa MỖI LẦN chuyển với cấp `level` (tra theo khung 10 cấp)."""
     level = max(0, int(level))
+    if currency == "gold":
+        if economy is not None:
+            override = _get_override(economy, "transfer_gold", level)
+            if override is not None:
+                return override
+        money_cap = transfer_cap(level, economy, "money")
+        gold_price = economy.get_gold_price() if economy is not None else 10_000_000
+        gold_price = max(1, int(gold_price))
+        return max(1, int(round(money_cap / gold_price)))
+
     if economy is not None:
         override = _get_override(economy, "transfer", level)
         if override is not None:
@@ -125,19 +135,25 @@ def transfer_cap(level: int, economy: Optional["Economy"] = None) -> int:
     return cap
 
 
-def daily_give_cap(level: int, economy: Optional["Economy"] = None) -> int:
-    """Tổng CHO tối đa MỖI NGÀY với cấp `level` (mặc định = giá trị khung)."""
+def daily_give_cap(level: int, economy: Optional["Economy"] = None, currency: str = "money") -> int:
+    """Tổng CHO tối đa MỖI NGÀY với cấp `level`."""
     level = max(0, int(level))
+    if currency == "gold":
+        if economy is not None:
+            override = _get_override(economy, "daily_gold", level)
+            if override is not None:
+                return override
+        return transfer_cap(level, economy, "gold")
     if economy is not None:
         override = _get_override(economy, "daily", level)
         if override is not None:
             return override
-    return transfer_cap(level, economy)
+    return transfer_cap(level, economy, "money")
 
 
-def daily_receive_cap(level: int, economy: Optional["Economy"] = None) -> int:
+def daily_receive_cap(level: int, economy: Optional["Economy"] = None, currency: str = "money") -> int:
     """Tổng NHẬN tối đa MỖI NGÀY với cấp `level` = 1.5x quỹ cho."""
-    return int(daily_give_cap(level, economy) * RECEIVE_CAP_MULTIPLIER)
+    return max(1, int(round(daily_give_cap(level, economy, currency) * RECEIVE_CAP_MULTIPLIER)))
 
 
 # --- KIỂM TRA & GHI NHẬN SỬ DỤNG ---
@@ -161,8 +177,8 @@ def check_give_limit(
     sender_level, _, _ = economy.get_member_level(sender_id)
     receiver_level, _, _ = economy.get_member_level(receiver_id)
 
-    sender_tcap = transfer_cap(sender_level, economy)
-    receiver_tcap = transfer_cap(receiver_level, economy)
+    sender_tcap = transfer_cap(sender_level, economy, currency)
+    receiver_tcap = transfer_cap(receiver_level, economy, currency)
     max_transfer = min(sender_tcap, receiver_tcap)
     if amount > max_transfer:
         return (
@@ -171,12 +187,12 @@ def check_give_limit(
                 f"❌ **Giới hạn theo cấp độ:** Mỗi lần chỉ có thể chuyển tối đa **{max_transfer:,} {unit}**.\n"
                 f"> Cấp của bạn: **{sender_level}** (hạn mức {sender_tcap:,} {unit}/lần) — "
                 f"Cấp của người nhận: **{receiver_level}** (hạn mức {receiver_tcap:,} {unit}/lần).\n"
-                f"> Chat nhiều để tăng cấp và nâng hạn mức! Dùng `$level` để xem tiến độ."
+                f"> Chat nhiều để tăng cấp và nâng hạn mức! Dùng `i?capdo` để xem tiến độ."
             ),
         )
 
-    sender_scap = daily_give_cap(sender_level, economy)
-    receiver_scap = daily_receive_cap(receiver_level, economy)
+    sender_scap = daily_give_cap(sender_level, economy, currency)
+    receiver_scap = daily_receive_cap(receiver_level, economy, currency)
     day = today_key()
     s_sent, _, s_sent_gold, _ = economy.get_give_daily(sender_id, day)
     _, r_received, _, r_received_gold = economy.get_give_daily(receiver_id, day)
@@ -233,9 +249,9 @@ def remaining_daily(economy: "Economy", user_id: int, currency: str = "money") -
     day = today_key()
     s_sent, r_received, s_sent_gold, r_received_gold = economy.get_give_daily(user_id, day)
     sent, received = (s_sent, r_received) if currency == "money" else (s_sent_gold, r_received_gold)
-    tcap = transfer_cap(level, economy)
-    gcap = daily_give_cap(level, economy)
-    rcap = daily_receive_cap(level, economy)
+    tcap = transfer_cap(level, economy, currency)
+    gcap = daily_give_cap(level, economy, currency)
+    rcap = daily_receive_cap(level, economy, currency)
     return {
         "level": level,
         "xp": xp,

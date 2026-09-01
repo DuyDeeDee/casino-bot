@@ -19,34 +19,49 @@ TICK_MINUTES = 15          # game minutes per tick (6 ticks = 90')
 MIN_BET = 10_000
 MAX_BET = 5_000_000
 
-# Mascot teams with attack/defence ratings (1-5). Ratings drift slightly per match.
+# Top world football clubs with attack/defence ratings (1-5). Ratings drift slightly per match.
 TEAMS: dict[str, dict] = {
-    "PHX": {"name": "Phượng Hoàng Xa Lộ", "emoji": "🔥", "att": 4.2, "def": 2.8},
-    "SHK": {"name": "Sói Hoang Karaoke", "emoji": "🐺", "att": 3.6, "def": 3.4},
-    "TCT": {"name": "Tôm Càng Tiền Tệ", "emoji": "🦐", "att": 3.0, "def": 4.0},
-    "DBK": {"name": "Drake Bạo Kích", "emoji": "🐉", "att": 4.6, "def": 2.2},
-    "MKC": {"name": "Mèo Kêu Cá Cược", "emoji": "🐱", "att": 2.6, "def": 3.2},
-    "CTB": {"name": "Cua Tô Bio", "emoji": "🦀", "att": 2.2, "def": 4.4},
-    "VTC": {"name": "Voi Trắng Cờ Bạc", "emoji": "🐘", "att": 3.8, "def": 3.0},
-    "GDH": {"name": "Gà Đòn Huyền Thoại", "emoji": "🐓", "att": 3.2, "def": 2.6},
+    "RMA": {"name": "Real Madrid", "emoji": "👑", "att": 4.8, "def": 4.6},
+    "MCI": {"name": "Manchester City", "emoji": "🔵", "att": 4.8, "def": 4.5},
+    "ARS": {"name": "Arsenal", "emoji": "🔴", "att": 4.6, "def": 4.6},
+    "LIV": {"name": "Liverpool", "emoji": "🦅", "att": 4.7, "def": 4.4},
+    "BAR": {"name": "Barcelona", "emoji": "🔵🔴", "att": 4.7, "def": 4.2},
+    "BAY": {"name": "Bayern Munich", "emoji": "⭐", "att": 4.7, "def": 4.3},
+    "PSG": {"name": "Paris Saint-Germain", "emoji": "🗼", "att": 4.5, "def": 4.1},
+    "INT": {"name": "Inter Milan", "emoji": "🐍", "att": 4.4, "def": 4.6},
+    "LEV": {"name": "Bayer Leverkusen", "emoji": "⚡", "att": 4.4, "def": 4.3},
+    "ATM": {"name": "Atletico Madrid", "emoji": "🛡️", "att": 4.1, "def": 4.6},
+    "BVB": {"name": "Borussia Dortmund", "emoji": "🟡", "att": 4.3, "def": 4.0},
+    "CHE": {"name": "Chelsea", "emoji": "🦁", "att": 4.2, "def": 4.0},
+    "MUN": {"name": "Manchester United", "emoji": "😈", "att": 4.1, "def": 3.9},
+    "JUV": {"name": "Juventus", "emoji": "🦓", "att": 4.1, "def": 4.4},
+    "MIL": {"name": "AC Milan", "emoji": "🔴⚫", "att": 4.2, "def": 4.1},
+    "TOT": {"name": "Tottenham Hotspur", "emoji": "🐓", "att": 4.2, "def": 3.8},
+    "NAP": {"name": "Napoli", "emoji": "🌋", "att": 4.2, "def": 4.1},
+    "AVL": {"name": "Aston Villa", "emoji": "🦁", "att": 4.1, "def": 4.0},
+    "NEW": {"name": "Newcastle United", "emoji": "⬛⬜", "att": 4.1, "def": 4.1},
+    "SPO": {"name": "Sporting CP", "emoji": "🟢", "att": 4.2, "def": 4.0},
 }
 
 OUTCOME_LABELS = {"1": "Thắng đội nhà", "X": "Hòa", "2": "Thắng đội khách"}
 
 FLAVOR_EVENTS = [
-    "⚡ {team} phản công sắc lẹm, thủ môn đội bạn bay người cứu thua thần kỳ!",
-    "🟨 Thẻ vàng cho cầu thủ {team} vì pha truy cản nguy hiểm.",
-    "🎯 {team} sút phạt trực tiếp — bóng chạm cột dọc bật ra!",
-    "🔄 {team} thay người tăng cường sức tấn công.",
-    "🧱 Hàng thủ {team} đứng vững trước sức ép của đối phương.",
-    "😱 Cơ hội ăn bàn VOLOĐẠI cho {team} nhưng bóng đi chọc mâm ngoài!",
+    "⚡ {team} phản công sắc lẹm, thủ môn đội bạn bay người cứu thua xuất thần!",
+    "🟨 Thẻ vàng cho cầu thủ {team} vì pha vào bóng nguy hiểm.",
+    "🎯 {team} sút phạt hiểm hóc — bóng dội xà ngang bật ra!",
+    "🔄 {team} điều chỉnh chiến thuật, thay người tăng cường hỏa lực.",
+    "🧱 Hàng thủ {team} bọc lót kiên cường, hóa giải đợt hãm thành liên tiếp.",
+    "😱 Cơ hội đối mặt mười mươi cho {team} nhưng pha dứt điểm đi chệch cột dọc trong gang tấc!",
+    "🧤 Thủ môn {team} có pha đổ người cứu thua không tưởng!",
+    "🚀 Tiền vệ {team} tung cú sút xa sấm sét khiến khung thành rung chuyển!",
 ]
 
 
 def _load_fixtures(economy: Economy) -> list[dict]:
     raw = economy.get_setting("match_fixtures", "[]")
     try:
-        return json.loads(raw)
+        data = json.loads(raw)
+        return [m for m in data if isinstance(m, dict) and m.get("t1") in TEAMS and m.get("t2") in TEAMS]
     except (TypeError, ValueError):
         return []
 
