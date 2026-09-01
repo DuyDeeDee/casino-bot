@@ -635,7 +635,7 @@ class GiveawayEditorView(discord.ui.View):
         embed = self.build_preview_embed()
         ping_header = cfg.get("ping_content") or f"# <a:w1:1526231439425667093> Giveaway {self.guild.name} <a:w2:1526231455422877798>"
         await interaction.response.edit_message(
-            content=f"💾 **[ĐÃ LƯU THÀNH CÔNG MẪU GIVEAWAY MẶC ĐỊNH!]**\n{ping_header}\n\n*(Từ nay, mỗi khi bạn gõ `i?ga ...` tạo Giveaway mới, bot sẽ tự động áp dụng giao diện này!)*",
+            content=f"💾 **[ĐÃ LƯU THÀNH CÔNG CHO TOÀN SERVER!]**\n{ping_header}\n\n*(Mẫu thiết kế này đã được áp dụng làm mặc định cho **toàn bộ thành viên trong Server** khi tạo Giveaway!)*",
             embed=embed
         )
 
@@ -661,7 +661,7 @@ class GiveawayEditorView(discord.ui.View):
             embed = self.build_preview_embed()
             ping_header = embed_config.get("ping_content") or f"# <a:w1:1526231439425667093> Giveaway {self.guild.name} <a:w2:1526231455422877798>"
             await interaction.response.edit_message(
-                content=f"💾 **[ĐÃ LƯU THÀNH CÔNG MẪU GIVEAWAY MẶC ĐỊNH!]**\n{ping_header}\n\n*(Từ nay, mỗi khi bạn gõ `i?ga ...` tạo Giveaway mới, bot sẽ tự động áp dụng giao diện này!)*",
+                content=f"💾 **[ĐÃ LƯU THÀNH CÔNG CHO TOÀN SERVER!]**\n{ping_header}\n\n*(Mẫu thiết kế này đã được áp dụng làm mặc định cho **toàn bộ thành viên trong Server** khi tạo Giveaway!)*",
                 embed=embed
             )
             return
@@ -802,19 +802,29 @@ class Giveaway(commands.Cog, name="Giveaway"):
     def save_template(self, guild_id: int, user_id: Optional[int], template_name: str, embed_config: dict):
         try:
             cfg_json = json.dumps(embed_config)
+            # 1. Luôn lưu làm Mẫu Mặc Định của Server (user_id = 0) để toàn bộ member dùng chung
             self.economy.cur.execute(
                 """INSERT INTO giveaway_templates (guild_id, user_id, template_name, embed_config)
-                   VALUES (?, ?, ?, ?)
+                   VALUES (?, 0, ?, ?)
                    ON CONFLICT(guild_id, user_id, template_name) DO UPDATE SET embed_config = excluded.embed_config""",
-                (guild_id, user_id, template_name, cfg_json)
+                (guild_id, template_name, cfg_json)
             )
+            # 2. Nếu có user_id cụ thể, lưu thêm bản ghi riêng
+            if user_id and user_id != 0:
+                self.economy.cur.execute(
+                    """INSERT INTO giveaway_templates (guild_id, user_id, template_name, embed_config)
+                       VALUES (?, ?, ?, ?)
+                       ON CONFLICT(guild_id, user_id, template_name) DO UPDATE SET embed_config = excluded.embed_config""",
+                    (guild_id, user_id, template_name, cfg_json)
+                )
             self.economy.conn.commit()
         except Exception as e:
             logger.error(f"Failed to save giveaway template: {e}", exc_info=True)
 
     def get_template(self, guild_id: int, user_id: Optional[int] = None, template_name: str = "default") -> dict:
         try:
-            if user_id is not None:
+            # 1. Ưu tiên kiểm tra template riêng của user (nếu có)
+            if user_id is not None and user_id != 0:
                 self.economy.cur.execute(
                     "SELECT embed_config FROM giveaway_templates WHERE guild_id = ? AND user_id = ? AND template_name = ?",
                     (guild_id, user_id, template_name)
@@ -822,9 +832,9 @@ class Giveaway(commands.Cog, name="Giveaway"):
                 row = self.economy.cur.fetchone()
                 if row and row[0]:
                     return json.loads(row[0])
-            # Fallback to guild-wide template
+            # 2. Tự động lấy Mẫu Mặc Định của Server (user_id = 0 hoặc user_id IS NULL)
             self.economy.cur.execute(
-                "SELECT embed_config FROM giveaway_templates WHERE guild_id = ? AND user_id IS NULL AND template_name = ?",
+                "SELECT embed_config FROM giveaway_templates WHERE guild_id = ? AND (user_id = 0 OR user_id IS NULL) AND template_name = ? ORDER BY id DESC LIMIT 1",
                 (guild_id, template_name)
             )
             row = self.economy.cur.fetchone()
@@ -945,15 +955,26 @@ class Giveaway(commands.Cog, name="Giveaway"):
             logger.error(f"Failed to mark giveaway as ended: {e}", exc_info=True)
 
     def can_manage_giveaway(self, user_or_member: discord.User, giveaway: Optional[dict] = None) -> bool:
-        """Checks if a user has management permissions (Administrator, Manage Guild, Bot Owner, or Giveaway Host)."""
+        """Checks if a user has management permissions (Administrator, Manage Guild, Manage Messages, Bot Owner/Admin, or Giveaway Host)."""
         if not user_or_member:
             return False
-        if hasattr(user_or_member, "guild_permissions"):
-            if user_or_member.guild_permissions.administrator or user_or_member.guild_permissions.manage_guild:
-                return True
-        if user_or_member.id in (getattr(self.bot, "owner_ids", None) or []):
+        from app.config import config
+        # Bot Owner or Bot Admin
+        if user_or_member.id in (getattr(config.bot, "owner_ids", []) or []) or user_or_member.id in (getattr(config.bot, "admin_ids", []) or []):
             return True
-        if giveaway and user_or_member.id == giveaway.get('host_id'):
+        # Discord Permissions
+        if hasattr(user_or_member, "guild_permissions"):
+            perms = user_or_member.guild_permissions
+            if perms.administrator or perms.manage_guild or perms.manage_messages:
+                return True
+        # Roles with management names
+        if hasattr(user_or_member, "roles"):
+            for r in user_or_member.roles:
+                r_name = r.name.lower()
+                if any(kw in r_name for kw in ["giveaway", "quản lý", "quan ly", "admin", "mod", "host"]):
+                    return True
+        # Giveaway Host (chỉ đối với giveaway cụ thể đang chạy)
+        if giveaway and giveaway.get('id', 0) != 0 and user_or_member.id == giveaway.get('host_id'):
             return True
         return False
 
@@ -1713,6 +1734,11 @@ class Giveaway(commands.Cog, name="Giveaway"):
             await ctx.message.delete()
         except Exception:
             pass
+
+        # Kiểm tra quyền quản lý (Admin / Quản lý Server / Quản lý Giveaway)
+        if not self.can_manage_giveaway(ctx.author):
+            await ctx.send("❌ **Bạn không có quyền quản lý để sử dụng lệnh này!** (Yêu cầu quyền Quản trị viên, Quản lý Server hoặc Quản lý Giveaway)", delete_after=10)
+            return
 
         # 1. Nếu không có message_id, thử lấy từ tin nhắn đang Reply
         if message_id is None:
