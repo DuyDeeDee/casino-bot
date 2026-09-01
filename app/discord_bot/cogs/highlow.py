@@ -12,7 +12,7 @@ from discord.ext import commands
 from PIL import Image, ImageDraw
 
 from app.config import config
-from app.discord_bot.modules.betting import validate_money_bet
+from app.discord_bot.modules.betting import parse_bet_amount, validate_money_bet
 from app.discord_bot.modules.card import Card
 from app.discord_bot.modules.economy import Economy
 from app.discord_bot.modules.helpers import make_embed, ABS_PATH
@@ -89,28 +89,6 @@ VIP_TIERS = [
     {"name": "Master", "title": "Huyền Thoại Casino", "req_plays": 300},
     {"name": "Grand Master", "title": "Thần Bài Vô Song", "req_plays": 500},
 ]
-
-
-def parse_bet_amount(val_str: str, current_money: int) -> int:
-    val_str = val_str.strip().lower()
-    if val_str in ["all", "allin", "all-in", "tất tay"]:
-        from app.discord_bot.modules.betting import get_capped_all_in_amount
-        return get_capped_all_in_amount(current_money)
-
-    val_str = val_str.replace(",", "").replace(".", "")
-
-    multiplier = 1
-    if val_str.endswith("k"):
-        multiplier = 1_000
-        val_str = val_str[:-1].strip()
-    elif val_str.endswith("m"):
-        multiplier = 1_000_000
-        val_str = val_str[:-1].strip()
-
-    try:
-        return int(float(val_str) * multiplier)
-    except ValueError:
-        return 0
 
 
 def get_daily_lucky_card() -> str:
@@ -468,6 +446,7 @@ class HighLowGameView(discord.ui.View):
         self.multiplier = 1.0
         self.streak = 0
         self.lucky_card_match = False
+        self.finished = False
         self.daily_lucky_val = get_daily_lucky_card()
         
         # Check if initial card matches lucky card
@@ -699,6 +678,9 @@ class HighLowGameView(discord.ui.View):
         await self.conclude_game(win=True, suffix="💰 **Bạn đã chủ động Cash Out chốt lời thành công!**")
 
     async def conclude_game(self, win: bool, suffix: str):
+        if self.finished:
+            return
+        self.finished = True
         self.cog.active_users.discard(self.user_id)
         self.stop()
         
@@ -715,7 +697,7 @@ class HighLowGameView(discord.ui.View):
         profit_delta = payout - self.bet_amount
 
         if payout > 0:
-            self.cog.economy.add_money(self.user_id, payout)
+            self.cog.economy.payout_winnings(self.user_id, payout, self.bet_amount)
             log_wallet_change(logger, event="highlow_payout", user_id=self.user_id, money_delta=payout, ctx=self.ctx)
 
         stats = self.cog.economy.get_highlow_stats(self.user_id)

@@ -8,7 +8,7 @@ import random
 from discord.ext import commands
 
 from app.config import config
-from app.discord_bot.modules.betting import validate_money_bet
+from app.discord_bot.modules.betting import parse_bet_amount, validate_money_bet
 from app.discord_bot.modules.card import Card
 from app.discord_bot.modules.card_table import render_card_table_bytes, render_multiplayer_table_bytes
 from app.discord_bot.modules.economy import Economy
@@ -155,8 +155,17 @@ class GameSession:
         valid_results = {player: data for player, data in self.results.items() if data['rank'] > 0}
         
         if not valid_results:
-            embed.description = "💥 **Tất cả đều QUẮC! Bàn này thối!**"
+            embed.description = "💥 **Tất cả đều QUẮC! Bàn này thối (đã hoàn lại tiền cược)!**"
             max_rank = 0
+            for player in self.players:
+                self.economy.add_money(player.id, self.bet)
+                log_wallet_change(
+                    logger,
+                    event="xidach_all_bust_refund",
+                    user_id=player.id,
+                    money_delta=self.bet,
+                    bet=self.bet,
+                )
         else:
             max_rank = max(data['rank'] for data in valid_results.values())
             
@@ -180,35 +189,32 @@ class GameSession:
             ]
 
         pot = self.bet * len(self.players)
-        payout_per_winner = 0
-        if winners:
-            payout_per_winner = pot // len(winners)
+        payout_per_winner = pot // len(winners) if winners else 0
 
         # Chấm điểm từng người
         for player, data in self.results.items():
             p_score = data['score']
             p_rank = data['rank']
             p_name = data['name']
-            money_delta = 0
             
-            if p_rank == 0:
-                result = "🔴 QUẮC (Thua)"
-                money_delta = -self.bet
+            if not valid_results:
+                result = "💥 THỐI BÀN (Hoàn cược)"
+                money_delta = self.bet
             elif p_rank == max_rank and max_rank > 0:
                 if len(winners) > 1:
-                    result = f"🟡 HÒA CHIA TIỀN ({p_name})"
+                    result = f"🟡 HÒA CHIA TIỀN ({p_name}) (+{payout_per_winner:,} VND)"
                 else:
-                    result = f"👑 THẮNG CƯỢC ({p_name})"
-                money_delta = payout_per_winner - self.bet
+                    result = f"👑 THẮNG CƯỢC ({p_name}) (+{payout_per_winner:,} VND)"
+                self.economy.payout_winnings(player.id, payout_per_winner, self.bet)
+                net_profit = payout_per_winner - self.bet
+                if net_profit >= 1_000_000:
+                    from app.discord_bot.modules.betting import reward_spouse_share
+                    await reward_spouse_share(self.bot, player.id, net_profit, self.channel)
+                money_delta = payout_per_winner
             else:
                 result = f"🔴 THUA ({p_name})"
-                money_delta = -self.bet
+                money_delta = 0
 
-            if money_delta:
-                self.economy.add_money(player.id, money_delta)
-                if money_delta >= 1_000_000:
-                    from app.discord_bot.modules.betting import reward_spouse_share
-                    await reward_spouse_share(self.bot, player.id, money_delta, self.channel)
             log_wallet_change(
                 logger,
                 event="xidach_pvp_settlement",
@@ -235,12 +241,13 @@ class GameSession:
 # --- MODULE 2: GIAO DIỆN BỐC BÀI (INBOX) ---
 class PlayerHandView(discord.ui.View):
     def __init__(self, player, hand, deck, session):
-        super().__init__(timeout=120)
+        super().__init__(timeout=90)
         self.player = player
         self.hand = hand
         self.deck = deck
         self.session = session
         self.table_filename = f"xidach-{player.id}-{uuid4().hex}.png"
+        self.is_done = False
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.player.id:
@@ -272,6 +279,9 @@ class PlayerHandView(discord.ui.View):
 
     @discord.ui.button(label="Rút thêm", style=discord.ButtonStyle.primary, emoji="👆")
     async def hit_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.is_done:
+            return
+            
         self.hand.append(self.deck.draw())
         score = Deck.calculate_score(self.hand)
         self.session.player_hands[self.player] = self.hand
@@ -280,6 +290,7 @@ class PlayerHandView(discord.ui.View):
         num_cards = len(self.hand)
         
         if score > 21:
+            self.is_done = True
             for child in self.children:
                 child.disabled = True
             file = self.render_table()
@@ -291,6 +302,7 @@ class PlayerHandView(discord.ui.View):
             self.stop()
             await self.session.player_done(self.player, self.hand, score, "bust")
         elif num_cards == 5:
+            self.is_done = True
             for child in self.children:
                 child.disabled = True
             file = self.render_table()
@@ -315,6 +327,9 @@ class PlayerHandView(discord.ui.View):
 
     @discord.ui.button(label="Dừng", style=discord.ButtonStyle.danger, emoji="🛑")
     async def stand_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.is_done:
+            return
+            
         score = Deck.calculate_score(self.hand)
         if score < 16:
             await interaction.response.send_message(
@@ -323,6 +338,7 @@ class PlayerHandView(discord.ui.View):
             )
             return
             
+        self.is_done = True
         for child in self.children:
             child.disabled = True
         file = self.render_table()
@@ -334,6 +350,17 @@ class PlayerHandView(discord.ui.View):
         self.stop()
         await self.session.player_done(self.player, self.hand, score, "stand")
 
+    async def on_timeout(self):
+        if self.is_done:
+            return
+        self.is_done = True
+        self.stop()
+        for child in self.children:
+            child.disabled = True
+        score = Deck.calculate_score(self.hand)
+        status = "bust" if score > 21 else "stand"
+        await self.session.player_done(self.player, self.hand, score, status)
+
 
 # --- MODULE 3: SẢNH CHỜ GIAO DỊCH ---
 class LobbyView(discord.ui.View):
@@ -344,6 +371,8 @@ class LobbyView(discord.ui.View):
         self.host = host
         self.economy = economy
         self.players = [host]
+        self.message: Optional[discord.Message] = None
+        self.started = False
 
     def _validate_player_funds(self, user: discord.Member | discord.User) -> str | None:
         try:
@@ -354,8 +383,31 @@ class LobbyView(discord.ui.View):
             return "Mức cược không hợp lệ."
         return None
 
+    async def on_timeout(self):
+        if self.started:
+            return
+        for child in self.children:
+            child.disabled = True
+        if self.message:
+            with suppress(discord.HTTPException):
+                await self.message.edit(view=self)
+        for player in list(self.players):
+            self.economy.add_money(player.id, self.bet_amount)
+            log_wallet_change(
+                logger,
+                event="xidach_lobby_timeout_refund",
+                user_id=player.id,
+                money_delta=self.bet_amount,
+                bet=self.bet_amount,
+            )
+        self.players.clear()
+
     @discord.ui.button(label="Lên thuyền", style=discord.ButtonStyle.green, emoji="🎟️")
     async def join_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.started:
+            await interaction.response.send_message("❌ Ván chơi đã bắt đầu!", ephemeral=True)
+            return
+
         if interaction.user in self.players:
             await interaction.response.send_message("Bro đã ngồi trong sòng rồi!", ephemeral=True)
             return
@@ -368,15 +420,58 @@ class LobbyView(discord.ui.View):
         if funds_error:
             await interaction.response.send_message(funds_error, ephemeral=True)
             return
-        
+
+        # Escrow stake immediately
+        self.economy.add_money(interaction.user.id, -self.bet_amount)
+        log_wallet_change(
+            logger,
+            event="xidach_join_escrow",
+            user_id=interaction.user.id,
+            money_delta=-self.bet_amount,
+            bet=self.bet_amount,
+        )
         self.players.append(interaction.user)
         await interaction.response.send_message(
             f"🔥 {interaction.user.mention} đã lên thuyền với cược {self.bet_amount:,} VND!",
             ephemeral=False,
         )
 
+    @discord.ui.button(label="Hủy sảnh", style=discord.ButtonStyle.secondary, emoji="❌")
+    async def cancel_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.started:
+            await interaction.response.send_message("❌ Ván chơi đã bắt đầu, không thể hủy!", ephemeral=True)
+            return
+
+        if interaction.user != self.host:
+            await interaction.response.send_message("Bro không phải chủ sảnh, không được hủy!", ephemeral=True)
+            return
+
+        self.started = True
+        for child in self.children:
+            child.disabled = True
+
+        for player in list(self.players):
+            self.economy.add_money(player.id, self.bet_amount)
+            log_wallet_change(
+                logger,
+                event="xidach_lobby_cancel_refund",
+                user_id=player.id,
+                money_delta=self.bet_amount,
+                bet=self.bet_amount,
+            )
+        self.players.clear()
+        await interaction.response.edit_message(
+            content="🛑 **Sảnh Xì Dách đã bị hủy.** Đã hoàn lại toàn bộ tiền cược cho người chơi.",
+            embed=None,
+            view=self,
+        )
+        self.stop()
+
     @discord.ui.button(label="Bắt đầu chia bài", style=discord.ButtonStyle.blurple, emoji="🃏")
     async def start_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.started:
+            return
+
         if interaction.user != self.host:
             await interaction.response.send_message("Bro không phải chủ sảnh, cất tay đi!", ephemeral=True)
             return
@@ -389,14 +484,10 @@ class LobbyView(discord.ui.View):
             await interaction.response.send_message("Sòng bài chỉ chứa tối đa 6 người chơi!", ephemeral=True)
             return
 
-        for player in self.players:
-            funds_error = self._validate_player_funds(player)
-            if funds_error:
-                await interaction.response.send_message(
-                    f"{player.mention} không đủ tiền ({self.bet_amount:,} VND cần thiết).",
-                    ephemeral=True,
-                )
-                return
+        self.started = True
+        active_players = list(self.players)
+        self.players.clear()
+        self.stop()
 
         for child in self.children:
             child.disabled = True
@@ -409,19 +500,19 @@ class LobbyView(discord.ui.View):
         session = GameSession(
             self.bot,
             interaction.channel,
-            self.players,
+            active_players,
             self.bet_amount,
             game_deck,
             self.economy,
         )
 
-        for player in self.players:
+        for player in active_players:
             player_hand = [game_deck.draw(), game_deck.draw()]
             session.player_hands[player] = player_hand
 
         await session.send_lobby_table()
 
-        for player in self.players:
+        for player in active_players:
             player_hand = session.player_hands[player]
             rank, score, name_vn = Deck.get_hand_rank(player_hand)
             view = PlayerHandView(player, player_hand, game_deck, session)
@@ -440,7 +531,15 @@ class LobbyView(discord.ui.View):
                     embed.color = discord.Color.gold()
                 await player.send(embed=embed, view=view, file=file)
             except discord.Forbidden:
-                await interaction.channel.send(f"⚠️ Ê {player.mention}, mở Inbox lên bot mới chia bài được!")
+                await interaction.channel.send(f"⚠️ Ê {player.mention}, mở Inbox lên bot mới chia bài được! (Đã hoàn cược)")
+                self.economy.add_money(player.id, self.bet_amount)
+                log_wallet_change(
+                    logger,
+                    event="xidach_dm_forbidden_refund",
+                    user_id=player.id,
+                    money_delta=self.bet_amount,
+                    bet=self.bet_amount,
+                )
                 session.players.remove(player)
                 session.pending -= 1
                 if session.pending == 0:
@@ -455,25 +554,41 @@ class LobbyView(discord.ui.View):
 class MultiBlackjack(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.economy = getattr(bot, "economy", Economy())
+        self.economy = getattr(bot, "economy", None) or Economy()
 
     @commands.command(name="party")
-    async def open_party(self, ctx, bet: int = config.bot.default_bet):
+    @commands.max_concurrency(1, per=commands.BucketType.channel, wait=False)
+    async def open_party(self, ctx, bet: str = str(config.bot.default_bet)):
+        current_money = self.economy.get_entry(ctx.author.id)[1]
+        bet_amount = parse_bet_amount(bet, current_money)
+
         try:
-            validate_money_bet(self.economy, ctx.author.id, bet)
+            validate_money_bet(self.economy, ctx.author.id, bet_amount)
+            self.economy.add_money(ctx.author.id, -bet_amount)
+            log_wallet_change(
+                logger,
+                event="xidach_host_escrow",
+                user_id=ctx.author.id,
+                money_delta=-bet_amount,
+                bet=bet_amount,
+                ctx=ctx,
+            )
         except InsufficientFundsException as exc:
             await ctx.send(str(exc))
             return
+        except Exception as exc:
+            await ctx.send(f"❌ Lỗi: {exc}")
+            return
 
-        view = LobbyView(self.bot, bet, ctx.author, self.economy)
+        view = LobbyView(self.bot, bet_amount, ctx.author, self.economy)
         embed = discord.Embed(
             title="🎰 SẢNH XÌ DÁCH PVP (Tối đa 6 người)",
             description=(
                 f"**Chủ sảnh:** {ctx.author.mention}\n"
-                f"**Mức cược:** `{bet:,} VND/người`\n\n"
+                f"**Mức cược:** `{bet_amount:,} VND/người`\n\n"
                 "👉 Bấm nút để góp vốn! Ai điểm cao nhất ăn tất! (Tối đa 6 người)"
             ),
             color=discord.Color.gold()
         )
         embed.set_thumbnail(url=ctx.author.display_avatar.url)
-        await ctx.send(embed=embed, view=view)
+        view.message = await ctx.send(embed=embed, view=view)

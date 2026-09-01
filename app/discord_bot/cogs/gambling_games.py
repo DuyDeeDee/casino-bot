@@ -12,7 +12,7 @@ from PIL import Image, ImageDraw, ImageFont
 from pathlib import Path
 
 from app.config import config
-from app.discord_bot.modules.betting import validate_money_bet
+from app.discord_bot.modules.betting import parse_bet_amount, validate_money_bet
 from app.discord_bot.modules.economy import Economy
 from app.discord_bot.modules.helpers import make_embed, InsufficientFundsException
 from app.discord_bot.modules.wallet_logging import log_wallet_change
@@ -36,28 +36,6 @@ MASCOT_MAPPING = {
     "🐓": "🐓 Gà",
 }
 
-
-def parse_bet_amount(val_str: str, current_money: int) -> int:
-    val_str = val_str.strip().lower()
-    if val_str in ["all", "allin", "all-in", "tất tay"]:
-        from app.discord_bot.modules.betting import get_capped_all_in_amount
-        return get_capped_all_in_amount(current_money)
-    
-    # Remove separators like commas or dots
-    val_str = val_str.replace(",", "").replace(".", "")
-    
-    multiplier = 1
-    if val_str.endswith("k"):
-        multiplier = 1_000
-        val_str = val_str[:-1].strip()
-    elif val_str.endswith("m"):
-        multiplier = 1_000_000
-        val_str = val_str[:-1].strip()
-        
-    try:
-        return int(float(val_str) * multiplier)
-    except ValueError:
-        return 0
 
 
 def draw_dice_face(value: int, size: int = 60) -> Image.Image:
@@ -350,7 +328,7 @@ class TaiXiuBetModal(discord.ui.Modal):
 
         # Get configured max bet
         max_bet_str = self.lobby_view.cog.economy.get_setting("taixiu_max_bet")
-        max_bet = int(max_bet_str) if max_bet_str is not None else 10000000  # Default 10M VND
+        max_bet = int(max_bet_str) if max_bet_str else 10000000  # Default 10M VND
         
         # Calculate what their new total bet for this door would be
         current_bet = 0
@@ -685,13 +663,19 @@ class BauCuaBetModal(discord.ui.Modal):
             await interaction.response.send_message("❌ Số tiền cược tối thiểu là **1,000 VND**.", ephemeral=True)
             return
 
+        try:
+            validate_money_bet(self.lobby_view.cog.economy, user.id, amount)
+        except Exception as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+            return
+
         if amount > current_money:
             await interaction.response.send_message(f"❌ Bạn không đủ tiền! Số dư hiện tại của bạn là **{current_money:,} VND**.", ephemeral=True)
             return
 
         # Deduct balance immediately
         self.lobby_view.cog.economy.add_money(user.id, -amount)
-        
+
         self.lobby_view.bets[self.mascot][user.id] = self.lobby_view.bets[self.mascot].get(user.id, 0) + amount
         self.lobby_view.user_names[user.id] = user.display_name
         
@@ -1124,7 +1108,7 @@ class ColorWheelSelectionView(discord.ui.View):
 class GamblingGames(commands.Cog, name="GamblingGames"):
     def __init__(self, client: commands.Bot):
         self.client = client
-        self.economy = getattr(client, "economy", Economy())
+        self.economy = getattr(client, "economy", None) or Economy()
         self.active_taixiu_sessions = set()
         self.taixiu_history = []
         self.active_baucua_sessions = set()
@@ -1525,7 +1509,18 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
                 await ctx.send(f"🎉 Chúc mừng các đại gia đã chiến thắng phiên #{session_id}: {', '.join(winner_mentions)}!")
         except Exception as e:
             logger.error(f"Error in taixiu command: {e}", exc_info=True)
-            await ctx.send(f"❌ Có lỗi xảy ra trong phiên Tài Xỉu #{session_id}: `{e}`")
+            # Refund any escrowed bets if game crashed before settlement
+            if 'view' in locals() and hasattr(view, 'tai_bets') and hasattr(view, 'xiu_bets'):
+                refunded_users = {}
+                for uid, amt in view.tai_bets.items():
+                    refunded_users[uid] = refunded_users.get(uid, 0) + amt
+                for uid, amt in view.xiu_bets.items():
+                    refunded_users[uid] = refunded_users.get(uid, 0) + amt
+                for uid, total_refund in refunded_users.items():
+                    if total_refund > 0:
+                        self.economy.add_money(uid, total_refund)
+                        log_wallet_change(logger, event="taixiu_crash_refund", user_id=uid, money_delta=total_refund)
+            await ctx.send(f"❌ Có lỗi xảy ra trong phiên Tài Xỉu #{session_id}. Toàn bộ tiền cược đã được hoàn lại.")
         finally:
             self.active_taixiu_sessions.discard(channel_id)
 
@@ -1780,7 +1775,17 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
                 await ctx.send(f"🎉 Chúc mừng các đại gia đã chiến thắng phiên #{session_id}: {', '.join(winner_mentions)}!")
         except Exception as e:
             logger.error(f"Error in baucua command: {e}", exc_info=True)
-            await ctx.send(f"❌ Có lỗi xảy ra trong phiên Bầu Cua #{session_id}: `{e}`")
+            # Refund any escrowed bets if game crashed before settlement
+            if 'view' in locals() and hasattr(view, 'bets'):
+                refunded_users = {}
+                for mascot, mascot_bets in view.bets.items():
+                    for uid, amt in mascot_bets.items():
+                        refunded_users[uid] = refunded_users.get(uid, 0) + amt
+                for uid, total_refund in refunded_users.items():
+                    if total_refund > 0:
+                        self.economy.add_money(uid, total_refund)
+                        log_wallet_change(logger, event="baucua_crash_refund", user_id=uid, money_delta=total_refund)
+            await ctx.send(f"❌ Có lỗi xảy ra trong phiên Bầu Cua #{session_id}. Toàn bộ tiền cược đã được hoàn lại.")
         finally:
             self.active_baucua_sessions.discard(channel_id)
 

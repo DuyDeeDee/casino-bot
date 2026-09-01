@@ -8,40 +8,12 @@ import discord
 from discord.ext import commands
 
 from app.config import config
-from app.discord_bot.modules.betting import validate_money_bet
+from app.discord_bot.modules.betting import parse_bet_amount, validate_money_bet
 from app.discord_bot.modules.economy import Economy
 from app.discord_bot.modules.helpers import make_embed
 from app.discord_bot.modules.wallet_logging import log_wallet_change
 
 logger = logging.getLogger(__name__)
-
-
-def parse_bet_amount(val_str: str, current_money: int) -> int:
-    val_str = val_str.strip().lower()
-    if val_str in ["all", "allin", "all-in", "tất tay"]:
-        from app.discord_bot.modules.betting import get_capped_all_in_amount
-        return get_capped_all_in_amount(current_money)
-    
-    has_suffix = val_str.endswith("k") or val_str.endswith("m")
-    
-    if has_suffix:
-        val_str = val_str.replace(",", "")
-        multiplier = 1000 if val_str.endswith("k") else 1000000
-        val_str = val_str[:-1].strip()
-    else:
-        val_str = val_str.replace(",", "")
-        if "." in val_str:
-            parts = val_str.split(".")
-            if len(parts[-1]) == 3:
-                val_str = val_str.replace(".", "")
-            else:
-                val_str = "".join(parts[:-1]) + "." + parts[-1]
-        multiplier = 1
-        
-    try:
-        return int(float(val_str) * multiplier)
-    except ValueError:
-        return 0
 
 
 def get_hand_emoji(hand: str) -> str:
@@ -108,27 +80,39 @@ class BkbEphemeralChoiceView(discord.ui.View):
         super().__init__(timeout=30.0)
         self.callback_fn = callback_fn
         self.user_id = user_id
+        self._chosen = False
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.user_id:
             await interaction.response.send_message("❌ Đây không phải lượt chọn của bạn!", ephemeral=True)
             return False
+        if self._chosen:
+            return False
         return True
 
     @discord.ui.button(label="Búa ✊", style=discord.ButtonStyle.primary)
     async def select_bua(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self.callback_fn(interaction, "bua")
+        if self._chosen:
+            return
+        self._chosen = True
         self.stop()
+        await self.callback_fn(interaction, "bua")
 
     @discord.ui.button(label="Kéo ✌️", style=discord.ButtonStyle.primary)
     async def select_keo(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self.callback_fn(interaction, "keo")
+        if self._chosen:
+            return
+        self._chosen = True
         self.stop()
+        await self.callback_fn(interaction, "keo")
 
     @discord.ui.button(label="Bao 🖐️", style=discord.ButtonStyle.primary)
     async def select_bao(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self.callback_fn(interaction, "bao")
+        if self._chosen:
+            return
+        self._chosen = True
         self.stop()
+        await self.callback_fn(interaction, "bao")
 
 
 # Solo view to select hand and play again
@@ -140,20 +124,29 @@ class BkbSoloView(discord.ui.View):
         self.user_id = ctx.author.id
         self.bet_amount = bet_amount
         self.message: Optional[discord.Message] = None
+        self._processing = False
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.user_id:
             await interaction.response.send_message("❌ Đây không phải lượt chơi của bạn!", ephemeral=True)
             return False
+        if self._processing:
+            await interaction.response.send_message("⏳ Đang xử lý lượt chơi...", ephemeral=True)
+            return False
         return True
 
     async def play_game(self, interaction: discord.Interaction, player_choice: str):
+        if self._processing:
+            return
+        self._processing = True
+        self.stop()
         await interaction.response.defer()
         
         # Deduct bet amount
         try:
             validate_money_bet(self.cog.economy, self.user_id, self.bet_amount)
-            self.cog.economy.add_money(self.user_id, -self.bet_amount)
+            with self.cog.economy.transaction():
+                self.cog.economy.add_money(self.user_id, -self.bet_amount)
             log_wallet_change(logger, event="bkb_solo_bet", user_id=self.user_id, money_delta=-self.bet_amount, ctx=self.ctx)
         except Exception as e:
             await interaction.followup.send(f"❌ {e}", ephemeral=True)
@@ -183,7 +176,8 @@ class BkbSoloView(discord.ui.View):
                 
             winnings = int(self.bet_amount * (1 + multiplier)) # get bet back + win amount
             net_profit = winnings - self.bet_amount
-            self.cog.economy.add_money(self.user_id, winnings)
+            with self.cog.economy.transaction():
+                self.cog.economy.payout_winnings(self.user_id, winnings, self.bet_amount)
             log_wallet_change(logger, event="bkb_solo_win", user_id=self.user_id, money_delta=winnings, ctx=self.ctx)
             
             new_streak = current_streak + 1
@@ -223,7 +217,8 @@ class BkbSoloView(discord.ui.View):
             )
         else:  # Draw
             winnings = self.bet_amount
-            self.cog.economy.add_money(self.user_id, winnings)
+            with self.cog.economy.transaction():
+                self.cog.economy.add_money(self.user_id, winnings)
             log_wallet_change(logger, event="bkb_solo_draw", user_id=self.user_id, money_delta=winnings, ctx=self.ctx)
             
             self.cog.economy.update_bkb_stats(
@@ -274,15 +269,24 @@ class BkbPlayAgainView(discord.ui.View):
         self.user_id = ctx.author.id
         self.bet_amount = bet_amount
         self.message: Optional[discord.Message] = None
+        self._processing = False
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.user_id:
             await interaction.response.send_message("❌ Đây không phải lượt chơi của bạn!", ephemeral=True)
             return False
+        if self._processing:
+            await interaction.response.send_message("⏳ Đang tải ván mới...", ephemeral=True)
+            return False
         return True
 
     @discord.ui.button(label="🔄 Chơi lại", style=discord.ButtonStyle.success)
     async def replay(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self._processing:
+            return
+        self._processing = True
+        self.stop()
+        
         # Verify wallet has enough funds
         current_money = self.cog.economy.get_entry(self.user_id)[1]
         if current_money < self.bet_amount:
@@ -316,48 +320,67 @@ class BkbPlayAgainView(discord.ui.View):
 
 # Invite view for 1v1 challenges
 class BkbChallengeInviteView(discord.ui.View):
-    def __init__(self, cog: "Bkb", ctx: commands.Context, opponent: discord.Member, bet_amount: int, is_bo3: bool = False, is_bo5: bool = False, challenger_predict: Optional[str] = None):
+    def __init__(self, cog: "Bkb", ctx: commands.Context, opponent: discord.Member, bet_amount: int, is_bo3: bool = False, is_bo5: bool = False, challenger_predict: Optional[str] = None, challenger: Optional[discord.Member] = None):
         super().__init__(timeout=45.0)
         self.cog = cog
         self.ctx = ctx
-        self.challenger = ctx.author
+        self.challenger = challenger or ctx.author
         self.opponent = opponent
         self.bet_amount = bet_amount
         self.is_bo3 = is_bo3
         self.is_bo5 = is_bo5
         self.challenger_predict = challenger_predict
         self.message: Optional[discord.Message] = None
+        self._processing = False
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.opponent.id:
             await interaction.response.send_message("❌ Nút này chỉ dành cho người được thách đấu!", ephemeral=True)
             return False
+        if self._processing:
+            await interaction.response.send_message("⏳ Yêu cầu đang được xử lý...", ephemeral=True)
+            return False
+        if self.cog.economy.is_banned(interaction.user.id):
+            await interaction.response.send_message("❌ Tài khoản của bạn đã bị khóa (banned), không thể tham gia!", ephemeral=True)
+            return False
+        if self.cog.economy.is_in_jail(interaction.user.id):
+            await interaction.response.send_message("❌ Bạn đang ở trong tù, không thể tham gia!", ephemeral=True)
+            return False
         return True
 
     @discord.ui.button(label="✅ Chấp nhận", style=discord.ButtonStyle.success)
     async def accept(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self._processing:
+            return
+        self._processing = True
+        self.stop()
         await interaction.response.defer()
         
+        # Check both players' ban & jail status
+        if self.cog.economy.is_banned(self.challenger.id) or self.cog.economy.is_banned(self.opponent.id):
+            await interaction.followup.send("❌ Một trong hai người chơi đã bị khóa tài khoản (banned)!", ephemeral=True)
+            return
+        if self.cog.economy.is_in_jail(self.challenger.id) or self.cog.economy.is_in_jail(self.opponent.id):
+            await interaction.followup.send("❌ Một trong hai người chơi đang ở trong tù!", ephemeral=True)
+            return
+
         # Check both players' money before starting
         c_money = self.cog.economy.get_entry(self.challenger.id)[1]
         o_money = self.cog.economy.get_entry(self.opponent.id)[1]
         
         if c_money < self.bet_amount:
             await interaction.followup.send(f"❌ Trận đấu bị huỷ vì {self.challenger.mention} không đủ tiền cược!")
-            self.stop()
             return
         if o_money < self.bet_amount:
             await interaction.followup.send(f"❌ Trận đấu bị huỷ vì {self.opponent.mention} không đủ tiền cược!")
-            self.stop()
             return
             
-        # Deduct money from both players
-        self.cog.economy.add_money(self.challenger.id, -self.bet_amount)
-        self.cog.economy.add_money(self.opponent.id, -self.bet_amount)
+        # Deduct money from both players atomically
+        with self.cog.economy.transaction():
+            self.cog.economy.add_money(self.challenger.id, -self.bet_amount)
+            self.cog.economy.add_money(self.opponent.id, -self.bet_amount)
         log_wallet_change(logger, event="bkb_1v1_bet", user_id=self.challenger.id, money_delta=-self.bet_amount, ctx=self.ctx)
         log_wallet_change(logger, event="bkb_1v1_bet", user_id=self.opponent.id, money_delta=-self.bet_amount, ctx=self.ctx)
-
-        self.stop()
         
         # Launch game loop
         if self.is_bo3 or self.is_bo5:
@@ -385,6 +408,10 @@ class BkbChallengeInviteView(discord.ui.View):
 
     @discord.ui.button(label="❌ Từ chối", style=discord.ButtonStyle.danger)
     async def decline(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self._processing:
+            return
+        self._processing = True
+        self.stop()
         await interaction.response.defer()
         embed = make_embed(
             title="⚔️ THÁCH ĐẤU BỊ TỪ CHỐI",
@@ -392,7 +419,6 @@ class BkbChallengeInviteView(discord.ui.View):
             color=discord.Color.red()
         )
         await self.message.edit(embed=embed, view=None)
-        self.stop()
 
     async def on_timeout(self):
         try:
@@ -480,9 +506,10 @@ class BkbSingleMatch:
         self.resolved = True
         self.view.stop()
         
-        # Refund both
-        self.cog.economy.add_money(self.p1.id, self.bet)
-        self.cog.economy.add_money(self.p2.id, self.bet)
+        # Refund both atomically
+        with self.cog.economy.transaction():
+            self.cog.economy.add_money(self.p1.id, self.bet)
+            self.cog.economy.add_money(self.p2.id, self.bet)
         log_wallet_change(logger, event="bkb_1v1_refund_timeout", user_id=self.p1.id, money_delta=self.bet, ctx=self.ctx)
         log_wallet_change(logger, event="bkb_1v1_refund_timeout", user_id=self.p2.id, money_delta=self.bet, ctx=self.ctx)
         
@@ -504,7 +531,7 @@ class BkbSingleMatch:
         
         # Update embed statuses
         p1_status = "Đã chọn" if self.p1.id in self.choices else "Đang chọn..."
-        p2_status = "Đã chọn" if self.p2.id in self.choices else "Đang chọn..."
+        p2_status = "Đang chọn..." if self.p2.id not in self.choices else "Đã chọn"
         predict_tag = f" (Đã đặt trước: {get_hand_emoji(self.p1_predict)})" if self.p1_predict else ""
         
         embed = make_embed(
@@ -519,13 +546,17 @@ class BkbSingleMatch:
         await self.message.edit(embed=embed, view=self.view)
         
         if len(self.choices) == 2:
+            if self.resolved:
+                return
             self.resolved = True
             self.view.stop()
             await self.resolve_game()
 
     async def resolve_game(self):
-        c1 = self.choices[self.p1.id]
-        c2 = self.choices[self.p2.id]
+        c1 = self.choices.get(self.p1.id)
+        c2 = self.choices.get(self.p2.id)
+        if not c1 or not c2:
+            return
         
         outcome = evaluate_hands(c1, c2)
         
@@ -534,9 +565,10 @@ class BkbSingleMatch:
         s2 = self.cog.economy.get_bkb_stats(self.p2.id)
         
         if outcome == 0:  # Draw
-            # Refund
-            self.cog.economy.add_money(self.p1.id, self.bet)
-            self.cog.economy.add_money(self.p2.id, self.bet)
+            # Refund atomically
+            with self.cog.economy.transaction():
+                self.cog.economy.add_money(self.p1.id, self.bet)
+                self.cog.economy.add_money(self.p2.id, self.bet)
             log_wallet_change(logger, event="bkb_1v1_refund_draw", user_id=self.p1.id, money_delta=self.bet, ctx=self.ctx)
             log_wallet_change(logger, event="bkb_1v1_refund_draw", user_id=self.p2.id, money_delta=self.bet, ctx=self.ctx)
             
@@ -550,7 +582,8 @@ class BkbSingleMatch:
                 f"  {self.p1.display_name}    vs    {self.p2.display_name}\n"
                 f"    {get_hand_emoji(c1)}              {get_hand_emoji(c2)}\n"
                 f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"🤝 Hoà! Không ai mất xu.\n"
+                f"🤝 **HOÀ NHAU!**\n"
+                f"💰 Đã hoàn trả lại `{self.bet:,} xu` tiền cược cho mỗi người.\n"
             )
             color = discord.Color.light_grey()
         elif outcome == 1:  # Player 1 Wins
@@ -566,7 +599,8 @@ class BkbSingleMatch:
                 net_profit_p1 = int(self.bet * 2.5)
                 predict_info = f"\n🎯 Thắng dự đoán trước: Nhận thưởng 2.5x tiền cược!"
                 
-            self.cog.economy.add_money(self.p1.id, payout)
+            with self.cog.economy.transaction():
+                self.cog.economy.payout_winnings(self.p1.id, payout, self.bet)
             log_wallet_change(logger, event="bkb_1v1_win", user_id=self.p1.id, money_delta=payout, ctx=self.ctx)
             
             # Update DB stats
@@ -590,7 +624,8 @@ class BkbSingleMatch:
             net_profit_p2 = self.bet
             net_profit_p1 = -self.bet
             
-            self.cog.economy.add_money(self.p2.id, payout)
+            with self.cog.economy.transaction():
+                self.cog.economy.payout_winnings(self.p2.id, payout, self.bet)
             log_wallet_change(logger, event="bkb_1v1_win", user_id=self.p2.id, money_delta=payout, ctx=self.ctx)
             
             # Update DB stats
@@ -628,19 +663,40 @@ class BkbChallengeAgainView(discord.ui.View):
         self.p1 = p1
         self.p2 = p2
         self.bet = bet
+        self._processing = False
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.p1.id and interaction.user.id != self.p2.id:
             await interaction.response.send_message("❌ Bạn không tham gia trận thách đấu này!", ephemeral=True)
             return False
+        if self._processing:
+            await interaction.response.send_message("⏳ Yêu cầu thách lại đang được xử lý...", ephemeral=True)
+            return False
+        if self.cog.economy.is_banned(interaction.user.id):
+            await interaction.response.send_message("❌ Tài khoản của bạn đã bị khóa (banned), không thể thách lại!", ephemeral=True)
+            return False
+        if self.cog.economy.is_in_jail(interaction.user.id):
+            await interaction.response.send_message("❌ Bạn đang ở trong tù, không thể thách lại!", ephemeral=True)
+            return False
         return True
 
     @discord.ui.button(label="🔄 Thách lại", style=discord.ButtonStyle.success)
     async def rematch(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self._processing:
+            return
+        self._processing = True
+        self.stop()
         await interaction.response.defer()
         
         challenger = interaction.user
         opponent = self.p2 if challenger.id == self.p1.id else self.p1
+
+        if self.cog.economy.is_banned(challenger.id) or self.cog.economy.is_banned(opponent.id):
+            await interaction.followup.send("❌ Một trong hai người chơi đã bị khóa tài khoản (banned)!", ephemeral=True)
+            return
+        if self.cog.economy.is_in_jail(challenger.id) or self.cog.economy.is_in_jail(opponent.id):
+            await interaction.followup.send("❌ Một trong hai người chơi đang ở trong tù!", ephemeral=True)
+            return
         
         # Verify wallets
         c_money = self.cog.economy.get_entry(challenger.id)[1]
@@ -660,16 +716,18 @@ class BkbChallengeAgainView(discord.ui.View):
             color=discord.Color.blue()
         )
         
-        view = BkbChallengeInviteView(self.cog, self.ctx, opponent, self.bet)
+        view = BkbChallengeInviteView(self.cog, self.ctx, opponent, self.bet, challenger=challenger)
         # We reuse the same message
         view.message = await interaction.message.edit(embed=embed, view=view)
-        self.stop()
 
     @discord.ui.button(label="🏃 Bỏ qua", style=discord.ButtonStyle.secondary)
     async def skip(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self._processing:
+            return
+        self._processing = True
+        self.stop()
         await interaction.response.defer()
         await interaction.message.edit(view=None)
-        self.stop()
 
 
 # Best of Match coordinator
@@ -832,7 +890,8 @@ class BkbBoMatch:
             net_profit_w = self.bet
             net_profit_l = -self.bet
             
-            self.cog.economy.add_money(self.p1.id, winnings)
+            with self.cog.economy.transaction():
+                self.cog.economy.payout_winnings(self.p1.id, winnings, self.bet)
             log_wallet_change(logger, event="bkb_bo_win", user_id=self.p1.id, money_delta=winnings, ctx=self.ctx)
             
             # Update stats
@@ -848,7 +907,8 @@ class BkbBoMatch:
             net_profit_w = self.bet
             net_profit_l = -self.bet
             
-            self.cog.economy.add_money(self.p2.id, winnings)
+            with self.cog.economy.transaction():
+                self.cog.economy.payout_winnings(self.p2.id, winnings, self.bet)
             log_wallet_change(logger, event="bkb_bo_win", user_id=self.p2.id, money_delta=winnings, ctx=self.ctx)
             
             # Update stats
@@ -885,6 +945,8 @@ class BkbPartyLobbyView(discord.ui.View):
         self.players = [ctx.author]
         self.message: Optional[discord.Message] = None
         self.started = False
+        self._joining_users = set()
+        self._action_lock = False
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         return True
@@ -896,8 +958,16 @@ class BkbPartyLobbyView(discord.ui.View):
             return
             
         user = interaction.user
-        if user.id in [p.id for p in self.players]:
-            await interaction.response.send_message("❌ Bạn đã tham gia lobby rồi!", ephemeral=True)
+        if user.id in self._joining_users or user.id in [p.id for p in self.players]:
+            await interaction.response.send_message("❌ Bạn đã tham gia hoặc đang được xử lý!", ephemeral=True)
+            return
+
+        if self.cog.economy.is_banned(user.id):
+            await interaction.response.send_message("❌ Tài khoản của bạn đã bị khóa (banned), không thể tham gia!", ephemeral=True)
+            return
+
+        if self.cog.economy.is_in_jail(user.id):
+            await interaction.response.send_message("❌ Bạn đang ở trong tù, không thể tham gia!", ephemeral=True)
             return
             
         if len(self.players) >= 8:
@@ -910,99 +980,100 @@ class BkbPartyLobbyView(discord.ui.View):
             await interaction.response.send_message("❌ Bạn không đủ tiền cược!", ephemeral=True)
             return
             
-        await interaction.response.defer()
-        
-        self.cog.economy.add_money(user.id, -self.bet)
-        log_wallet_change(logger, event="bkb_party_bet", user_id=user.id, money_delta=-self.bet, ctx=self.ctx)
-        self.players.append(user)
-        
-        await self.update_lobby()
-        
-        if len(self.players) == 8:
-            self.stop()
-            await self.start_game()
+        self._joining_users.add(user.id)
+        try:
+            await interaction.response.defer()
+            with self.cog.economy.transaction():
+                self.cog.economy.add_money(user.id, -self.bet)
+            log_wallet_change(logger, event="bkb_party_bet", user_id=user.id, money_delta=-self.bet, ctx=self.ctx)
+            if user.id not in [p.id for p in self.players]:
+                self.players.append(user)
+            await self.update_lobby()
+        finally:
+            self._joining_users.discard(user.id)
 
-    @discord.ui.button(label="🚀 Bắt đầu", style=discord.ButtonStyle.primary)
+    @discord.ui.button(label="🚀 Bắt đầu ngay", style=discord.ButtonStyle.primary)
     async def force_start(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user.id != self.host.id:
-            await interaction.response.send_message("❌ Chỉ có người tạo phòng mới được kích hoạt!", ephemeral=True)
+            await interaction.response.send_message("❌ Chỉ chủ phòng (host) mới có thể bắt đầu trận đấu!", ephemeral=True)
+            return
+            
+        if self._action_lock or self.started:
             return
             
         if len(self.players) < 2:
-            await interaction.response.send_message("❌ Cần ít nhất 2 người để chơi!", ephemeral=True)
+            await interaction.response.send_message("❌ Cần tối thiểu 2 người để chơi!", ephemeral=True)
             return
             
-        await interaction.response.defer()
+        self._action_lock = True
+        self.started = True
         self.stop()
-        await self.start_game()
+        await interaction.response.defer()
+        
+        party = BkbPartyMatch(self.cog, self.ctx, self.players, self.bet, self.message)
+        await party.start()
 
     @discord.ui.button(label="❌ Huỷ phòng", style=discord.ButtonStyle.danger)
     async def cancel_lobby(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user.id != self.host.id:
-            await interaction.response.send_message("❌ Chỉ người tạo phòng mới được huỷ phòng!", ephemeral=True)
+            await interaction.response.send_message("❌ Chỉ chủ phòng (host) mới có quyền huỷ lobby!", ephemeral=True)
             return
             
-        await interaction.response.defer()
+        if self._action_lock or self.started:
+            return
+            
+        self._action_lock = True
+        self.started = True
         self.stop()
+        await interaction.response.defer()
         
-        # Refund everyone
-        for p in self.players:
-            self.cog.economy.add_money(p.id, self.bet)
-            log_wallet_change(logger, event="bkb_party_refund", user_id=p.id, money_delta=self.bet, ctx=self.ctx)
+        # Refund all players who paid
+        with self.cog.economy.transaction():
+            for p in self.players:
+                self.cog.economy.add_money(p.id, self.bet)
+                log_wallet_change(logger, event="bkb_party_refund_cancel", user_id=p.id, money_delta=self.bet, ctx=self.ctx)
             
         embed = make_embed(
-            title="🎪 LOBBY PARTY BỊ HUỶ",
-            description=f"❌ Phòng Party cược {self.bet:,} xu đã bị huỷ bởi người tạo {self.host.mention}. Đã hoàn tiền cược cho tất cả.",
+            title="🎪 LOBBY PARTY ĐÃ BỊ HUỶ",
+            description=f"❌ Chủ phòng {self.host.mention} đã huỷ lobby. Hoàn trả tiền cược cho tất cả mọi người.",
             color=discord.Color.red()
         )
         await self.message.edit(embed=embed, view=None)
 
     async def update_lobby(self):
-        player_list_str = "\n".join([f"✅ {p.mention} đã vào" for p in self.players])
+        player_list = "\n".join([f"• {p.mention}" for p in self.players])
         embed = make_embed(
-            title="🎪 PARTY BÚA KÉO BAO",
+            title="🎪 LOBBY BÚA KÉO BAO (PARTY)",
             description=(
+                f"👑 **Chủ phòng:** {self.host.mention}\n"
                 f"💰 **Cược:** `{self.bet:,} xu/người`\n"
-                f"👥 **Thành viên ({len(self.players)}/8):**\n"
-                f"{player_list_str}\n\n"
+                f"👥 **Người tham gia ({len(self.players)}/8):**\n{player_list}\n\n"
                 f"⏳ Đang chờ thêm người..."
             ),
             color=discord.Color.blue()
         )
-        # Update Join button label with bet
-        self.join_lobby.label = f"🙋 Tham gia — {self.bet:,} xu"
         await self.message.edit(embed=embed, view=self)
 
-    async def start_game(self):
-        self.started = True
-        game = BkbPartyMatch(self.cog, self.ctx, self.players, self.bet, self.message)
-        await game.start()
-
     async def on_timeout(self):
-        if self.started:
-            return
-            
-        if len(self.players) >= 2:
+        if not self.started:
             self.started = True
-            await self.start_game()
-        else:
-            # Cancel and refund
-            for p in self.players:
-                self.cog.economy.add_money(p.id, self.bet)
-                log_wallet_change(logger, event="bkb_party_refund", user_id=p.id, money_delta=self.bet, ctx=self.ctx)
+            # Refund all players
+            with self.cog.economy.transaction():
+                for p in self.players:
+                    self.cog.economy.add_money(p.id, self.bet)
+                    log_wallet_change(logger, event="bkb_party_refund_timeout", user_id=p.id, money_delta=self.bet, ctx=self.ctx)
                 
-            embed = make_embed(
-                title="🎪 LOBBY PARTY BỊ HUỶ",
-                description="❌ Hết thời gian chờ mà phòng không đủ 2 người chơi. Hoàn tiền cược.",
-                color=discord.Color.red()
-            )
             try:
+                embed = make_embed(
+                    title="🎪 LOBBY HẾT HẠN",
+                    description="⏳ Lobby party đã hết thời gian chờ và bị huỷ. Hoàn lại tiền cược.",
+                    color=discord.Color.red()
+                )
                 await self.message.edit(embed=embed, view=None)
             except Exception:
                 pass
 
 
-# Choice view in channel for Party Mode
 class BkbPartyChoiceView(discord.ui.View):
     def __init__(self, match_obj, players: list, timeout: float = 15.0):
         super().__init__(timeout=timeout)
@@ -1344,6 +1415,12 @@ class Bkb(commands.Cog, name="Bkb"):
             opponent = ctx.message.mentions[0]
             if opponent.id == ctx.author.id:
                 await ctx.send("❌ Bạn không thể thách đấu chính mình!")
+                return
+            if self.economy.is_banned(opponent.id):
+                await ctx.send(f"❌ **{opponent.display_name}** đã bị khóa tài khoản (banned), không thể thách đấu!")
+                return
+            if self.economy.is_in_jail(opponent.id):
+                await ctx.send(f"❌ **{opponent.display_name}** đang ở trong tù, không thể thách đấu!")
                 return
                 
             # Look for bet string in args (usually args[1] or args[0] might be the mention, so we iterate)

@@ -97,7 +97,7 @@ class Handlers(commands.Cog, name="handlers"):
         
         # Nếu chưa nhận quà khởi nghiệp và lệnh không phải là khoinghiep hoặc help hoặc exempt
         if not self.economy.has_claimed_start(user_id):
-            if ctx.command and (ctx.command.name in ["khoinghiep", "help"] or (ctx.command.cog and ctx.command.cog.qualified_name in exempt_cogs)):
+            if ctx.command and (ctx.command.name in ["khoinghiep", "help", "redeem"] or (ctx.command.cog and ctx.command.cog.qualified_name in exempt_cogs)):
                 return
                 
             prefix = self.client.command_prefix
@@ -110,6 +110,8 @@ class Handlers(commands.Cog, name="handlers"):
                     f"Vì bạn là người mới và chưa khởi nghiệp, ví của bạn hiện đang trống rỗng.\n"
                     f"Hãy sử dụng lệnh khởi nghiệp dưới đây để nhận **1,000,000 VND** làm vốn ban đầu:\n\n"
                     f"👉 👉 **`{prefix}khoinghiep`** (hoặc `{prefix}batdau`) 👈 👈\n\n"
+                    f"🙏 **Cảm ơn bạn đã tham gia phiên bản Beta!**\n"
+                    f"🎁 Nếu bạn có mã quà tặng, hãy dùng `{prefix}redeem <code>` để nhận phần thưởng đặc biệt!\n\n"
                     f"Sau khi nhận tiền, bạn có thể tham gia các trò chơi hoặc làm việc kiếm thêm tiền bằng lệnh `{prefix}work`.\n"
                     f"Gõ `{prefix}help` để xem toàn bộ danh sách lệnh."
                 ),
@@ -140,7 +142,7 @@ class Handlers(commands.Cog, name="handlers"):
         if hasattr(ctx.command, "on_error"):
             return
 
-        if isinstance(error, commands.CheckFailure) and str(error) in ["Chưa khởi nghiệp", "Bị ban", "Kênh bị cấm"]:
+        if isinstance(error, commands.CheckFailure) and str(error) in ["Chưa khởi nghiệp", "Bị ban", "Kênh bị cấm", "Guild bị cấm"]:
             return
 
         if isinstance(error, CommandInvokeError):
@@ -163,9 +165,18 @@ class Handlers(commands.Cog, name="handlers"):
             return
 
         if isinstance(error, MissingPermissions):
+            perm_labels = {
+                "administrator": "Quản trị viên",
+                "manage_messages": "Quản lý tin nhắn",
+                "manage_guild": "Quản lý server",
+                "manage_channels": "Quản lý kênh",
+                "ban_members": "Cấm thành viên",
+            }
+            required = ", ".join(perm_labels.get(p, p) for p in error.missing_perms)
             await ctx.send(
-                "Bạn phải có các quyền sau: "
-                + ", ".join(f"`{perm}`" for perm in error.missing_perms)
+                "❌ **Bạn không có đủ quyền** để dùng lệnh này!\n"
+                f"🔑 Yêu cầu: {required}",
+                delete_after=10,
             )
             return
 

@@ -584,7 +584,7 @@ class Uno(commands.Cog, name="UNO"):
 
     def __init__(self, client: commands.Bot):
         self.client = client
-        self.economy: Economy = getattr(client, "economy", Economy())
+        self.economy: Economy = getattr(client, "economy", None) or Economy()
 
     def _is_view_stale(self, view: discord.ui.View | discord.ui.Select | discord.ui.Button, game: UnoGame) -> bool:
         if not hasattr(view, "game") or view.game is not game:

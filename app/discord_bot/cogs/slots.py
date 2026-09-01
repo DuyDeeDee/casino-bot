@@ -24,11 +24,52 @@ from app.discord_bot.modules.betting import (
 from app.discord_bot.modules.economy import Economy
 from app.discord_bot.modules.helpers import (
     ABS_PATH,
+    calc_gold,
     make_embed,
+    parse_amount,
 )
 from app.discord_bot.modules.wallet_logging import log_wallet_change
 
 logger = logging.getLogger(__name__)
+
+TOPUP_CONFIRM_VND_THRESHOLD = 5_000_000
+
+
+class TopupConfirmView(discord.ui.View):
+    """Confirmation buttons for crediting a large gold top-up via i?addtopup."""
+
+    def __init__(self, admin: discord.Member, target: discord.Member,
+                 vnd_amount: int, total_gold: int, bonus_pct: int):
+        super().__init__(timeout=60)
+        self.admin = admin
+        self.target = target
+        self.vnd_amount = vnd_amount
+        self.total_gold = total_gold
+        self.bonus_pct = bonus_pct
+        self.confirmed: bool | None = None
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.admin.id:
+            await interaction.response.send_message(
+                "❌ Chỉ admin đã gõ lệnh mới có thể xác nhận.", ephemeral=True
+            )
+            return False
+        return True
+
+    async def _finish(self, interaction: discord.Interaction, confirmed: bool):
+        self.confirmed = confirmed
+        for item in self.children:
+            item.disabled = True
+        await interaction.response.edit_message(view=self)
+        self.stop()
+
+    @discord.ui.button(label="✅ Xác nhận cộng Gold", style=discord.ButtonStyle.success)
+    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._finish(interaction, True)
+
+    @discord.ui.button(label="❌ Huỷ", style=discord.ButtonStyle.danger)
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._finish(interaction, False)
 
 
 @dataclass(frozen=True)
@@ -57,7 +98,7 @@ class Slots(commands.Cog):
     def __init__(self, client: commands.Bot):
         self.client = client
         self.bot = client
-        self.economy = getattr(client, "economy", Economy())
+        self.economy = getattr(client, "economy", None) or Economy()
         self._assets_path = Path(ABS_PATH) / "modules"
         self._slot_facade = Image.open(self._assets_path / "slot-face.png").convert("RGBA")
         self._slot_reel = Image.open(self._assets_path / "slot-reel.png").convert("RGBA")
@@ -364,28 +405,6 @@ class Slots(commands.Cog):
         Base rate: 1k VND (1,000 VND) = 3 Gold
         Discount / Bonus: Every 100k VND grants +2% bonus Gold (capped at 40%).
         """
-        def parse_amount(s: str) -> int | None:
-            if not s:
-                return None
-            s = s.lower().strip().replace(".", "").replace(",", "")
-            try:
-                if s.endswith("k"):
-                    return int(float(s[:-1]) * 1000)
-                elif s.endswith("m"):
-                    return int(float(s[:-1]) * 1_000_000)
-                else:
-                    return int(s)
-            except ValueError:
-                return None
-
-        def calc_gold(vnd: int) -> tuple[int, int, int, int]:
-            base_gold = (vnd // 1000) * 3
-            bonus_tier = vnd // 100_000
-            discount_pct = min(40, bonus_tier * 2)
-            bonus_gold = int(base_gold * (discount_pct / 100))
-            total_gold = base_gold + bonus_gold
-            return base_gold, bonus_gold, discount_pct, total_gold
-
         vnd_amount = parse_amount(amount_str)
 
         if vnd_amount is None or vnd_amount <= 0:
@@ -416,6 +435,19 @@ class Slots(commands.Cog):
         else:
             base_g, bonus_g, disc_p, tot_g = calc_gold(vnd_amount)
             vnd_formatted = f"{vnd_amount:,} VND"
+
+            if self.economy.get_setting("bank_configured") != "1":
+                embed = make_embed(
+                    title="⚠️ CHƯA CẤU HÌNH TÀI KHOẢN NHẬN TIỀN",
+                    description=(
+                        f"Hệ thống nạp chưa có thông tin ngân hàng chính thức nên không thể tạo mã QR.\n"
+                        f"Vui lòng liên hệ Admin/Owner để nạp Thỏi Vàng.\n\n"
+                        f"*(Admin/Owner: cấu hình bằng lệnh `i?setbank <mã_NH> <STK> <Tên_chủ_TK>`.)*"
+                    ),
+                    color=discord.Color.red()
+                )
+                await ctx.send(embed=embed)
+                return
 
             bank_id = self.economy.get_setting("bank_id", "MB")
             bank_account = self.economy.get_setting("bank_account", "0000000000")
@@ -489,6 +521,7 @@ class Slots(commands.Cog):
         self.economy.set_setting("bank_id", bank_id)
         self.economy.set_setting("bank_account", bank_account)
         self.economy.set_setting("account_name", account_name)
+        self.economy.set_setting("bank_configured", "1")
 
         embed = make_embed(
             title="✅ CẬP NHẬT THÔNG TIN NGÂN HÀNG THÀNH CÔNG ✅",
@@ -560,30 +593,31 @@ class Slots(commands.Cog):
             await ctx.send("❌ Lệnh này chỉ dành cho Admin / Owner!")
             return
 
-        def parse_amount(s: str) -> int | None:
-            if not s:
-                return None
-            s = s.lower().strip().replace(".", "").replace(",", "")
-            try:
-                if s.endswith("k"):
-                    return int(float(s[:-1]) * 1000)
-                elif s.endswith("m"):
-                    return int(float(s[:-1]) * 1_000_000)
-                else:
-                    return int(s)
-            except ValueError:
-                return None
-
         vnd_amount = parse_amount(amount_str)
         if not vnd_amount or vnd_amount <= 0:
             await ctx.send("❌ Số tiền nạp không hợp lệ! Ví dụ: `i?addtopup @user 100k` hoặc `i?addtopup @user 500000`.")
             return
 
-        base_gold = (vnd_amount // 1000) * 3
-        bonus_tier = vnd_amount // 100_000
-        discount_pct = min(40, bonus_tier * 2)
-        bonus_gold = int(base_gold * (discount_pct / 100))
-        total_gold = base_gold + bonus_gold
+        base_g, bonus_g, disc_p, total_gold = calc_gold(vnd_amount)
+
+        if vnd_amount >= TOPUP_CONFIRM_VND_THRESHOLD:
+            view = TopupConfirmView(ctx.author, target, vnd_amount, total_gold, disc_p)
+            confirm_embed = make_embed(
+                title="⚠️ XÁC NHẬN CỘNG GOLD NẠP LỚN",
+                description=(
+                    f"Bạn sắp cộng **`{total_gold:,}` Thỏi Vàng** cho **{target.mention}**:\n"
+                    f"💵 Số tiền nạp: `{vnd_amount:,} VND`\n"
+                    f"🪙 Gold gốc: `{base_g:,}` | Ưu đãi +{disc_p}%: `+{bonus_g:,}`\n\n"
+                    f"Kiểm tra kỹ biên lai chuyển khoản trước khi xác nhận!"
+                ),
+                color=discord.Color.orange()
+            )
+            await ctx.send(embed=confirm_embed, view=view)
+            await view.wait()
+            if not view.confirmed:
+                reason = "⏰ Hết thời gian xác nhận" if view.confirmed is None else "❌ Đã huỷ"
+                await ctx.send(f"{reason} — không cộng gold cho **{target.mention}**.")
+                return
 
         self.economy.add_credits(target.id, total_gold)
         new_total_vnd = self.economy.add_user_topup(target.id, vnd_amount, total_gold)
@@ -595,7 +629,7 @@ class Slots(commands.Cog):
             description=(
                 f"ADMIN **{ctx.author.mention}** đã xác nhận nạp tiền cho **{target.mention}**!\n\n"
                 f"💵 **Số tiền nạp:** `{vnd_amount:,} VND`\n"
-                f"✨ **Số Gold nhận được (+{discount_pct}%):** `+{total_gold:,}` Thỏi Vàng <:32100goldbarsfortnite:1514192020921651251>\n"
+                f"✨ **Số Gold nhận được (+{disc_p}%):** `+{total_gold:,}` Thỏi Vàng <:32100goldbarsfortnite:1514192020921651251>\n"
                 f"🏆 **Tổng nạp tích lũy (Top Nạp):** `{new_total_vnd:,} VND`"
             ),
             color=discord.Color.green()
@@ -638,20 +672,6 @@ class Slots(commands.Cog):
             await ctx.send("❌ Lệnh này chỉ dành cho Admin / Owner!")
             return
 
-        def parse_amount(s: str) -> int | None:
-            if not s:
-                return None
-            s = s.lower().strip().replace(".", "").replace(",", "")
-            try:
-                if s.endswith("k"):
-                    return int(float(s[:-1]) * 1000)
-                elif s.endswith("m"):
-                    return int(float(s[:-1]) * 1_000_000)
-                else:
-                    return int(s)
-            except ValueError:
-                return None
-
         new_price = parse_amount(price_str)
         if not new_price or new_price < 1_000_000:
             await ctx.send("❌ Giá vàng không hợp lệ! Mức tối thiểu là 1,000,000 VND. Ví dụ: `i?setgoldprice 30m` hoặc `i?setgoldprice 30000000`.")
@@ -693,8 +713,23 @@ class Slots(commands.Cog):
             
             # High volatility: random shock up to 25%
             random_shock = random.uniform(-0.25, 0.25)
-            
-            new_price = int(current_price * (1 + drift + random_shock))
+
+            # Supply/demand pressure from last week's gold flows:
+            # more gold mined than spent pushes the price down and vice versa.
+            mined = int(self.economy.get_setting("gold_mined_week", "0"))
+            spent = int(self.economy.get_setting("gold_spent_week", "0"))
+            self.economy.set_setting("gold_mined_week", "0")
+            self.economy.set_setting("gold_spent_week", "0")
+            supply_pressure = 0.0
+            if mined + spent > 0:
+                net_ratio = (mined - spent) / max(mined, spent)
+                supply_pressure = -0.08 * net_ratio
+                logger.info(
+                    "Gold flow last week: mined=%s spent=%s -> supply_pressure=%.3f",
+                    mined, spent, supply_pressure,
+                )
+
+            new_price = int(current_price * (1 + drift + random_shock + supply_pressure))
             # Clamp between 3,000,000 and 150,000,000
             new_price = max(3_000_000, min(150_000_000, new_price))
             # Round to nearest 1,000
@@ -710,105 +745,6 @@ class Slots(commands.Cog):
     @tasks.loop(minutes=10)
     async def update_gold_price(self):
         self._check_and_update_gold_price()
-
-    @commands.command(
-        name="adhelp",
-        hidden=True,
-        aliases=["adminhelp", "ownerhelp"]
-    )
-    async def adhelp(self, ctx: commands.Context):
-        """Lệnh ẩn: Danh sách các lệnh chỉ dành cho Owner / Admin."""
-        if ctx.author.id not in config.bot.owner_ids and ctx.author.id not in config.bot.admin_ids:
-            return  # Không phản hồi gì hết, tàng hình hoàn toàn
-
-        embed = make_embed(
-            title="👑 DANH SÁCH LỆNH OWNER / ADMIN 👑",
-            description="Các lệnh ẩn chỉ dành cho Owner và Admin của bot.",
-            color=discord.Color.from_rgb(255, 215, 0)
-        )
-
-        # --- TIỀN / GOLD ---
-        embed.add_field(
-            name="💰 Tiền & Vàng",
-            value=(
-                "`i?addtopup @user <số_tiền>` — Cộng tiền nạp VND và tự động quy đổi Gold cho người chơi.\n"
-                "`i?removetopup @user` — Xoá người chơi khỏi bảng xếp hạng top nạp.\n"
-                "`i?setgoldprice <số>` — Đặt thủ công giá vàng thế giới (vd: `30m`).\n"
-                "`i?giveall <loại> <số>` — Tặng tiền/vàng cho tất cả người chơi trong DB.\n"
-            ),
-            inline=False
-        )
-
-        # --- BAN / UNBAN ---
-        embed.add_field(
-            name="🔨 Ban / Unban",
-            value=(
-                "`i?ban @user [lý do]` — Cấm người chơi sử dụng bot.\n"
-                "`i?unban @user` — Bỏ cấm người chơi.\n"
-            ),
-            inline=False
-        )
-
-        # --- BANNER / ITEM ---
-        embed.add_field(
-            name="🖼️ Banner & Item",
-            value=(
-                "`i?adminshop` — Xem danh sách banner độc quyền (Admin Only).\n"
-                "`i?givebanner @user <banner_id>` — Tặng banner đặc biệt cho người chơi.\n"
-                "`i?setbannerother @user <banner_id>` — Đặt banner trực tiếp cho người chơi.\n"
-                "`i?giveitem @user <item_id> [số]` — Tặng item từ shop cho người chơi.\n"
-            ),
-            inline=False
-        )
-
-        # --- HÔN NHÂN ---
-        embed.add_field(
-            name="💍 Hôn Nhân",
-            value=(
-                "`i?admindelmarriage @user` — Xóa cưỡng chế hôn nhân của người chơi.\n"
-            ),
-            inline=False
-        )
-
-        # --- CÁ CƯỢC ---
-        embed.add_field(
-            name="🎰 Cờ Bạc",
-            value=(
-                "`i?setbetlimit <min> <max>` — Đặt giới hạn cược tối thiểu/tối đa toàn bot.\n"
-                "`i?set_taixiu_config <tham số>` — Cấu hình tài xỉu.\n"
-                "`i?set_baucua_config <tham số>` — Cấu hình bầu cua.\n"
-                "`i?set_roulette_stats @user <tham số>` — Chỉnh số liệu roulette của người chơi.\n"
-                "`i?set_coinflip_stats @user <tham số>` — Chỉnh số liệu coinflip của người chơi.\n"
-                "`i?anxin @user` — Làm mới số dư / fix trạng thái người chơi.\n"
-            ),
-            inline=False
-        )
-
-        # --- DANH HIỆU ---
-        embed.add_field(
-            name="🏅 Danh Hiệu",
-            value=(
-                "`i?give_danh_hieu @user <danh_hiệu>` — Tặng danh hiệu cho người chơi.\n"
-                "`i?remove_danh_hieu @user <danh_hiệu>` — Thu hồi danh hiệu của người chơi.\n"
-            ),
-            inline=False
-        )
-
-        # --- HỆ THỐNG ---
-        embed.add_field(
-            name="⚙️ Hệ Thống",
-            value=(
-                "`i?kill` — Tắt bot (chỉ Owner).\n"
-                "`i?botplayers` — Xem tổng số người chơi trong DB.\n"
-                "`i?botservers` — Xem tổng số server bot đang hoạt động.\n"
-                "`i?trungbay` — Khai hàng trúng bầy (gift toàn server).\n"
-                "`i?reply_feedback <id>` — Trả lời feedback từ người chơi.\n"
-            ),
-            inline=False
-        )
-
-        embed.set_footer(text="Lệnh này hoàn toàn ẩn. Chỉ bạn mới thấy nó!")
-        await ctx.send(embed=embed)
 
 
 async def setup(client: commands.Bot):

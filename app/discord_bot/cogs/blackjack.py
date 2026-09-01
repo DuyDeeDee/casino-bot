@@ -100,7 +100,7 @@ class Blackjack(commands.Cog):
     def __init__(self, client: commands.Bot):
         self.client = client
         self.bot = client  # alias để tránh lỗi 'has no attribute bot'
-        self.economy = getattr(client, "economy", Economy())
+        self.economy = getattr(client, "economy", None) or Economy()
 
     def check_bet(
         self,
@@ -172,6 +172,18 @@ class Blackjack(commands.Cog):
         bankroll = self.check_bet(ctx, bet)
         base_bet = int(bet)
 
+        # Escrow base bet immediately
+        self.economy.add_money(ctx.author.id, -base_bet)
+        log_wallet_change(
+            logger,
+            event="blackjack_place_bet",
+            user_id=ctx.author.id,
+            money_delta=-base_bet,
+            bet=base_bet,
+            ctx=ctx,
+        )
+        bankroll -= base_bet
+
         deck = [Card(suit, num) for num in range(2, 15) for suit in Card.suits]
         random.shuffle(deck)
 
@@ -185,13 +197,12 @@ class Blackjack(commands.Cog):
 
         table_filename = f"blackjack-{ctx.author.id}-{uuid4().hex}.png"
 
-        total_exposure = base_bet
         insurance_bet = 0
         insurance_delta = 0
         timed_out = False
 
         def can_commit(extra: int) -> bool:
-            return total_exposure + extra <= bankroll
+            return extra <= bankroll
 
         async def out_table(
             *,
@@ -266,7 +277,16 @@ class Blackjack(commands.Cog):
                     )
                     if insurance_choice == "buy":
                         insurance_bet = max_insurance
-                        total_exposure += insurance_bet
+                        bankroll -= insurance_bet
+                        self.economy.add_money(ctx.author.id, -insurance_bet)
+                        log_wallet_change(
+                            logger,
+                            event="blackjack_buy_insurance",
+                            user_id=ctx.author.id,
+                            money_delta=-insurance_bet,
+                            insurance_bet=insurance_bet,
+                            ctx=ctx,
+                        )
 
             dealer_checks_blackjack = dealer_upcard.symbol == "A" or self.is_ten_value(dealer_upcard)
             dealer_blackjack = (
@@ -278,30 +298,35 @@ class Blackjack(commands.Cog):
                 if dealer_hand[1].down:
                     dealer_hand[1].flip()
 
-                net_change = 0
+                total_payout = 0
                 summary: list[str] = []
 
                 if player_blackjack:
-                    summary.append(f"Cược chính: hòa ({base_bet:,} VND)")
+                    total_payout += base_bet
+                    self.economy.add_money(ctx.author.id, base_bet)
+                    summary.append(f"Cược chính: hòa (+{base_bet:,} VND hoàn lại)")
                 else:
-                    net_change -= base_bet
-                    summary.append(f"Cược chính: nhà cái blackjack ({self.format_delta(-base_bet)})")
+                    summary.append(f"Cược chính: nhà cái blackjack (-{base_bet:,} VND)")
 
                 if insurance_bet:
-                    insurance_win = insurance_bet * 2
-                    net_change += insurance_win
-                    summary.append(f"Bảo hiểm: thắng ({self.format_delta(insurance_win)})")
+                    ins_payout = insurance_bet * 3
+                    total_payout += ins_payout
+                    self.economy.payout_winnings(ctx.author.id, ins_payout, insurance_bet)
+                    summary.append(f"Bảo hiểm: thắng (+{ins_payout:,} VND)")
 
-                if net_change:
-                    self.economy.add_money(ctx.author.id, net_change)
-                    if net_change >= 1_000_000:
-                        from app.discord_bot.modules.betting import reward_spouse_share
-                        await reward_spouse_share(self.bot, ctx.author.id, net_change, ctx.channel)
+                total_invested = base_bet + insurance_bet
+                net_change = total_payout - total_invested
+
+                if net_change >= 1_000_000:
+                    from app.discord_bot.modules.betting import reward_spouse_share
+                    await reward_spouse_share(self.bot, ctx.author.id, net_change, ctx.channel)
+
                 log_wallet_change(
                     logger,
                     event="blackjack_round_settlement",
                     user_id=ctx.author.id,
-                    money_delta=net_change,
+                    money_delta=total_payout,
+                    net_profit=net_change,
                     ctx=ctx,
                     result="dealer_blackjack",
                     base_bet=base_bet,
@@ -327,25 +352,27 @@ class Blackjack(commands.Cog):
                 )
                 return
 
-            if insurance_bet:
-                insurance_delta = -insurance_bet
-
             if player_blackjack:
                 if dealer_hand[1].down:
                     dealer_hand[1].flip()
 
-                blackjack_win = int(base_bet * 1.5)
-                net_change = blackjack_win + insurance_delta
-                if net_change:
-                    self.economy.add_money(ctx.author.id, net_change)
-                    if net_change >= 1_000_000:
-                        from app.discord_bot.modules.betting import reward_spouse_share
-                        await reward_spouse_share(self.bot, ctx.author.id, net_change, ctx.channel)
+                # Blackjack pays 3:2 => Gross payout = 2.5 * base_bet
+                bj_payout = int(base_bet * 2.5)
+                self.economy.payout_winnings(ctx.author.id, bj_payout, base_bet)
+
+                total_invested = base_bet + insurance_bet
+                net_change = bj_payout - total_invested
+
+                if net_change >= 1_000_000:
+                    from app.discord_bot.modules.betting import reward_spouse_share
+                    await reward_spouse_share(self.bot, ctx.author.id, net_change, ctx.channel)
+
                 log_wallet_change(
                     logger,
                     event="blackjack_round_settlement",
                     user_id=ctx.author.id,
-                    money_delta=net_change,
+                    money_delta=bj_payout,
+                    net_profit=net_change,
                     ctx=ctx,
                     result="player_blackjack",
                     base_bet=base_bet,
@@ -353,9 +380,9 @@ class Blackjack(commands.Cog):
                     hands=len(player_hands),
                 )
 
-                summary = [f"Blackjack trả thưởng 3:2 ({self.format_delta(blackjack_win)})"]
+                summary = [f"Blackjack trả thưởng 3:2 (+{bj_payout:,} VND)"]
                 if insurance_bet:
-                    summary.append(f"Bảo hiểm: thua ({self.format_delta(insurance_delta)})")
+                    summary.append(f"Bảo hiểm: thua (-{insurance_bet:,} VND)")
 
                 color = discord.Color.green() if net_change >= 0 else discord.Color.red()
                 await out_table(
@@ -479,7 +506,16 @@ class Blackjack(commands.Cog):
 
                 if chosen_action == "double":
                     initial_action_pending = False
-                    total_exposure += hand.bet
+                    bankroll -= hand.bet
+                    self.economy.add_money(ctx.author.id, -hand.bet)
+                    log_wallet_change(
+                        logger,
+                        event="blackjack_double_down",
+                        user_id=ctx.author.id,
+                        money_delta=-hand.bet,
+                        double_amount=hand.bet,
+                        ctx=ctx,
+                    )
                     hand.bet *= 2
                     hand.cards.append(deck.pop())
                     hand.finished = True
@@ -488,7 +524,16 @@ class Blackjack(commands.Cog):
 
                 if chosen_action == "split":
                     initial_action_pending = False
-                    total_exposure += hand.bet
+                    bankroll -= hand.bet
+                    self.economy.add_money(ctx.author.id, -hand.bet)
+                    log_wallet_change(
+                        logger,
+                        event="blackjack_split_hand",
+                        user_id=ctx.author.id,
+                        money_delta=-hand.bet,
+                        split_bet=hand.bet,
+                        ctx=ctx,
+                    )
 
                     split_was_aces = hand.cards[0].symbol == "A" and hand.cards[1].symbol == "A"
                     moved_card = hand.cards.pop()
@@ -541,11 +586,12 @@ class Blackjack(commands.Cog):
                     dealer_hand.append(deck.pop())
                     dealer_score, dealer_soft = self.hand_value(dealer_hand, include_down=True)
 
-            net_change = insurance_delta
+            total_payout = 0
+            total_invested = sum(h.bet for h in player_hands) + insurance_bet
             result_lines: list[str] = []
 
             if insurance_bet:
-                result_lines.append(f"Bảo hiểm: thua ({self.format_delta(insurance_delta)})")
+                result_lines.append(f"Bảo hiểm: thua (-{insurance_bet:,} VND)")
 
             for i, hand in enumerate(player_hands):
                 hand_total = self.calc_hand(hand.cards)
@@ -554,40 +600,47 @@ class Blackjack(commands.Cog):
                     delta = -hand.bet
                     outcome = "Bỏ cuộc (hết giờ)"
                 elif hand.surrendered:
-                    surrender_loss = (hand.bet + 1) // 2
-                    delta = -surrender_loss
-                    outcome = "Đầu hàng"
+                    # Surrender: refund half the bet
+                    refund = hand.bet // 2
+                    total_payout += refund
+                    self.economy.add_money(ctx.author.id, refund)
+                    delta = -(hand.bet - refund)
+                    outcome = f"Đầu hàng (+{refund:,} VND hoàn lại)"
                 elif hand_total > 21:
                     delta = -hand.bet
                     outcome = "Quắc"
-                elif dealer_score > 21:
+                elif dealer_score > 21 or hand_total > dealer_score:
+                    # Win: gross payout 2x bet
+                    payout = hand.bet * 2
+                    total_payout += payout
+                    self.economy.payout_winnings(ctx.author.id, payout, hand.bet)
                     delta = hand.bet
-                    outcome = "Thắng"
-                elif hand_total > dealer_score:
-                    delta = hand.bet
-                    outcome = "Thắng"
+                    outcome = f"Thắng (+{payout:,} VND)"
                 elif hand_total < dealer_score:
                     delta = -hand.bet
                     outcome = "Thua"
                 else:
+                    # Push: refund 1x bet
+                    total_payout += hand.bet
+                    self.economy.add_money(ctx.author.id, hand.bet)
                     delta = 0
-                    outcome = "Hòa"
+                    outcome = f"Hòa (+{hand.bet:,} VND hoàn lại)"
 
-                net_change += delta
                 result_lines.append(
                     f"Tụ {i + 1}: {outcome} (tổng {hand_total}, {self.format_delta(delta)})"
                 )
 
-            if net_change:
-                self.economy.add_money(ctx.author.id, net_change)
-                if net_change >= 1_000_000:
-                    from app.discord_bot.modules.betting import reward_spouse_share
-                    await reward_spouse_share(self.bot, ctx.author.id, net_change, ctx.channel)
+            net_change = total_payout - total_invested
+            if net_change >= 1_000_000:
+                from app.discord_bot.modules.betting import reward_spouse_share
+                await reward_spouse_share(self.bot, ctx.author.id, net_change, ctx.channel)
+
             log_wallet_change(
                 logger,
                 event="blackjack_round_settlement",
                 user_id=ctx.author.id,
-                money_delta=net_change,
+                money_delta=total_payout,
+                net_profit=net_change,
                 ctx=ctx,
                 result="timed_out" if timed_out else "resolved",
                 base_bet=base_bet,

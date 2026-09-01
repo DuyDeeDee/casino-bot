@@ -580,9 +580,20 @@ class GameSession:
         winner_p = None
         if winner_override:
             winner_p = winner_override
+            payout = self.pot
             rank_val, rank_name, _ = evaluate_hand(self.player_states[winner_p.id]["hand"])
             desc = f"🏆 **{winner_p.mention}** thắng cuộc do tất cả đối thủ khác đã Úp bài!\n💰 **Tiền thưởng nhận:** `+{self.pot:,} VND`"
             embed.description = desc
+            
+            # Settlement payout for winner
+            self.economy.payout_winnings(winner_p.id, self.pot, self.bet_amount)
+            log_wallet_change(
+                logger,
+                event="baito_payout_fold_win",
+                user_id=winner_p.id,
+                money_delta=self.pot,
+                room_id=self.room_id
+            )
         else:
             # Showdown comparison
             results = []
@@ -637,7 +648,7 @@ class GameSession:
             
             # Settlement payout
             for w in winners:
-                self.economy.add_money(w.id, payout)
+                self.economy.payout_winnings(w.id, payout, self.bet_amount // max(1, len(winners)))
                 log_wallet_change(
                     logger,
                     event="baito_payout",
@@ -651,7 +662,7 @@ class GameSession:
             state = self.player_states[p.id]
             is_winner = (p.id == winner_p.id) if not winner_override else (p == winner_p)
             winnings = self.pot if is_winner else 0
-            if not winner_override and not winner_p: # split pot
+            if not winner_override and len(winners) > 1: # split pot
                 winnings = payout if p in winners else 0
                 
             net_profit = winnings - state["contribution"]
@@ -748,7 +759,7 @@ def check_and_update_achievements(stats: dict, won: bool, went_allin: bool, was_
 class Baito(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.economy = getattr(bot, "economy", Economy())
+        self.economy = getattr(bot, "economy", None) or Economy()
 
     @commands.group(name="baito", brief="Bài Tố kiểu Bài Cào 3 lá.", usage="baito [subcommand]", invoke_without_command=True)
     async def baito_group(self, ctx: commands.Context):

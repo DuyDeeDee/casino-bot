@@ -3753,7 +3753,9 @@ class TuTienCog(commands.Cog, name="TuTien"):
 
     @commands.command(
         name="dao-vu",
-        aliases=["nhiem-vu", "nhiemvu", "daovu", "quest", "dailyquest", "nv"],
+        # KHÔNG dùng alias "nhiemvu"/"quest" — trùng với lệnh quests của Simulator
+        # gây CommandRegistrationError làm bot không khởi động được.
+        aliases=["nhiem-vu", "daovu", "dailyquest", "nv"],
         brief="Xem danh sách Đạo Vụ Hàng Ngày (Nhiệm vụ nhận Linh Thạch, Tiên Ngọc, Vé quay).",
         usage="dao-vu"
     )

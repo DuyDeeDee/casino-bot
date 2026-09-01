@@ -9,34 +9,12 @@ import discord
 from discord.ext import commands
 
 from app.config import config
+from app.discord_bot.modules.betting import parse_bet_amount
 from app.discord_bot.modules.economy import Economy
 from app.discord_bot.modules.helpers import make_embed
 from app.discord_bot.modules.wallet_logging import log_wallet_change
 
 logger = logging.getLogger(__name__)
-
-
-def parse_bet_amount(val_str: str, current_money: int) -> int:
-    val_str = val_str.strip().lower()
-    if val_str in ["all", "allin", "all-in", "tất tay"]:
-        from app.discord_bot.modules.betting import get_capped_all_in_amount
-        return get_capped_all_in_amount(current_money)
-
-    # Remove separators like commas or dots
-    val_str = val_str.replace(",", "").replace(".", "")
-
-    multiplier = 1
-    if val_str.endswith("k"):
-        multiplier = 1_000
-        val_str = val_str[:-1].strip()
-    elif val_str.endswith("m"):
-        multiplier = 1_000_000
-        val_str = val_str[:-1].strip()
-
-    try:
-        return int(float(val_str) * multiplier)
-    except ValueError:
-        return 0
 
 
 class CrashBetModal(discord.ui.Modal):
@@ -297,7 +275,7 @@ class CrashActiveView(discord.ui.View):
         p["multiplier"] = mult
 
         winnings = int(p["bet"] * mult)
-        self.lobby_view.cog.economy.add_money(user.id, winnings)
+        self.lobby_view.cog.economy.payout_winnings(user.id, winnings, p["bet"])
 
         log_wallet_change(
             logger,
@@ -317,7 +295,7 @@ class CrashActiveView(discord.ui.View):
 class Crash(commands.Cog, name="Crash"):
     def __init__(self, client: commands.Bot):
         self.client = client
-        self.economy = getattr(client, "economy", Economy())
+        self.economy = getattr(client, "economy", None) or Economy()
         self.active_sessions = set()
         self.crash_history = []
 
@@ -325,7 +303,7 @@ class Crash(commands.Cog, name="Crash"):
         r = random.random()
         if r < house_edge:
             return 1.00  # crash immediately
-        return round(1 / (1 - r), 2)
+        return round((1.0 - house_edge) / (1.0 - r), 2)
 
     @commands.command(
         brief="Trò chơi Crash Game (Multiplier tăng dần liên tục, bấm rút tiền trước khi nổ).",

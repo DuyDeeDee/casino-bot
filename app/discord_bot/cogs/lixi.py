@@ -6,39 +6,12 @@ from typing import Optional
 import discord
 from discord.ext import commands
 
+from app.discord_bot.modules.betting import parse_bet_amount
 from app.discord_bot.modules.economy import Economy
 from app.discord_bot.modules.helpers import make_embed
 from app.discord_bot.modules.wallet_logging import log_wallet_change
 
 logger = logging.getLogger(__name__)
-
-
-def parse_bet_amount(val_str: str, current_money: int) -> int:
-    val_str = val_str.strip().lower()
-    if val_str in ["all", "allin", "all-in", "tất tay"]:
-        from app.discord_bot.modules.betting import get_capped_all_in_amount
-        return get_capped_all_in_amount(current_money)
-    
-    has_suffix = val_str.endswith("k") or val_str.endswith("m")
-    
-    if has_suffix:
-        val_str = val_str.replace(",", "")
-        multiplier = 1000 if val_str.endswith("k") else 1000000
-        val_str = val_str[:-1].strip()
-    else:
-        val_str = val_str.replace(",", "")
-        if "." in val_str:
-            parts = val_str.split(".")
-            if len(parts[-1]) == 3:
-                val_str = val_str.replace(".", "")
-            else:
-                val_str = "".join(parts[:-1]) + "." + parts[-1]
-        multiplier = 1
-        
-    try:
-        return int(float(val_str) * multiplier)
-    except ValueError:
-        return 0
 
 
 def split_lixi(total_amount: int, num_parts: int, min_amount: int = 1000) -> list[int]:
@@ -130,6 +103,14 @@ class LixiView(discord.ui.View):
             await interaction.response.send_message("❌ Bao lì xì này đã kết thúc rồi!", ephemeral=True)
             return
 
+        if self.economy.is_banned(interaction.user.id):
+            await interaction.response.send_message("❌ Tài khoản của bạn đã bị khóa (banned), không thể bốc lì xì!", ephemeral=True)
+            return
+
+        if self.economy.is_in_jail(interaction.user.id):
+            await interaction.response.send_message("❌ Bạn đang ở trong tù, không thể bốc lì xì!", ephemeral=True)
+            return
+
         if interaction.user.id == self.sender.id:
             await interaction.response.send_message("❌ Bạn không thể tự bốc lì xì của chính mình!", ephemeral=True)
             return
@@ -137,6 +118,9 @@ class LixiView(discord.ui.View):
         if interaction.user.id in self.claimed_user_ids:
             await interaction.response.send_message("❌ Bạn đã bốc lì xì này rồi, hãy nhường cơ hội cho người khác nhé!", ephemeral=True)
             return
+
+        # Chốt chỗ NGAY TRƯỚC defer — mọi await đầu tiên là điểm hai task xen nhau
+        self.claimed_user_ids.add(interaction.user.id)
 
         await interaction.response.defer()
 

@@ -132,7 +132,6 @@ def draw_profile_content(
     biz_count: int,
     inv_count: int,
     rl_title: str | None = None,
-    daga_title: str | None = None,
     cf_title: str | None = None,
     custom_titles: list[str] | None = None
 ) -> None:
@@ -416,7 +415,6 @@ async def render_profile_banner(
     inv_count: int,
     banner_path: Path | None = None,
     rl_title: str | None = None,
-    daga_title: str | None = None,
     cf_title: str | None = None,
     custom_titles: list[str] | None = None
 ) -> BytesIO:
@@ -473,7 +471,6 @@ async def render_profile_banner(
                         biz_count=biz_count,
                         inv_count=inv_count,
                         rl_title=rl_title,
-                        daga_title=daga_title,
                         cf_title=cf_title,
                         custom_titles=custom_titles
                     )
@@ -519,7 +516,6 @@ async def render_profile_banner(
                 biz_count=biz_count,
                 inv_count=inv_count,
                 rl_title=rl_title,
-                daga_title=daga_title,
                 cf_title=cf_title,
                 custom_titles=custom_titles
             )
@@ -557,7 +553,6 @@ async def render_profile_banner(
         biz_count=biz_count,
         inv_count=inv_count,
         rl_title=rl_title,
-        daga_title=daga_title,
         cf_title=cf_title,
         custom_titles=custom_titles
     )
@@ -573,280 +568,3 @@ async def render_profile_banner(
     return output
 
 
-async def render_showcase_image(
-    cock_info: dict | None,
-    car_info: dict | None
-) -> BytesIO | None:
-    if not cock_info and not car_info:
-        return None
-
-    def resize_contain(image: Image.Image, max_w: int, max_h: int) -> Image.Image:
-        original_w, original_h = image.size
-        aspect_ratio = original_w / original_h
-
-        if original_w / max_w > original_h / max_h:
-            new_w = max_w
-            new_h = max(1, int(max_w / aspect_ratio))
-        else:
-            new_h = max_h
-            new_w = max(1, int(max_h * aspect_ratio))
-
-        return image.resize((new_w, new_h), Image.Resampling.LANCZOS)
-
-    width, height = 800, 240
-    # Create background image with dark gradient
-    gradient = Image.new("RGBA", (1, 2))
-    gradient.putpixel((0, 0), (20, 10, 35, 255))
-    gradient.putpixel((0, 1), (8, 4, 12, 255))
-    img = gradient.resize((width, height), Image.Resampling.BILINEAR)
-    draw = ImageDraw.Draw(img)
-
-    # Draw outline border
-    draw.rounded_rectangle([6, 6, width - 6, height - 6], radius=16, outline=(255, 255, 255, 30), width=2)
-
-    font_bold = load_font("bold", 16)
-    font_regular = load_font("regular", 12)
-    font_header = load_font("bold", 18)
-
-    panel_y = 25
-    panel_h = 190
-    panel_w = 360
-
-    from app.discord_bot.modules.helpers import ABS_PATH
-
-    # Panel 1: Cock
-    if cock_info and car_info:
-        cock_x = 30
-    elif cock_info:
-        cock_x = (width - panel_w) // 2
-    else:
-        cock_x = None
-
-    if cock_info and cock_x is not None:
-        # Draw Cock Panel Frosted Glass Box
-        draw.rounded_rectangle(
-            [cock_x, panel_y, cock_x + panel_w, panel_y + panel_h],
-            radius=12,
-            fill=(255, 255, 255, 10),
-            outline=(255, 255, 255, 20),
-            width=1
-        )
-        rarity_colors = {
-            "Thường": (120, 120, 120, 255),       # C (Grey)
-            "Hiếm": (46, 204, 113, 255),         # B (Green)
-            "Quý": (52, 152, 219, 255),          # A (Blue)
-            "Sử Thi": (155, 89, 182, 255),       # S (Purple)
-            "Huyền Thoại": (241, 196, 15, 255),   # SS (Gold)
-            "Thần Kê": (231, 76, 60, 255),       # SSS (Red)
-            "Exclusive": (230, 126, 34, 255)     # Exclusive (Orange)
-        }
-        rarity_display = {
-            "Thường": "C",
-            "Hiếm": "B",
-            "Quý": "A",
-            "Sử Thi": "S",
-            "Huyền Thoại": "SS",
-            "Thần Kê": "SSS",
-            "Exclusive": "Exclusive"
-        }
-        rarity = cock_info.get("rarity", "Thường")
-        accent_color = rarity_colors.get(rarity, (120, 120, 120, 255))
-        draw.rounded_rectangle(
-            [cock_x, panel_y, cock_x + 5, panel_y + panel_h],
-            radius=12,
-            fill=accent_color
-        )
-
-        # Draw cock image
-        img_file = cock_info.get("image_filename")
-        cock_img = None
-        if img_file:
-            if Path(img_file).is_absolute():
-                path = Path(img_file)
-            else:
-                path = ABS_PATH / "modules" / "daga" / img_file
-            if path.exists():
-                try:
-                    cock_img = Image.open(path).convert("RGBA")
-                    cock_img = resize_contain(cock_img, 130, 150)
-                except Exception as e:
-                    logger.error(f"Failed to load cock image: {e}")
-        
-        if cock_img:
-            new_w, new_h = cock_img.size
-            paste_x = cock_x + 85 - (new_w // 2)
-            paste_y = panel_y + 95 - (new_h // 2)
-            img.paste(cock_img, (paste_x, paste_y), mask=cock_img)
-            cock_img.close()
-        else:
-            draw.ellipse([cock_x + 20, panel_y + 30, cock_x + 150, panel_y + 160], fill=(100, 100, 100, 255))
-
-        name = cock_info.get("name", "Nhân vật")
-        level = cock_info.get("level", 1)
-        wins = cock_info.get("wins", 0)
-        losses = cock_info.get("losses", 0)
-        streak = cock_info.get("streak", 0)
-
-        draw.text((cock_x + 165, panel_y + 25), name, font=font_header, fill=(255, 255, 255, 255))
-        
-        display_rarity = rarity_display.get(rarity, rarity)
-        draw.text((cock_x + 165, panel_y + 55), f"Độ hiếm: {display_rarity}", font=font_bold, fill=accent_color)
-        draw.text((cock_x + 165, panel_y + 80), f"Cấp độ: {level}", font=font_regular, fill=(200, 200, 200, 255))
-        draw.text((cock_x + 165, panel_y + 110), f"Thắng: {wins} | Thua: {losses}", font=font_regular, fill=(200, 200, 200, 255))
-        draw.text((cock_x + 165, panel_y + 135), f"Chuỗi thắng: {streak}", font=font_regular, fill=(200, 200, 200, 255))
-
-    # Panel 2: Car
-    if cock_info and car_info:
-        car_x = 410
-    elif car_info:
-        car_x = (width - panel_w) // 2
-    else:
-        car_x = None
-
-    if car_info and car_x is not None:
-        # Draw Car Panel Frosted Glass Box
-        draw.rounded_rectangle(
-            [car_x, panel_y, car_x + panel_w, panel_y + panel_h],
-            radius=12,
-            fill=(255, 255, 255, 10),
-            outline=(255, 255, 255, 20),
-            width=1
-        )
-        rarity_colors = {
-            "Common": (120, 120, 120, 255),
-            "Rare": (46, 204, 113, 255),
-            "Epic": (52, 152, 219, 255),
-            "Legendary": (155, 89, 182, 255),
-            "Mythic": (241, 196, 15, 255),
-            "Exclusive": (231, 76, 60, 255)
-        }
-        rarity = car_info.get("rarity", "Common")
-        accent_color = rarity_colors.get(rarity, (120, 120, 120, 255))
-        draw.rounded_rectangle(
-            [car_x, panel_y, car_x + 5, panel_y + panel_h],
-            radius=12,
-            fill=accent_color
-        )
-
-        # Draw car image
-        img_file = car_info.get("image_filename")
-        car_img = None
-        if img_file:
-            path = ABS_PATH / "modules" / "duaxe" / img_file
-            if path.exists():
-                try:
-                    car_img = Image.open(path).convert("RGBA")
-                    car_img = resize_contain(car_img, 150, 110)
-                except Exception as e:
-                    logger.error(f"Failed to load car image: {e}")
-                    
-        if car_img:
-            new_w, new_h = car_img.size
-            paste_x = car_x + 90 - (new_w // 2)
-            paste_y = panel_y + 95 - (new_h // 2)
-            img.paste(car_img, (paste_x, paste_y), mask=car_img)
-            car_img.close()
-        else:
-            draw.ellipse([car_x + 20, panel_y + 45, car_x + 150, panel_y + 145], fill=(100, 100, 100, 255))
-
-        model = car_info.get("model", "Xe Chưa Đặt Tên")
-        edition = car_info.get("edition", "Stock")
-        serial = car_info.get("serial", 1)
-        collection = car_info.get("collection", "Other")
-
-        draw.text((car_x + 175, panel_y + 25), model, font=font_header, fill=(255, 255, 255, 255))
-        draw.text((car_x + 175, panel_y + 55), f"Độ hiếm: {rarity}", font=font_bold, fill=accent_color)
-        draw.text((car_x + 175, panel_y + 80), f"Phiên bản: {edition}", font=font_regular, fill=(200, 200, 200, 255))
-        draw.text((car_x + 175, panel_y + 110), f"Bộ sưu tập: {collection}", font=font_regular, fill=(200, 200, 200, 255))
-        draw.text((car_x + 175, panel_y + 135), f"Serial: #{serial:04d}", font=font_bold, fill=(255, 215, 0, 255))
-
-    output = BytesIO()
-    img.save(output, format="PNG")
-    output.seek(0)
-    img.close()
-    return output
-
-
-async def render_money_card(
-    username: str,
-    avatar_url: str,
-    money: int,
-    gold: int,
-    role_text: str
-) -> BytesIO:
-    """Renders a beautiful balance (i?money) card image and returns it as a BytesIO buffer."""
-    width = 600
-    height = 245
-    
-    # 1. Create transparent base image
-    img = Image.new("RGBA", (width, height), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(img)
-    
-    # 2. Draw outer card background with rounded corners
-    draw.rounded_rectangle([10, 10, width - 10, height - 10], radius=16, fill=(43, 45, 49, 255))
-    
-    # 3. Fetch and process avatar
-    avatar_bytes = await fetch_avatar(avatar_url)
-    avatar_img = None
-    avatar_size = 80
-    avatar_x, avatar_y = 35, 30
-    
-    if avatar_bytes:
-        try:
-            avatar_img = Image.open(BytesIO(avatar_bytes)).convert("RGBA")
-            avatar_img = avatar_img.resize((avatar_size, avatar_size), Image.Resampling.LANCZOS)
-            
-            mask = Image.new("L", (avatar_size, avatar_size), 0)
-            mask_draw = ImageDraw.Draw(mask)
-            mask_draw.ellipse((0, 0, avatar_size, avatar_size), fill=255)
-            
-            avatar_circle = Image.new("RGBA", (avatar_size, avatar_size), (0, 0, 0, 0))
-            avatar_circle.paste(avatar_img, (0, 0), mask=mask)
-            img.paste(avatar_circle, (avatar_x, avatar_y), mask=avatar_circle)
-            avatar_circle.close()
-            mask.close()
-        except Exception as e:
-            logger.error(f"Failed to render money card avatar: {e}")
-            avatar_img = None
-            
-    if not avatar_img:
-        # Fallback circle
-        draw.ellipse([avatar_x, avatar_y, avatar_x + avatar_size, avatar_y + avatar_size], fill=(100, 100, 100, 255))
-        
-    # Avatar outline border (purple)
-    draw.ellipse([avatar_x - 3, avatar_y - 3, avatar_x + avatar_size + 3, avatar_y + avatar_size + 3], outline=(148, 0, 211, 255), width=3)
-    
-    # 4. Load Fonts
-    font_username = load_font("bold", 24)
-    font_role = load_font("bold", 12)
-    font_section_title = load_font("regular", 11)
-    font_section_val = load_font("bold", 26)
-    font_section_unit = load_font("regular", 11)
-    
-    # Draw User Info (Username and Role)
-    draw.text((130, 35), username, font=font_username, fill=(255, 255, 255, 255))
-    draw.text((130, 68), role_text, font=font_role, fill=(148, 155, 164, 255))
-    
-    # 5. Draw Middle Cards (SỐ DƯ and THỎI VÀNG)
-    # Box 1: SỐ DƯ (Left)
-    draw.rounded_rectangle([35, 125, 285, 225], radius=10, fill=(35, 36, 40, 255), outline=(184, 134, 11, 100), width=1)
-    # Draw small gold coin indicator
-    draw.ellipse([50, 138, 60, 148], fill=(218, 165, 32, 255))
-    draw.text((68, 135), "SỐ DƯ", font=font_section_title, fill=(148, 155, 164, 255))
-    draw.text((50, 158), f"{money:,}", font=font_section_val, fill=(255, 215, 0, 255)) # Gold color
-    draw.text((50, 195), "VND", font=font_section_unit, fill=(148, 155, 164, 255))
-    
-    # Box 2: THỎI VÀNG (Right)
-    draw.rounded_rectangle([315, 125, 565, 225], radius=10, fill=(35, 36, 40, 255), outline=(184, 134, 11, 100), width=1)
-    # Draw small gold coin indicator
-    draw.ellipse([330, 138, 340, 148], fill=(218, 165, 32, 255))
-    draw.text((348, 135), "THỎI VÀNG", font=font_section_title, fill=(148, 155, 164, 255))
-    draw.text((330, 158), f"{gold:,}", font=font_section_val, fill=(255, 255, 255, 255)) # White
-    draw.text((330, 195), "thỏi vàng", font=font_section_unit, fill=(148, 155, 164, 255))
-    
-    # Return as BytesIO
-    buf = BytesIO()
-    img.save(buf, format="PNG")
-    buf.seek(0)
-    img.close()
-    return buf

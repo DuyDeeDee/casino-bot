@@ -56,6 +56,10 @@ from app.discord_bot.cogs import (
     ChannelControl,
     TuTienCog,
     Hopy,
+    Bank,
+    ServerEvents,
+    SportsBet,
+    ChatLevels,
 )
 
 from app.discord_bot.modules.economy import Economy
@@ -94,6 +98,10 @@ COGS = (
     ChannelControl,
     TuTienCog,
     Hopy,
+    Bank,
+    ServerEvents,
+    SportsBet,
+    ChatLevels,
 )
 
 
@@ -124,7 +132,17 @@ class CasinoBot(commands.Bot):
         self._cogs_loaded = False
         self.economy = Economy()
         self.cooldown_tracker = {}
+        self.add_check(self.guild_lock_check)
         self.add_check(self.global_cooldown_check)
+
+    async def guild_lock_check(self, ctx: commands.Context) -> bool:
+        """Chặn toàn bộ lệnh nếu không đúng server được phép."""
+        allowed = config.bot.allowed_guild_ids
+        if not allowed:
+            return True  # Danh sách rỗng → cho phép mọi server
+        if ctx.guild is None or ctx.guild.id not in allowed:
+            raise commands.CheckFailure("Guild bị cấm")
+        return True
 
     async def setup_hook(self) -> None:
         if getattr(self.economy, "conn", None) is None:

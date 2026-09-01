@@ -9,7 +9,7 @@ import discord
 from discord.ext import commands
 from PIL import Image, ImageDraw
 
-from app.discord_bot.modules.betting import validate_money_bet
+from app.discord_bot.modules.betting import parse_bet_amount, validate_money_bet
 from app.discord_bot.modules.economy import Economy
 from app.discord_bot.modules.helpers import make_embed
 from app.discord_bot.modules.wallet_logging import log_wallet_change
@@ -49,33 +49,6 @@ BIN_LAYOUTS = {
     "high": [100.0, 25.0, 10.0, 5.0, 2.0, 0.0, 0.2, 0.5, 1.0, 3.0, 100.0]
 }
 
-
-def parse_bet_amount(val_str: str, current_money: int) -> int:
-    val_str = val_str.strip().lower()
-    if val_str in ["all", "allin", "all-in", "tất tay"]:
-        from app.discord_bot.modules.betting import get_capped_all_in_amount
-        return get_capped_all_in_amount(current_money)
-    
-    has_suffix = val_str.endswith("k") or val_str.endswith("m")
-    
-    if has_suffix:
-        val_str = val_str.replace(",", "")
-        multiplier = 1000 if val_str.endswith("k") else 1000000
-        val_str = val_str[:-1].strip()
-    else:
-        val_str = val_str.replace(",", "")
-        if "." in val_str:
-            parts = val_str.split(".")
-            if len(parts[-1]) == 3:
-                val_str = val_str.replace(".", "")
-            else:
-                val_str = "".join(parts[:-1]) + "." + parts[-1]
-        multiplier = 1
-        
-    try:
-        return int(float(val_str) * multiplier)
-    except ValueError:
-        return 0
 
 
 def check_and_unlock_plinko_achievements(stats: dict, final_multiplier: float, total_profit: int) -> list[str]:
@@ -376,6 +349,7 @@ class Plinko(commands.Cog, name="Plinko"):
 
         # Show initial loading feedback
         loading_msg = await ctx.send("🎰 **Plinko:** Đang chuẩn bị thả bóng...")
+        settled = False
 
         try:
             # Draw result based on risk weights
@@ -421,8 +395,9 @@ class Plinko(commands.Cog, name="Plinko"):
 
             # Give payout
             if payout > 0:
-                self.economy.add_money(user_id, payout)
+                self.economy.payout_winnings(user_id, payout, bet_amount)
                 log_wallet_change(logger, event="plinko_payout", user_id=user_id, money_delta=payout, ctx=ctx)
+            settled = True
 
             # Check and update achievements
             updated_stats = self.economy.get_plinko_stats(user_id)
@@ -433,21 +408,21 @@ class Plinko(commands.Cog, name="Plinko"):
 
             # Render Animated GIF
             timestamp_str = datetime.now().strftime("%d/%m/%Y · %H:%M:%S")
-            
-            # We wrap the CPU-bound PIL rendering in an executor to avoid blocking the asyncio event loop!
-            loop = asyncio.get_event_loop()
-            gif_buf = await loop.run_in_executor(
-                None,
-                render_plinko_gif,
-                risk,
-                multiplier,
-                target_index,
-                directions
-            )
+            file = None
+            try:
+                loop = asyncio.get_event_loop()
+                gif_buf = await loop.run_in_executor(
+                    None,
+                    render_plinko_gif,
+                    risk,
+                    multiplier,
+                    target_index,
+                    directions
+                )
+                file = discord.File(gif_buf, filename="plinko.gif")
+            except Exception as render_err:
+                logger.warning(f"Failed to render Plinko GIF: {render_err}")
 
-            # Send result
-            file = discord.File(gif_buf, filename="plinko.gif")
-            
             embed = make_embed(
                 title="💎 TRÒ CHƠI PLINKO",
                 color=discord.Color.purple()
@@ -471,10 +446,12 @@ class Plinko(commands.Cog, name="Plinko"):
                 achievement_texts = "\n".join([f"✨ **{PLINKO_ACHIEVEMENTS[a]}**" for a in newly_unlocked])
                 embed.add_field(name="🏆 THÀNH TỰU MỚI!", value=achievement_texts, inline=False)
                 
-            embed.set_image(url="attachment://plinko.gif")
+            if file:
+                embed.set_image(url="attachment://plinko.gif")
+                await ctx.send(embed=embed, file=file)
+            else:
+                await ctx.send(embed=embed)
             embed.set_footer(text=f"Sylus Meow · {timestamp_str}")
-            
-            await ctx.send(embed=embed, file=file)
 
             # Clean up loading message
             try:
@@ -495,7 +472,12 @@ class Plinko(commands.Cog, name="Plinko"):
 
         except Exception as e:
             logger.error(f"Error executing Plinko: {e}", exc_info=True)
-            await ctx.send("❌ Đã xảy ra lỗi hệ thống khi xử lý lượt chơi Plinko.")
+            if not settled:
+                self.economy.add_money(user_id, bet_amount)
+                log_wallet_change(logger, event="plinko_crash_refund", user_id=user_id, money_delta=bet_amount, ctx=ctx)
+                await ctx.send("❌ Đã xảy ra lỗi hệ thống khi xử lý Plinko. Tiền cược đã được hoàn lại.")
+            else:
+                await ctx.send("❌ Đã xảy ra lỗi hiển thị kết quả Plinko (tiền thưởng đã được cộng vào tài khoản).")
         finally:
             # Always ensure player is unregistered from active
             self.active_users.discard(user_id)

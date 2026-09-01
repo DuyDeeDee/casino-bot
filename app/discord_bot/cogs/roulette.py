@@ -9,7 +9,7 @@ import discord
 from discord.ext import commands
 
 from app.config import config
-from app.discord_bot.modules.betting import validate_money_bet
+from app.discord_bot.modules.betting import parse_bet_amount, validate_money_bet
 from app.discord_bot.modules.economy import Economy
 from app.discord_bot.modules.helpers import make_embed
 from app.discord_bot.modules.wallet_logging import log_wallet_change
@@ -79,7 +79,7 @@ VIP_TIERS = [
         "win_bonus": 0.12,
         "loss_refund": 0.15,
         "chip_rate": 2,
-        "lucky_mult": 1.5,
+        "lucky_mult": 1.0,
     },
 ]
 
@@ -117,7 +117,7 @@ def get_vip_buffs_description(vip: dict) -> str:
         buffs.append(f"🛡️ Bảo hiểm hoàn cược thua: `{vip['loss_refund']*100:.0f}%` số tiền thua")
     if vip["chip_rate"] > 1:
         buffs.append(f"⚡ Tốc độ tích lũy Chip May Mắn: x{vip['chip_rate']}")
-    if vip["lucky_mult"] > 1.0:
+    if vip.get("lucky_mult", 1.0) > 1.0:
         buffs.append(f"🌟 Nhân thưởng số may mắn hàng ngày: x{vip['lucky_mult']}")
     
     if not buffs:
@@ -195,34 +195,6 @@ def describe_number(num: int) -> str:
         col = "Cột 3"
         
     return f"{color} **{num}** ({color_name}, {even_odd}, {low_high}, {dozen}, {col})"
-
-
-def parse_bet_amount(val_str: str, current_money: int) -> int:
-    val_str = val_str.strip().lower()
-    if val_str in ["all", "allin", "all-in", "tất tay"]:
-        from app.discord_bot.modules.betting import get_capped_all_in_amount
-        return get_capped_all_in_amount(current_money)
-    
-    has_suffix = val_str.endswith("k") or val_str.endswith("m")
-    
-    if has_suffix:
-        val_str = val_str.replace(",", "")
-        multiplier = 1000 if val_str.endswith("k") else 1000000
-        val_str = val_str[:-1].strip()
-    else:
-        val_str = val_str.replace(",", "")
-        if "." in val_str:
-            parts = val_str.split(".")
-            if len(parts[-1]) == 3:
-                val_str = val_str.replace(".", "")
-            else:
-                val_str = "".join(parts[:-1]) + "." + parts[-1]
-        multiplier = 1
-        
-    try:
-        return int(float(val_str) * multiplier)
-    except ValueError:
-        return 0
 
 
 
@@ -375,8 +347,6 @@ def get_payout_multiplier(bet_type: str, bet_choice: str, lucky_number: int) -> 
     if bet_type == "number":
         chosen_nums = [int(x) for x in bet_choice.split()]
         if len(chosen_nums) == 1:
-            if chosen_nums[0] == lucky_number:
-                return 40
             return 36
         else:
             return 9
@@ -474,15 +444,23 @@ class RouletteBetModal(discord.ui.Modal):
             )
             return
             
-        user_bets = lobby["bets"].get(user.id, [])
-        total_queued = sum(b["amount"] for b in user_bets)
-        if total_queued + amount > current_money:
+        if amount > current_money:
             await interaction.followup.send(
-                f"❌ Bạn không đủ tiền! Số tiền hiện có: {current_money:,} VNĐ, đã cược trước đó: {total_queued:,} VNĐ, muốn cược thêm: {amount:,} VNĐ.",
+                f"❌ Bạn không đủ tiền! Số tiền hiện có: {current_money:,} VNĐ, muốn cược: {amount:,} VNĐ.",
                 ephemeral=True,
             )
             return
             
+        # Deduct bet immediately to escrow
+        self.roulette_cog.economy.add_money(user.id, -amount)
+        log_wallet_change(
+            logger,
+            event="roulette_place_multi_bet",
+            user_id=user.id,
+            money_delta=-amount,
+            amount=amount,
+        )
+
         if user.id not in lobby["bets"]:
             lobby["bets"][user.id] = []
         lobby["bets"][user.id].append({
@@ -556,15 +534,23 @@ class RouletteNumberBetModal(discord.ui.Modal):
             )
             return
             
-        user_bets = lobby["bets"].get(user.id, [])
-        total_queued = sum(b["amount"] for b in user_bets)
-        if total_queued + amount > current_money:
+        if amount > current_money:
             await interaction.followup.send(
-                f"❌ Bạn không đủ tiền! Số tiền hiện có: {current_money:,} VNĐ, đã cược trước đó: {total_queued:,} VNĐ, muốn cược thêm: {amount:,} VNĐ.",
+                f"❌ Bạn không đủ tiền! Số tiền hiện có: {current_money:,} VNĐ, muốn cược: {amount:,} VNĐ.",
                 ephemeral=True,
             )
             return
             
+        # Deduct bet immediately to escrow
+        self.roulette_cog.economy.add_money(user.id, -amount)
+        log_wallet_change(
+            logger,
+            event="roulette_place_multi_bet",
+            user_id=user.id,
+            money_delta=-amount,
+            amount=amount,
+        )
+
         if user.id not in lobby["bets"]:
             lobby["bets"][user.id] = []
         lobby["bets"][user.id].append({
@@ -677,15 +663,30 @@ class RouletteLobbyView(discord.ui.View):
         if not lobby or not lobby["bets"] or not any(len(b) > 0 for b in lobby["bets"].values()):
             await interaction.response.send_message("❌ Chưa có ai cược trên bàn này!", ephemeral=True)
             return
-            
+
+        if lobby.get("spinning"):
+            await interaction.response.send_message("⏳ Bàn xoay đang quay, vui lòng đợi kết quả!", ephemeral=True)
+            return
+        lobby["spinning"] = True
+
         await interaction.response.defer()
         await self.roulette_cog.run_multi_spin(interaction, interaction.user, lobby)
 
     async def cancel_callback(self, interaction: discord.Interaction):
         lobby = self.roulette_cog.active_lobbies.get(self.channel_id)
         if lobby and interaction.user.id in lobby["bets"]:
-            del lobby["bets"][interaction.user.id]
-            await interaction.response.send_message("🧹 Đã hủy toàn bộ cược của bạn tại bàn này.", ephemeral=True)
+            user_bets = lobby["bets"].pop(interaction.user.id, [])
+            refund_total = sum(b["amount"] for b in user_bets)
+            if refund_total > 0:
+                self.roulette_cog.economy.add_money(interaction.user.id, refund_total)
+                log_wallet_change(
+                    logger,
+                    event="roulette_cancel_multi_bet",
+                    user_id=interaction.user.id,
+                    money_delta=refund_total,
+                    refund_amount=refund_total,
+                )
+            await interaction.response.send_message(f"🧹 Đã hủy toàn bộ cược của bạn tại bàn này. Hoàn lại **{refund_total:,} VNĐ**.", ephemeral=True)
             await self.roulette_cog.update_lobby(self.channel_id)
         else:
             await interaction.response.send_message("❌ Bạn chưa đặt cược nào tại bàn này để hủy.", ephemeral=True)
@@ -695,23 +696,42 @@ class RouletteLobbyView(discord.ui.View):
             await interaction.response.send_message("❌ Chỉ chủ bàn mới có thể hủy/đóng bàn!", ephemeral=True)
             return
             
-        if self.channel_id in self.roulette_cog.active_lobbies:
-            del self.roulette_cog.active_lobbies[self.channel_id]
+        lobby = self.roulette_cog.active_lobbies.pop(self.channel_id, None)
+        if lobby and lobby.get("bets"):
+            for u_id, u_bets in lobby["bets"].items():
+                u_refund = sum(b["amount"] for b in u_bets)
+                if u_refund > 0:
+                    self.roulette_cog.economy.add_money(u_id, u_refund)
+                    log_wallet_change(
+                        logger,
+                        event="roulette_close_lobby_refund",
+                        user_id=u_id,
+                        money_delta=u_refund,
+                    )
             
-        await interaction.response.send_message("🧹 Bàn quay Roulette đã bị hủy bởi chủ bàn.", ephemeral=False)
-        embed = discord.Embed(title="🎰 BÀN QUAY ROULETTE CHÂU ÂU 🎰", description="❌ Bàn quay đã bị chủ bàn hủy bỏ.", color=discord.Color.red())
+        await interaction.response.send_message("🧹 Bàn quay Roulette đã bị hủy bởi chủ bàn. Tiền cược đã được hoàn trả.", ephemeral=False)
+        embed = discord.Embed(title="🎰 BÀN QUAY ROULETTE CHÂU ÂU 🎰", description="❌ Bàn quay đã bị chủ bàn hủy bỏ. Toàn bộ tiền cược đã được hoàn trả.", color=discord.Color.red())
         try:
             await interaction.message.edit(embed=embed, view=None)
         except Exception:
             pass
 
     async def on_timeout(self):
-        lobby = self.roulette_cog.active_lobbies.get(self.channel_id)
+        lobby = self.roulette_cog.active_lobbies.pop(self.channel_id, None)
         if lobby:
-            if self.channel_id in self.roulette_cog.active_lobbies:
-                del self.roulette_cog.active_lobbies[self.channel_id]
+            if lobby.get("bets"):
+                for u_id, u_bets in lobby["bets"].items():
+                    u_refund = sum(b["amount"] for b in u_bets)
+                    if u_refund > 0:
+                        self.roulette_cog.economy.add_money(u_id, u_refund)
+                        log_wallet_change(
+                            logger,
+                            event="roulette_timeout_lobby_refund",
+                            user_id=u_id,
+                            money_delta=u_refund,
+                        )
             try:
-                embed = discord.Embed(title="🎰 BÀN QUAY ROULETTE CHÂU ÂU 🎰", description="⏱️ Bàn quay đã tự động đóng do hết thời gian chờ.", color=discord.Color.red())
+                embed = discord.Embed(title="🎰 BÀN QUAY ROULETTE CHÂU ÂU 🎰", description="⏱️ Bàn quay đã tự động đóng do hết thời gian chờ. Toàn bộ tiền cược đã được hoàn trả.", color=discord.Color.red())
                 await lobby["message"].edit(embed=embed, view=None)
             except Exception:
                 pass
@@ -780,7 +800,7 @@ class RouletteLobbyView(discord.ui.View):
             f"**CẤP BẬC VIP:** {vip['emoji']} **{vip['title']}**\n"
             f"⭐ **Đặc quyền VIP đang kích hoạt:**\n{get_vip_buffs_description(vip)}\n\n"
             f"{get_next_vip_requirement(plays, ach_list)}\n\n"
-            f"🍀 Số may mắn hôm nay: **{lucky_number}** (Thưởng x40 khi cược trúng)\n"
+            f"🍀 Số may mắn hôm nay: **{lucky_number}** (Thưởng x36 khi cược trúng)\n"
             f"⚡ Chip May Mắn hiện có: **{stats['chips']}/10** (Thưởng thêm `+{stats['chips'] * 0.5}%`)\n\n"
             f"📊 **BẢNG THỐNG KÊ CHI TIẾT:**\n"
             f"• Đã chơi: `{plays}` ván\n"
@@ -847,7 +867,7 @@ class Roulette(commands.Cog, name="Roulette"):
                 f"**CẤP BẬC VIP:** {vip['emoji']} **{vip['title']}**\n"
                 f"⭐ **Đặc quyền VIP đang kích hoạt:**\n{get_vip_buffs_description(vip)}\n\n"
                 f"{get_next_vip_requirement(plays, ach_list)}\n\n"
-                f"🍀 Số may mắn hôm nay: **{lucky_number}** (Thưởng x40 khi cược trúng)\n"
+                f"🍀 Số may mắn hôm nay: **{lucky_number}** (Thưởng x36 khi cược trúng)\n"
                 f"⚡ Chip May Mắn hiện có: **{stats['chips']}/10** (Thưởng thêm `+{stats['chips'] * 0.5}%`)\n\n"
                 f"📊 **BẢNG THỐNG KÊ CHI TIẾT:**\n"
                 f"• Đã chơi: `{plays}` ván\n"
@@ -884,7 +904,7 @@ class Roulette(commands.Cog, name="Roulette"):
             lucky_number = get_daily_lucky_number(user_id)
             desc = (
                 f"Chào mừng bạn đến với **Roulette Châu Âu (Bàn Multiplayer)** 🎡\n\n"
-                f"🍀 Số may mắn của bạn hôm nay: **{lucky_number}** (Thưởng x40 khi cược đơn trúng!)\n"
+                f"🍀 Số may mắn của bạn hôm nay: **{lucky_number}** (Thưởng x36 khi cược đơn trúng!)\n"
                 f"👑 VIP Rank của bạn: {vip['emoji']} **{vip['title']}**\n"
                 f"⭐ **Đặc quyền VIP đang kích hoạt:**\n{get_vip_buffs_description(vip)}\n\n"
                 f"💰 Giới hạn cược: Không giới hạn\n"
@@ -1028,11 +1048,7 @@ class Roulette(commands.Cog, name="Roulette"):
         chip_rate = vip.get("chip_rate", 1)
         
         if won:
-            is_lucky_hit = (bet_type == "number" and bet_choice == str(lucky_number))
             multiplier = get_payout_multiplier(bet_type, bet_choice, lucky_number)
-            if is_lucky_hit and vip.get("lucky_mult", 1.0) > 1.0:
-                multiplier = int(multiplier * vip["lucky_mult"])
-                
             base_payout = bet_amount * multiplier
             
             # Luck chip bonus logic
@@ -1049,7 +1065,7 @@ class Roulette(commands.Cog, name="Roulette"):
             new_chips_count = 0
             
             # Add payout to player's wallet
-            self.economy.add_money(user_id, payout)
+            self.economy.payout_winnings(user_id, payout, bet_amount)
             log_wallet_change(
                 logger,
                 event="roulette_payout_win",
@@ -1254,272 +1270,242 @@ class Roulette(commands.Cog, name="Roulette"):
             logger.error(f"Error updating lobby message: {e}")
 
     async def run_multi_spin(self, ctx_or_interaction, host, lobby: dict):
+        lobby["spinning"] = True
         channel_id = lobby["message"].channel.id if lobby["message"] else ctx_or_interaction.channel.id
         
-        # Calculate valid participants and their bets
-        valid_bets_by_user = {}
-        users_to_warn = []
-        total_table_bet = 0
-        
-        for u_id, u_bets in list(lobby["bets"].items()):
-            if not u_bets:
-                continue
-            u_total = sum(b["amount"] for b in u_bets)
-            
-            # Check player's money at spin time
-            u_profile = self.economy.get_entry(u_id)
-            current_money = u_profile[1] if u_profile else 0
-            
-            if current_money < u_total:
-                users_to_warn.append(u_id)
-            else:
-                valid_bets_by_user[u_id] = u_bets
-                total_table_bet += u_total
-                
-                # Deduct money
-                self.economy.add_money(u_id, -u_total)
-                log_wallet_change(
-                    logger,
-                    event="roulette_place_multi_bet",
-                    user_id=u_id,
-                    money_delta=-u_total,
-                    total_bet=u_total,
-                )
+        try:
+            # Bets are already escrowed upon modal submission
+            valid_bets_by_user = {u_id: u_bets for u_id, u_bets in lobby["bets"].items() if u_bets}
+            total_table_bet = sum(sum(b["amount"] for b in u_bets) for u_bets in valid_bets_by_user.values())
 
-        if not valid_bets_by_user:
-            if isinstance(ctx_or_interaction, discord.Interaction):
-                await ctx_or_interaction.followup.send("❌ Không có người chơi nào đủ tiền để quay bàn xoay!", ephemeral=True)
-            else:
-                await ctx_or_interaction.send("❌ Không có người chơi nào đủ tiền để quay bàn xoay!")
-            # Clean up the lobby since it can't proceed
-            if channel_id in self.active_lobbies:
-                del self.active_lobbies[channel_id]
-            return
-
-        # Spin animation setup
-        participants_mentions = ", ".join(f"<@{u_id}>" for u_id in valid_bets_by_user.keys())
-        spinning_embed = make_embed(
-            title="🎡 ROULETTE ĐANG QUAY... 🎡",
-            description=(
-                f"👥 Người chơi: {participants_mentions}\n"
-                f"🎟️ Đang quay bàn cược với **{len(valid_bets_by_user)}** người chơi...\n"
-                f"💰 Tổng cược toàn bàn: **{total_table_bet:,} VNĐ**\n\n"
-                f"⚡ *Bàn xoay đang quay tròn...*\n"
-                f"⚫🔴⚫🔴🟢⚫🔴⚫🔴⚫🔴🟢⚫🔴"
-            ),
-            color=discord.Color.dark_theme(),
-        )
-        
-        if isinstance(ctx_or_interaction, discord.Interaction):
-            msg = await ctx_or_interaction.followup.send(embed=spinning_embed)
-        else:
-            msg = await ctx_or_interaction.send(embed=spinning_embed)
-
-        await asyncio.sleep(1.5)
-        
-        # Slowing down animation
-        slowing_embed = make_embed(
-            title="🎡 VÒNG QUAY ĐANG CHẬM DẦN... 🎡",
-            description=(
-                f"👥 Người chơi: {participants_mentions}\n"
-                f"🎟️ Đang quay bàn cược với **{len(valid_bets_by_user)}** người chơi...\n"
-                f"💰 Tổng cược toàn bàn: **{total_table_bet:,} VNĐ**\n\n"
-                f"⚡ *Bóng đang nhảy quanh các ô...*\n"
-                f"🟢⚫🔴⚫🔴🟢⚫🔴"
-            ),
-            color=discord.Color.dark_theme(),
-        )
-        await msg.edit(embed=slowing_embed)
-        
-        await asyncio.sleep(1.5)
-        
-        # Final result calculation
-        rolled_num = random.randint(0, 36)
-        desc_rolled = describe_number(rolled_num)
-        
-        # Process payouts for each player
-        results_desc_parts = []
-        overall_net_profit = 0
-        
-        for u_id, u_bets in valid_bets_by_user.items():
-            user = self.client.get_user(u_id)
-            user_display = user.display_name if user else f"ID: {u_id}"
-            
-            stats = self.economy.get_roulette(u_id)
-            vip = get_user_vip(stats)
-            chip_rate = vip.get("chip_rate", 1)
-            lucky_number = get_daily_lucky_number(u_id)
-            
-            u_total_bet = sum(b["amount"] for b in u_bets)
-            u_total_payout = 0
-            u_total_profit = 0
-            u_total_refund = 0
-            any_won = False
-            details_logs = []
-            
-            for b in u_bets:
-                won = check_win(b["type"], b["choice"], rolled_num)
-                viet_choice = get_vietnamese_bet_name(b["type"], b["choice"])
-                
-                if won:
-                    any_won = True
-                    is_lucky_hit = (b["type"] == "number" and b["choice"] == str(lucky_number))
-                    multiplier = get_payout_multiplier(b["type"], b["choice"], lucky_number)
-                    if is_lucky_hit and vip.get("lucky_mult", 1.0) > 1.0:
-                        multiplier = int(multiplier * vip["lucky_mult"])
-                        
-                    base_payout = b["amount"] * multiplier
-                    
-                    # Chip bonus
-                    chip_bonus_percent = stats["chips"] * 0.005
-                    chip_bonus = int(base_payout * chip_bonus_percent)
-                    
-                    # VIP Win Bonus
-                    vip_win_bonus = int(base_payout * vip.get("win_bonus", 0.0))
-                    
-                    payout = base_payout + chip_bonus + vip_win_bonus
-                    p_profit = payout - b["amount"]
-                    
-                    u_total_payout += payout
-                    u_total_profit += p_profit
-                    
-                    bonus_str = []
-                    if chip_bonus > 0:
-                        bonus_str.append(f"+{chip_bonus:,} VNĐ từ {stats['chips']} Chip")
-                    if vip_win_bonus > 0:
-                        bonus_str.append(f"+{vip_win_bonus:,} VNĐ từ VIP")
-                    
-                    bonus_desc = f" ({', '.join(bonus_str)})" if bonus_str else ""
-                    details_logs.append(f"  🟢 **{viet_choice}** (Cược: `{b['amount']:,}`): **Thắng!** +`{payout:,}` VNĐ{bonus_desc}")
+            if not valid_bets_by_user:
+                if isinstance(ctx_or_interaction, discord.Interaction):
+                    await ctx_or_interaction.followup.send("❌ Không có người chơi nào đặt cược hợp lệ để quay bàn xoay!", ephemeral=True)
                 else:
-                    refund = int(b["amount"] * vip.get("loss_refund", 0.0))
-                    p_profit = -b["amount"] + refund
-                    u_total_profit += p_profit
-                    u_total_refund += refund
+                    await ctx_or_interaction.send("❌ Không có người chơi nào đặt cược hợp lệ để quay bàn xoay!")
+                return
+
+            # Spin animation setup
+            participants_mentions = ", ".join(f"<@{u_id}>" for u_id in valid_bets_by_user.keys())
+            spinning_embed = make_embed(
+                title="🎡 ROULETTE ĐANG QUAY... 🎡",
+                description=(
+                    f"👥 Người chơi: {participants_mentions}\n"
+                    f"🎟️ Đang quay bàn cược với **{len(valid_bets_by_user)}** người chơi...\n"
+                    f"💰 Tổng cược toàn bàn: **{total_table_bet:,} VNĐ**\n\n"
+                    f"⚡ *Bàn xoay đang quay tròn...*\n"
+                    f"⚫🔴⚫🔴🟢⚫🔴⚫🔴⚫🔴🟢⚫🔴"
+                ),
+                color=discord.Color.dark_theme(),
+            )
+            
+            if isinstance(ctx_or_interaction, discord.Interaction):
+                msg = await ctx_or_interaction.followup.send(embed=spinning_embed)
+            else:
+                msg = await ctx_or_interaction.send(embed=spinning_embed)
+
+            await asyncio.sleep(1.5)
+            
+            # Slowing down animation
+            slowing_embed = make_embed(
+                title="🎡 VÒNG QUAY ĐANG CHẬM DẦN... 🎡",
+                description=(
+                    f"👥 Người chơi: {participants_mentions}\n"
+                    f"🎟️ Đang quay bàn cược với **{len(valid_bets_by_user)}** người chơi...\n"
+                    f"💰 Tổng cược toàn bàn: **{total_table_bet:,} VNĐ**\n\n"
+                    f"⚡ *Bóng đang nhảy quanh các ô...*\n"
+                    f"🟢⚫🔴⚫🔴🟢⚫🔴"
+                ),
+                color=discord.Color.dark_theme(),
+            )
+            await msg.edit(embed=slowing_embed)
+            
+            await asyncio.sleep(1.5)
+            
+            # Final result calculation
+            rolled_num = random.randint(0, 36)
+            desc_rolled = describe_number(rolled_num)
+            
+            # Process payouts for each player
+            results_desc_parts = []
+            overall_net_profit = 0
+            
+            for u_id, u_bets in valid_bets_by_user.items():
+                user = self.client.get_user(u_id)
+                user_display = user.display_name if user else f"ID: {u_id}"
+                
+                stats = self.economy.get_roulette(u_id)
+                vip = get_user_vip(stats)
+                chip_rate = vip.get("chip_rate", 1)
+                lucky_number = get_daily_lucky_number(u_id)
+                
+                u_total_bet = sum(b["amount"] for b in u_bets)
+                u_total_payout = 0
+                u_total_profit = 0
+                u_total_refund = 0
+                any_won = False
+                details_logs = []
+                
+                for b in u_bets:
+                    won = check_win(b["type"], b["choice"], rolled_num)
+                    viet_choice = get_vietnamese_bet_name(b["type"], b["choice"])
                     
-                    refund_str = f" (Hoàn tiền VIP: `+{refund:,}` VNĐ)" if refund > 0 else ""
-                    details_logs.append(f"  🔴 **{viet_choice}** (Cược: `{b['amount']:,}`): **Thua!**{refund_str}")
-            
-            overall_net_profit += u_total_profit
-            
-            # Update chip count
-            new_chips_count = stats["chips"]
-            if any_won:
-                new_chips_count = 0
-                total_to_add = u_total_payout + u_total_refund
-                if total_to_add > 0:
-                    self.economy.add_money(u_id, total_to_add)
+                    if won:
+                        any_won = True
+                        multiplier = get_payout_multiplier(b["type"], b["choice"], lucky_number)
+                        base_payout = b["amount"] * multiplier
+                        
+                        # Chip bonus
+                        chip_bonus_percent = stats["chips"] * 0.005
+                        chip_bonus = int(base_payout * chip_bonus_percent)
+                        
+                        # VIP Win Bonus
+                        vip_win_bonus = int(base_payout * vip.get("win_bonus", 0.0))
+                        
+                        payout = base_payout + chip_bonus + vip_win_bonus
+                        p_profit = payout - b["amount"]
+                        
+                        u_total_payout += payout
+                        u_total_profit += p_profit
+                        
+                        bonus_str = []
+                        if chip_bonus > 0:
+                            bonus_str.append(f"+{chip_bonus:,} VNĐ từ {stats['chips']} Chip")
+                        if vip_win_bonus > 0:
+                            bonus_str.append(f"+{vip_win_bonus:,} VNĐ từ VIP")
+                        
+                        bonus_desc = f" ({', '.join(bonus_str)})" if bonus_str else ""
+                        details_logs.append(f"  🟢 **{viet_choice}** (Cược: `{b['amount']:,}`): **Thắng!** +`{payout:,}` VNĐ{bonus_desc}")
+                    else:
+                        refund = int(b["amount"] * vip.get("loss_refund", 0.0))
+                        p_profit = -b["amount"] + refund
+                        u_total_profit += p_profit
+                        u_total_refund += refund
+                        
+                        refund_str = f" (Hoàn tiền VIP: `+{refund:,}` VNĐ)" if refund > 0 else ""
+                        details_logs.append(f"  🔴 **{viet_choice}** (Cược: `{b['amount']:,}`): **Thua!**{refund_str}")
+                
+                overall_net_profit += u_total_profit
+                
+                # Update chip count
+                new_chips_count = stats["chips"]
+                if any_won:
+                    new_chips_count = 0
+                    total_to_add = u_total_payout + u_total_refund
+                    if total_to_add > 0:
+                        self.economy.add_money(u_id, total_to_add)
+                        log_wallet_change(
+                            logger,
+                            event="roulette_multi_payout_win",
+                            user_id=u_id,
+                            money_delta=total_to_add,
+                            payout=u_total_payout,
+                            refund=u_total_refund,
+                            profit=u_total_profit,
+                        )
+                else:
+                    if stats["chips"] < 10:
+                        new_chips_count = min(10, stats["chips"] + chip_rate)
+                    if u_total_refund > 0:
+                        self.economy.add_money(u_id, u_total_refund)
                     log_wallet_change(
                         logger,
-                        event="roulette_multi_payout_win",
+                        event="roulette_multi_payout_lose",
                         user_id=u_id,
-                        money_delta=total_to_add,
-                        payout=u_total_payout,
+                        money_delta=u_total_refund,
                         refund=u_total_refund,
                         profit=u_total_profit,
                     )
-            else:
-                if stats["chips"] < 10:
-                    new_chips_count = min(10, stats["chips"] + chip_rate)
-                if u_total_refund > 0:
-                    self.economy.add_money(u_id, u_total_refund)
-                log_wallet_change(
-                    logger,
-                    event="roulette_multi_payout_lose",
-                    user_id=u_id,
-                    money_delta=u_total_refund,
-                    refund=u_total_refund,
-                    profit=u_total_profit,
+                    
+                # Update database stats
+                plays_delta = 1
+                won_round = u_total_profit > 0
+                wins_delta = 1 if won_round else 0
+                losses_delta = 0 if won_round else 1
+                
+                new_streak = stats["streak"] + 1 if won_round else 0
+                new_max_streak = max(stats["max_streak"], new_streak)
+                
+                num_stats = stats.get("number_stats", {})
+                num_str = str(rolled_num)
+                num_stats[num_str] = num_stats.get(num_str, 0) + 1
+                
+                temp_stats_for_check = {
+                    "plays": stats["plays"] + plays_delta,
+                    "wins": stats["wins"] + wins_delta,
+                    "losses": stats["losses"] + losses_delta,
+                    "streak": new_streak,
+                    "max_streak": new_max_streak,
+                    "achievements": stats["achievements"],
+                }
+                
+                all_ach, newly_unlocked = check_achievements(
+                    temp_stats_for_check,
+                    "multi",
+                    "multi",
+                    u_total_bet,
+                    rolled_num,
+                    lucky_number,
+                    won_round,
                 )
                 
-            # Update database stats
-            plays_delta = 1
-            won_round = u_total_profit > 0
-            wins_delta = 1 if won_round else 0
-            losses_delta = 0 if won_round else 1
-            
-            new_streak = stats["streak"] + 1 if won_round else 0
-            new_max_streak = max(stats["max_streak"], new_streak)
-            
-            num_stats = stats.get("number_stats", {})
-            num_str = str(rolled_num)
-            num_stats[num_str] = num_stats.get(num_str, 0) + 1
-            
-            temp_stats_for_check = {
-                "plays": stats["plays"] + plays_delta,
-                "wins": stats["wins"] + wins_delta,
-                "losses": stats["losses"] + losses_delta,
-                "streak": new_streak,
-                "max_streak": new_max_streak,
-                "achievements": stats["achievements"],
-            }
-            
-            all_ach, newly_unlocked = check_achievements(
-                temp_stats_for_check,
-                "multi",
-                "multi",
-                u_total_bet,
-                rolled_num,
-                lucky_number,
-                won_round,
-            )
-            
-            self.economy.update_roulette(
-                u_id,
-                plays=plays_delta,
-                wins=wins_delta,
-                losses=losses_delta,
-                profit=u_total_profit,
-                streak=new_streak,
-                max_streak=new_max_streak,
-                chips=new_chips_count,
-                number_stats=num_stats,
-                achievements=all_ach,
-            )
-            
-            # Format results for this player
-            user_res_str = f"👤 **{user_display}**:\n" + "\n".join(details_logs) + "\n"
-            if u_total_profit > 0:
-                user_res_str += f"  💰 **Tổng thực nhận:** `+{u_total_payout + u_total_refund:,} VNĐ` (Lợi nhuận ròng: `{u_total_profit:+,} VNĐ`)"
-            elif u_total_profit < 0:
-                user_res_str += f"  💸 **Tổng thực nhận:** `{u_total_payout + u_total_refund:,} VNĐ` (Lợi nhuận ròng: `{u_total_profit:,} VNĐ` | Tích lũy {chip_rate} chip, hiện có: **{new_chips_count}/10**)"
-            else:
-                user_res_str += f"  ⚖️ **Tổng thực nhận:** `{u_total_payout + u_total_refund:,} VNĐ` (Lợi nhuận ròng: `0 VNĐ`)"
+                self.economy.update_roulette(
+                    u_id,
+                    plays=plays_delta,
+                    wins=wins_delta,
+                    losses=losses_delta,
+                    profit=u_total_profit,
+                    streak=new_streak,
+                    max_streak=new_max_streak,
+                    chips=new_chips_count,
+                    number_stats=num_stats,
+                    achievements=all_ach,
+                )
                 
-            if newly_unlocked:
-                user_res_str += f"\n  🏆 *Thành tựu mới:* {', '.join(newly_unlocked)}"
+                # Format results for this player
+                user_res_str = f"👤 **{user_display}**:\n" + "\n".join(details_logs) + "\n"
+                if u_total_profit > 0:
+                    user_res_str += f"  💰 **Tổng thực nhận:** `+{u_total_payout + u_total_refund:,} VNĐ` (Lợi nhuận ròng: `{u_total_profit:+,} VNĐ`)"
+                elif u_total_profit < 0:
+                    user_res_str += f"  💸 **Tổng thực nhận:** `{u_total_payout + u_total_refund:,} VNĐ` (Lợi nhuận ròng: `{u_total_profit:,} VNĐ` | Tích lũy {chip_rate} chip, hiện có: **{new_chips_count}/10**)"
+                else:
+                    user_res_str += f"  ⚖️ **Tổng thực nhận:** `{u_total_payout + u_total_refund:,} VNĐ` (Lợi nhuận ròng: `0 VNĐ`)"
+                    
+                if newly_unlocked:
+                    user_res_str += f"\n  🏆 *Thành tựu mới:* {', '.join(newly_unlocked)}"
+                
+                results_desc_parts.append(user_res_str)
+
+            embed_color = discord.Color.green() if overall_net_profit > 0 else (discord.Color.red() if overall_net_profit < 0 else discord.Color.light_grey())
+            emoji_title = "🎉 KẾT QUẢ VÒNG QUAY 🎉"
             
-            results_desc_parts.append(user_res_str)
-
-        # Append warnings for skipped players
-        if users_to_warn:
-            warn_mentions = ", ".join(f"<@{u_id}>" for u_id in users_to_warn)
-            results_desc_parts.append(f"\n⚠️ **Bị bỏ qua do không đủ tiền:** {warn_mentions}")
-
-        embed_color = discord.Color.green() if overall_net_profit > 0 else (discord.Color.red() if overall_net_profit < 0 else discord.Color.light_grey())
-        emoji_title = "🎉 KẾT QUẢ VÒNG QUAY 🎉"
-        
-        results_str = "\n".join(results_desc_parts)
-        desc = (
-            f"🎡 **Bóng đã dừng tại ô:** {desc_rolled}\n\n"
-            f"📋 **BẢNG KẾT QUẢ CHI TIẾT:**\n"
-            f"{results_str}\n\n"
-            f"--- \n"
-            f"💰 **Tổng cược bàn:** `{total_table_bet:,} VNĐ`\n"
-            f"📈 **Tổng lợi nhuận cả bàn:** `{overall_net_profit:+,} VNĐ`\n"
-        )
-        
-        embed = make_embed(
-            title=f"{emoji_title} ROULETTE MULTIPLAYER {emoji_title}",
-            description=desc,
-            color=embed_color,
-        )
-        
-        await msg.edit(embed=embed)
-        
-        # Clear queued state
-        if channel_id in self.active_lobbies:
-            del self.active_lobbies[channel_id]
+            results_str = "\n".join(results_desc_parts)
+            desc = (
+                f"🎡 **Bóng đã dừng tại ô:** {desc_rolled}\n\n"
+                f"📋 **BẢNG KẾT QUẢ CHI TIẾT:**\n"
+                f"{results_str}\n\n"
+                f"--- \n"
+                f"💰 **Tổng cược bàn:** `{total_table_bet:,} VNĐ`\n"
+                f"📈 **Tổng lợi nhuận cả bàn:** `{overall_net_profit:+,} VNĐ`\n"
+            )
+            
+            embed = make_embed(
+                title=f"{emoji_title} ROULETTE MULTIPLAYER {emoji_title}",
+                description=desc,
+                color=embed_color,
+            )
+            
+            await msg.edit(embed=embed)
+        except Exception as e:
+            logger.exception("Error during roulette run_multi_spin")
+            if isinstance(ctx_or_interaction, discord.Interaction):
+                await ctx_or_interaction.channel.send(f"❌ Đã xảy ra lỗi khi quay bàn Roulette: `{e}`")
+            else:
+                await ctx_or_interaction.send(f"❌ Đã xảy ra lỗi khi quay bàn Roulette: `{e}`")
+        finally:
+            # Clear queued state
+            if channel_id in self.active_lobbies:
+                del self.active_lobbies[channel_id]
 
 
 async def setup(client: commands.Bot):

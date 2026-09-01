@@ -8,6 +8,7 @@ import discord
 from discord.ext import commands
 from PIL import Image, ImageDraw, ImageFont
 
+from app.discord_bot.modules.betting import parse_bet_amount, validate_money_bet
 from app.discord_bot.modules.helpers import make_embed
 from app.discord_bot.modules.wallet_logging import log_wallet_change
 from app.discord_bot.modules.profile_renderer import load_font
@@ -143,34 +144,6 @@ def generate_horserace_image(
     return out
 
 
-def parse_bet_amount(val_str: str, current_money: int) -> int:
-    val_str = val_str.strip().lower()
-    if val_str in ["all", "allin", "all-in", "tất tay"]:
-        from app.discord_bot.modules.betting import get_capped_all_in_amount
-        return get_capped_all_in_amount(current_money)
-
-    has_suffix = val_str.endswith("k") or val_str.endswith("m")
-
-    if has_suffix:
-        val_str = val_str.replace(",", "")
-        multiplier = 1000 if val_str.endswith("k") else 1000000
-        val_str = val_str[:-1].strip()
-    else:
-        val_str = val_str.replace(",", "")
-        if "." in val_str:
-            parts = val_str.split(".")
-            if len(parts[-1]) == 3:
-                val_str = val_str.replace(".", "")
-            else:
-                val_str = "".join(parts[:-1]) + "." + parts[-1]
-        multiplier = 1
-
-    try:
-        return max(0, int(float(val_str) * multiplier))
-    except (ValueError, TypeError):
-        return 0
-
-
 class HorseRaceBetModal(discord.ui.Modal):
     def __init__(self, horse: dict, lobby_view: "HorseRaceLobbyView"):
         super().__init__(title=f"Cược cho {horse['name']}")
@@ -211,6 +184,12 @@ class HorseRaceBetModal(discord.ui.Modal):
             await interaction.response.send_message(
                 "❌ Số tiền cược tối thiểu là **1,000 VND**.", ephemeral=True
             )
+            return
+
+        try:
+            validate_money_bet(self.lobby_view.cog.economy, user.id, amount)
+        except Exception as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
             return
 
         if amount > current_money:
@@ -499,8 +478,8 @@ class HorseRace(commands.Cog, name="HorseRace"):
                 if winner_id in horse_bets:
                     bet_amount = horse_bets[winner_id]
                     payout_amount = int(bet_amount * winner["odds"])
-                    # Payout consists of original bet + winnings (which is exactly bet_amount * odds)
-                    self.economy.add_money(user_id, payout_amount)
+                    # Payout consists of original bet + winnings
+                    self.economy.payout_winnings(user_id, payout_amount, bet_amount)
                     
                     # Log wallet changes
                     log_wallet_change(
@@ -534,7 +513,7 @@ class HorseRace(commands.Cog, name="HorseRace"):
             def get_track_num(h):
                 return selected_horses.index(h) + 1
 
-            w_track = get_track_num(sorted_horses[0])
+            w_track = get_track_num(winner)
             h2_track = get_track_num(sorted_horses[1])
             h3_track = get_track_num(sorted_horses[2])
 
@@ -573,7 +552,18 @@ class HorseRace(commands.Cog, name="HorseRace"):
 
         except Exception as e:
             logger.exception("Error during horse race minigame")
-            await ctx.send("❌ Đã xảy ra lỗi hệ thống trong lúc vận hành đường đua!")
+            # Fallback refund all escrowed bets if race crashed!
+            for user_id, horse_bets in lobby.bets.items():
+                user_total = sum(horse_bets.values())
+                if user_total > 0:
+                    self.economy.add_money(user_id, user_total)
+                    log_wallet_change(
+                        logger,
+                        event="horserace_crash_refund",
+                        user_id=user_id,
+                        money_delta=user_total,
+                    )
+            await ctx.send("❌ Đã xảy ra lỗi hệ thống trong lúc vận hành đường đua! Toàn bộ tiền cược đã được hoàn lại.")
         finally:
             self.active_races.pop(guild_id, None)
 

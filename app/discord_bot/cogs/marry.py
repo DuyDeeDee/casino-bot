@@ -11,7 +11,7 @@ import requests
 
 from app.config import config
 from app.discord_bot.modules.economy import Economy
-from app.discord_bot.modules.helpers import make_embed, ABS_PATH
+from app.discord_bot.modules.helpers import make_embed, ABS_PATH, parse_amount
 from app.discord_bot.modules.profile_renderer import load_font
 from app.discord_bot.modules.wallet_logging import log_wallet_change
 
@@ -53,6 +53,25 @@ RING_IMAGES = {
     "ring_eternal_butterfly": "Nhan_sal.png",
     "ring_nhankat": "NhanKat.png"
 }
+
+# Priority order when auto-selecting the best owned ring (best first)
+RING_PRIORITY = [
+    "ring_eternal_butterfly",
+    "ring_divine",
+    "ring_angel",
+    "ring_nhankat",
+    "ring_gothic",
+    "ring_sunburst",
+    "ring_sapphire",
+    "ring_ruby",
+    "ring_citrine",
+    "ring_cupid",
+    "ring_amethyst",
+    "ring_emerald",
+    "ring_aquamarine",
+    "ring_quartz",
+    "ring_grass"
+]
 
 # Couple Assets Dictionaries
 COUPLE_ESTATES = {
@@ -196,9 +215,10 @@ def get_avatar_img(user) -> Image.Image:
     """Downloads user avatar or returns a fallback grey placeholder."""
     try:
         url = str(user.display_avatar.url)
-        resp = requests.get(url, timeout=3)
-        if resp.status_code == 200:
-            return Image.open(BytesIO(resp.content)).convert("RGBA")
+        if url:
+            resp = requests.get(url, timeout=3)
+            if resp.status_code == 200:
+                return Image.open(BytesIO(resp.content)).convert("RGBA")
     except Exception as e:
         logger.warning(f"Failed to fetch avatar for {user.id}: {e}")
     return Image.new("RGBA", (150, 150), (120, 120, 120, 255))
@@ -664,12 +684,13 @@ class CoupleBannerView(discord.ui.View):
 
 class MarriageView(discord.ui.View):
     """View with Accept/Decline buttons for proposal flows."""
-    def __init__(self, proposer: discord.User | discord.Member, target: discord.User | discord.Member, ring_id: str, economy: Economy):
+    def __init__(self, proposer: discord.User | discord.Member, target: discord.User | discord.Member, ring_id: str, economy: Economy, cog: "Marry" = None):
         super().__init__(timeout=60.0)
         self.proposer = proposer
         self.target = target
         self.ring_id = ring_id
         self.economy = economy
+        self.cog = cog
         self.accepted = None
         self.message = None
 
@@ -683,16 +704,28 @@ class MarriageView(discord.ui.View):
     async def accept(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.accepted = True
         self.stop()
-        
+
+        # Re-verify marriage limits at accept time: the proposal can sit for up to 60s
+        # and either party may have married someone else in the meantime.
+        if self.cog is not None:
+            author_limit = 5 if await self.cog.is_admin_user(self.proposer) else 1
+            target_limit = 5 if await self.cog.is_admin_user(self.target) else 1
+            if (len(self.economy.get_marriages(self.proposer.id)) >= author_limit
+                    or len(self.economy.get_marriages(self.target.id)) >= target_limit):
+                await interaction.response.send_message("❌ Một trong hai người đã kết hôn trong lúc chờ đợi! Lời cầu hôn này không còn hợp lệ.", ephemeral=True)
+                return
+
         # Verify proposer still has the ring
         inventory = dict(self.economy.get_inventory(self.proposer.id))
         if inventory.get(self.ring_id, 0) <= 0:
             await interaction.response.send_message("❌ Người cầu hôn không còn sở hữu nhẫn cưới này để kết hôn!", ephemeral=True)
             return
-            
-        # Consume ring & execute marriage
+
+        # create_marriage refuses duplicate pairs so the ring is only consumed on success
+        if not self.economy.create_marriage(self.proposer.id, self.target.id, self.ring_id):
+            await interaction.response.send_message("❌ Hai người đã kết hôn với nhau rồi!", ephemeral=True)
+            return
         self.economy.add_inventory_item(self.proposer.id, self.ring_id, -1)
-        self.economy.create_marriage(self.proposer.id, self.target.id, self.ring_id)
         
         # Disable buttons
         for child in self.children:
@@ -736,11 +769,13 @@ class MarriageView(discord.ui.View):
 
 class DivorceView(discord.ui.View):
     """View with Accept/Decline buttons for mutual divorce flows."""
-    def __init__(self, initiator: discord.User | discord.Member, spouse: discord.User | discord.Member, economy: Economy):
+    def __init__(self, initiator: discord.User | discord.Member, spouse: discord.User | discord.Member, economy: Economy, user_one: int = None, user_two: int = None):
         super().__init__(timeout=60.0)
         self.initiator = initiator
         self.spouse = spouse
         self.economy = economy
+        self.user_one = user_one
+        self.user_two = user_two
         self.confirmed = None
         self.message = None
 
@@ -754,25 +789,34 @@ class DivorceView(discord.ui.View):
     async def accept(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.confirmed = True
         self.stop()
-        
+
         for child in self.children:
             child.disabled = True
         await interaction.response.edit_message(view=self)
-        
-        # Get marriage details to split joint wallet
-        marriage = self.economy.get_marriage(self.initiator.id)
+
+        # Get marriage details to split joint wallet (match the exact pair, not just "first marriage")
+        marriage = None
+        if self.user_one and self.user_two:
+            for m in self.economy.get_marriages(self.initiator.id):
+                if {m[0], m[1]} == {self.user_one, self.user_two}:
+                    marriage = m
+                    break
+        else:
+            marriage = self.economy.get_marriage(self.initiator.id)
+
         if marriage:
             user_one, user_two, ring_type, love_points, joint_wallet, married_at, _, _ = marriage
             split = joint_wallet // 2
             
-            # Refund assets 25%
-            refund_str = refund_couple_assets_on_divorce(self.economy, user_one, user_two)
+            with self.economy.transaction():
+                # Refund assets 25%
+                refund_str = refund_couple_assets_on_divorce(self.economy, user_one, user_two)
 
-            # Delete marriage and return wallet cash
-            self.economy.delete_marriage(user_one, user_two)
-            if split > 0:
-                self.economy.add_money(user_one, split)
-                self.economy.add_money(user_two, split)
+                # Delete marriage and return wallet cash
+                self.economy.delete_marriage(user_one, user_two)
+                if split > 0:
+                    self.economy.add_money(user_one, split)
+                    self.economy.add_money(user_two, split)
                 
             desc = (
                 f"💔 Hai bạn đã chính thức đường ai nấy đi.\n"
@@ -811,7 +855,7 @@ class CoupleShopView(discord.ui.View):
     def get_embed(self) -> discord.Embed:
         if self.current_tab == 0:
             desc = "### 🏠 DANH SÁCH BẤT ĐỘNG SẢN CẶP ĐÔI\n"
-            desc += "Mua bằng lệnh: `i?couple buy nha <ID>` (trừ thỏi vàng cá nhân)\n\n"
+            desc += f"Mua bằng lệnh: `{config.bot.prefix}couple buy nha <ID> [chỉ_số]` (trừ thỏi vàng cá nhân)\n\n"
             for k, v in COUPLE_ESTATES.items():
                 desc += f"• **`{k}`** — {v['name']}\n  └ Giá: **{v['price']:,} Thỏi Vàng** | Buff: `+{v['buff']} pts/ngày` vào giới hạn thân mật\n"
             embed = make_embed(
@@ -822,7 +866,7 @@ class CoupleShopView(discord.ui.View):
             embed.set_footer(text="Trang 1/3 • Bất Động Sản")
         elif self.current_tab == 1:
             desc = "### 🚗 DANH SÁCH PHƯƠNG TIỆN CẶP ĐÔI\n"
-            desc += "Mua bằng lệnh: `i?couple buy xe <ID>` (trừ thỏi vàng cá nhân)\n\n"
+            desc += f"Mua bằng lệnh: `{config.bot.prefix}couple buy xe <ID> [chỉ_số]` (trừ thỏi vàng cá nhân)\n\n"
             for k, v in COUPLE_VEHICLES.items():
                 desc += f"• **`{k}`** — {v['name']}\n  └ Giá: **{v['price']:,} Thỏi Vàng** | Buff: `+{v['buff']} pts/ngày` vào giới hạn thân mật\n"
             embed = make_embed(
@@ -833,7 +877,7 @@ class CoupleShopView(discord.ui.View):
             embed.set_footer(text="Trang 2/3 • Phương Tiện")
         else:
             desc = "### 🐾 DANH SÁCH THÚ CƯNG CẶP ĐÔI\n"
-            desc += "Mua bằng lệnh: `i?couple buy pet <ID>` (trừ thỏi vàng cá nhân)\n\n"
+            desc += f"Mua bằng lệnh: `{config.bot.prefix}couple buy pet <ID> [chỉ_số]` (trừ thỏi vàng cá nhân)\n\n"
             for k, v in COUPLE_PETS.items():
                 desc += f"• **`{k}`** — {v['name']}\n  └ Giá: **{v['price']:,} Thỏi Vàng** | Buff: `+{v['buff']} pts/ngày` vào giới hạn thân mật\n"
             embed = make_embed(
@@ -926,31 +970,33 @@ class CoupleWithdrawView(discord.ui.View):
         if not marriage:
             await interaction.channel.send("❌ Thất bại: Hôn nhân này không còn tồn tại!")
             return
-            
+
         user_one, user_two, ring_type, love_points, joint_wallet, married_at, _, _ = marriage
         if joint_wallet < self.amount:
             await interaction.channel.send(f"❌ Thất bại: Quỹ chung hiện tại không đủ để rút (Chỉ còn `{joint_wallet:,} VND`!)")
             return
-            
-        # Perform withdrawal
-        self.economy.update_joint_wallet(user_one, user_two, -self.amount)
-        self.economy.add_money(self.proposer.id, self.amount)
-        
+
+        # Perform withdrawal atomically (re-checks balance inside the same transaction)
+        success, new_joint = self.economy.couple_withdraw_joint(self.proposer.id, user_one, user_two, self.amount)
+        if not success:
+            await interaction.channel.send("❌ Thất bại: Hôn nhân không còn tồn tại hoặc quỹ chung không đủ để rút!")
+            return
+
         log_wallet_change(
             logger,
             event="couple_joint_withdraw",
             user_id=self.proposer.id,
             money_delta=self.amount,
-            joint_balance=joint_wallet - self.amount,
+            joint_balance=new_joint,
             ctx=self.ctx
         )
-        
+
         embed = make_embed(
             title="🏦 RÚT TIỀN QUỸ CHUNG THÀNH CÔNG 🏦",
             description=(
                 f"**{self.spouse.name}** đã đồng ý cho **{self.proposer.name}** rút tiền từ quỹ phu thê:\n\n"
                 f"💰 **Nhận lại ví:** `+{self.amount:,} VND`\n"
-                f"🏦 **Số dư quỹ chung còn lại:** `{joint_wallet - self.amount:,} VND`"
+                f"🏦 **Số dư quỹ chung còn lại:** `{new_joint:,} VND`"
             ),
             color=discord.Color.green()
         )
@@ -971,7 +1017,7 @@ class Marry(commands.Cog):
     """Cog for community Couple features and rewards."""
     def __init__(self, bot):
         self.bot = bot
-        self.economy = getattr(bot, "economy", Economy())
+        self.economy = getattr(bot, "economy", None) or Economy()
 
     async def is_admin_user(self, user) -> bool:
         if user.id in config.bot.owner_ids or user.id in config.bot.admin_ids:
@@ -1013,7 +1059,7 @@ class Marry(commands.Cog):
         author_limit = 5 if await self.is_admin_user(ctx.author) else 1
         if len(author_marriages) >= author_limit:
             if author_limit == 1:
-                await ctx.send("❌ Bạn đang trong một cuộc hôn nhân! Hãy ly hôn (i?divorce) trước khi đi tìm bến đỗ mới.")
+                await ctx.send(f"❌ Bạn đang trong một cuộc hôn nhân! Hãy ly hôn ({config.bot.prefix}divorce) trước khi đi tìm bến đỗ mới.")
             else:
                 await ctx.send(f"❌ Bạn đã đạt giới hạn kết hôn tối đa là {author_limit} người cùng lúc!")
             return
@@ -1034,31 +1080,13 @@ class Marry(commands.Cog):
         # Select best ring owned
         owned_rings = [k for k in RINGS.keys() if inventory.get(k, 0) > 0]
         if not owned_rings:
-            await ctx.send("❌ **Bạn không sở hữu nhẫn cưới nào!** Hãy sử dụng `i?shop` để mua một chiếc nhẫn cầu hôn trước.")
+            await ctx.send(f"❌ **Bạn không sở hữu nhẫn cưới nào!** Hãy sử dụng `{config.bot.prefix}shop` để mua một chiếc nhẫn cầu hôn trước.")
             return
-            
-        # Prioritize divine > angel > nhankat > gothic > sunburst > sapphire > ruby > citrine > cupid > amethyst > emerald > aquamarine > quartz > grass
-        ring_priority = [
-            "ring_eternal_butterfly",
-            "ring_divine",
-            "ring_angel",
-            "ring_nhankat",
-            "ring_gothic",
-            "ring_sunburst",
-            "ring_sapphire",
-            "ring_ruby",
-            "ring_citrine",
-            "ring_cupid",
-            "ring_amethyst",
-            "ring_emerald",
-            "ring_aquamarine",
-            "ring_quartz",
-            "ring_grass"
-        ]
-        ring_id = next(r for r in ring_priority if r in owned_rings)
+
+        ring_id = next(r for r in RING_PRIORITY if r in owned_rings)
         ring_name = RINGS[ring_id]
-        
-        view = MarriageView(ctx.author, target, ring_id, self.economy)
+
+        view = MarriageView(ctx.author, target, ring_id, self.economy, cog=self)
         embed = make_embed(
             title="💞 LỜI CẦU HÔN LÃNG MẠN 💞",
             description=(
@@ -1113,36 +1141,10 @@ class Marry(commands.Cog):
             
         marriage = marriages[target_index - 1]
         user_one, user_two, ring_type, love_points, joint_wallet, married_at, _, _ = marriage
-        
-        # Accumulate Quỹ Chung interest if ring_eternal_butterfly
-        if ring_type == "ring_eternal_butterfly" and joint_wallet > 0:
-            last_interest, last_wish = self.economy.get_marriage_times(user_one, user_two)
-            now = int(time.time())
-            
-            # If last_interest is 0, initialize it to married_at
-            if last_interest == 0:
-                last_interest = married_at
-                self.economy.update_marriage_times(user_one, user_two, last_interest_time=last_interest)
-                
-            # Calculate calendar days since last interest
-            import datetime
-            last_date = datetime.date.fromtimestamp(last_interest)
-            now_date = datetime.date.fromtimestamp(now)
-            days_passed = (now_date - last_date).days
-            
-            if days_passed > 0:
-                total_interest = 0
-                temp_wallet = joint_wallet
-                for _ in range(min(days_passed, 30)): # Cap at 30 days of inactivity to prevent overflow
-                    day_interest = int(temp_wallet * 0.03)
-                    day_interest = min(15_000_000, day_interest) # Cap daily interest at 15M
-                    total_interest += day_interest
-                    temp_wallet += day_interest
-                
-                if total_interest > 0:
-                    self.economy.update_joint_wallet(user_one, user_two, total_interest)
-                    self.economy.update_marriage_times(user_one, user_two, last_interest_time=now)
-                    joint_wallet += total_interest
+
+        # Accrue pending joint-wallet interest for Nhẫn Song Điệp Vĩnh Hằng (atomic, race-safe)
+        if ring_type == "ring_eternal_butterfly":
+            _, joint_wallet = self.economy.apply_marriage_interest(user_one, user_two)
         
         # Get spouse object
         spouse_id = user_two if target_user.id == user_one else user_one
@@ -1158,7 +1160,7 @@ class Marry(commands.Cog):
                     self.id = uid
                     self.display_name = f"User_ID:{uid}"
                     self.display_avatar = self
-                    self.url = "https://example.com/avatar.png"
+                    self.url = ""  # empty URL: get_avatar_img skips the network and uses its placeholder
             spouse = FallbackUser(spouse_id)
             
         married_days = max(1, (int(time.time()) - married_at) // 86400)
@@ -1396,7 +1398,7 @@ class Marry(commands.Cog):
             return
             
         if not remaining_args:
-            await ctx.send("❌ Vui lòng nhập ngày bắt đầu kết hôn! Cú pháp: `i?couple setdate 14/02/2024` hoặc `i?couple setdate DD/MM/YYYY`.")
+            await ctx.send(f"❌ Vui lòng nhập ngày bắt đầu kết hôn! Cú pháp: `{config.bot.prefix}couple setdate 14/02/2024` hoặc `{config.bot.prefix}couple setdate DD/MM/YYYY`.")
             return
 
         date_input = remaining_args[0].strip()
@@ -1420,6 +1422,12 @@ class Marry(commands.Cog):
 
         user_one, user_two = marriage[0], marriage[1]
         self.economy.update_marriage_date(user_one, user_two, parsed_ts)
+
+        # Keep the interest window in sync so back-dating the wedding date can never
+        # retro-farm joint-wallet interest on the next profile view.
+        last_interest, _ = self.economy.get_marriage_times(user_one, user_two)
+        if last_interest == 0:
+            self.economy.update_marriage_times(user_one, user_two, last_interest_time=parsed_ts)
 
         new_date_str = datetime.fromtimestamp(parsed_ts).strftime("%d/%m/%Y")
         days = max(1, (int(time.time()) - parsed_ts) // 86400)
@@ -1450,7 +1458,7 @@ class Marry(commands.Cog):
         owned_rings = [k for k in RINGS.keys() if inventory.get(k, 0) > 0]
 
         if not owned_rings:
-            await ctx.send("❌ **Bạn không sở hữu nhẫn cưới nào trong túi đồ!** Vui lòng mua nhẫn mới từ sảnh `i?shop`.")
+            await ctx.send(f"❌ **Bạn không sở hữu nhẫn cưới nào trong túi đồ!** Vui lòng mua nhẫn mới từ sảnh `{config.bot.prefix}shop`.")
             return
 
         selected_ring_id = None
@@ -1467,24 +1475,7 @@ class Marry(commands.Cog):
                 return
         else:
             # Prioritize best ring
-            ring_priority = [
-                "ring_eternal_butterfly",
-                "ring_divine",
-                "ring_angel",
-                "ring_nhankat",
-                "ring_gothic",
-                "ring_sunburst",
-                "ring_sapphire",
-                "ring_ruby",
-                "ring_citrine",
-                "ring_cupid",
-                "ring_amethyst",
-                "ring_emerald",
-                "ring_aquamarine",
-                "ring_quartz",
-                "ring_grass"
-            ]
-            selected_ring_id = next((r for r in ring_priority if r in owned_rings), None)
+            selected_ring_id = next((r for r in RING_PRIORITY if r in owned_rings), None)
 
         if not selected_ring_id:
             await ctx.send("❌ Không thể xác định nhẫn cưới để đổi!")
@@ -1495,10 +1486,12 @@ class Marry(commands.Cog):
             return
 
         # Perform the ring swap
-        # 1. Deduct new ring
+        # 1. Deduct new ring from the changer
         self.economy.add_inventory_item(ctx.author.id, selected_ring_id, -1)
-        # 2. Return old ring
-        self.economy.add_inventory_item(ctx.author.id, old_ring_type, 1)
+        # 2. Return the old ring to its original owner: the proposer (user_one) paid for
+        #    it at proposal time, so giving it to whoever runs the command would let a
+        #    spouse extract high-value rings through divorce/remarry cycles.
+        self.economy.add_inventory_item(user_one, old_ring_type, 1)
         # 3. Update database
         self.economy.update_marriage_ring(user_one, user_two, selected_ring_id)
 
@@ -1508,14 +1501,20 @@ class Marry(commands.Cog):
             user_id=ctx.author.id,
             old_ring=old_ring_type,
             new_ring=selected_ring_id,
+            ring_returned_to=user_one,
             ctx=ctx
         )
 
+        owner_note = (
+            "trong túi đồ của bạn"
+            if ctx.author.id == user_one
+            else f"trong túi đồ của <@{user_one}> (người cầu hôn)"
+        )
         embed = make_embed(
             title="💖 THAY THẾ NHẪN CƯỚI THÀNH CÔNG 💖",
             description=(
                 f"Đã đổi tín vật kết duyên thành công cho cuộc hôn nhân này!\n\n"
-                f"📦 **Nhẫn cũ hoàn trả vào túi đồ:** {RINGS.get(old_ring_type, old_ring_type)}\n"
+                f"📦 **Nhẫn cũ hoàn trả {owner_note}:** {RINGS.get(old_ring_type, old_ring_type)}\n"
                 f"✨ **Tín vật mới của gia đình:** {RINGS[selected_ring_id]}"
             ),
             color=discord.Color.magenta()
@@ -1535,36 +1534,35 @@ class Marry(commands.Cog):
         if not remaining_args:
             await ctx.send("❌ Vui lòng nhập số tiền muốn góp!")
             return
-            
+
         amount = remaining_args[0]
         # Get user cash balance
         profile_entry = self.economy.get_entry(ctx.author.id)
         user_cash = profile_entry[1]
 
         # Parse deposit amount
-        if amount.lower() in ["all", "tất tay"]:
+        if amount.lower() in ("all", "tất tay", "tat tay"):
             money_val = user_cash
         else:
-            try:
-                # Custom parse multiplier like 100k, 1m
-                val_str = amount.lower().replace("k", "000").replace("m", "000000").replace(",", "").replace(".", "")
-                money_val = int(val_str)
-            except Exception:
+            money_val = parse_amount(amount)
+            if money_val is None:
                 await ctx.send("❌ Số tiền nhập vào không hợp lệ!")
                 return
-                
+
         if money_val <= 0:
             await ctx.send("❌ Số tiền góp phải lớn hơn 0.")
             return
-            
+
         if user_cash < money_val:
             await ctx.send(f"❌ Bạn không đủ tiền! Bạn chỉ có `{user_cash:,} VND`.")
             return
-            
-        # Deduct cash
-        self.economy.add_money(ctx.author.id, -money_val)
-        new_joint = self.economy.update_joint_wallet(user_one, user_two, money_val)
-        
+
+        # Deduct cash and credit the joint wallet in one atomic transaction
+        success, new_joint = self.economy.couple_deposit_joint(ctx.author.id, user_one, user_two, money_val)
+        if not success:
+            await ctx.send("❌ Góp tiền thất bại: không đủ tiền hoặc hôn nhân không còn tồn tại!")
+            return
+
         log_wallet_change(
             logger,
             event="couple_joint_deposit",
@@ -1573,7 +1571,7 @@ class Marry(commands.Cog):
             joint_balance=new_joint,
             ctx=ctx
         )
-        
+
         embed = make_embed(
             title="🏦 GÓP TIỀN QUỸ CHUNG THÀNH CÔNG 🏦",
             description=(
@@ -1598,24 +1596,21 @@ class Marry(commands.Cog):
         if not remaining_args:
             await ctx.send("❌ Vui lòng nhập số tiền muốn rút!")
             return
-            
+
         amount = remaining_args[0]
         # Parse withdraw amount
-        if amount.lower() == "all" or amount.lower() == "tất tay":
+        if amount.lower() in ("all", "tất tay", "tat tay"):
             money_val = joint_wallet
         else:
-            try:
-                # Custom parse multiplier like 100k, 1m
-                val_str = amount.lower().replace("k", "000").replace("m", "000000").replace(",", "").replace(".", "")
-                money_val = int(val_str)
-            except Exception:
+            money_val = parse_amount(amount)
+            if money_val is None:
                 await ctx.send("❌ Số tiền nhập vào không hợp lệ!")
                 return
-                
+
         if money_val <= 0:
             await ctx.send("❌ Số tiền rút phải lớn hơn 0.")
             return
-            
+
         if joint_wallet < money_val:
             await ctx.send(f"❌ Quỹ chung không đủ tiền! Quỹ chỉ có `{joint_wallet:,} VND`.")
             return
@@ -1674,12 +1669,7 @@ class Marry(commands.Cog):
         # Grant reward: +5 intimacy points and +200,000 VND to joint wallet
         self.economy.update_marriage_times(user_one, user_two, last_wish_time=now)
         self.economy.update_joint_wallet(user_one, user_two, 200_000)
-        
-        self.economy.cur.execute(
-            "UPDATE user_marry SET love_points = love_points + 5 WHERE user_one = ? AND user_two = ?",
-            (user_one, user_two)
-        )
-        self.economy.conn.commit()
+        self.economy.add_marriage_love_points_raw(user_one, user_two, 5)
         
         embed = make_embed(
             title="🦋 ƯỚC NGUYỆN PHU THÊ VĨNH HẰNG 🦋",
@@ -1724,188 +1714,101 @@ class Marry(commands.Cog):
                 elif item_type in ["pet", "thucung", "thu"]:
                     await ctx.invoke(self.couple_buy_pet, item_id=item_id)
                     return
-            await ctx.send("❌ Cú pháp: `i?couple buy nha <ID>`, `i?couple buy xe <ID>`, hoặc `i?couple buy pet <ID>`. Gõ `i?couple shop` để xem danh sách món đồ!")
+            await ctx.send(f"❌ Cú pháp: `{config.bot.prefix}couple buy nha <ID> [chỉ_số]`, `{config.bot.prefix}couple buy xe <ID> [chỉ_số]`, hoặc `{config.bot.prefix}couple buy pet <ID> [chỉ_số]`. Gõ `{config.bot.prefix}couple shop` để xem danh sách món đồ!")
 
-    @couple_buy.command(name="nha", aliases=["bds", "estate"], brief="Mua nhà / bất động sản cho cặp đôi.")
-    async def couple_buy_nha(self, ctx: commands.Context, item_id: str):
-        marriage, _ = self._resolve_marriage_and_args(ctx.author.id, [])
-        if not marriage:
-            await ctx.send("❌ Bạn chưa kết hôn nên không thể mua bất động sản cặp đôi!")
+    async def _execute_couple_buy(self, ctx: commands.Context, catalog: dict, kind: str, kind_label: str, item_id: str, marriage_index: int, title: str, action: str, recipient: str):
+        """Shared purchase flow for estate/vehicle/pet: resolves the marriage (with an
+        optional index for admins with multiple marriages), then pays through the
+        atomic Economy.purchase_couple_asset method."""
+        marriages = self.economy.get_marriages(ctx.author.id)
+        if not marriages:
+            await ctx.send(f"❌ Bạn chưa kết hôn nên không thể mua {kind_label} cặp đôi!")
             return
 
-        user_one, user_two = marriage[0], marriage[1]
-        item_id = item_id.lower().strip()
-        if item_id not in COUPLE_ESTATES:
-            await ctx.send(f"❌ ID bất động sản `{item_id}` không hợp lệ! Hãy gõ `i?couple shop` để xem danh sách.")
-            return
-
-        estate_info = COUPLE_ESTATES[item_id]
-        price = estate_info["price"]
-
-        profile = self.economy.get_entry(ctx.author.id)
-        gold = profile[2]
-        if gold < price:
-            await ctx.send(f"❌ Bạn không đủ thỏi vàng! `{estate_info['name']}` có giá `{price:,} Thỏi Vàng`, nhưng bạn chỉ có `{gold:,} Thỏi Vàng`.")
-            return
-
-        assets = self.economy.get_couple_assets(user_one, user_two)
-        refund_msg = ""
-        if assets and assets[0] and assets[1] > 0 and assets[2] > 0:
-            old_id, old_price, old_buyer = assets[0], assets[1], assets[2]
-            if old_id == item_id:
-                await ctx.send(f"❌ Cặp đôi của bạn hiện đã sở hữu {estate_info['name']} rồi!")
-                return
-            refund_amount = int(old_price * 0.25)
-            if refund_amount > 0 and old_buyer > 0:
-                self.economy.add_credits(old_buyer, refund_amount)
-                old_name = COUPLE_ESTATES.get(old_id, {}).get("name", old_id)
-                refund_msg = f"\n📦 **Thanh lý {old_name} cũ:** Hoàn lại 25% (`+{refund_amount:,} Thỏi Vàng`) cho <@{old_buyer}>."
-
-        self.economy.add_credits(ctx.author.id, -price)
-        self.economy.set_couple_estate(user_one, user_two, item_id, price, ctx.author.id)
-
-        log_wallet_change(
-            logger,
-            event="couple_buy_estate",
-            user_id=ctx.author.id,
-            credits_delta=-price,
-            estate_id=item_id,
-            ctx=ctx
-        )
-
-        embed = make_embed(
-            title="🏠 MUA BẤT ĐỘNG SẢN CẶP ĐÔI THÀNH CÔNG 🏠",
-            description=(
-                f"**{ctx.author.name}** đã mua thành công **{estate_info['name']}** cho tổ ấm gia đình!\n\n"
-                f"🟡 **Chi phí:** `-{price:,} Thỏi Vàng` (trừ ví vàng cá nhân)\n"
-                f"✨ **Buff thân mật:** `+{estate_info['buff']} pts/ngày` vào giới hạn thân mật hàng ngày!{refund_msg}"
-            ),
-            color=discord.Color.gold()
-        )
-        await ctx.send(embed=embed)
-
-    @couple_buy.command(name="xe", aliases=["vehicle", "phuongtien"], brief="Mua xe / phương tiện cho cặp đôi.")
-    async def couple_buy_xe(self, ctx: commands.Context, item_id: str):
-        marriage, _ = self._resolve_marriage_and_args(ctx.author.id, [])
-        if not marriage:
-            await ctx.send("❌ Bạn chưa kết hôn nên không thể mua phương tiện cặp đôi!")
-            return
-
-        user_one, user_two = marriage[0], marriage[1]
-        item_id = item_id.lower().strip()
-        if item_id not in COUPLE_VEHICLES:
-            await ctx.send(f"❌ ID phương tiện `{item_id}` không hợp lệ! Hãy gõ `i?couple shop` để xem danh sách.")
-            return
-
-        vehicle_info = COUPLE_VEHICLES[item_id]
-        price = vehicle_info["price"]
-
-        profile = self.economy.get_entry(ctx.author.id)
-        gold = profile[2]
-        if gold < price:
-            await ctx.send(f"❌ Bạn không đủ thỏi vàng! `{vehicle_info['name']}` có giá `{price:,} Thỏi Vàng`, nhưng bạn chỉ có `{gold:,} Thỏi Vàng`.")
-            return
-
-        assets = self.economy.get_couple_assets(user_one, user_two)
-        refund_msg = ""
-        if assets and assets[3] and assets[4] > 0 and assets[5] > 0:
-            old_id, old_price, old_buyer = assets[3], assets[4], assets[5]
-            if old_id == item_id:
-                await ctx.send(f"❌ Cặp đôi của bạn hiện đã sở hữu {vehicle_info['name']} rồi!")
-                return
-            refund_amount = int(old_price * 0.25)
-            if refund_amount > 0 and old_buyer > 0:
-                self.economy.add_credits(old_buyer, refund_amount)
-                old_name = COUPLE_VEHICLES.get(old_id, {}).get("name", old_id)
-                refund_msg = f"\n📦 **Thanh lý {old_name} cũ:** Hoàn lại 25% (`+{refund_amount:,} Thỏi Vàng`) cho <@{old_buyer}>."
-
-        self.economy.add_credits(ctx.author.id, -price)
-        self.economy.set_couple_vehicle(user_one, user_two, item_id, price, ctx.author.id)
-
-        log_wallet_change(
-            logger,
-            event="couple_buy_vehicle",
-            user_id=ctx.author.id,
-            credits_delta=-price,
-            vehicle_id=item_id,
-            ctx=ctx
-        )
-
-        embed = make_embed(
-            title="🚗 MUA PHƯƠNG TIỆN CẶP ĐÔI THÀNH CÔNG 🚗",
-            description=(
-                f"**{ctx.author.name}** đã sắm thành công **{vehicle_info['name']}** cho cặp đôi!\n\n"
-                f"🟡 **Chi phí:** `-{price:,} Thỏi Vàng` (trừ ví vàng cá nhân)\n"
-                f"✨ **Buff thân mật:** `+{vehicle_info['buff']} pts/ngày` vào giới hạn thân mật hàng daily!{refund_msg}"
-            ),
-            color=discord.Color.blue()
-        )
-        await ctx.send(embed=embed)
-
-    @couple_buy.command(name="pet", aliases=["thucung", "thu"], brief="Mua thú cưng cho cặp đôi.")
-    async def couple_buy_pet(self, ctx: commands.Context, item_id: str):
-        marriage, _ = self._resolve_marriage_and_args(ctx.author.id, [])
-        if not marriage:
-            await ctx.send("❌ Bạn chưa kết hôn nên không thể mua thú cưng cặp đôi!")
-            return
-
-        user_one, user_two = marriage[0], marriage[1]
-        item_id = item_id.lower().strip()
-        if item_id not in COUPLE_PETS:
-            if f"pet_{item_id}" in COUPLE_PETS:
-                item_id = f"pet_{item_id}"
-            elif item_id.replace(" ", "_") in COUPLE_PETS:
-                item_id = item_id.replace(" ", "_")
-            elif f"pet_{item_id.replace(' ', '_')}" in COUPLE_PETS:
-                item_id = f"pet_{item_id.replace(' ', '_')}"
+        if not (1 <= marriage_index <= len(marriages)):
+            if len(marriages) == 1:
+                await ctx.send("❌ Bạn chỉ có 1 cuộc hôn nhân!")
             else:
-                await ctx.send(f"❌ ID thú cưng `{item_id}` không hợp lệ! Hãy gõ `i?couple shop` để xem danh sách.")
-                return
-
-        pet_info = COUPLE_PETS[item_id]
-        price = pet_info["price"]
-
-        profile = self.economy.get_entry(ctx.author.id)
-        gold = profile[2]
-        if gold < price:
-            await ctx.send(f"❌ Bạn không đủ thỏi vàng! `{pet_info['name']}` có giá `{price:,} Thỏi Vàng`, nhưng bạn chỉ có `{gold:,} Thỏi Vàng`.")
+                await ctx.send(f"❌ Chỉ số cuộc hôn nhân không hợp lệ! (Nhập từ 1 đến {len(marriages)})")
             return
 
-        assets = self.economy.get_couple_assets(user_one, user_two)
-        refund_msg = ""
-        if assets and assets[6] and assets[7] > 0 and assets[8] > 0:
-            old_id, old_price, old_buyer = assets[6], assets[7], assets[8]
-            if old_id == item_id:
-                await ctx.send(f"❌ Cặp đôi của bạn hiện đã sở hữu {pet_info['name']} rồi!")
-                return
-            refund_amount = int(old_price * 0.25)
-            if refund_amount > 0 and old_buyer > 0:
-                self.economy.add_credits(old_buyer, refund_amount)
-                old_name = COUPLE_PETS.get(old_id, {}).get("name", old_id)
-                refund_msg = f"\n📦 **Thanh lý {old_name} cũ:** Hoàn lại 25% (`+{refund_amount:,} Thỏi Vàng`) cho <@{old_buyer}>."
+        marriage = marriages[marriage_index - 1]
+        user_one, user_two = marriage[0], marriage[1]
+        item_id = item_id.lower().strip()
+        if item_id not in catalog:
+            await ctx.send(f"❌ ID {kind_label} `{item_id}` không hợp lệ! Hãy gõ `{config.bot.prefix}couple shop` để xem danh sách.")
+            return
 
-        self.economy.add_credits(ctx.author.id, -price)
-        self.economy.set_couple_pet(user_one, user_two, item_id, price, ctx.author.id)
+        item_info = catalog[item_id]
+        status, refund_amount, refund_target, _replaced = self.economy.purchase_couple_asset(
+            ctx.author.id, user_one, user_two, kind, item_id, item_info["price"]
+        )
+        if status == "insufficient":
+            profile = self.economy.get_entry(ctx.author.id)
+            gold = profile[2]
+            await ctx.send(f"❌ Bạn không đủ thỏi vàng! `{item_info['name']}` có giá `{item_info['price']:,} Thỏi Vàng`, nhưng bạn chỉ có `{gold:,} Thỏi Vàng`.")
+            return
+        if status == "owned":
+            await ctx.send(f"❌ Cặp đôi của bạn hiện đã sở hữu {item_info['name']} rồi!")
+            return
+
+        refund_msg = ""
+        if refund_amount > 0 and refund_target > 0:
+            refund_msg = f"\n📦 **Thanh lý tài sản cũ:** Hoàn lại 25% (`+{refund_amount:,} Thỏi Vàng`) cho <@{refund_target}>."
 
         log_wallet_change(
             logger,
-            event="couple_buy_pet",
+            event=f"couple_buy_{kind}",
             user_id=ctx.author.id,
-            credits_delta=-price,
-            pet_id=item_id,
+            credits_delta=-item_info["price"],
+            asset_id=item_id,
             ctx=ctx
         )
 
         embed = make_embed(
-            title="🐾 MUA THÚ CƯNG CẶP ĐÔI THÀNH CÔNG 🐾",
+            title=title,
             description=(
-                f"**{ctx.author.name}** đã nhận nuôi thành công **{pet_info['name']}** cho hai bạn!\n\n"
-                f"🟡 **Chi phí:** `-{price:,} Thỏi Vàng` (trừ ví vàng cá nhân)\n"
-                f"✨ **Buff thân mật:** `+{pet_info['buff']} pts/ngày` vào giới hạn thân mật hàng daily!{refund_msg}"
+                f"**{ctx.author.name}** đã {action} **{item_info['name']}** {recipient}!\n\n"
+                f"🟡 **Chi phí:** `-{item_info['price']:,} Thỏi Vàng` (trừ ví vàng cá nhân)\n"
+                f"✨ **Buff thân mật:** `+{item_info['buff']} pts/ngày` vào giới hạn thân mật hàng ngày!{refund_msg}"
             ),
-            color=discord.Color.green()
+            color=discord.Color.gold() if kind == "estate" else (discord.Color.blue() if kind == "vehicle" else discord.Color.green())
         )
         await ctx.send(embed=embed)
+
+    @couple_buy.command(name="nha", aliases=["bds", "estate"], brief="Mua nhà / bất động sản cho cặp đôi.", usage="couple buy nha <ID> [chỉ_số]")
+    async def couple_buy_nha(self, ctx: commands.Context, item_id: str, marriage_index: int = 1):
+        await self._execute_couple_buy(
+            ctx, COUPLE_ESTATES, "estate", "bất động sản", item_id, marriage_index,
+            title="🏠 MUA BẤT ĐỘNG SẢN CẶP ĐÔI THÀNH CÔNG 🏠",
+            action="mua thành công",
+            recipient="cho tổ ấm gia đình"
+        )
+
+    @couple_buy.command(name="xe", aliases=["vehicle", "phuongtien"], brief="Mua xe / phương tiện cho cặp đôi.", usage="couple buy xe <ID> [chỉ_số]")
+    async def couple_buy_xe(self, ctx: commands.Context, item_id: str, marriage_index: int = 1):
+        await self._execute_couple_buy(
+            ctx, COUPLE_VEHICLES, "vehicle", "phương tiện", item_id, marriage_index,
+            title="🚗 MUA PHƯƠNG TIỆN CẶP ĐÔI THÀNH CÔNG 🚗",
+            action="sắm thành công",
+            recipient="cho cặp đôi"
+        )
+
+    @couple_buy.command(name="pet", aliases=["thucung", "thu"], brief="Mua thú cưng cho cặp đôi.", usage="couple buy pet <ID> [chỉ_số]")
+    async def couple_buy_pet(self, ctx: commands.Context, item_id: str, marriage_index: int = 1):
+        # Accept loose pet IDs like "hr_meow" or "hr meow" in addition to exact keys
+        probe = item_id.lower().strip()
+        if probe not in COUPLE_PETS:
+            for candidate in (f"pet_{probe}", probe.replace(" ", "_"), f"pet_{probe.replace(' ', '_')}"):
+                if candidate in COUPLE_PETS:
+                    item_id = candidate
+                    break
+        await self._execute_couple_buy(
+            ctx, COUPLE_PETS, "pet", "thú cưng", item_id, marriage_index,
+            title="🐾 MUA THÚ CƯNG CẶP ĐÔI THÀNH CÔNG 🐾",
+            action="nhận nuôi thành công",
+            recipient="cho hai bạn"
+        )
 
     @couple_cmd.command(name="assets", aliases=["estate", "vehicle", "pet", "items", "taisan"], brief="Xem danh sách tài sản và buff của cặp đôi.", usage="couple assets [chỉ_số/người_dùng]")
     async def couple_assets_cmd(self, ctx: commands.Context, index_or_user: str = None, index: int = None):
@@ -1982,6 +1885,13 @@ class Marry(commands.Cog):
 
 
     async def process_interact(self, ctx: commands.Context, target: discord.Member, action: str, emoji: str, action_type: str):
+        if target.bot:
+            await ctx.send("❌ Bạn không thể tương tác thân mật với bot!")
+            return
+        if target.id == ctx.author.id:
+            await ctx.send("❌ Bạn không thể tự tương tác với chính mình!")
+            return
+
         marriages = self.economy.get_marriages(ctx.author.id)
         if not marriages:
             await ctx.send(f"❌ Lệnh tương tác cặp đôi chỉ dành cho người đã kết hôn!")
@@ -2032,33 +1942,14 @@ class Marry(commands.Cog):
             
         # Try to add love points
         now = int(time.time())
-        base_points = 10 if action_type == "Fuck" else 5
-        
-        # Ring buff intimacy multipliers from shop descriptions
-        ring_love_buffs = {
-            "ring_quartz": 0.02,
-            "ring_aquamarine": 0.03,
-            "ring_emerald": 0.04,
-            "ring_amethyst": 0.05,
-            "ring_cupid": 0.07,
-            "ring_nhankat": 0.20,
-            "ring_citrine": 0.09,
-            "ring_ruby": 0.12,
-            "ring_sapphire": 0.15,
-            "ring_sunburst": 0.20,
-            "ring_gothic": 0.25,
-            "ring_angel": 0.30,
-            "ring_divine": 0.50,
-            "ring_eternal_butterfly": 0.15
-        }
-        
+
+        # Flat points per interaction; the daily cap (ring + assets) is what scales.
+        # Nhẫn Song Điệp Vĩnh Hằng keeps its exclusive bigger chunks.
         if ring_type == "ring_eternal_butterfly":
             points_to_add = 15 if action_type == "Fuck" else 7
         else:
-            buff_pct = ring_love_buffs.get(ring_type, 0.0)
-            import math
-            points_to_add = math.ceil(base_points * (1 + buff_pct))
-            
+            points_to_add = 10 if action_type == "Fuck" else 5
+
         old_love_points = love_points
         assets = self.economy.get_couple_assets(user_one, user_two)
         total_limit = self._get_couple_daily_limit(ring_type, assets)
@@ -2147,8 +2038,8 @@ class Marry(commands.Cog):
             description=(
                 f"Bạn đang yêu cầu chấm dứt hôn nhân cùng <@{spouse_id}>.\n\n"
                 f"Hãy chọn một trong hai phương án giải quyết dưới đây:\n"
-                f"1️⃣ **Ly hôn Đồng Thuận (Mutual):** Gõ `i?divorcemutual {idx}` (Cả hai cùng ký đơn, không mất phí, quỹ chung chia đôi).\n"
-                f"2️⃣ **Ly hôn Đơn Phương (Unilateral):** Gõ `i?divorceforce {idx}` (Không cần bên kia đồng ý, án phí tòa án rất đắt: **{unilateral_cost:,} VND** (10% ví của bạn), 50% án phí sẽ đền bù cho bạn đời của bạn)."
+                f"1️⃣ **Ly hôn Đồng Thuận (Mutual):** Gõ `{config.bot.prefix}divorcemutual {idx}` (Cả hai cùng ký đơn, không mất phí, quỹ chung chia đôi).\n"
+                f"2️⃣ **Ly hôn Đơn Phương (Unilateral):** Gõ `{config.bot.prefix}divorceforce {idx}` (Không cần bên kia đồng ý, án phí tòa án rất đắt: **{unilateral_cost:,} VND** (10% ví của bạn), 50% án phí sẽ đền bù cho bạn đời của bạn)."
             ),
             color=discord.Color.red()
         )
@@ -2167,8 +2058,13 @@ class Marry(commands.Cog):
         if not spouse:
             try: spouse = await self.bot.fetch_user(spouse_id)
             except Exception: pass
-            
-        view = DivorceView(ctx.author, spouse, self.economy)
+
+        if not spouse:
+            await ctx.send("❌ Không thể tìm thấy thông tin bạn đời để tạo đơn ly hôn đồng thuận!")
+            return
+
+        # Pin the exact marriage pair so the view divorces the right one for multi-marriage admins
+        view = DivorceView(ctx.author, spouse, self.economy, user_one, user_two)
         embed = make_embed(
             title="📜 ĐƠN LY HÔN ĐỒNG THUẬN 📜",
             description=f"**{ctx.author.mention}** đề xuất ly hôn đồng thuận. Mời **{spouse.mention}** bấm nút ký đơn để xác nhận giải tán gia đình.",
@@ -2186,34 +2082,35 @@ class Marry(commands.Cog):
         user_one, user_two, ring_type, love_points, joint_wallet, married_at, _, _ = marriage
         spouse_id = user_two if ctx.author.id == user_one else user_one
         
-        author_profile = self.economy.get_entry(ctx.author.id)
-        cash = author_profile[1]
-        
-        unilateral_cost = max(10_000_000, int(cash * 0.10))
-        if ring_type == "ring_eternal_butterfly":
-            unilateral_cost = unilateral_cost // 2
+        with self.economy.transaction():
+            author_profile = self.economy.get_entry(ctx.author.id)
+            cash = author_profile[1] if author_profile else 0
             
-        if cash < unilateral_cost:
-            await ctx.send(f"❌ Bạn không đủ tiền mặt trong ví để trả án phí ly hôn đơn phương! Cần `{unilateral_cost:,} VND` nhưng bạn chỉ có `{cash:,} VND`.")
-            return
-            
-        # Refund assets 25%
-        refund_str = refund_couple_assets_on_divorce(self.economy, user_one, user_two)
+            unilateral_cost = max(10_000_000, int(cash * 0.10))
+            if ring_type == "ring_eternal_butterfly":
+                unilateral_cost = unilateral_cost // 2
+                
+            if cash < unilateral_cost:
+                await ctx.send(f"❌ Bạn không đủ tiền mặt trong ví để trả án phí ly hôn đơn phương! Cần `{unilateral_cost:,} VND` nhưng bạn chỉ có `{cash:,} VND`.")
+                return
+                
+            # Refund assets 25%
+            refund_str = refund_couple_assets_on_divorce(self.economy, user_one, user_two)
 
-        # Execute force divorce
-        split = joint_wallet // 2
-        self.economy.delete_marriage(user_one, user_two)
-        
-        # Apply economic penalty
-        self.economy.add_money(ctx.author.id, -unilateral_cost)
-        # 50% of the penalty is compensated to the spouse
-        compensation = unilateral_cost // 2
-        self.economy.add_money(spouse_id, compensation)
-        
-        # Split joint wallet
-        if split > 0:
-            self.economy.add_money(user_one, split)
-            self.economy.add_money(user_two, split)
+            # Execute force divorce
+            split = joint_wallet // 2
+            self.economy.delete_marriage(user_one, user_two)
+            
+            # Apply economic penalty
+            self.economy.add_money(ctx.author.id, -unilateral_cost)
+            # 50% of the penalty is compensated to the spouse
+            compensation = unilateral_cost // 2
+            self.economy.add_money(spouse_id, compensation)
+            
+            # Split joint wallet
+            if split > 0:
+                self.economy.add_money(user_one, split)
+                self.economy.add_money(user_two, split)
             
         log_wallet_change(
             logger,

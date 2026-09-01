@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import math
 import random
 import time
 from typing import Optional, Union, Dict, List
@@ -11,10 +12,12 @@ from discord.ext import commands, tasks
 from app.config import config
 from app.discord_bot.modules.economy import Economy
 from app.discord_bot.modules.helpers import make_embed, ABS_PATH
-from app.discord_bot.modules.profile_renderer import render_profile_banner, render_showcase_image
+from app.discord_bot.modules.mini_games import DungeonCrawlView
+from app.discord_bot.cogs.gambling_helpers import CAREER_PREREQUISITES
+from app.discord_bot.cogs.server_events import get_mine_slow_factor, get_active_mine_mult, get_sale_factor
+from app.discord_bot.modules.profile_renderer import render_profile_banner
 from app.discord_bot.modules.wallet_logging import log_wallet_change
 from app.discord_bot.cogs.xe import get_car_image_file
-from app.discord_bot.cogs.daga import get_cock_image_file, RARITY_DISPLAY
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +41,9 @@ DEFAULT_PRICES = {
     "SOL": 80_000,
     "DOGE": 5_000
 }
+
+# Limit order tự hết hạn sau khoảng thời gian này; tài sản khóa được hoàn lại
+LIMIT_ORDER_TTL = 24 * 3600
 
 ORES_CONFIG = {
     "coal": {
@@ -285,25 +291,25 @@ SHOP_ITEMS = {
         "name": "Bằng cấp công nghệ 🎓",
         "cost": 5,
         "currency": "gold",
-        "description": "Mở khóa công việc Công nghệ trong lệnh $work để nhận dự án lớn."
+        "description": "Mở khóa công việc Công nghệ trong lệnh $work (720,000-1,350,000 VND/ca, cooldown 1h). Bằng nhập môn của hệ thống nghề nghiệp."
     },
     "bang_kien_truc": {
         "name": "Bằng Kiến Trúc Sư 📐",
         "cost": 10,
         "currency": "gold",
-        "description": "Mở khóa các dự án thiết kế công trình trong lệnh $work để nhận từ 1,620,000 VND đến 2,700,000 VND mỗi giờ."
+        "description": "Mở khóa các dự án thiết kế công trình trong lệnh $work (1,620,000-2,700,000 VND/ca, cooldown 2h). ⚠️ Yêu cầu: Bằng Công Nghệ + 15 XP nghề."
     },
     "bang_phi_hanh": {
         "name": "Chứng Chỉ Phi Hành Gia 🚀",
         "cost": 15,
         "currency": "gold",
-        "description": "Mở khóa nhiệm vụ thám hiểm vũ trụ trong lệnh $work để nhận từ 4,050,000 VND đến 7,200,000 VND mỗi giờ."
+        "description": "Mở khóa nhiệm vụ thám hiểm vũ trụ trong lệnh $work (4,050,000-7,200,000 VND/ca, cooldown 3h). ⚠️ Yêu cầu: Bằng Kiến Trúc Sư + 40 XP nghề."
     },
     "bang_bac_si": {
         "name": "Bằng Bác Sĩ Chuyên Khoa 🩺",
         "cost": 35,
         "currency": "gold",
-        "description": "Mở khóa công việc chăm sóc sức khỏe VIP trong lệnh $work để nhận từ 10,800,000 VND đến 18,000,000 VND mỗi giờ."
+        "description": "Mở khóa công việc chăm sóc sức khỏe VIP trong lệnh $work (10,800,000-18,000,000 VND/ca, cooldown 5h). ⚠️ Yêu cầu: Chứng Chỉ Phi Hành Gia + 80 XP nghề."
     },
     "the_tho_mo": {
         "name": "Nghề Khai Thác Vàng ⛏️",
@@ -434,85 +440,85 @@ SHOP_ITEMS = {
         "name": "<:NhanThachAnhTrang:1521733831932121159>Nhẫn Thạch Anh Trắng",
         "cost": 2,
         "currency": "gold",
-        "description": "Nhẫn bạc đơn giản đính thạch anh tinh khiết. Buff: +2% điểm thân mật."
+        "description": "Nhẫn bạc đơn giản đính thạch anh tinh khiết. Buff: +2% lương làm việc."
     },
     "ring_aquamarine": {
         "name": "<:NhnSngMaiAquamarine:1521739939849441461>Nhẫn Sương Mai Aquamarine",
         "cost": 10,
         "currency": "gold",
-        "description": "Dây xoắn mảnh đính Aquamarine lam nhạt. Buff: +3% điểm thân mật."
+        "description": "Dây xoắn mảnh đính Aquamarine lam nhạt. Buff: +3% lương làm việc."
     },
     "ring_emerald": {
         "name": "<:NhnThanhXunLcBo:1521739876838543410>Nhẫn Thanh Xuân Lục Bảo",
         "cost": 15,
         "currency": "gold",
-        "description": "Hình lá cây Peridot xanh tươi trẻ. Buff: +4% điểm thân mật, +2% lương làm việc."
+        "description": "Hình lá cây Peridot xanh tươi trẻ. Buff: +4% lương làm việc."
     },
     "ring_amethyst": {
         "name": "<:NhnTrngKhuytAmethyst:1521739893947105361>Nhẫn Trăng Khuyết Amethyst",
         "cost": 20,
         "currency": "gold",
-        "description": "Trăng khuyết ôm lấy thạch anh tím huyền bí. Buff: +5% điểm thân mật, +3% lương làm việc."
+        "description": "Trăng khuyết ôm lấy thạch anh tím huyền bí. Buff: +5% lương làm việc."
     },
     "ring_cupid": {
         "name": "<:NhnTnhYuCupid:1521739979691135027>Nhẫn Tình Yêu Cupid",
         "cost": 50,
         "currency": "gold",
-        "description": "Vàng hồng đính thạch anh hồng Cupid ngọt ngào. Buff: +7% điểm thân mật, +5% lương làm việc."
+        "description": "Vàng hồng đính thạch anh hồng Cupid ngọt ngào. Buff: +7% lương làm việc."
     },
     "ring_citrine": {
         "name": "<:NhnVngMinCitrine:1521740000100876308>Nhẫn Vương Miện Citrine",
         "cost": 75,
         "currency": "gold",
-        "description": "Vương miện vàng đính Citrine vàng rực rỡ. Buff: +9% điểm thân mật, +7% lương làm việc."
+        "description": "Vương miện vàng đính Citrine vàng rực rỡ. Buff: +9% lương làm việc."
     },
     "ring_ruby": {
         "name": "<:NhnHngNgcBchHp:1521740055293591702>Nhẫn Hồng Ngọc Bách Hợp",
         "cost": 100,
         "currency": "gold",
-        "description": "Ruby đỏ uốn lượn như cánh hoa hồng. Buff: +12% điểm thân mật, +10% lương, giảm 5% phí ly hôn."
+        "description": "Ruby đỏ uốn lượn như cánh hoa hồng. Buff: +12% lương làm việc."
     },
     "ring_sapphire": {
         "name": "<:NhnLamNgcTinhT:1521740040730968114>Nhẫn Lam Ngọc Tinh Tú",
         "cost": 150,
         "currency": "gold",
-        "description": "Lam ngọc xanh đính kim cương nhỏ lấp lánh. Buff: +15% điểm thân mật, +12% lương, giảm 10% phí ly hôn."
+        "description": "Lam ngọc xanh đính kim cương nhỏ lấp lánh. Buff: +15% lương làm việc."
     },
     "ring_sunburst": {
         "name": "<:NhnNhtQuangThiDng:1521740029473591306>Nhẫn Nhật Quang Thái Dương",
         "cost": 200,
         "currency": "gold",
-        "description": "Hào quang mặt trời đính Opal lửa cam rực cháy. Buff: +20% điểm thân mật, +15% lương, +2% đào mỏ."
+        "description": "Hào quang mặt trời đính Opal lửa cam rực cháy. Buff: +20% lương làm việc."
     },
     "ring_gothic": {
         "name": "<:NhnHcD:1521740067415134258>Nhẫn Hắc Dạ Gothic",
         "cost": 300,
         "currency": "gold",
-        "description": "Vành kim loại đen đính đá Obsidian ma mị. Buff: +25% điểm thân mật, +20% lương, giảm 20% bị cướp."
+        "description": "Vành kim loại đen đính đá Obsidian ma mị. Buff: +25% lương làm việc, giảm 20% bị cướp (tiền và vàng)."
     },
     "ring_angel": {
         "name": "<:NhnCnhThnSapphire:1521740094283841576>Nhẫn Cánh Thần Sapphire",
         "cost": 600,
         "currency": "gold",
-        "description": "Cánh thiên thần bạc ôm Sapphire hoàng gia. Buff: +30% điểm thân mật, +25% lương, giảm 40% bị cướp."
+        "description": "Cánh thiên thần bạc ôm Sapphire hoàng gia. Buff: +30% lương làm việc, giảm 40% bị cướp (tiền và vàng)."
     },
     "ring_divine": {
         "name": "<:NhnHoQuangVnhCu:1521740081935814797>Nhẫn Hào Quang Vĩnh Cửu",
         "cost": 2000,
         "currency": "gold",
-        "description": "Cực phẩm cánh thiên thần vàng đính đá ngũ sắc. Buff: +50% thân mật, +40% lương, miễn nhiễm cướp vĩnh viễn, hoàn trả 3% cược Casino, pháo hoa toàn server."
+        "description": "Cực phẩm cánh thiên thần vàng đính đá ngũ sắc. Buff: +40% lương làm việc, miễn nhiễm cướp vĩnh viễn, pháo hoa toàn server khi cưới."
     },
     "ring_eternal_butterfly": {
         "name": "<:Nhan_sal:1525903672658231328>Nhẫn Sally ",
         "cost": 0,
         "currency": "gold",
-        "description": "Nhẫn giới hạn. Buff: +15% thân mật, +12% lương, giảm 15% bị cướp, +5% tiền tiêu vặt phu thê, Quản lý tự động vĩnh viễn, Ước nguyện tri kỷ hàng ngày."
+        "description": "Nhẫn giới hạn. Buff: +12% lương làm việc, giảm 15% bị cướp (tiền và vàng), +5% tiền lương chia cho bạn đời, Quản lý tự động vĩnh viễn, Ước nguyện tri kỷ hàng ngày."
     },
     "ring_nhankat": {
         "name": "<:NhanKat:1527628223364464650>Nhẫn Kat ",
         "cost": 0,
         "currency": "gold",
-        "description": "Nhẫn độc quyền không thể mua. Buff: +20% điểm thân mật, +30% lương, miễn nhiễm mọi hình thức cướp."
+        "description": "Nhẫn độc quyền không thể mua. Buff: +30% lương làm việc, miễn nhiễm mọi hình thức cướp."
     }
 }
 
@@ -592,7 +598,7 @@ class ControlPanelView(discord.ui.View):
         
         # Add stock select menu if on invest tab
         if self.current_tab == "invest":
-            self.add_item(StockSelect(self.cog, is_panel=True))
+            self.add_item(StockSelect(self.cog, is_panel=True, current_symbol=self.selected_stock))
             
         # Add buttons depending on tab
         if self.current_tab == "overview":
@@ -746,7 +752,7 @@ class ControlPanelView(discord.ui.View):
             pickaxe_level = upgrades[3]
             eff_lvl = min(max(0, pickaxe_level), 6)
             p_info = PICKAXE_CONFIG.get(pickaxe_level, PICKAXE_CONFIG[eff_lvl])
-            cooldown = p_info["cooldown_hours"] * 3600
+            cooldown = int(p_info["cooldown_hours"] * 3600 * get_mine_slow_factor(self.economy))
             
             if self.author.id in getattr(self.cog, "active_miners", set()):
                 mine_status = "⛏️ Đang trong chuyến khai thác (Kiểm tra tin nhắn đào mỏ)!"
@@ -798,7 +804,7 @@ class ControlPanelView(discord.ui.View):
             pass
 
 class StockSelect(discord.ui.Select):
-    def __init__(self, cog, is_panel=False):
+    def __init__(self, cog, is_panel=False, current_symbol: str = "CASINO"):
         self.cog = cog
         self.is_panel = is_panel
         options = [
@@ -810,8 +816,8 @@ class StockSelect(discord.ui.Select):
             discord.SelectOption(label="SOL (Solana)", value="SOL", emoji="☀️"),
             discord.SelectOption(label="DOGE (Dogecoin)", value="DOGE", emoji="🐕"),
         ]
-        # Highlight current stock
-        symbol = getattr(cog, "selected_stock", "CASINO") if is_panel else "CASINO"
+        # Highlight current stock (thuộc tính selected_stock nằm trên view, không phải cog)
+        symbol = current_symbol.upper() if is_panel else "CASINO"
         for opt in options:
             opt.default = (opt.value == symbol)
             
@@ -843,7 +849,7 @@ class InvestLobbyView(discord.ui.View):
         self.author = author
         self.selected_symbol = "CASINO"
         self.message = None
-        self.add_item(StockSelect(cog, is_panel=False))
+        self.add_item(StockSelect(cog, is_panel=False, current_symbol=self.selected_symbol))
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.author.id:
@@ -900,8 +906,21 @@ class WorkButton(discord.ui.Button):
         if not general_cog:
             await interaction.response.send_message("❌ Lỗi: Không tìm thấy module General.", ephemeral=True)
             return
-        embed = await general_cog.process_work(interaction.user)
-        await interaction.response.send_message(embed=embed, ephemeral=False)
+        user = interaction.user
+        balance_before = general_cog.economy.get_entry(user.id)[1]
+        embed = await general_cog.process_work(user)
+        balance_after = general_cog.economy.get_entry(user.id)[1]
+        earned = balance_after - balance_before
+        rush_view = general_cog.build_work_rush_view(user, embed, earned)
+        if rush_view:
+            await interaction.response.send_message(embed=embed, view=rush_view, ephemeral=False)
+            try:
+                rush_view.message = await interaction.original_response()
+                rush_view.start()
+            except Exception:
+                pass
+        else:
+            await interaction.response.send_message(embed=embed, ephemeral=False)
         await self.view.update_message(interaction.message)
 
 class InventoryButton(discord.ui.Button):
@@ -1155,6 +1174,8 @@ class OreMineExpeditionView(discord.ui.View):
             harvest_summary[name_key]["money"] += m_val
             harvest_summary[name_key]["gold"] += g_val
 
+        total_money = int(total_money * get_active_mine_mult(self.economy))
+
         self.cog.economy.add_money(self.user_id, total_money)
 
         current_frac = stats[3]
@@ -1166,6 +1187,7 @@ class OreMineExpeditionView(discord.ui.View):
             self.cog.economy.add_credits(self.user_id, int_gold)
 
         self.cog.economy.set_simulator_stats(self.user_id, last_mine=now, fractional_gold=final_frac)
+        self.cog.economy.bump_quest(self.user_id, "mine")
 
         log_wallet_change(
             logger,
@@ -1249,25 +1271,6 @@ class MineButton(discord.ui.Button):
                 raise
         else:
             await interaction.response.send_message(embed=embed, ephemeral=True)
-        try:
-            await self.view.update_message(interaction.message)
-        except Exception:
-            pass
-
-
-class TrainButton(discord.ui.Button):
-    def __init__(self):
-        super().__init__(label="Huấn Luyện", style=discord.ButtonStyle.success, emoji="💪")
-
-    async def callback(self, interaction: discord.Interaction):
-        daga_cog = interaction.client.get_cog("Daga")
-        if not daga_cog:
-            await interaction.response.send_message("❌ Lỗi: Không tìm thấy module Đại Chiến Anime.", ephemeral=True)
-            return
-        
-        mock_ctx = InteractionContext(interaction)
-        await daga_cog.daga_train(mock_ctx)
-        
         try:
             await self.view.update_message(interaction.message)
         except Exception:
@@ -1448,15 +1451,13 @@ class ShopView(discord.ui.View):
 class Simulator(commands.Cog):
     def __init__(self, client: commands.Bot):
         self.client = client
-        self.economy = getattr(client, "economy", Economy())
+        self.economy = getattr(client, "economy", None) or Economy()
         self.active_miners: set[int] = set()
+        self.active_explorers: set[int] = set()
         self.update_stock_prices_task.start()
 
     def cog_unload(self) -> None:
         self.update_stock_prices_task.cancel()
-
-    async def cog_before_invoke(self, ctx: commands.Context):
-        self.economy.set_setting("last_invest_channel_id", str(ctx.channel.id))
 
     @commands.command(
         brief="Hiển thị bảng điều khiển quản lý tài sản.",
@@ -1576,7 +1577,7 @@ class Simulator(commands.Cog):
         last_mine = stats[1]
         now = int(time.time())
         
-        cooldown = pickaxe_info["cooldown_hours"] * 3600
+        cooldown = int(pickaxe_info["cooldown_hours"] * 3600 * get_mine_slow_factor(self.economy))
         if now - last_mine < cooldown:
             time_left = cooldown - (now - last_mine)
             hours = time_left // 3600
@@ -1677,7 +1678,22 @@ class Simulator(commands.Cog):
         stats = self.economy.get_simulator_stats(user_id)
         last_collect = stats[0]
         now = int(time.time())
-        
+
+        # Businesses only accrue revenue while the owner stays active:
+        # revenue stops accruing after 48h without work or mining.
+        last_active = max(stats[4] or 0, stats[1] or 0)
+        if last_active and now - last_active > 48 * 3600:
+            embed = make_embed(
+                title="💤 DOANH NGHIỆP NGỦNG HOẠT ĐỘNG 💤",
+                description=(
+                    f"**{user.name}**, doanh nghiệp của bạn tạm đóng cửa vì chủ thiếu hoạt động!\n\n"
+                    "Doanh thu không tích lũy khi bạn không `i?work` hoặc `i?mine` trong **48 giờ**.\n"
+                    "Hãy hoạt động lại để mở cửa và tiếp tục thu hoạch doanh thu."
+                ),
+                color=discord.Color.orange()
+            )
+            return embed
+
         if last_collect == 0:
             self.economy.set_simulator_stats(user_id, last_collect=now)
             embed = make_embed(
@@ -1766,6 +1782,7 @@ class Simulator(commands.Cog):
             self.economy.add_credits(user_id, int_gold)
 
         self.economy.set_simulator_stats(user_id, last_collect=now, fractional_gold=new_frac)
+        self.economy.bump_quest(user_id, "collect")
         
         log_wallet_change(
             logger,
@@ -1838,65 +1855,38 @@ class Simulator(commands.Cog):
         )
         
         user_portfolio = dict(self.economy.get_portfolio(user.id))
-        
+        portfolio_with_cost = {sym: (sh, avg) for sym, sh, avg in self.economy.get_portfolio_with_cost(user.id)}
+
         if target_row:
             sym, price, prev, change = target_row
             trend_str = "📈 TĂNG" if change > 0 else "📉 GIẢM" if change < 0 else "↔️ ỔN ĐỊNH"
             owned_shares = user_portfolio.get(sym, 0.0)
             value = int(owned_shares * price)
-            
+
+            holding_lines = [f"🎒 **Bạn đang sở hữu:** `{owned_shares:.2f}` cổ (`{value:,} VND`)"]
+            if owned_shares > 0:
+                avg_cost = portfolio_with_cost.get(sym, (0.0, 0.0))[1]
+                if avg_cost > 0:
+                    pl = (price - avg_cost) * owned_shares
+                    pl_pct = (price / avg_cost - 1) * 100
+                    pl_icon = "📈" if pl >= 0 else "📉"
+                    holding_lines.append(
+                        f"📊 **Giá vốn TB:** `{avg_cost:,.0f} VND` → {pl_icon} **Lãi/Lỗ:** `{pl:+,.0f} VND` (`{pl_pct:+.2f}%`)"
+                    )
+                else:
+                    holding_lines.append("📊 **Giá vốn TB:** `—` (dữ liệu cũ)")
+
             embed.add_field(
                 name=f"{sym} ({trend_str})",
                 value=(
                     f"💵 **Giá hiện tại:** `{price:,} VND` / cổ\n"
                     f"📊 **Biến động:** `{change:+.2f}%`\n"
-                    f"🎒 **Bạn đang sở hữu:** `{owned_shares:.2f}` cổ (`{value:,} VND`)"
+                    + "\n".join(holding_lines)
                 ),
                 inline=False
             )
-            
-        embed.set_footer(text="Gõ i?invest buy <ticker> <số lượng> hoặc i?invest sell <ticker> <số lượng>")
-        return embed
 
-    def get_daga_embed(self, user: discord.User | discord.Member) -> discord.Embed:
-        active_row = self.economy.get_active_cock(user.id)
-        if not active_row:
-            embed = make_embed(
-                title="⚔️ ĐẠI CHIẾN ANIME ⚔️",
-                description="⚠️ **Bạn chưa chọn nhân vật chính xuất trận.**\n\nHãy gõ `i?anime list` để xem các nhân vật bạn đang sở hữu và gõ `i?anime active <ID>` để đặt nhân vật xuất trận!",
-                color=discord.Color.gold()
-            )
-            return embed
-
-        from app.discord_bot.cogs.daga import Cock
-        c = Cock(active_row)
-        
-        rarity_emojis = {
-            "Thường": "<:698204c:1515422780370190377>",
-            "Hiếm": "<:759990b:1515423304620703905>",
-            "Quý": "<:780661a:1515423318587609224>",
-            "Sử Thi": "<:429893s:1515423348014715091>",
-            "Huyền Thoại": "<:915638ss:1515423361310785536>",
-            "Thần Kê": "<:886814sss:1515423524167225415>",
-            "Exclusive": "<a:869826sparklyrainbow:1515427348516831404>"
-        }
-        
-        display_rarity = RARITY_DISPLAY.get(c.rarity, c.rarity)
-        desc = (
-            f"⚔️ **Nhân vật:** `{c.name}`\n"
-            f"⭐ **Độ hiếm:** {rarity_emojis.get(c.rarity, '')} `{display_rarity}`\n"
-            f"📈 **Cấp độ:** `{c.level}` (EXP: `{c.exp}/{c.level * 100}`)\n"
-            f"❤️ **HP:** `{c.hp}` | ⚔️ **ATK:** `{c.atk}` | 🛡️ **DEF:** `{c.df}`\n"
-            f"⚡ **SPD:** `{c.spd}` | 🍀 **LUK:** `{c.luk}`\n"
-            f"⚔️ **Số trận thắng:** `{c.wins}` | 🛡️ **Số trận thua:** `{c.losses}`\n"
-            f"🔥 **Chuỗi thắng hiện tại:** `{c.streak}` ngày"
-        )
-        
-        embed = make_embed(
-            title=f"⚔️ NHÂN VẬT ĐANG XUẤT TRẬN CỦA {user.name.upper()} ⚔️",
-            description=desc,
-            color=discord.Color.gold()
-        )
+        embed.set_footer(text="Gõ i?invest buy/sell <ticker> <số lượng> • i?invest portfolio để xem toàn bộ danh mục")
         return embed
 
     def get_xe_embed(self, user: discord.User | discord.Member) -> discord.Embed:
@@ -1922,15 +1912,12 @@ class Simulator(commands.Cog):
         )
         return embed
 
-    def cog_unload(self) -> None:
-        self.update_stock_prices_task.cancel()
-
     @tasks.loop(minutes=5)
     async def update_stock_prices_task(self):
         """Fluctuates the virtual stock/crypto prices every 5 minutes."""
+        import json
+        now = int(time.time())
         try:
-            import json
-            now = int(time.time())
             
             # --- 1. Market News Event System ---
             active_news = None
@@ -2008,28 +1995,8 @@ class Simulator(commands.Cog):
                         countdown = 0
                     
                     if countdown == 2:
-                        # Decrement to 1
+                        # Decrement to 1 — no warning is sent by design (silent bankruptcy)
                         self.economy.set_setting(f"scheduled_bankruptcy_{symbol}", "1")
-                        # Send warning to channel without pings (countdown = 1)
-                        try:
-                            channel_id_str = self.economy.get_setting("last_invest_channel_id")
-                            if channel_id_str:
-                                channel_id = int(channel_id_str)
-                                channel = self.client.get_channel(channel_id)
-                                if channel is None:
-                                    channel = await self.client.fetch_channel(channel_id)
-                                if channel:
-                                    embed = make_embed(
-                                        title=f"⚠️ CẢNH BÁO PHÁ SẢN KHẨN CẤP: {symbol} (Còn 1 phiên) ⚠️",
-                                        description=(
-                                            f"Mã đầu tư `{symbol}` đang gặp biến động cực kỳ tiêu cực và có nguy cơ cao sẽ **phá sản** ở phiên tiếp theo!\n\n"
-                                            f"💡 Toàn bộ cổ đông nắm giữ hãy chủ động xử lý tài sản trước khi mã này bị thanh lý cưỡng chế."
-                                        ),
-                                        color=discord.Color.gold()
-                                    )
-                                    await channel.send(embed=embed)
-                        except Exception as warn_err:
-                            logger.error(f"Error sending countdown=1 bankruptcy warning: {warn_err}")
                     elif countdown == 1:
                         # Time to crash!
                         is_bankruptcy = True
@@ -2041,35 +2008,11 @@ class Simulator(commands.Cog):
                             is_bankruptcy_rolled = True
                     elif random.random() < 0.005: # 0.5% chance normally
                         is_bankruptcy_rolled = True
-                        
+
                     if is_bankruptcy_rolled:
-                        # Schedule bankruptcy: set to 2 sessions
+                        # Schedule bankruptcy: set to 2 sessions — silent, holders get no
+                        # advance notice; they are only DM'd the forced-liquidation receipt.
                         self.economy.set_setting(f"scheduled_bankruptcy_{symbol}", "2")
-                        # Send warning (countdown = 2) with user pings
-                        try:
-                            holders = self.economy.get_stock_holders(symbol)
-                            holder_ids = [user_id for user_id, shares in holders if shares > 0]
-                            if holder_ids:
-                                mentions = " ".join([f"<@{uid}>" for uid in holder_ids])
-                                channel_id_str = self.economy.get_setting("last_invest_channel_id")
-                                if channel_id_str:
-                                    channel_id = int(channel_id_str)
-                                    channel = self.client.get_channel(channel_id)
-                                    if channel is None:
-                                        channel = await self.client.fetch_channel(channel_id)
-                                    if channel:
-                                        embed = make_embed(
-                                            title=f"🚨 CẢNH BÁO PHÁ SẢN: {symbol} (Còn 2 phiên) 🚨",
-                                            description=(
-                                                f"Hội đồng quản trị `{symbol}` báo cáo tình hình tài chính cực kỳ nguy kịch. Mã này dự kiến sẽ **phá sản** sau 2 phiên nữa!\n\n"
-                                                f"🚨 **Các cổ đông nắm giữ:** {mentions}\n"
-                                                f"💡 Vui lòng đưa ra quyết định đầu tư phù hợp."
-                                            ),
-                                            color=discord.Color.orange()
-                                        )
-                                        await channel.send(content=mentions, embed=embed)
-                        except Exception as warn_err:
-                            logger.error(f"Error sending countdown=2 bankruptcy warning: {warn_err}")
                     
                 if is_bankruptcy:
                     bankrupted_symbols.append(symbol)
@@ -2087,11 +2030,13 @@ class Simulator(commands.Cog):
                                 if order_type == "BUY":
                                     refund_money = get_limit_buy_cost(shares, target_price, symbol)
                                     self.economy.add_money(user_id, refund_money)
+                                    log_wallet_change(logger, event="invest_bankruptcy_buy_refund", user_id=user_id, money_delta=refund_money, symbol=symbol, shares=shares, order_id=order_id)
                                 else: # SELL
                                     # Refund locked shares back to their portfolio
                                     portfolio = dict(self.economy.get_portfolio(user_id))
                                     curr_shares = portfolio.get(symbol, 0.0)
                                     self.economy.set_portfolio_shares(user_id, symbol, curr_shares + shares)
+                                    log_wallet_change(logger, event="invest_bankruptcy_sell_unlock", user_id=user_id, symbol=symbol, shares=shares, order_id=order_id)
                                 self.economy.remove_limit_order(order_id)
                     except Exception as err:
                         logger.error(f"Error handling limit orders for bankrupt stock {symbol}: {err}")
@@ -2111,6 +2056,7 @@ class Simulator(commands.Cog):
                             # Add payout to user and set shares to 0
                             self.economy.add_money(user_id, payout)
                             self.economy.set_portfolio_shares(user_id, symbol, 0.0)
+                            log_wallet_change(logger, event="invest_bankruptcy_liquidation", user_id=user_id, money_delta=payout, symbol=symbol, shares=shares, liquidation_price=bankruptcy_price)
                             liquidated_users.append((user_id, shares, payout))
                             
                         # Send DM notification to players who owned the bankrupt stock
@@ -2153,7 +2099,13 @@ class Simulator(commands.Cog):
                     change = random.uniform(*down_range)
                 else:
                     change = random.uniform(*base_range)
-                    
+
+                # Mean reversion: kéo giá nhẹ về mức gốc để không kẹt biên min/max mãi
+                base_price = DEFAULT_PRICES.get(symbol)
+                if base_price and current_price > 0:
+                    reversion = max(-0.05, min(0.05, 0.02 * (base_price / current_price - 1)))
+                    change = max(-0.35, min(0.35, change + reversion))
+
                 new_price = int(current_price * (1 + change))
                 new_price = max(min_p, min(max_p, new_price))
                 
@@ -2161,180 +2113,219 @@ class Simulator(commands.Cog):
                 self.economy.update_stock_price(symbol, new_price, current_price, change_percent)
             logger.info("Stock/crypto prices updated.")
 
-            # --- 3. Limit Orders Execution ---
-            try:
-                active_orders = self.economy.get_all_active_limit_orders()
-                current_prices = dict((row[0], row[1]) for row in self.economy.get_stock_prices())
-                
-                for order_id, user_id, symbol, order_type, target_price, shares, created_at in active_orders:
-                    curr_price = current_prices.get(symbol)
-                    if not curr_price:
-                        continue
-                        
-                    trigger = False
-                    if order_type == "BUY" and curr_price <= target_price:
-                        trigger = True
-                    elif order_type == "SELL" and curr_price >= target_price:
-                        trigger = True
-                        
-                    if trigger:
-                        if order_type == "BUY":
-                            portfolio = dict(self.economy.get_portfolio(user_id))
-                            curr_shares = portfolio.get(symbol, 0.0)
-                            
-                            # Check max holding limit (Option B)
-                            limit_str = self.economy.get_setting(f"max_holding_{symbol}")
-                            limit_exceeded = False
-                            if limit_str:
-                                try:
-                                    limit_val = float(limit_str)
-                                    if curr_shares + shares > limit_val:
-                                        limit_exceeded = True
-                                except ValueError:
-                                    pass
-                                    
-                            if limit_exceeded:
-                                # Refund locked funds and cancel order
-                                locked_funds = get_limit_buy_cost(shares, target_price, symbol)
-                                self.economy.add_money(user_id, locked_funds)
-                                self.economy.remove_limit_order(order_id)
-                                
-                                user = self.client.get_user(user_id)
-                                if user is None:
-                                    try: user = await self.client.fetch_user(user_id)
-                                    except Exception: pass
-                                if user:
-                                    embed = make_embed(
-                                        title="🔔 LỆNH TỰ ĐỘNG BỊ HỦY (VƯỢT GIỚI HẠN) 🔔",
-                                        description=(
-                                            f"Lệnh mua tự động (Limit Buy) của bạn đã bị hủy do số lượng nắm giữ vượt quá giới hạn của server!\n\n"
-                                            f"📈 **Mã:** `{symbol}`\n"
-                                            f"📊 **Số lượng lệnh:** `{shares:.2f}`\n"
-                                            f"🎒 **Số lượng hiện có:** `{curr_shares:.2f}`\n"
-                                            f"🚫 **Giới hạn tối đa:** `{limit_val:,}`\n\n"
-                                            f"💰 Đã hoàn trả `+{locked_funds:,} VND` vào tài khoản."
-                                        ),
-                                        color=discord.Color.orange()
-                                    )
-                                    try: await user.send(embed=embed)
-                                    except Exception: pass
-                                continue
 
-                            # Target price cost including target slippage and fee was locked
-                            locked_funds = get_limit_buy_cost(shares, target_price, symbol)
-                            
-                            # Slippage & buy fee
-                            liquidity = LIQUIDITY_VOLUME.get(symbol, 10000.0)
-                            slippage_pct = (shares / liquidity) * 0.01
-                            effective_curr_price = int(curr_price * (1 + slippage_pct))
-                            actual_cost_base = int(shares * effective_curr_price)
-                            buy_fee = int(actual_cost_base * 0.02)
-                            actual_cost = actual_cost_base + buy_fee
-                            
-                            refund = locked_funds - actual_cost
-                            self.economy.add_money(user_id, refund)
-                            self.economy.set_portfolio_shares(user_id, symbol, curr_shares + shares)
-                            
-                            self.economy.remove_limit_order(order_id)
-                            
-                            user = self.client.get_user(user_id)
-                            if user is None:
-                                try: user = await self.client.fetch_user(user_id)
-                                except Exception: pass
-                            if user:
-                                refund_str = f" và được hoàn trả `+{refund:,} VND` chênh lệch" if refund > 0 else f" và khấu trừ thêm `{abs(refund):,} VND` chênh lệch" if refund < 0 else ""
-                                embed = make_embed(
-                                    title="🔔 LỆNH MUA TỰ ĐỘNG KHỚP 🔔",
-                                    description=(
-                                        f"Lệnh mua tự động (Limit Order) của bạn đã khớp thành công!\n\n"
-                                        f"📈 **Mã:** `{symbol}`\n"
-                                        f"📊 **Số lượng:** `{shares:.2f}`\n"
-                                        f"💵 **Giá thị trường:** `{curr_price:,} VND`\n"
-                                        f"⚡ **Trượt giá:** `+{slippage_pct*100:.3f}%` (Giá khớp: `{effective_curr_price:,} VND`)\n"
-                                        f"🏷️ **Phí mua (2%):** `{buy_fee:,} VND`\n"
-                                        f"💰 Đã nhận `+{shares:.2f} {symbol}` vào tài khoản{refund_str}."
-                                    ),
-                                    color=discord.Color.green()
-                                )
-                                try: await user.send(embed=embed)
-                                except Exception: pass
-                        else:  # SELL
-                            # Slippage & sell fee
-                            liquidity = LIQUIDITY_VOLUME.get(symbol, 10000.0)
-                            slippage_pct = (shares / liquidity) * 0.01
-                            effective_curr_price = int(curr_price * (1 - slippage_pct))
-                            effective_curr_price = max(int(curr_price * 0.1), effective_curr_price)
-                            
-                            base_payout = int(shares * effective_curr_price)
-                            sell_fee = int(base_payout * 0.05)
-                            payout = base_payout - sell_fee
-                            
-                            self.economy.add_money(user_id, payout)
-                            self.economy.remove_limit_order(order_id)
-                            
-                            user = self.client.get_user(user_id)
-                            if user is None:
-                                try: user = await self.client.fetch_user(user_id)
-                                except Exception: pass
-                            if user:
-                                embed = make_embed(
-                                    title="🔔 LỆNH BÁN TỰ ĐỘNG KHỚP 🔔",
-                                    description=(
-                                        f"Lệnh bán tự động (Limit Order) của bạn đã khớp thành công!\n\n"
-                                        f"📈 **Mã:** `{symbol}`\n"
-                                        f"📊 **Số lượng:** `{shares:.2f}`\n"
-                                        f"💵 **Giá thị trường:** `{curr_price:,} VND`\n"
-                                        f"⚡ **Trượt giá:** `-{slippage_pct*100:.3f}%` (Giá khớp: `{effective_curr_price:,} VND`)\n"
-                                        f"🏷️ **Phí bán (5%):** `{sell_fee:,} VND`\n"
-                                        f"💰 Nhận về ví: `+{payout:,} VND`."
-                                    ),
-                                    color=discord.Color.green()
-                                )
-                                try: await user.send(embed=embed)
-                                except Exception: pass
-            except Exception as ex:
-                logger.error(f"Error executing limit orders: {ex}")
+        except Exception as e:
+            logger.error(f"Error updating stock prices: {e}")
 
-            # --- 4. Manager Automatic Business Collect ---
-            try:
-                active_managers = self.economy.get_all_active_managers()
-                
-                # Fetch all users who have ring_eternal_butterfly marriage
-                try:
-                    self.economy.cur.execute(
-                        "SELECT user_one, user_two FROM user_marry WHERE ring_type = 'ring_eternal_butterfly'"
-                    )
-                    eternal_partners = []
-                    for row in self.economy.cur.fetchall():
-                        eternal_partners.extend([row[0], row[1]])
+        # --- 3. Limit Orders Execution ---
+        try:
+            active_orders = self.economy.get_all_active_limit_orders()
+            current_prices = dict((row[0], row[1]) for row in self.economy.get_stock_prices())
+            
+            for order_id, user_id, symbol, order_type, target_price, shares, created_at in active_orders:
+                # Quá hạn TTL: hoàn tài sản khóa, hủy lệnh và DM thông báo
+                if now - created_at >= LIMIT_ORDER_TTL:
+                    if order_type == "BUY":
+                        refund_money = get_limit_buy_cost(shares, target_price, symbol)
+                        self.economy.add_money(user_id, refund_money)
+                        log_wallet_change(logger, event="invest_limit_expire", user_id=user_id, money_delta=refund_money, symbol=symbol, shares=shares, order_id=order_id)
+                        refund_note = f"Đã hoàn lại `+{refund_money:,} VND` vào ví của bạn."
+                    else: # SELL
+                        portfolio = dict(self.economy.get_portfolio(user_id))
+                        self.economy.set_portfolio_shares(user_id, symbol, portfolio.get(symbol, 0.0) + shares)
+                        log_wallet_change(logger, event="invest_limit_expire", user_id=user_id, symbol=symbol, shares=shares, order_id=order_id)
+                        refund_note = f"Đã trả lại `+{shares:.2f} {symbol}` vào kho của bạn."
+                    self.economy.remove_limit_order(order_id)
+
+                    user = self.client.get_user(user_id)
+                    if user is None:
+                        try: user = await self.client.fetch_user(user_id)
+                        except Exception: pass
+                    if user:
+                        type_str = "🟢 MUA" if order_type == "BUY" else "🔴 BÁN"
+                        embed = make_embed(
+                            title="⏰ LỆNH TỰ ĐỘNG HẾT HẠN ⏰",
+                            description=(
+                                f"Lệnh giới hạn (Limit Order) **#{order_id}** của bạn đã quá {LIMIT_ORDER_TTL // 3600} giờ không khớp và bị hủy tự động.\n\n"
+                                f"📈 **Mã:** `{symbol}`\n"
+                                f"📊 **Loại lệnh:** {type_str} `{shares:.2f}` @ `{target_price:,} VND`\n"
+                                f"💰 {refund_note}"
+                            ),
+                            color=discord.Color.blue()
+                        )
+                        try: await user.send(embed=embed)
+                        except Exception: pass
+                    continue
+
+                curr_price = current_prices.get(symbol)
+                if not curr_price:
+                    continue
                     
-                    active_manager_ids = {u_id for u_id, _, _ in active_managers}
-                    for u_id in eternal_partners:
-                        if u_id not in active_manager_ids:
-                            stats = self.economy.get_simulator_stats(u_id)
-                            last_collect = stats[0]
-                            active_managers.append((u_id, last_collect, now + 86400))
-                except Exception as inner_ex:
-                    logger.error(f"Error querying eternal butterfly managers: {inner_ex}")
+                trigger = False
+                if order_type == "BUY" and curr_price <= target_price:
+                    trigger = True
+                elif order_type == "SELL" and curr_price >= target_price:
+                    trigger = True
+                    
+                if trigger:
+                    if order_type == "BUY":
+                        portfolio = dict(self.economy.get_portfolio(user_id))
+                        curr_shares = portfolio.get(symbol, 0.0)
+                        
+                        # Check max holding limit (Option B)
+                        limit_str = self.economy.get_setting(f"max_holding_{symbol}")
+                        limit_exceeded = False
+                        if limit_str:
+                            try:
+                                limit_val = float(limit_str)
+                                if curr_shares + shares > limit_val:
+                                    limit_exceeded = True
+                            except ValueError:
+                                pass
+                                
+                        if limit_exceeded:
+                            # Refund locked funds and cancel order
+                            locked_funds = get_limit_buy_cost(shares, target_price, symbol)
+                            self.economy.add_money(user_id, locked_funds)
+                            self.economy.remove_limit_order(order_id)
+                            log_wallet_change(logger, event="invest_limit_buy_cancel_limit_exceeded", user_id=user_id, money_delta=locked_funds, symbol=symbol, shares=shares, order_id=order_id)
+                            
+                            user = self.client.get_user(user_id)
+                            if user is None:
+                                try: user = await self.client.fetch_user(user_id)
+                                except Exception: pass
+                            if user:
+                                embed = make_embed(
+                                    title="🔔 LỆNH TỰ ĐỘNG BỊ HỦY (VƯỢT GIỚI HẠN) 🔔",
+                                    description=(
+                                        f"Lệnh mua tự động (Limit Buy) của bạn đã bị hủy do số lượng nắm giữ vượt quá giới hạn của server!\n\n"
+                                        f"📈 **Mã:** `{symbol}`\n"
+                                        f"📊 **Số lượng lệnh:** `{shares:.2f}`\n"
+                                        f"🎒 **Số lượng hiện có:** `{curr_shares:.2f}`\n"
+                                        f"🚫 **Giới hạn tối đa:** `{limit_val:,}`\n\n"
+                                        f"💰 Đã hoàn trả `+{locked_funds:,} VND` vào tài khoản."
+                                    ),
+                                    color=discord.Color.orange()
+                                )
+                                try: await user.send(embed=embed)
+                                except Exception: pass
+                            continue
 
-                for user_id, last_collect, manager_expiry in active_managers:
-                    if now - last_collect >= 12 * 3600:
+                        # Target price cost including target slippage and fee was locked
+                        locked_funds = get_limit_buy_cost(shares, target_price, symbol)
+                        
+                        # Slippage & buy fee
+                        liquidity = LIQUIDITY_VOLUME.get(symbol, 10000.0)
+                        slippage_pct = (shares / liquidity) * 0.01
+                        effective_curr_price = int(curr_price * (1 + slippage_pct))
+                        actual_cost_base = int(shares * effective_curr_price)
+                        buy_fee = int(actual_cost_base * 0.02)
+                        actual_cost = actual_cost_base + buy_fee
+
+                        refund = locked_funds - actual_cost
+                        self.economy.add_money(user_id, refund)
+                        self.economy.apply_stock_buy(user_id, symbol, shares, effective_curr_price)
+
+                        self.economy.remove_limit_order(order_id)
+                        log_wallet_change(logger, event="invest_limit_buy_fill", user_id=user_id, money_delta=refund, symbol=symbol, shares=shares, fill_price=effective_curr_price, order_id=order_id)
+                        
                         user = self.client.get_user(user_id)
                         if user is None:
                             try: user = await self.client.fetch_user(user_id)
                             except Exception: pass
                         if user:
-                            embed = await self.process_collect(user)
-                            # Customize title and description for auto-collect
-                            embed.title = "💼 BÁO CÁO THU HOẠCH TỰ ĐỘNG CỦA QUẢN LÝ 💼"
-                            embed.description = f"Quản lý của bạn đã tự động thu hoạch doanh nghiệp:\n\n{embed.description}"
+                            refund_str = f" và được hoàn trả `+{refund:,} VND` chênh lệch" if refund > 0 else f" và khấu trừ thêm `{abs(refund):,} VND` chênh lệch" if refund < 0 else ""
+                            embed = make_embed(
+                                title="🔔 LỆNH MUA TỰ ĐỘNG KHỚP 🔔",
+                                description=(
+                                    f"Lệnh mua tự động (Limit Order) của bạn đã khớp thành công!\n\n"
+                                    f"📈 **Mã:** `{symbol}`\n"
+                                    f"📊 **Số lượng:** `{shares:.2f}`\n"
+                                    f"💵 **Giá thị trường:** `{curr_price:,} VND`\n"
+                                    f"⚡ **Trượt giá:** `+{slippage_pct*100:.3f}%` (Giá khớp: `{effective_curr_price:,} VND`)\n"
+                                    f"🏷️ **Phí mua (2%):** `{buy_fee:,} VND`\n"
+                                    f"💰 Đã nhận `+{shares:.2f} {symbol}` vào tài khoản{refund_str}."
+                                ),
+                                color=discord.Color.green()
+                            )
                             try: await user.send(embed=embed)
                             except Exception: pass
-            except Exception as ex:
-                logger.error(f"Error in manager auto-collect: {ex}")
+                    else:  # SELL
+                        # Slippage & sell fee
+                        liquidity = LIQUIDITY_VOLUME.get(symbol, 10000.0)
+                        slippage_pct = (shares / liquidity) * 0.01
+                        effective_curr_price = int(curr_price * (1 - slippage_pct))
+                        effective_curr_price = max(int(curr_price * 0.1), effective_curr_price)
+                        
+                        base_payout = int(shares * effective_curr_price)
+                        sell_fee = int(base_payout * 0.05)
+                        payout = base_payout - sell_fee
 
-        except Exception as e:
-            logger.error(f"Error updating stock prices: {e}")
+                        self.economy.add_money(user_id, payout)
+                        self.economy.remove_limit_order(order_id)
+                        log_wallet_change(logger, event="invest_limit_sell_fill", user_id=user_id, money_delta=payout, symbol=symbol, shares=shares, fill_price=effective_curr_price, order_id=order_id)
+                        
+                        user = self.client.get_user(user_id)
+                        if user is None:
+                            try: user = await self.client.fetch_user(user_id)
+                            except Exception: pass
+                        if user:
+                            embed = make_embed(
+                                title="🔔 LỆNH BÁN TỰ ĐỘNG KHỚP 🔔",
+                                description=(
+                                    f"Lệnh bán tự động (Limit Order) của bạn đã khớp thành công!\n\n"
+                                    f"📈 **Mã:** `{symbol}`\n"
+                                    f"📊 **Số lượng:** `{shares:.2f}`\n"
+                                    f"💵 **Giá thị trường:** `{curr_price:,} VND`\n"
+                                    f"⚡ **Trượt giá:** `-{slippage_pct*100:.3f}%` (Giá khớp: `{effective_curr_price:,} VND`)\n"
+                                    f"🏷️ **Phí bán (5%):** `{sell_fee:,} VND`\n"
+                                    f"💰 Nhận về ví: `+{payout:,} VND`."
+                                ),
+                                color=discord.Color.green()
+                            )
+                            try: await user.send(embed=embed)
+                            except Exception: pass
+        except Exception as ex:
+            logger.error(f"Error executing limit orders: {ex}")
+
+        # --- 4. Manager Automatic Business Collect ---
+        try:
+            active_managers = self.economy.get_all_active_managers()
+            
+            # Fetch all users who have ring_eternal_butterfly marriage
+            try:
+                self.economy.cur.execute(
+                    "SELECT user_one, user_two FROM user_marry WHERE ring_type = 'ring_eternal_butterfly'"
+                )
+                eternal_partners = []
+                for row in self.economy.cur.fetchall():
+                    eternal_partners.extend([row[0], row[1]])
+                
+                active_manager_ids = {u_id for u_id, _, _ in active_managers}
+                for u_id in eternal_partners:
+                    if u_id not in active_manager_ids:
+                        stats = self.economy.get_simulator_stats(u_id)
+                        last_collect = stats[0]
+                        active_managers.append((u_id, last_collect, now + 86400))
+            except Exception as inner_ex:
+                logger.error(f"Error querying eternal butterfly managers: {inner_ex}")
+
+            for user_id, last_collect, manager_expiry in active_managers:
+                if now - last_collect >= 12 * 3600:
+                    user = self.client.get_user(user_id)
+                    if user is None:
+                        try: user = await self.client.fetch_user(user_id)
+                        except Exception: pass
+                    if user:
+                        embed = await self.process_collect(user)
+                        # Customize title and description for auto-collect
+                        embed.title = "💼 BÁO CÁO THU HOẠCH TỰ ĐỘNG CỦA QUẢN LÝ 💼"
+                        embed.description = f"Quản lý của bạn đã tự động thu hoạch doanh nghiệp:\n\n{embed.description}"
+                        try: await user.send(embed=embed)
+                        except Exception: pass
+        except Exception as ex:
+            logger.error(f"Error in manager auto-collect: {ex}")
+
 
     @commands.command(
         brief="Hiển thị profile sành điệu dạng banner của bạn.",
@@ -2637,29 +2628,60 @@ class Simulator(commands.Cog):
             if any(inv_item == item_id and qty > 0 for inv_item, qty in inventory):
                 await ctx.send(f"❌ Bạn đã sở hữu banner này rồi! Không thể mua thêm.")
                 return
-        
+
+        # Degree prerequisites: previous degree + total work XP.
+        # Existing holders are unaffected (grandfathered) — checks run on purchase only.
+        prereq = CAREER_PREREQUISITES.get(item_id)
+        if prereq:
+            inventory = self.economy.get_inventory(user_id)
+            owned_items = {inv_item for inv_item, qty in inventory if qty > 0}
+            req_name = SHOP_ITEMS[prereq["requires"]]["name"]
+            if prereq["requires"] not in owned_items:
+                await ctx.send(
+                    f"🎓 **Chưa đủ điều kiện học nâng cao!**\n"
+                    f"Để mua **{item['name']}**, bạn phải sở hữu **{req_name}** trước.\n"
+                    f"Hãy gõ `i?buyitem {prereq['requires']}` rồi quay lại nhé!"
+                )
+                return
+            xp_threshold = int(self.economy.get_setting(prereq["xp_setting"], str(prereq["xp_default"])))
+            work_xp = self.economy.get_work_xp(user_id)
+            if work_xp < xp_threshold:
+                await ctx.send(
+                    f"📚 **Chưa đủ kinh nghiệm làm việc!**\n"
+                    f"Để mua **{item['name']}**, bạn cần tối thiểu **{xp_threshold} XP nghề** "
+                    f"(hiện tại: `{work_xp} XP`).\n"
+                    f"Hãy chăm chỉ `i?work` hơn nữa nhé!"
+                )
+                return
+
         # Check current balance
         profile = self.economy.get_entry(user_id)
         money = profile[1]
         gold = profile[2]
         
+        sale_factor = get_sale_factor(self.economy)
+        cost = int(item['cost'] * sale_factor)
+        if sale_factor < 1.0:
+            logger.info("Flash sale: %s discounted %s -> %s", item_id, item['cost'], cost)
+
         if item['currency'] == "money":
-            if money < item['cost']:
-                await ctx.send(f"❌ Bạn không đủ tiền mặt! Cần `{item['cost']:,} VND` nhưng bạn chỉ có `{money:,} VND`.")
+            if money < cost:
+                await ctx.send(f"❌ Bạn không đủ tiền mặt! Cần `{cost:,} VND` nhưng bạn chỉ có `{money:,} VND`.")
                 return
             # Deduct VND
-            self.economy.add_money(user_id, -item['cost'])
-            log_wallet_change(logger, event="buy_shop_item", user_id=user_id, money_delta=-item['cost'], item_id=item_id, ctx=ctx)
+            self.economy.add_money(user_id, -cost)
+            log_wallet_change(logger, event="buy_shop_item", user_id=user_id, money_delta=-cost, item_id=item_id, ctx=ctx)
         else:
-            if gold < item['cost']:
-                await ctx.send(f"❌ Bạn không đủ Vàng! Cần `{item['cost']}` thỏi vàng nhưng bạn chỉ có `{gold}` thỏi vàng.")
+            if gold < cost:
+                await ctx.send(f"❌ Bạn không đủ Vàng! Cần `{cost}` thỏi vàng nhưng bạn chỉ có `{gold}` thỏi vàng.")
                 return
             # Deduct gold
-            self.economy.add_credits(user_id, -item['cost'])
-            log_wallet_change(logger, event="buy_shop_item", user_id=user_id, credits_delta=-item['cost'], item_id=item_id, ctx=ctx)
+            self.economy.add_credits(user_id, -cost)
+            log_wallet_change(logger, event="buy_shop_item", user_id=user_id, credits_delta=-cost, item_id=item_id, ctx=ctx)
 
         # Add item to inventory
         self.economy.add_inventory_item(user_id, item_id, 1)
+        self.economy.bump_quest(user_id, "buyitem")
         
         embed = make_embed(
             title="🎁 MUA HÀNG THÀNH CÔNG 🎁",
@@ -2742,6 +2764,57 @@ class Simulator(commands.Cog):
     )
     async def inventory(self, ctx: commands.Context):
         embed = self.get_inventory_embed(ctx.author)
+        await ctx.send(embed=embed)
+
+    @commands.command(
+        brief="Xem và nhận thưởng nhiệm vụ hằng ngày.",
+        usage="quests [claim <1-3>]",
+        aliases=["quest", "nhiemvu"]
+    )
+    async def quests(self, ctx: commands.Context, action: str = None, index: int = None):
+        user_id = ctx.author.id
+        quests = self.economy.get_daily_quests(user_id)
+
+        if action and action.lower() in ("claim", "nhan"):
+            if index is None or not 1 <= index <= len(quests):
+                await ctx.send("❌ Dùng: `i?quests claim <số 1-3>`.")
+                return
+            claimed = self.economy.claim_daily_quest(user_id, index - 1)
+            if not claimed:
+                await ctx.send("❌ Nhiệm vụ này chưa hoàn thành hoặc đã nhận thưởng rồi!")
+                return
+            gold_str = f" + **{claimed['reward_gold']} thỏi vàng**" if claimed.get("reward_gold") else ""
+            embed = make_embed(
+                title="✅ NHẬN THƯỞNG NHIỆM VỤ ✅",
+                description=(
+                    f"{claimed['emoji']} **{claimed['desc'].format(target=claimed['target'])}**\n\n"
+                    f"💰 **Thưởng:** `+{claimed['reward_money']:,} VND`{gold_str}"
+                ),
+                color=discord.Color.green()
+            )
+            await ctx.send(embed=embed)
+            return
+
+        lines = []
+        for i, q in enumerate(quests, 1):
+            bar_len = 10
+            filled = int(bar_len * q["progress"] / q["target"])
+            bar = "█" * filled + "░" * (bar_len - filled)
+            if q["claimed"]:
+                status = "✅ **ĐÃ NHẬN THƯỞNG**"
+            elif q["progress"] >= q["target"]:
+                status = f"🎉 **HOÀN THÀNH — nhận bằng `i?quests claim {i}`**"
+            else:
+                status = f"{bar} `{q['progress']}/{q['target']}`"
+            gold_str = f" + {q['reward_gold']} vàng" if q.get("reward_gold") else ""
+            lines.append(f"{q['emoji']} **{q['desc'].format(target=q['target'])}**\n└ {status}\n└ 💰 Thưởng: `{q['reward_money']:,} VND`{gold_str}\n")
+
+        embed = make_embed(
+            title="📋 NHIỆM VỤ HẰNG NGÀY",
+            description="Nhiệm vụ reset mỗi ngày lúc 00:00 (giờ Việt Nam).\n\n" + "\n".join(lines),
+            color=discord.Color.blurple()
+        )
+        embed.set_footer(text="Hoàn thành nhiệm vụ để nhận VND và thỏi vàng!")
         await ctx.send(embed=embed)
 
 
@@ -2872,295 +2945,6 @@ class Simulator(commands.Cog):
 
 
 
-    async def process_chest_open(self, interaction: discord.Interaction, view: discord.ui.View, selected_option: str, quantity: int):
-        return
-        user_id = interaction.user.id
-        
-        details = {
-            "banner_thuong": ("🔮 Banner Thường", 1_000_000, "banner", "thuong"),
-            "banner_xin": ("🔮 Banner Xịn", 5_000_000, "banner", "xin"),
-            
-            "box_garage": ("🏎️ Garage Box Xe", 100_000, "box", "1"),
-            "box_premium": ("🏎️ Premium Box Xe", 1_000_000, "box", "2"),
-            "box_luxury": ("🏎️ Luxury Box Xe", 10_000_000, "box", "3"),
-        }
-        
-        name, price_per_one, item_type, tier_id = details[selected_option]
-        total_price = price_per_one * quantity
-        
-        # Check money
-        profile = self.economy.get_entry(user_id)
-        money = profile[1]
-        if money < total_price:
-            await interaction.response.send_message(
-                f"❌ **Lỗi:** Bạn không đủ tiền! Cần `{total_price:,} VND` nhưng bạn chỉ có `{money:,} VND`.",
-                ephemeral=True
-            )
-            return
-
-        # Defer interaction first to acknowledge and allow editing with files
-        await interaction.response.defer()
-
-        # Deduct money
-        self.economy.add_money(user_id, -total_price)
-        log_wallet_change(logger, event="open_chest_menu", user_id=user_id, money_delta=-total_price, chest_type=selected_option, quantity=quantity)
-
-        # Show opening animation
-        anim_embed = make_embed(
-            title="📦 ĐANG MỞ RƯƠNG... 📦",
-            description=f"⏳ **{interaction.user.display_name}** đang mở **{quantity}x {name}** với tổng giá **{total_price:,} VNĐ**...\nHãy chờ xem bạn nhận được gì nhé! 🍀",
-            color=discord.Color.gold()
-        )
-        
-        gif_path = ABS_PATH / "modules" / "daga" / "open_chest.gif"
-        if item_type == "banner":
-            gif_path = ABS_PATH / "modules" / "daga" / "mo_trung.gif"
-
-        file_gif = None
-        if gif_path.exists():
-            file_gif = discord.File(gif_path, filename=gif_path.name)
-            anim_embed.set_image(url=f"attachment://{gif_path.name}")
-        
-        if file_gif:
-            await interaction.message.edit(content=None, embed=anim_embed, view=None, attachments=[file_gif])
-        else:
-            await interaction.message.edit(content=None, embed=anim_embed, view=None, attachments=[])
-        
-        await asyncio.sleep(3)
-
-        results = []
-        if item_type == "banner":
-            from app.discord_bot.cogs.daga import BREEDS, STAT_RANGES, get_cock_image_file
-            rarity_emojis = {
-                "Thường": "<:698204c:1515422780370190377>",
-                "Hiếm": "<:759990b:1515423304620703905>",
-                "Quý": "<:780661a:1515423318587609224>",
-                "Sử Thi": "<:429893s:1515423348014715091>",
-                "Huyền Thoại": "<:915638ss:1515423361310785536>",
-                "Thần Kê": "<:886814sss:1515423524167225415>",
-                "Exclusive": "<a:869826sparklyrainbow:1515427348516831404>"
-            }
-            
-            pity = self.economy.get_pity_golden(user_id)
-            final_pity = pity
-
-            for _ in range(quantity):
-                # Roll secret SSS first
-                r_secret = random.random() * 100
-                is_secret_sss = False
-                if tier_id == "thuong" and r_secret < 0.02:
-                    is_secret_sss = True
-                elif tier_id == "xin" and r_secret < 0.1:
-                    is_secret_sss = True
-
-                rarity = "Thường"
-                is_reset_pity = False
-
-                if is_secret_sss:
-                    rarity = "Thần Kê"
-                    if tier_id == "xin":
-                        final_pity += 1
-                else:
-                    r = random.random() * 100
-                    if tier_id == "thuong":
-                        if r < 60.0:
-                            rarity = "Thường"
-                        elif r < 90.0:
-                            rarity = "Hiếm"
-                        elif r < 99.0:
-                            rarity = "Quý"
-                        elif r < 99.8:
-                            rarity = "Sử Thi"
-                        else:
-                            rarity = "Huyền Thoại"
-                    elif tier_id == "xin":
-                        if final_pity >= 49:
-                            rarity = "Huyền Thoại"
-                            is_reset_pity = True
-                        else:
-                            if r < 40.0:
-                                rarity = "Hiếm"
-                            elif r < 85.0:
-                                rarity = "Quý"
-                            elif r < 97.0:
-                                rarity = "Sử Thi"
-                            else:
-                                rarity = "Huyền Thoại"
-                                is_reset_pity = True
-
-                        if is_reset_pity:
-                            final_pity = 0
-                        else:
-                            final_pity += 1
-
-                breed = random.choice(BREEDS[rarity])
-                ranges = STAT_RANGES[rarity]
-                hp = random.randint(*ranges["hp"])
-                atk = random.randint(*ranges["atk"])
-                df = random.randint(*ranges["df"])
-                spd = random.randint(*ranges["spd"])
-                luk = random.randint(*ranges["luk"])
-                
-                cock_id, is_duplicate, is_upgraded, old_stars, new_stars, new_shards, final_stats = self.economy.add_cock(
-                    user_id, breed, rarity, hp, atk, df, spd, luk
-                )
-                results.append({
-                    "id": cock_id,
-                    "breed": breed,
-                    "rarity": rarity,
-                    "hp": final_stats["hp"],
-                    "atk": final_stats["atk"],
-                    "df": final_stats["df"],
-                    "spd": final_stats["spd"],
-                    "luk": final_stats["luk"],
-                    "is_duplicate": is_duplicate,
-                    "is_upgraded": is_upgraded,
-                    "old_stars": old_stars,
-                    "new_stars": new_stars,
-                    "new_shards": new_shards
-                })
-
-            if tier_id == "xin":
-                self.economy.set_pity_golden(user_id, final_pity)
-
-            from app.discord_bot.cogs.daga import RARITY_DISPLAY
-            # Build result message
-            if quantity == 1:
-                res = results[0]
-                pity_str = f"\n🛡️ **Số lần tích bảo hiểm (Pity SS):** `{final_pity}/50`" if tier_id == "xin" else ""
-                display_rarity = RARITY_DISPLAY.get(res['rarity'], res['rarity'])
-                if res.get("is_duplicate"):
-                    needed = res["new_stars"] + 1
-                    if res["new_shards"] >= needed:
-                        tip_msg = f"*(🎉 Đã tích đủ mảnh trùng! Hãy gõ `i?anime dotpha` để tiến hành đột phá!)*"
-                    else:
-                        tip_msg = f"*(Nhận thêm `{needed - res['new_shards']}` bản trùng nữa để lên {res['new_stars'] + 1} Sao)*"
-                    desc = (
-                        f"🔄 **BẠN NHẬN TRÙNG NHÂN VẬT!** (Tích luỹ mảnh)\n\n"
-                        f"⚔️ **Nhân vật:** `{res['breed']}`\n"
-                        f"⭐ **Độ hiếm:** {rarity_emojis[res['rarity']]} `{display_rarity}`\n"
-                        f"📊 **Tiến trình đột phá:** `[ {res['new_shards']} / {needed} ]` mảnh trùng\n"
-                        f"{tip_msg}"
-                        f"{pity_str}"
-                    )
-                else:
-                    desc = (
-                        f"⚔️ **Nhân vật:** `{res['breed']}`\n"
-                        f"⭐ **Độ hiếm:** {rarity_emojis[res['rarity']]} `{display_rarity}`\n"
-                        f"❤️ **Máu (HP):** `{res['hp']}`\n"
-                        f"⚔️ **Sát thương (ATK):** `{res['atk']}`\n"
-                        f"🛡️ **Phòng thủ (DEF):** `{res['df']}`\n"
-                        f"⚡ **Tốc độ (SPD):** `{res['spd']}`\n"
-                        f"🍀 **May mắn (LUK):** `{res['luk']}`"
-                        f"{pity_str}"
-                    )
-                embed = make_embed(
-                    title="🔮 TRIỆU HỒI THÀNH CÔNG 🔮",
-                    description=desc,
-                    color=discord.Color.green(),
-                )
-                img_name = get_cock_image_file(res['breed'])
-                file_img = None
-                if img_name:
-                    file_img = discord.File(ABS_PATH / "modules" / "daga" / img_name, filename=img_name)
-                    embed.set_thumbnail(url=f"attachment://{img_name}")
-                
-                if file_img:
-                    await interaction.message.edit(embed=embed, view=view, attachments=[file_img])
-                else:
-                    await interaction.message.edit(embed=embed, view=view, attachments=[])
-            else:
-                list_str = ""
-                for res in results:
-                    emoji = rarity_emojis[res['rarity']]
-                    display_rarity = RARITY_DISPLAY.get(res['rarity'], res['rarity'])
-                    if res.get("is_duplicate"):
-                        needed = res["new_stars"] + 1
-                        if res["new_shards"] >= needed:
-                            list_str += f"• `[ID: {res['id']}]` {emoji} **{res['breed']}** ({display_rarity}) | HP: `{res['hp']}` | ATK: `{res['atk']}` | DEF: `{res['df']}` (Trùng - Đủ mảnh đột phá! 💥)\n"
-                        else:
-                            list_str += f"• `[ID: {res['id']}]` {emoji} **{res['breed']}** ({display_rarity}) | HP: `{res['hp']}` | ATK: `{res['atk']}` | DEF: `{res['df']}` (Trùng - Mảnh: `{res['new_shards']}/{needed}`)\n"
-                    else:
-                        list_str += f"• `[ID: {res['id']}]` {emoji} **{res['breed']}** ({display_rarity}) | HP: `{res['hp']}` | ATK: `{res['atk']}` | DEF: `{res['df']}`\n"
-                
-                pity_str = f"\n🛡️ **Bảo hiểm hiện tại (Pity SS):** `{final_pity}/50`" if tier_id == "xin" else ""
-                embed = make_embed(
-                    title=f"🔮 KẾT QUẢ TRIỆU HỒI {quantity} LƯỢT 🔮",
-                    description=f"Chúc mừng bạn đã sở hữu thêm các nhân vật mới:\n\n{list_str}{pity_str}",
-                    color=discord.Color.green()
-                )
-                embed.set_thumbnail(url=interaction.user.display_avatar.url)
-                await interaction.message.edit(embed=embed, view=view, attachments=[])
-
-        elif item_type == "box":
-            from app.discord_bot.cogs.xe import BOX_DETAILS, CAR_RARITIES, CAR_EDITIONS, COLLECTIONS, RARITY_INFO, get_car_image_file, roll_rarity, CAR_QUOTES
-            rarity_emojis = {
-                "Common": "⚪", "Rare": "🟢", "Epic": "🔵", "Legendary": "🟣", "Mythic": "🟡", "Exclusive": "🔴"
-            }
-            
-            box = BOX_DETAILS[tier_id]
-            for _ in range(quantity):
-                rarity = roll_rarity(box["rates"])
-                
-                models = [name for name, r_name in CAR_RARITIES.items() if r_name == rarity]
-                model = random.choice(models)
-                
-                edition = "Stock"
-                if model in CAR_EDITIONS:
-                    if random.random() < 0.30:
-                        edition = random.choice(CAR_EDITIONS[model][1:])
-                for c_name, c_models in COLLECTIONS.items():
-                    if model in c_models:
-                        col_name = c_name
-                        break
-                
-                serial = random.randint(1, 9999)
-                self.economy.add_user_car(user_id, model, rarity, serial, edition, col_name)
-                
-                results.append({
-                    "model": model,
-                    "rarity": rarity,
-                    "edition": edition,
-                    "emoji": rarity_emojis[rarity]
-                })
-
-            if quantity == 1:
-                res = results[0]
-                desc = (
-                    f"🏎️ **Xe:** **{res['model']}**\n"
-                    f"⭐ **Độ hiếm:** {res['emoji']} `{res['rarity']}`\n"
-                    f"✨ **Phiên bản:** `{res['edition']}`\n\n"
-                    f"*\"{CAR_QUOTES.get(res['model'], 'Một chiếc xe tuyệt vời!')}\"*\n\n"
-                    f"Đã được chuyển vào Garage của bạn (`i?xe garage`)!"
-                )
-                embed = make_embed(
-                    title="🏎️ MỞ BOX XE THÀNH CÔNG 🏎️",
-                    description=desc,
-                    color=discord.Color.green(),
-                )
-                img_name = get_car_image_file(res['model'])
-                file_img = None
-                if img_name:
-                    file_img = discord.File(ABS_PATH / "modules" / "duaxe" / img_name, filename=img_name)
-                    embed.set_thumbnail(url=f"attachment://{img_name}")
-                
-                if file_img:
-                    await interaction.message.edit(embed=embed, view=view, attachments=[file_img])
-                else:
-                    await interaction.message.edit(embed=embed, view=view, attachments=[])
-            else:
-                list_str = ""
-                for res in results:
-                    list_str += f"• {res['emoji']} **{res['model']}** ({res['rarity']}) - `{res['edition']}`\n"
-                
-                embed = make_embed(
-                    title=f"🏎️ KẾT QUẢ MỞ {quantity} BOX XE 🏎️",
-                    description=f"Chúc mừng bạn đã nhận được các xe sau:\n\n{list_str}",
-                    color=discord.Color.green()
-                )
-                embed.set_thumbnail(url=interaction.user.display_avatar.url)
-                await interaction.message.edit(embed=embed, view=view, attachments=[])
-
     @commands.command(
         brief="Xem và nâng cấp cuốc đào mỏ của bạn.",
         usage="pickaxe [upgrade]",
@@ -3268,7 +3052,7 @@ class Simulator(commands.Cog):
 
 
     @commands.command(
-        brief="Sử dụng Bản đồ Kho báu để thám hiểm hầm mộ cổ đại nhận cổ vật giá trị cao.",
+        brief="Dùng Bản đồ Kho báu thám hiểm hầm mộ cổ đại (mini game 5 phòng chọn cửa) để nhận cổ vật giá trị cao.",
         usage="explore <normal / rare / legend>",
         aliases=["thamhiem"]
     )
@@ -3293,11 +3077,16 @@ class Simulator(commands.Cog):
         if owned_qty <= 0:
             await ctx.send(f"❌ Bạn không sở hữu **{map_name}** trong túi đồ! Hãy làm nghề **Thợ săn Kho báu** (lệnh `i?work`) để tìm kiếm bản đồ.")
             return
-            
+
+        if user_id in self.active_explorers:
+            await ctx.send("❌ Bạn đang có một chuyến thám hiểm chưa hoàn tất! Hãy đi hết hầm mộ hoặc đợi 120 giây.")
+            return
+        self.active_explorers.add(user_id)
+
         # Deduct 1 map from inventory
         self.economy.add_inventory_item(user_id, map_item_id, -1)
         
-        # Roll rarity based on map type
+        # Roll độ hiếm NỀN bằng đúng bảng cũ (mini game chỉ biến động ±1 bậc quanh nền này)
         r = random.random()
         if map_type == "normal":
             if r < 0.50: rarity = "Thường"
@@ -3313,37 +3102,26 @@ class Simulator(commands.Cog):
             if r < 0.85: rarity = "Quý hiếm"
             elif r < 0.995: rarity = "Huyền thoại"
             else: rarity = "Thần thoại"
-            
-        # Select treasure
-        rarity_pool = [k for k, v in TREASURES.items() if v["rarity"] == rarity]
-        chosen_id = random.choice(rarity_pool)
-        treasure = TREASURES[chosen_id]
-        
-        # Add to inventory
-        self.economy.add_inventory_item(user_id, chosen_id, 1)
-        
+
         log_wallet_change(
             logger,
-            event="map_exploration_success",
+            event="map_exploration_started",
             user_id=user_id,
-            item_id=chosen_id,
-            quantity=1,
-            ctx=ctx
+            ctx=ctx,
+            map_type=map_type,
+            base_rarity=rarity,
         )
-        
-        embed = make_embed(
-            title="🏴‍☠️ CUỘC THÁM HIỂM KHO BÁU BẮT ĐẦU 🏴‍☠️",
-            description=(
-                f"Bạn đã sử dụng **{map_name}** để thâm nhập vào khu hầm mộ cổ đại bí ẩn...\n\n"
-                f"🏺 **Phát hiện cổ vật:** {treasure['name']} (ID: `{chosen_id}`)\n"
-                f"✨ **Độ hiếm:** `{treasure['rarity']}`\n"
-                f"💰 **Giá trị ước tính:** `{treasure['value']:,} VND`\n\n"
-                f"💡 *Bạn có thể trưng bày lên trang cá nhân hoặc dùng `i?sellitem {chosen_id}` để bán.*"
-            ),
-            color=discord.Color.gold()
-        )
-        embed.set_thumbnail(url=ctx.author.display_avatar.url)
-        await ctx.send(embed=embed)
+
+        view = DungeonCrawlView(self, ctx.author, self.economy, map_type, map_name, rarity, TREASURES, ctx=ctx)
+        embed = view.render_embed()
+        try:
+            msg = await ctx.send(embed=embed, view=view)
+            view.message = msg
+        except Exception:
+            # Gửi thất bại → hoàn lại bản đồ để người chơi không mất tài sản oan
+            self.active_explorers.discard(user_id)
+            self.economy.add_inventory_item(user_id, map_item_id, 1)
+            raise
 
     @commands.group(
         brief="Hệ thống quản lý tài sản và kinh doanh thụ động.",
@@ -3427,6 +3205,12 @@ class Simulator(commands.Cog):
             return
         if target.id == ctx.author.id:
             await ctx.send("❌ Bạn không thể tự cướp tiền của chính mình!")
+            return
+        if self.economy.is_banned(target.id):
+            await ctx.send(f"❌ **Lỗi:** **{target.display_name}** đã bị khóa tài khoản (banned), không thể cướp tiền người này!")
+            return
+        if self.economy.is_in_jail(target.id):
+            await ctx.send(f"❌ **Lỗi:** **{target.display_name}** đang ở trong tù, không thể cướp tiền người này!")
             return
             
         # Check if target is admin or owner
@@ -3540,6 +3324,7 @@ class Simulator(commands.Cog):
             self.economy.set_simulator_stats(user_id, last_rob=now)
             
             log_wallet_change(logger, event="rob_success", user_id=user_id, money_delta=steal_amount, victim_id=target.id, ctx=ctx)
+            self.economy.bump_quest(user_id, "rob")
             log_wallet_change(logger, event="rob_victim", user_id=target.id, money_delta=-steal_amount, actor_id=user_id, ctx=ctx)
             
             embed = make_embed(
@@ -3662,8 +3447,22 @@ class Simulator(commands.Cog):
 
         self.economy.set_setting(f"cooldown_robgold_{user_id}", str(now))
 
-        # 50% success chance
+        # 50% success chance, reduced by target's protection rings
+        # (same modifiers as the money rob path)
         success_rate = 0.50
+        has_angel_ring = any(item == 'ring_angel' and qty > 0 for item, qty in target_inv) or \
+                         any(marriage[2] == 'ring_angel' for marriage in target_marriages)
+        has_gothic_ring = any(item == 'ring_gothic' and qty > 0 for item, qty in target_inv) or \
+                          any(marriage[2] == 'ring_gothic' for marriage in target_marriages)
+        has_butterfly_ring = any(item == 'ring_eternal_butterfly' and qty > 0 for item, qty in target_inv) or \
+                             any(marriage[2] == 'ring_eternal_butterfly' for marriage in target_marriages)
+
+        if has_angel_ring:
+            success_rate *= 0.60
+        elif has_gothic_ring:
+            success_rate *= 0.80
+        elif has_butterfly_ring:
+            success_rate *= 0.85
 
         if random.random() < success_rate:
             # Steal limited range: 1 to 10 gold bars (maxed at target's available gold)
@@ -3718,7 +3517,7 @@ class Simulator(commands.Cog):
 
     @commands.group(
         brief="Đầu tư cổ phiếu & tiền điện tử biến động.",
-        usage="invest [list/buy/sell]",
+        usage="invest [buy/sell/limit/portfolio]",
         invoke_without_command=True
     )
     async def invest(self, ctx: commands.Context):
@@ -3730,6 +3529,7 @@ class Simulator(commands.Cog):
         view.message = msg
 
     @invest.command(name="buy", aliases=["mua"])
+    @commands.cooldown(1, 3, commands.BucketType.user)
     async def invest_buy(self, ctx: commands.Context, symbol: str, shares: float):
         symbol = symbol.upper()
         prices = dict((row[0], row[1]) for row in self.economy.get_stock_prices())
@@ -3738,8 +3538,8 @@ class Simulator(commands.Cog):
             await ctx.send(f"❌ Mã đầu tư `{symbol}` không tồn tại. Các mã hợp lệ: `USDT`, `AGV`, `CASINO`, `ETH`, `BTC`, `SOL`, `DOGE`.")
             return
             
-        if shares <= 0:
-            await ctx.send("❌ Số lượng cổ phiếu mua phải lớn hơn 0.")
+        if not math.isfinite(shares) or shares <= 0:
+            await ctx.send("❌ Số lượng cổ phiếu mua phải là số dương hợp lệ.")
             return
 
         user_id = ctx.author.id
@@ -3788,7 +3588,9 @@ class Simulator(commands.Cog):
 
         # Process transaction
         self.economy.add_money(user_id, -total_cost)
-        self.economy.set_portfolio_shares(user_id, symbol, current_shares + shares)
+        self.economy.apply_stock_buy(user_id, symbol, shares, effective_price)
+        # Buy pressure nudges the market price up (lasting impact)
+        self.economy.adjust_stock_price(symbol, slippage_pct)
         
         log_wallet_change(
             logger,
@@ -3815,6 +3617,7 @@ class Simulator(commands.Cog):
         await ctx.send(embed=embed)
 
     @invest.command(name="sell", aliases=["ban"])
+    @commands.cooldown(1, 3, commands.BucketType.user)
     async def invest_sell(self, ctx: commands.Context, symbol: str, shares: float):
         symbol = symbol.upper()
         prices = dict((row[0], row[1]) for row in self.economy.get_stock_prices())
@@ -3823,8 +3626,8 @@ class Simulator(commands.Cog):
             await ctx.send(f"❌ Mã đầu tư `{symbol}` không tồn tại. Các mã hợp lệ: `USDT`, `AGV`, `CASINO`, `ETH`, `BTC`, `SOL`, `DOGE`.")
             return
             
-        if shares <= 0:
-            await ctx.send("❌ Số lượng cổ phiếu bán phải lớn hơn 0.")
+        if not math.isfinite(shares) or shares <= 0:
+            await ctx.send("❌ Số lượng cổ phiếu bán phải là số dương hợp lệ.")
             return
 
         user_id = ctx.author.id
@@ -3851,6 +3654,8 @@ class Simulator(commands.Cog):
         
         self.economy.set_portfolio_shares(user_id, symbol, current_shares - shares)
         self.economy.add_money(user_id, total_payout)
+        # Sell pressure nudges the market price down (lasting impact)
+        self.economy.adjust_stock_price(symbol, -slippage_pct)
         
         log_wallet_change(
             logger,
@@ -3876,11 +3681,55 @@ class Simulator(commands.Cog):
         )
         await ctx.send(embed=embed)
 
+    @invest.command(name="portfolio", aliases=["pf", "holdings"], brief="Xem toàn bộ danh mục đầu tư của bạn kèm lãi/lỗ.")
+    async def invest_portfolio(self, ctx: commands.Context):
+        user_id = ctx.author.id
+        holdings = self.economy.get_portfolio_with_cost(user_id)
+
+        if not holdings:
+            await ctx.send("📭 Bạn chưa sở hữu cổ phiếu nào. Dùng `i?invest buy <ticker> <số lượng>` để bắt đầu đầu tư!")
+            return
+
+        prices = dict((row[0], row[1]) for row in self.economy.get_stock_prices())
+        lines = []
+        total_value = 0
+        total_cost = 0
+        for sym, shares, avg_cost in holdings:
+            price = prices.get(sym, 0)
+            value = int(shares * price)
+            cost_basis = shares * avg_cost
+            pl = value - cost_basis
+            pl_pct = (price / avg_cost - 1) * 100 if avg_cost > 0 else 0.0
+            icon = "📈" if pl >= 0 else "📉"
+            avg_str = f"`{avg_cost:,.0f} VND`" if avg_cost > 0 else "`—`"
+            lines.append(
+                f"{icon} **{sym}** — `{shares:.2f}` cổ\n"
+                f"> Giá vốn: {avg_str} • Giá hiện tại: `{price:,} VND`\n"
+                f"> Giá trị: `{value:,} VND` • Lãi/Lỗ: `{pl:+,.0f} VND` (`{pl_pct:+.2f}%`)"
+            )
+            total_value += value
+            total_cost += cost_basis
+
+        total_pl = total_value - total_cost
+        total_pl_pct = (total_value / total_cost - 1) * 100 if total_cost > 0 else 0.0
+        embed = make_embed(
+            title=f"💼 DANH MỤC ĐẦU TƯ CỦA {ctx.author.name.upper()} 💼",
+            description=(
+                "\n\n".join(lines)
+                + f"\n\n💰 **TỔNG GIÁ TRỊ:** `{total_value:,} VND`\n"
+                f"📊 **TỔNG LÃI/LỖ:** `{total_pl:+,.0f} VND` (`{total_pl_pct:+.2f}%`)"
+            ),
+            color=discord.Color.green() if total_pl >= 0 else discord.Color.red()
+        )
+        embed.set_thumbnail(url=ctx.author.display_avatar.url)
+        await ctx.send(embed=embed)
+
     @invest.group(name="limit", brief="Quản lý lệnh mua/bán tự động (Limit Orders).", invoke_without_command=True)
     async def invest_limit(self, ctx: commands.Context):
         await ctx.send("❌ Vui lòng sử dụng các lệnh: `i?invest limit buy`, `i?invest limit sell`, `i?invest limit list`, `i?invest limit cancel`.")
 
     @invest_limit.command(name="buy", aliases=["mua"])
+    @commands.cooldown(1, 3, commands.BucketType.user)
     async def invest_limit_buy(self, ctx: commands.Context, symbol: str, shares: float, target_price: int):
         symbol = symbol.upper()
         prices = dict((row[0], row[1]) for row in self.economy.get_stock_prices())
@@ -3889,10 +3738,10 @@ class Simulator(commands.Cog):
             await ctx.send(f"❌ Mã đầu tư `{symbol}` không tồn tại. Các mã hợp lệ: `USDT`, `AGV`, `CASINO`, `ETH`, `BTC`, `SOL`, `DOGE`.")
             return
             
-        if shares <= 0 or target_price <= 0:
-            await ctx.send("❌ Số lượng cổ phiếu và giá mục tiêu phải lớn hơn 0.")
+        if not math.isfinite(shares) or shares <= 0 or target_price <= 0:
+            await ctx.send("❌ Số lượng cổ phiếu và giá mục tiêu phải là số dương hợp lệ.")
             return
-            
+
         user_id = ctx.author.id
         total_cost = get_limit_buy_cost(shares, target_price, symbol)
         
@@ -3932,6 +3781,17 @@ class Simulator(commands.Cog):
         # Lock VND
         self.economy.add_money(user_id, -total_cost)
         order_id = self.economy.add_limit_order(user_id, symbol, "BUY", target_price, shares)
+        log_wallet_change(
+            logger,
+            event="invest_limit_buy_place",
+            user_id=user_id,
+            money_delta=-total_cost,
+            symbol=symbol,
+            shares=shares,
+            target_price=target_price,
+            order_id=order_id,
+            ctx=ctx
+        )
         
         liquidity = LIQUIDITY_VOLUME.get(symbol, 10000.0)
         slippage_pct = (shares / liquidity) * 0.01
@@ -3950,6 +3810,7 @@ class Simulator(commands.Cog):
         await ctx.send(embed=embed)
 
     @invest_limit.command(name="sell", aliases=["ban"])
+    @commands.cooldown(1, 3, commands.BucketType.user)
     async def invest_limit_sell(self, ctx: commands.Context, symbol: str, shares: float, target_price: int):
         symbol = symbol.upper()
         prices = dict((row[0], row[1]) for row in self.economy.get_stock_prices())
@@ -3958,10 +3819,10 @@ class Simulator(commands.Cog):
             await ctx.send(f"❌ Mã đầu tư `{symbol}` không tồn tại. Các mã hợp lệ: `USDT`, `AGV`, `CASINO`, `ETH`, `BTC`, `SOL`, `DOGE`.")
             return
             
-        if shares <= 0 or target_price <= 0:
-            await ctx.send("❌ Số lượng cổ phiếu và giá mục tiêu phải lớn hơn 0.")
+        if not math.isfinite(shares) or shares <= 0 or target_price <= 0:
+            await ctx.send("❌ Số lượng cổ phiếu và giá mục tiêu phải là số dương hợp lệ.")
             return
-            
+
         user_id = ctx.author.id
         portfolio = dict(self.economy.get_portfolio(user_id))
         curr_shares = portfolio.get(symbol, 0.0)
@@ -3973,6 +3834,16 @@ class Simulator(commands.Cog):
         # Lock shares
         self.economy.set_portfolio_shares(user_id, symbol, curr_shares - shares)
         order_id = self.economy.add_limit_order(user_id, symbol, "SELL", target_price, shares)
+        log_wallet_change(
+            logger,
+            event="invest_limit_sell_place",
+            user_id=user_id,
+            symbol=symbol,
+            shares=shares,
+            target_price=target_price,
+            order_id=order_id,
+            ctx=ctx
+        )
         
         embed = make_embed(
             title="🔴 ĐẶT LỆNH BÁN TỰ ĐỘNG THÀNH CÔNG 🔴",
@@ -4010,12 +3881,14 @@ class Simulator(commands.Cog):
         for oid, symbol, otype, target, shares, created in orders:
             type_str = "🟢 MUA" if otype == "BUY" else "🔴 BÁN"
             lock_asset = f"{get_limit_buy_cost(shares, target, symbol):,} VND" if otype == "BUY" else f"{shares:.2f} {symbol}"
+            remain = max(0, LIMIT_ORDER_TTL - (int(time.time()) - created))
             embed.add_field(
                 name=f"Lệnh #{oid} | {type_str} {symbol}",
                 value=(
                     f"• Số lượng: **{shares:.2f}**\n"
                     f"• Giá mục tiêu: **{target:,} VND**\n"
-                    f"• Đang khóa: `{lock_asset}`"
+                    f"• Đang khóa: `{lock_asset}`\n"
+                    f"• Hết hạn sau: `{remain // 3600}h {(remain % 3600) // 60}m`"
                 ),
                 inline=False
             )
@@ -4041,11 +3914,30 @@ class Simulator(commands.Cog):
             refund_money = get_limit_buy_cost(shares, target_price, symbol)
             self.economy.add_money(user_id, refund_money)
             refund_msg = f"Đã hoàn lại `+{refund_money:,} VND` vào ví của bạn."
+            log_wallet_change(
+                logger,
+                event="invest_limit_buy_cancel",
+                user_id=user_id,
+                money_delta=refund_money,
+                symbol=symbol,
+                shares=shares,
+                order_id=order_id,
+                ctx=ctx
+            )
         else: # SELL
             portfolio = dict(self.economy.get_portfolio(user_id))
             curr_shares = portfolio.get(symbol, 0.0)
             self.economy.set_portfolio_shares(user_id, symbol, curr_shares + shares)
             refund_msg = f"Đã trả lại `+{shares:.2f} {symbol}` vào kho của bạn."
+            log_wallet_change(
+                logger,
+                event="invest_limit_sell_cancel",
+                user_id=user_id,
+                symbol=symbol,
+                shares=shares,
+                order_id=order_id,
+                ctx=ctx
+            )
             
         self.economy.remove_limit_order(order_id)
         
@@ -4251,6 +4143,83 @@ class Simulator(commands.Cog):
         await ctx.send(embed=embed)
 
     @commands.command(
+        brief="Xem tổng tài sản và hạng giàu của bạn trên server.",
+        usage="networth",
+        aliases=["ts", "taisan"]
+    )
+    async def networth(self, ctx: commands.Context):
+        user_id = ctx.author.id
+        money = self.economy.get_entry(user_id)[1]
+        gold = self.economy.get_entry(user_id)[2]
+        gold_price = self.economy.get_gold_price()
+        stock_value = self.economy.get_portfolio_value(user_id)
+
+        # Tài sản đang bị khóa trong các lệnh limit (BUY khóa VND, SELL khóa cổ phiếu)
+        prices = dict((row[0], row[1]) for row in self.economy.get_stock_prices())
+        locked_money = 0
+        locked_shares_value = 0
+        for _oid, sym, otype, target_price, shares, _created in self.economy.get_limit_orders(user_id):
+            if otype == "BUY":
+                locked_money += get_limit_buy_cost(shares, target_price, sym)
+            else:
+                locked_shares_value += int(shares * prices.get(sym, 0))
+        locked_total = locked_money + locked_shares_value
+
+        total = money + int(gold * gold_price) + stock_value + locked_total
+        rank = self.economy.get_rich_rank(user_id)
+        locked_line = f"🔒 **Đang khóa trong lệnh limit:** `~{locked_total:,} VND`\n" if locked_total else ""
+
+        embed = make_embed(
+            title=f"💰 TỔNG TÀI SẢN CỦA {ctx.author.name.upper()} 💰",
+            description=(
+                f"💵 **Tiền mặt:** `{money:,} VND`\n"
+                f"🪙 **Thỏi vàng:** `{gold}` (~`{int(gold * gold_price):,} VND`)\n"
+                f"📈 **Cổ phiếu:** `~{stock_value:,} VND`\n"
+                f"{locked_line}"
+                f"💎 **TỔNG CỘNG:** `{total:,} VND`\n\n"
+                f"🏆 **Hạng giàu thứ:** `#{rank}` trên server"
+            ),
+            color=discord.Color.gold()
+        )
+        embed.set_thumbnail(url=ctx.author.display_avatar.url)
+        await ctx.send(embed=embed)
+
+    @commands.command(
+        name="economy",
+        brief="Xem thống kê kinh tế server (Chỉ Admin/Owner).",
+        usage="economy",
+        aliases=["kinhte"],
+        hidden=True
+    )
+    async def economy_stats(self, ctx: commands.Context):
+        if ctx.author.id not in config.bot.owner_ids and not await ctx.bot.is_owner(ctx.author):
+            await ctx.send("❌ **Lỗi:** Chỉ có Admin/Owner mới có quyền sử dụng lệnh này!")
+            return
+
+        t = self.economy.get_economy_totals()
+        top_lines = []
+        for i, (uid, money) in enumerate(t["top"], 1):
+            member = ctx.guild.get_member(uid) if ctx.guild else None
+            name = member.display_name if member else f"ID {uid}"
+            top_lines.append(f"`#{i}` **{name}** — `{money:,} VND`")
+
+        avg = t["total_money"] // t["user_count"] if t["user_count"] else 0
+        embed = make_embed(
+            title="📊 THỐNG KÊ KINH TẾ SERVER 📊",
+            description=(
+                f"💰 **Tổng tiền lưu thông:** `{t['total_money']:,} VND`\n"
+                f"👥 **Số ví đang hoạt động:** `{t['user_count']}`\n"
+                f"📈 **Trung bình mỗi ví:** `{avg:,} VND`\n"
+                f"🎰 **Quỹ Jackpot chung:** `{t['jackpot_pool']:,} VND`\n\n"
+                f"🪙 **Giá vàng hiện tại:** `{t['gold_price']:,} VND/thỏi`\n"
+                f"⛏️ **Vàng đào tuần này:** `{t['gold_mined_week']}` | 🛒 **Vàng tiêu thụ:** `{t['gold_spent_week']}`\n\n"
+                f"**🏆 TOP 10 GIÀU NHẤT:**\n" + "\n".join(top_lines)
+            ),
+            color=discord.Color.blurple()
+        )
+        await ctx.send(embed=embed)
+
+    @commands.command(
         name="setbetlimit",
         brief="Đặt giới hạn cược tối thiểu và tối đa cho các trò chơi cờ bạc (Chỉ Admin/Owner).",
         usage="setbetlimit [min] [max]",
@@ -4363,6 +4332,28 @@ class Simulator(commands.Cog):
         )
         await ctx.send(embed=embed)
 
+    def _refund_user_limit_orders(self, user_id: int, symbol: str | None = None) -> tuple[int, int]:
+        """Hủy lệnh limit của một người chơi và hoàn lại tài sản đang khóa.
+
+        BUY hoàn VND đã khóa, SELL trả lại cổ phiếu khóa vào portfolio.
+        Trả về (số lệnh đã hủy, tổng VND hoàn lại). symbol=None để xử lý mọi mã.
+        """
+        cancelled = 0
+        refunded_money = 0
+        for oid, sym, otype, target_price, shares, _created in self.economy.get_limit_orders(user_id):
+            if symbol is not None and sym != symbol:
+                continue
+            if otype == "BUY":
+                refund = get_limit_buy_cost(shares, target_price, sym)
+                self.economy.add_money(user_id, refund)
+                refunded_money += refund
+            else:
+                portfolio = dict(self.economy.get_portfolio(user_id))
+                self.economy.set_portfolio_shares(user_id, sym, portfolio.get(sym, 0.0) + shares)
+            self.economy.remove_limit_order(oid)
+            cancelled += 1
+        return cancelled, refunded_money
+
     @commands.command(
         name="setshares",
         aliases=["setstock", "chinhcophieu", "setcp"],
@@ -4395,10 +4386,14 @@ class Simulator(commands.Cog):
         
         if symbol in ["ALL", "TATCA", "ALLSHARES", "*"]:
             if shares <= 0:
+                cancelled, refunded = self._refund_user_limit_orders(user_id)
                 self.economy.cur.execute("DELETE FROM user_portfolio WHERE user_id = ?", (user_id,))
-                self.economy.cur.execute("DELETE FROM limit_orders WHERE user_id = ?", (user_id,))
                 self.economy.conn.commit()
-                await ctx.send(f"✅ Đã xóa toàn bộ cổ phiếu và hủy tất cả lệnh limit của **{user_name}** (`{user_id}`) về **0**.")
+                refund_note = f" (hoàn `{refunded:,} VND` tiền khóa từ lệnh BUY)" if refunded else ""
+                await ctx.send(
+                    f"✅ Đã xóa toàn bộ cổ phiếu của **{user_name}** (`{user_id}`) về **0** "
+                    f"và hủy `{cancelled}` lệnh limit{refund_note}."
+                )
             else:
                 await ctx.send("❌ Với tùy chọn `ALL`, chỉ hỗ trợ đặt số lượng về 0.")
             return
@@ -4410,10 +4405,14 @@ class Simulator(commands.Cog):
 
         shares = max(0.0, float(shares))
         if shares == 0:
+            cancelled, refunded = self._refund_user_limit_orders(user_id, symbol)
             self.economy.cur.execute("DELETE FROM user_portfolio WHERE user_id = ? AND symbol = ?", (user_id, symbol))
-            self.economy.cur.execute("DELETE FROM limit_orders WHERE user_id = ? AND symbol = ?", (user_id, symbol))
             self.economy.conn.commit()
-            await ctx.send(f"✅ Đã đặt số lượng cổ phiếu **{symbol}** của **{user_name}** (`{user_id}`) về **0**.")
+            refund_note = f" (hoàn `{refunded:,} VND` tiền khóa từ lệnh BUY)" if refunded else ""
+            await ctx.send(
+                f"✅ Đã đặt số lượng cổ phiếu **{symbol}** của **{user_name}** (`{user_id}`) về **0**, "
+                f"hủy `{cancelled}` lệnh limit liên quan{refund_note}."
+            )
         else:
             self.economy.set_portfolio_shares(user_id, symbol, shares)
             await ctx.send(f"✅ Đã đặt số lượng cổ phiếu **{symbol}** của **{user_name}** (`{user_id}`) thành **{shares:,.2f}**.")
@@ -4446,31 +4445,23 @@ class Simulator(commands.Cog):
         except Exception:
             user_name = f"User {user_id}"
 
+        cancelled, refunded = self._refund_user_limit_orders(user_id)
         self.economy.cur.execute("DELETE FROM user_portfolio WHERE user_id = ?", (user_id,))
-        self.economy.cur.execute("DELETE FROM limit_orders WHERE user_id = ?", (user_id,))
         self.economy.conn.commit()
-        await ctx.send(f"🧹 Đã xóa sạch toàn bộ cổ phiếu và hủy mọi lệnh limit của **{user_name}** (`{user_id}`) về **0** thành công!")
+        refund_note = f" (hoàn `{refunded:,} VND` tiền khóa từ lệnh BUY)" if refunded else ""
+        await ctx.send(f"🧹 Đã xóa sạch toàn bộ cổ phiếu của **{user_name}** (`{user_id}`) về **0** và hủy `{cancelled}` lệnh limit{refund_note}!")
 
     def get_stock_chart_file(self, symbol: str) -> discord.File:
         prices = dict((row[0], row[1]) for row in self.economy.get_stock_prices())
         current_price = prices.get(symbol, 1000)
-        
-        history_rows = self.economy.get_stock_price_history(symbol, limit=15)
+
+        history_rows = self.economy.get_stock_price_history(symbol, limit=30)
         history = [row[0] for row in history_rows]
-        
-        # Fallback if history is insufficient (generate fake walk backwards)
-        if len(history) < 15:
-            import random
-            prices_list = [current_price]
-            # Generate backwards
-            for _ in range(15 - len(history)):
-                change = random.uniform(-0.05, 0.05)
-                prev_price = int(prices_list[-1] / (1 + change))
-                prices_list.append(prev_price)
-            history = list(reversed(prices_list))
-            
-        from app.discord_bot.modules.chart_renderer import draw_candlestick_chart
-        buf = draw_candlestick_chart(symbol, history, current_price)
+        if not history:
+            history = [current_price]
+
+        from app.discord_bot.modules.chart_renderer import draw_stock_chart
+        buf = draw_stock_chart(symbol, history, current_price)
         return discord.File(buf, filename="chart.png")
 
 async def setup(client: commands.Bot):

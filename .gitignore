@@ -140,6 +140,8 @@ dmypy.json
 
 node_modules/
 scratch/
+graphify-out/
+scratch_*.txt
 test_*.png
 test_tutien.db
 test_*.db

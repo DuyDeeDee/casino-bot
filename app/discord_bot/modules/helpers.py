@@ -1,3 +1,4 @@
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -49,3 +50,48 @@ def make_embed(title=None, description=None, color=None, author=None,
     else:
         embed.set_footer(text=datetime.now().strftime("%m/%d/%Y %H:%M:%S"))
     return embed
+
+
+_AMOUNT_RE = re.compile(r"^(\d[\d.,]*)([km]?)(\d*)$")
+
+
+def parse_amount(text: str) -> int | None:
+    """Parses money input: '500', '100k', '1.5m', '1.000.000', '1,000,000'.
+
+    '.' and ',' act as thousands separators when no k/m suffix is present, and as
+    decimal separators when a k/m suffix is present. Returns None if invalid.
+    """
+    if not text:
+        return None
+    cleaned = text.strip().lower().replace(" ", "").replace("_", "")
+    match = _AMOUNT_RE.match(cleaned)
+    if not match or match.group(3):  # trailing digits after a k/m suffix (e.g. "1m5") are invalid
+        return None
+    digits_part, suffix, _ = match.groups()
+    multiplier = {"k": 1_000, "m": 1_000_000}.get(suffix, 1)
+    try:
+        if suffix:
+            whole, _, frac = digits_part.replace(",", ".").partition(".")
+            if not whole.isdigit() or (frac and not frac.isdigit()) or len(frac) > 6:
+                return None
+            value = int(whole + frac) * multiplier
+            if frac:
+                value //= 10 ** len(frac)
+            return value
+        return int(digits_part.replace(".", "").replace(",", ""))
+    except ValueError:
+        return None
+
+
+def calc_gold(vnd: int) -> tuple[int, int, int, int]:
+    """Top-up exchange rate: 1,000 VND = 3 Gold, plus 2% bonus Gold per full
+    100,000 VND deposited (capped at 40%).
+
+    Returns (base_gold, bonus_gold, bonus_pct, total_gold). The single source
+    of truth for both the i?nap price display and i?addtopup crediting.
+    """
+    base_gold = (vnd // 1000) * 3
+    bonus_tier = vnd // 100_000
+    bonus_pct = min(40, bonus_tier * 2)
+    bonus_gold = int(base_gold * (bonus_pct / 100))
+    return base_gold, bonus_gold, bonus_pct, base_gold + bonus_gold

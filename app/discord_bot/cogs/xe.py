@@ -298,7 +298,7 @@ class XeRateView(discord.ui.View):
 class Xe(commands.Cog, name="Xe"):
     def __init__(self, client: commands.Bot):
         self.client = client
-        self.economy = getattr(client, "economy", Economy())
+        self.economy = getattr(client, "economy", None) or Economy()
 
     def _get_estimated_value(self, car) -> int:
         # car row: [id, user_id, model, rarity, serial, edition, collection, is_favorite]
@@ -561,7 +561,7 @@ class Xe(commands.Cog, name="Xe"):
             description=f"⏳ **{ctx.author.display_name}** đang mở **{box['name']}** với giá **{price:,} VNĐ**...",
             color=discord.Color.gold()
         )
-        gif_path = ABS_PATH / "modules" / "daga" / "open_chest.gif"
+        gif_path = ABS_PATH / "pictures" / "open_chest.gif"
         
         if gif_path.exists():
             file_gif = discord.File(gif_path, filename="open_chest.gif")
@@ -817,33 +817,34 @@ class Xe(commands.Cog, name="Xe"):
     @market_group.command(name="buy", brief="Mua xe từ chợ xe.")
     async def market_buy(self, ctx: commands.Context, listing_id: int):
         listing = self.economy.get_market_listing(listing_id)
-        if not listing:
-            await ctx.send(f"❌ **Lỗi:** Không tìm thấy tin đăng bán xe với ID `{listing_id}`.")
-            return
-            
-        lst_id, car_id, seller_id, price, _ = listing
-        
-        if seller_id == ctx.author.id:
-            await ctx.send("❌ **Lỗi:** Bạn không thể mua chiếc xe của chính bản thân đăng bán!")
-            return
-            
-        try:
-            validate_money_bet(self.economy, ctx.author.id, price)
-        except Exception as exc:
-            await ctx.send(str(exc))
-            return
-            
-        car = self.economy.get_user_car(car_id)
-        if not car:
-            await ctx.send("❌ **Lỗi:** Chiếc xe này không còn tồn tại.")
+        with self.economy.transaction():
+            # Re-verify listing and car existence inside transaction
+            listing = self.economy.get_market_listing(listing_id)
+            if not listing:
+                await ctx.send(f"❌ **Lỗi:** Tin đăng bán xe `{listing_id}` không còn tồn tại.")
+                return
+
+            lst_id, car_id, seller_id, price, _ = listing
+            if seller_id == ctx.author.id:
+                await ctx.send("❌ **Lỗi:** Bạn không thể mua chiếc xe của chính bản thân đăng bán!")
+                return
+
+            buyer_money = self.economy.get_entry(ctx.author.id)[1]
+            if buyer_money < price:
+                await ctx.send(f"❌ Bạn không đủ tiền! Cần `{price:,} VND` nhưng ví chỉ có `{buyer_money:,} VND`.")
+                return
+
+            car = self.economy.get_user_car(car_id)
+            if not car:
+                await ctx.send("❌ **Lỗi:** Chiếc xe này không còn tồn tại.")
+                self.economy.delete_market_listing(listing_id)
+                return
+
+            # Execute Transaction
+            self.economy.add_money(ctx.author.id, -price)
+            self.economy.add_money(seller_id, price)
+            self.economy.transfer_user_car(car_id, ctx.author.id)
             self.economy.delete_market_listing(listing_id)
-            return
-            
-        # Execute Transaction
-        self.economy.add_money(ctx.author.id, -price)
-        self.economy.add_money(seller_id, price)
-        self.economy.transfer_user_car(car_id, ctx.author.id)
-        self.economy.delete_market_listing(listing_id)
         
         log_wallet_change(
             logger,

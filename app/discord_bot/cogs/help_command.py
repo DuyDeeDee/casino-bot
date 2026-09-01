@@ -3,7 +3,12 @@ import discord
 from discord.ext import commands
 from discord.ui import Select, View
 
+from app.config import config
 from app.discord_bot.modules.helpers import ABS_PATH, make_embed
+
+# Các lệnh kiểm tra quyền admin ngay TRONG thân hàm (không bọc decorator) nên quét động
+# theo metadata không thấy được — phải liệt kê tường minh tại đây.
+EXTRA_ADMIN_COMMANDS = {"invest max"}
 
 
 # ──────────────────────────────────────────────
@@ -81,22 +86,182 @@ def _parse_label_and_emoji(raw_label: str):
     return raw_label, None
 
 
-def _is_admin_command(cmd: commands.Command) -> bool:
-    """Kiểm tra xem lệnh có phải là lệnh admin/owner hay không."""
-    if cmd.hidden:
+def _is_owner_command(cmd: commands.Command) -> bool:
+    """Lệnh chỉ Owner/Admin bot dùng được — bị ẨN khỏi help thường (xem qua i?adhelp)."""
+    if getattr(cmd, "hidden", False):
         return True
     brief = (cmd.brief or "").lower()
     name = cmd.name.lower()
     if brief.startswith("[admin]") or "[admin]" in brief or "admin" in name or "owner" in name:
         return True
+    if cmd.qualified_name in EXTRA_ADMIN_COMMANDS:
+        return True
+    requires = getattr(cmd, "requires", None)
+    if getattr(requires, "predicates", None):
+        return True
+    # @commands.is_owner() / check tùy chỉnh nằm ở cmd.checks. Riêng
+    # @commands.has_permissions(...) có perms dict → là lệnh quyền Discord server,
+    # vẫn HIỆN trong help thường (người chơi dùng sẽ bị báo thiếu quyền).
+    checks = getattr(cmd, "checks", None)
+    if checks and _perms_from_checks(cmd) is None:
+        return True
+    # Lệnh con kế thừa gate từ group cha (vd: giftcode create/delete/list)
+    parent = getattr(cmd, "parent", None)
+    while parent is not None:
+        if _is_owner_command(parent):
+            return True
+        parent = getattr(parent, "parent", None)
     return False
+
+
+def _is_admin_command(cmd: commands.Command) -> bool:
+    """Lệnh giới hạn quyền (owner bot HOẶC quyền Discord server) — dùng cho i?adhelp."""
+    if _is_owner_command(cmd):
+        return True
+    requires = getattr(cmd, "requires", None)
+    return _perms_from_checks(cmd) is not None or getattr(requires, "permissions", None) is not None
+
+
+def _perms_from_checks(cmd: commands.Command) -> dict | None:
+    """Lấy dict quyền từ @commands.has_permissions(...) nếu lệnh có (vd {'administrator': True})."""
+    for check in getattr(cmd, "checks", None) or []:
+        fn = getattr(check, "predicate", None) or check
+        perms = getattr(fn, "perms", None)
+        if isinstance(perms, dict):
+            return perms
+        # Một số bản discord.py giữ perms trong closure của predicate
+        for cell in getattr(fn, "__closure__", None) or ():
+            try:
+                v = cell.cell_contents
+            except ValueError:
+                continue
+            if isinstance(v, dict) and v and all(
+                isinstance(k, str) and isinstance(b, bool) for k, b in v.items()
+            ):
+                return v
+    return None
+
+
+def _admin_perm_label(cmd: commands.Command) -> str | None:
+    """Nhãn quyền Discord yêu cầu bởi @commands.has_permissions(...), nếu có."""
+    perms = _perms_from_checks(cmd)
+    if not perms:
+        return None
+    labels = []
+    for viett, key in (
+        ("Quản trị viên", "administrator"),
+        ("Quản lý tin nhắn", "manage_messages"),
+        ("Quản lý server", "manage_guild"),
+        ("Quản lý kênh", "manage_channels"),
+    ):
+        if perms.get(key):
+            labels.append(viett)
+    return " + ".join(labels) if labels else "quyền đặc biệt"
+
+
+def _iter_admin_commands(client: commands.Bot) -> list[commands.Command]:
+    """Quét toàn bộ lệnh của bot (kể cả subcommand của group) lấy các lệnh admin/owner."""
+    found: list[commands.Command] = []
+
+    def walk(cmds):
+        for c in cmds:
+            # Bỏ qua lệnh help tổng (ẩn để không lọt vào nhóm lệnh, nhưng không phải lệnh admin)
+            if c.qualified_name == "help":
+                continue
+            if _is_admin_command(c):
+                found.append(c)
+            if isinstance(c, commands.Group):
+                walk(c.commands)
+
+    for cog in client.cogs.values():
+        walk(cog.get_commands())
+    return sorted(found, key=lambda c: c.qualified_name)
+
+
+def _clean_brief(cmd: commands.Command) -> str:
+    """Brief hiển thị: bỏ tag [ADMIN] rỗng, ưu tiên docstring khi brief chỉ là tag."""
+    raw = (cmd.brief or "").split("\n")[0].strip()
+    if not raw or raw.upper().startswith("[ADMIN"):
+        raw = (cmd.short_doc or "").split("\n")[0].strip()
+    if raw[:6].upper() == "[ADMIN":
+        raw = raw.split("]", 1)[-1].strip()
+    return raw or "Không có mô tả."
+
+
+def _admin_help_embeds(client: commands.Bot, prefix: str, only_discord_perms: bool) -> list[discord.Embed]:
+    """Danh sách embed liệt kê toàn bộ lệnh admin/owner, quét động từ command tree.
+
+    Giới hạn Discord: 1 field ≤ 1024 ký tự, 1 embed ≤ 6000 ký tự — nội dung được
+    chunk thành nhiều field/embed thay vì cắt ngắn để không mất lệnh nào.
+    """
+    cmds = _iter_admin_commands(client)
+    if only_discord_perms:
+        # Quản trị server (không phải admin bot) chỉ thấy lệnh họ thực sự chạy được
+        cmds = [c for c in cmds if _admin_perm_label(c)]
+
+    groups: dict[str, list[commands.Command]] = {}
+    for c in cmds:
+        cog = c.cog
+        cog_name = cog.qualified_name if cog else "Khác"
+        emoji, name = COG_GROUP_MAPPING.get(cog_name, ("📦", cog_name))
+        groups.setdefault(f"{emoji} {name}", []).append(c)
+
+    ordered = [(g, groups[g]) for g in GROUP_ORDER if g in groups]
+    others = [(g, groups[g]) for g in groups if g not in GROUP_ORDER]
+
+    fields: list[tuple[str, str]] = []
+    for label, group_cmds in ordered + others:
+        lines = []
+        for cmd in group_cmds:
+            aliases = f" `({', '.join(cmd.aliases)})`" if cmd.aliases else ""
+            perm = _admin_perm_label(cmd)
+            perm_tag = f" 🔑 *[{perm}]*" if perm else ""
+            usage = f"`{prefix}{cmd.usage}`" if cmd.usage else f"`{prefix}{cmd.qualified_name}`"
+            lines.append(f"> {usage}{aliases}{perm_tag}\n> ╰ {_clean_brief(cmd)}")
+        # Chunk các dòng thành field ≤ 1000 ký tự
+        buf: list[str] = []
+        blen = 0
+        idx = 1
+        for ln in lines:
+            if blen + len(ln) + 1 > 1000 and buf:
+                fields.append((label if idx == 1 else f"{label} ({idx})", "\n".join(buf)))
+                buf, blen, idx = [], 0, idx + 1
+            buf.append(ln)
+            blen += len(ln) + 1
+        if buf:
+            fields.append((label if idx == 1 else f"{label} ({idx})", "\n".join(buf)))
+
+    header_desc = (
+        f"Prefix: **`{prefix}`** • Tổng: **{len(cmds)}** lệnh ẩn / giới hạn quyền\n"
+        "🔍 Danh sách được quét tự động từ toàn bộ lệnh của bot — luôn cập nhật."
+    )
+    embeds: list[discord.Embed] = []
+    cur: discord.Embed | None = None
+    cur_len = 0
+    for name, value in fields:
+        if cur is None or cur_len + len(name) + len(value) > 5700 or len(cur.fields) >= 25:
+            cur = make_embed(
+                title="👑 DANH SÁCH LỆNH OWNER / ADMIN 👑",
+                description=header_desc,
+                color=discord.Color.from_rgb(255, 215, 0),
+            )
+            if embeds:
+                cur.title = "👑 DANH SÁCH LỆNH OWNER / ADMIN 👑 (tiếp)"
+            embeds.append(cur)
+            cur_len = len(header_desc) + len(cur.title)
+        cur.add_field(name=name, value=value, inline=False)
+        cur_len += len(name) + len(value)
+
+    for emb in embeds:
+        emb.set_footer(text=f"Dùng {prefix}help <tên_lệnh> để xem chi tiết lệnh thường • Lệnh này ẩn với người chơi")
+    return embeds
 
 
 def _build_groups(client: commands.Bot):
     """Gom các lệnh theo nhóm, trả về dict {group_label: [commands]}."""
     groups: dict[str, list[commands.Command]] = {}
     for cog in client.cogs.values():
-        cog_cmds = [c for c in cog.get_commands() if not _is_admin_command(c)]
+        cog_cmds = [c for c in cog.get_commands() if not _is_owner_command(c)]
         if not cog_cmds:
             continue
         emoji, name = COG_GROUP_MAPPING.get(cog.qualified_name, ("📦", cog.qualified_name))
@@ -318,7 +483,7 @@ class Help(commands.Cog, name="help"):
         # ── Chi tiết 1 lệnh cụ thể ──
         if request:
             command = self.client.get_command(request)
-            if command is None or _is_admin_command(command):
+            if command is None or _is_owner_command(command):
                 await ctx.invoke(self.client.get_command("help"))
                 return
 
@@ -335,7 +500,7 @@ class Help(commands.Cog, name="help"):
 
             if isinstance(command, commands.Group):
                 subs = sorted(
-                    [s for s in command.commands if not _is_admin_command(s)],
+                    [s for s in command.commands if not _is_owner_command(s)],
                     key=lambda c: c.name,
                 )
                 if subs:
@@ -355,6 +520,36 @@ class Help(commands.Cog, name="help"):
         view   = HelpView(groups, prefix)
 
         await ctx.send(embed=embed, view=view)
+
+    @commands.command(
+        name="adhelp",
+        hidden=True,
+        aliases=["adminhelp", "ownerhelp"],
+        brief="[ADMIN] Danh sách các lệnh chỉ dành cho Owner / Admin.",
+        usage="adhelp",
+    )
+    async def adhelp(self, ctx: commands.Context):
+        """[ADMIN] Danh sách các lệnh ẩn chỉ dành cho Owner / Admin (quét tự động)."""
+        cfg_bot = getattr(config, "bot", None)
+        owner_ids = set(getattr(cfg_bot, "owner_ids", None) or [])
+        admin_ids = set(getattr(cfg_bot, "admin_ids", None) or [])
+        try:
+            is_app_owner = await self.client.is_owner(ctx.author)
+        except Exception:
+            is_app_owner = False
+        is_bot_admin = ctx.author.id in owner_ids or ctx.author.id in admin_ids or is_app_owner
+        is_guild_admin = bool(ctx.guild) and ctx.author.guild_permissions.administrator
+        if not (is_bot_admin or is_guild_admin):
+            return  # Không phản hồi gì hết, tàng hình hoàn toàn với người chơi thường
+
+        prefix = self.client.command_prefix
+        if isinstance(prefix, list):
+            prefix = prefix[0]
+
+        embeds = _admin_help_embeds(self.client, prefix, only_discord_perms=not is_bot_admin)
+        if not is_bot_admin:
+            embeds[0].title = "🛡️ DANH SÁCH LỆNH QUẢN TRỊ SERVER 🛡️"
+        await ctx.send(embeds=embeds)
 
     @commands.command(hidden=True)
     @commands.is_owner()

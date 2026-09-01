@@ -7,7 +7,7 @@ from typing import Optional
 import discord
 from discord.ext import commands
 
-from app.discord_bot.modules.betting import validate_money_bet
+from app.discord_bot.modules.betting import parse_bet_amount, validate_money_bet
 from app.discord_bot.modules.economy import Economy
 from app.discord_bot.modules.helpers import make_embed
 from app.discord_bot.modules.wallet_logging import log_wallet_change
@@ -43,28 +43,6 @@ TOWER_ACHIEVEMENTS = {
     "survive_3_eggs": "☠️ Sinh Tử Kỳ Tích (Vượt qua một tầng có 3 quả trứng)",
     "lucky_escape": "🍀 Thần May Mắn Gõ Cửa (Thắng một ván mà có ít nhất hai tầng xuất hiện 2 hoặc 3 trứng)"
 }
-
-
-def parse_bet_amount(val_str: str, current_money: int) -> int:
-    val_str = val_str.strip().lower()
-    if val_str in ["all", "allin", "all-in", "tất tay"]:
-        from app.discord_bot.modules.betting import get_capped_all_in_amount
-        return get_capped_all_in_amount(current_money)
-    
-    val_str = val_str.replace(",", "").replace(".", "")
-    
-    multiplier = 1
-    if val_str.endswith("k"):
-        multiplier = 1_000
-        val_str = val_str[:-1].strip()
-    elif val_str.endswith("m"):
-        multiplier = 1_000_000
-        val_str = val_str[:-1].strip()
-        
-    try:
-        return int(float(val_str) * multiplier)
-    except ValueError:
-        return 0
 
 
 def check_and_unlock_tower_achievements(stats: dict, game_info: dict) -> list[str]:
@@ -293,6 +271,8 @@ class TowerGameView(discord.ui.View):
         await self.message.edit(embed=embed, view=self)
 
     async def process_win(self):
+        if self.game_finished:
+            return
         self.game_finished = True
         self.stop()
         self.cog.active_users.discard(self.user_id)
@@ -307,7 +287,7 @@ class TowerGameView(discord.ui.View):
         net_profit = payout - self.bet_amount
 
         # Award payout
-        self.cog.economy.add_money(self.user_id, payout)
+        self.cog.economy.payout_winnings(self.user_id, payout, self.bet_amount)
         log_wallet_change(logger, event="tower_win_perfect", user_id=self.user_id, money_delta=payout, ctx=self.ctx)
 
         # Update stats
@@ -360,6 +340,8 @@ class TowerGameView(discord.ui.View):
         await self.message.edit(embed=embed, view=self)
 
     async def process_cash_out(self):
+        if self.game_finished:
+            return
         self.game_finished = True
         self.stop()
         self.cog.active_users.discard(self.user_id)
@@ -374,7 +356,7 @@ class TowerGameView(discord.ui.View):
         net_profit = payout - self.bet_amount
 
         # Award payout
-        self.cog.economy.add_money(self.user_id, payout)
+        self.cog.economy.payout_winnings(self.user_id, payout, self.bet_amount)
         log_wallet_change(logger, event="tower_cashout", user_id=self.user_id, money_delta=payout, ctx=self.ctx)
 
         # Update stats
@@ -435,21 +417,11 @@ class TowerGameView(discord.ui.View):
         current_payout = int(self.bet_amount * current_mult)
         next_payout = int(self.bet_amount * next_mult)
 
-        # Generate warning if active floor contains exactly 3 eggs
-        warning_msg = ""
-        if self.current_floor < 6 and sum(self.board[self.current_floor]) == 3:
-            warning_msg = (
-                "\n> ☠️ **Nguy hiểm!**\n"
-                "> *Bạn cảm nhận được luồng sát khí...*\n"
-                "> *Có điều gì đó bất thường ở tầng này...*\n"
-            )
-
         desc = (
             f"👤 **Người chơi:** {self.ctx.author.mention}\n"
             f"💵 **Tiền cược:** `{self.bet_amount:,} VNĐ`\n"
             f"💰 **Bảo toàn:** `{current_payout:,} VNĐ` (`{current_mult:.2f}x`)\n"
             f"⏭️ **Tầng kế:** `{next_payout:,} VNĐ` (`{next_mult:.2f}x`)\n"
-            f"{warning_msg}\n"
             f"{board_str}"
         )
         embed = make_embed(
@@ -478,7 +450,7 @@ class TowerGameView(discord.ui.View):
             payout = int(self.bet_amount * multiplier)
             net_profit = payout - self.bet_amount
 
-            self.cog.economy.add_money(self.user_id, payout)
+            self.cog.economy.payout_winnings(self.user_id, payout, self.bet_amount)
             log_wallet_change(logger, event="tower_timeout_cashout", user_id=self.user_id, money_delta=payout)
 
             stats = self.cog.economy.get_tower_stats(self.user_id)
@@ -656,8 +628,7 @@ class Tower(commands.Cog, name="Tower"):
                 description=(
                     "Tháp gồm **4 cột (A, B, C, D) × 6 tầng**. Hãy cẩn thận di chuyển từ tầng 1 đến tầng 6, "
                     "tránh những quả Trứng Rồng để không đánh thức Rồng Mẹ!\n\n"
-                    "🔥 **Điều thú vị:** Càng lên cao, số trứng xuất hiện ngẫu nhiên ở mỗi tầng càng nhiều (từ 1 đến 3 quả).\n"
-                    "☠️ **Đặc biệt:** Nếu tầng tiếp theo có **3 quả trứng** (xác suất sống chỉ 25%), bạn sẽ cảm nhận được luồng sát khí bất thường!\n\n"
+                    "🔥 **Điều thú vị:** Càng lên cao, số trứng xuất hiện ngẫu nhiên ở mỗi tầng càng nhiều (từ 1 đến 3 quả).\n\n"
                     "💵 **Bảng hệ số nhân:**\n"
                     "• Tầng 1: `1.25x`\n"
                     "• Tầng 2: `1.70x`\n"
@@ -702,23 +673,12 @@ class Tower(commands.Cog, name="Tower"):
         # Display initial embed
         next_mult = TOWER_MULTIPLIERS[1]
         next_payout = int(bet_amount * next_mult)
-        
-        warning_msg = ""
-        # Check warning for floor 1 (though floor 1 weight for 3 eggs is 0%, we keep it generic)
-        if sum(view.board[0]) == 3:
-            warning_msg = (
-                "\n> ☠️ **Nguy hiểm!**\n"
-                "> *Bạn cảm nhận được luồng sát khí...*\n"
-                "> *Có điều gì đó bất thường ở tầng này...*\n"
-            )
-
         board_str = view.render_board(reveal_all=False)
         desc = (
             f"👤 **Người chơi:** {ctx.author.mention}\n"
             f"💵 **Tiền cược:** `{bet_amount:,} VNĐ`\n"
             f"💰 **Bảo toàn:** `0 VNĐ` (`1.00x`)\n"
             f"⏭️ **Tầng kế:** `{next_payout:,} VNĐ` (`{next_mult:.2f}x`)\n"
-            f"{warning_msg}\n"
             f"{board_str}"
         )
         embed = make_embed(

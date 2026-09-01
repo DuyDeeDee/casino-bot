@@ -9,7 +9,7 @@ from typing import Optional, Dict
 import discord
 from discord.ext import commands
 
-from app.discord_bot.modules.betting import validate_money_bet
+from app.discord_bot.modules.betting import parse_bet_amount, validate_money_bet
 from app.discord_bot.modules.economy import Economy
 from app.discord_bot.modules.helpers import make_embed
 from app.discord_bot.modules.wallet_logging import log_wallet_change
@@ -62,27 +62,6 @@ GIAIMA_ACHIEVEMENTS = {
     "no_hint_nightmare": "🔥 Không Khoan Nhượng (Thắng độ khó Ác Mộng không dùng gợi ý)",
     "combo_master": "🏆 Bậc Thầy Giải Mã (Đạt chuỗi thắng combo x50%)"
 }
-
-def parse_bet_amount(val_str: str, current_money: int) -> int:
-    val_str = val_str.strip().lower()
-    if val_str in ["all", "allin", "all-in", "tất tay"]:
-        from app.discord_bot.modules.betting import get_capped_all_in_amount
-        return get_capped_all_in_amount(current_money)
-    
-    val_str = val_str.replace(",", "").replace(".", "")
-    
-    multiplier = 1
-    if val_str.endswith("k"):
-        multiplier = 1_000
-        val_str = val_str[:-1].strip()
-    elif val_str.endswith("m"):
-        multiplier = 1_000_000
-        val_str = val_str[:-1].strip()
-        
-    try:
-        return int(float(val_str) * multiplier)
-    except ValueError:
-        return 0
 
 async def get_user_name(bot: commands.Bot, user_id: int) -> str:
     user = bot.get_user(user_id)

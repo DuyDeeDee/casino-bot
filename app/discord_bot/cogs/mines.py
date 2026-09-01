@@ -6,7 +6,7 @@ from typing import Optional
 import discord
 from discord.ext import commands
 
-from app.discord_bot.modules.betting import validate_money_bet
+from app.discord_bot.modules.betting import parse_bet_amount, validate_money_bet
 from app.discord_bot.modules.economy import Economy
 from app.discord_bot.modules.helpers import make_embed
 from app.discord_bot.modules.wallet_logging import log_wallet_change
@@ -33,27 +33,6 @@ MINES_ACHIEVEMENTS = {
     "survive_7_bombs": "☠️ Sống sót với 7 bom (Thắng ván chơi có 7 bom)",
     "clear_all_safe": "🔥 Mở toàn bộ ô an toàn (Mở sạch ô an toàn và thắng)"
 }
-
-def parse_bet_amount(val_str: str, current_money: int) -> int:
-    val_str = val_str.strip().lower()
-    if val_str in ["all", "allin", "all-in", "tất tay"]:
-        from app.discord_bot.modules.betting import get_capped_all_in_amount
-        return get_capped_all_in_amount(current_money)
-    
-    val_str = val_str.replace(",", "").replace(".", "")
-    
-    multiplier = 1
-    if val_str.endswith("k"):
-        multiplier = 1_000
-        val_str = val_str[:-1].strip()
-    elif val_str.endswith("m"):
-        multiplier = 1_000_000
-        val_str = val_str[:-1].strip()
-        
-    try:
-        return int(float(val_str) * multiplier)
-    except ValueError:
-        return 0
 
 
 def index_to_coordinate(index: int) -> str:
@@ -119,6 +98,8 @@ class MinesGameView(discord.ui.View):
         self.num_bombs = num_bombs
         self.message: Optional[discord.Message] = None
         self.game_finished = False
+        self.settled = False
+        self.doubling = False
 
         # Initialize board: 0 = safe, 1 = bomb
         self.board = [0] * 9
@@ -232,6 +213,7 @@ class MinesGameView(discord.ui.View):
 
     async def process_boom(self, boom_index: int):
         self.game_finished = True
+        self.settled = True
         self.stop()
         self.cog.active_users.discard(self.user_id)
         self.cog.active_games.pop(self.user_id, None)
@@ -278,6 +260,7 @@ class MinesGameView(discord.ui.View):
 
     async def process_perfect_win(self):
         self.game_finished = True
+        self.settled = True
         self.stop()
         self.cog.active_users.discard(self.user_id)
         self.cog.active_games.pop(self.user_id, None)
@@ -310,7 +293,7 @@ class MinesGameView(discord.ui.View):
         final_payout = payout + streak_bonus
 
         # Credit payout to wallet
-        self.cog.economy.add_money(self.user_id, final_payout)
+        self.cog.economy.payout_winnings(self.user_id, final_payout, self.bet_amount)
         log_wallet_change(logger, event="mines_perfect_win", user_id=self.user_id, money_delta=final_payout, ctx=self.ctx)
 
         new_max_streak = max(stats["max_streak"], new_streak)
@@ -367,6 +350,8 @@ class MinesGameView(discord.ui.View):
         await self.process_cashout_decision()
 
     async def process_cashout_decision(self):
+        if self.game_finished:
+            return
         self.game_finished = True
         self.cog.active_users.discard(self.user_id)
         self.cog.active_games.pop(self.user_id, None)
@@ -433,6 +418,9 @@ class MinesGameView(discord.ui.View):
         await self.process_double_or_nothing_start()
 
     async def process_double_or_nothing_start(self):
+        if self.doubling:
+            return
+        self.doubling = True
         self.remove_item(self.double_button)
         self.remove_item(self.claim_button)
         
@@ -472,9 +460,13 @@ class MinesGameView(discord.ui.View):
         await self.process_double_choice(interaction, clicked_index=1)
 
     async def process_double_choice(self, interaction: discord.Interaction, clicked_index: int):
+        already_settled = self.settled
+        self.settled = True
         await interaction.response.defer()
         self.stop()
-        
+        if already_settled:
+            return
+
         is_win = (clicked_index == self.winning_card)
         
         self.remove_item(self.card_left_button)
@@ -503,7 +495,7 @@ class MinesGameView(discord.ui.View):
         
         if is_win:
             doubled_payout = self.final_payout * 2
-            self.cog.economy.add_money(self.user_id, doubled_payout)
+            self.cog.economy.payout_winnings(self.user_id, doubled_payout, self.bet_amount)
             log_wallet_change(logger, event="mines_double_win", user_id=self.user_id, money_delta=doubled_payout, ctx=self.ctx)
             
             new_max_streak = max(stats["max_streak"], self.new_streak)
@@ -578,7 +570,11 @@ class MinesGameView(discord.ui.View):
         await self.process_cashout_claim()
 
     async def process_cashout_claim(self):
-        self.cog.economy.add_money(self.user_id, self.final_payout)
+        if self.settled:
+            return
+        self.settled = True
+        self.stop()
+        self.cog.economy.payout_winnings(self.user_id, self.final_payout, self.bet_amount)
         log_wallet_change(logger, event="mines_win", user_id=self.user_id, money_delta=self.final_payout, ctx=self.ctx)
         
         stats = self.cog.economy.get_mines_stats(self.user_id)
@@ -715,10 +711,15 @@ class MinesGameView(discord.ui.View):
         await self.message.edit(embed=embed, view=self)
 
     async def on_timeout(self):
-        if self.game_finished:
+        if self.settled:
+            return
+        self.stop()
+        # Đang ở màn Nhận Tiền / Double or Nothing: tự nhận tiền thay vì bỏ lửng
+        if self.game_finished and self.final_payout > 0:
+            await self.process_cashout_claim()
             return
         self.game_finished = True
-        self.stop()
+        self.settled = True
         self.cog.active_users.discard(self.user_id)
         self.cog.active_games.pop(self.user_id, None)
         
@@ -761,8 +762,8 @@ class MinesGameView(discord.ui.View):
                 
             streak_bonus = int(payout * streak_bonus_percent)
             final_payout = payout + streak_bonus
-            
-            self.cog.economy.add_money(self.user_id, final_payout)
+
+            self.cog.economy.payout_winnings(self.user_id, final_payout, self.bet_amount)
             log_wallet_change(logger, event="mines_timeout_cashout", user_id=self.user_id, money_delta=final_payout)
             
             new_max_streak = max(stats["max_streak"], new_streak)

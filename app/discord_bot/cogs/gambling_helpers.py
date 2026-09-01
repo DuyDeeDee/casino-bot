@@ -9,9 +9,28 @@ from discord.ext import commands
 from app.config import config
 from app.discord_bot.modules.economy import Economy
 from app.discord_bot.modules.helpers import make_embed
+from app.discord_bot.modules.member_levels import check_give_limit, record_give, remaining_daily
+from app.discord_bot.modules.mini_games import WorkRushView
 from app.discord_bot.modules.wallet_logging import log_wallet_change
 
 logger = logging.getLogger(__name__)
+
+
+# Career progression ladder: cooldown and XP gain scale with degree tier.
+# Cooldown applies from the HIGHEST degree owned; jobs are weighted toward it.
+CAREER_TIERS: dict[str, dict] = {
+    "bang_cap":        {"tier": 1, "cooldown": 3600,  "xp_per_shift": 1},
+    "bang_kien_truc":  {"tier": 2, "cooldown": 7200,  "xp_per_shift": 2},
+    "bang_phi_hanh":   {"tier": 3, "cooldown": 10800, "xp_per_shift": 3},
+    "bang_bac_si":     {"tier": 4, "cooldown": 18000, "xp_per_shift": 5},
+}
+# Degree prerequisites (previous degree + total work XP). Thresholds are
+# readable from system_settings so they can be tuned without code changes.
+CAREER_PREREQUISITES: dict[str, dict] = {
+    "bang_kien_truc": {"requires": "bang_cap",    "xp_setting": "req_kien_truc_xp", "xp_default": 15},
+    "bang_phi_hanh":  {"requires": "bang_kien_truc", "xp_setting": "req_phi_hanh_xp", "xp_default": 40},
+    "bang_bac_si":    {"requires": "bang_phi_hanh",  "xp_setting": "req_bac_si_xp",   "xp_default": 80},
+}
 
 
 class ConfirmResetView(discord.ui.View):
@@ -154,7 +173,7 @@ class OwnerFeedbackView(discord.ui.View):
 class GamblingHelpers(commands.Cog, name="General"):
     def __init__(self, client: commands.Bot) -> None:
         self.client = client
-        self.economy = getattr(client, "economy", Economy())
+        self.economy = getattr(client, "economy", None) or Economy()
         self.client.add_check(self.check_user_loans_check)
 
     def cog_unload(self) -> None:
@@ -226,13 +245,14 @@ class GamblingHelpers(commands.Cog, name="General"):
             actor_user_id=ctx.author.id,
         )
 
-    @commands.command(hidden=True)
+    @commands.command(name="resetall", aliases=["reset", "reset-all", "ecoreset"], hidden=True)
     @commands.is_owner()
     async def resetall(self, ctx: commands.Context):
-        """Reset tiền (VND), vàng (Gold) và toàn bộ dữ liệu khởi nghiệp của tất cả người chơi."""
+        """Reset tiền (VND), vàng (Gold) và toàn bộ dữ liệu (ngân hàng, xe, gà, hôn nhân, túi đồ, cổ phiếu...) của tất cả người chơi."""
         view = ConfirmResetView(ctx.author)
         msg = await ctx.send(
-            "⚠️ **CẢNH BÁO:** Bạn có chắc chắn muốn reset toàn bộ tiền (VND), vàng (Gold), và dữ liệu khởi nghiệp (doanh nghiệp, túi đồ, cổ phiếu...) của **TẤT CẢ** người chơi không?\nHành động này không thể hoàn tác!",
+            "⚠️ **CẢNH BÁO:** Bạn có chắc chắn muốn reset toàn bộ tiền (VND), vàng (Gold), ngân hàng, xe, gà chọi, hôn nhân, túi đồ, quà khởi nghiệp... của **TẤT CẢ** người chơi không?\n"
+            "Hành động này sẽ đưa toàn bộ người chơi về trạng thái mới ban đầu và **không thể hoàn tác**!",
             view=view
         )
         
@@ -249,9 +269,9 @@ class GamblingHelpers(commands.Cog, name="General"):
                 actor_user_id=ctx.author.id,
             )
             try:
-                await msg.edit(content="✅ **Thành công:** Đã reset toàn bộ tiền, vàng và dữ liệu khởi nghiệp của tất cả người chơi về mặc định!")
+                await msg.edit(content="✅ **Thành công:** Đã reset toàn bộ ví tiền, tài sản và dữ liệu của tất cả người chơi về trạng thái ban đầu!")
             except Exception:
-                await ctx.send("✅ **Thành công:** Đã reset toàn bộ tiền, vàng và dữ liệu khởi nghiệp của tất cả người chơi về mặc định!")
+                await ctx.send("✅ **Thành công:** Đã reset toàn bộ ví tiền, tài sản và dữ liệu của tất cả người chơi về trạng thái ban đầu!")
 
     @commands.command(
         brief="Xem số tiền bạn hoặc người khác đang có",
@@ -454,7 +474,16 @@ class GamblingHelpers(commands.Cog, name="General"):
                         
                     embed.description += f"\n\n💞 **Đồng Cam Cộng Khổ:** Bạn đời của bạn ({spouse_mention}) đã nhận thêm **5%** tiền tiêu vặt (`+{share_bonus:,} VND`) vào ví!"
 
-        await ctx.send(embed=embed)
+        rush_view = self.build_work_rush_view(ctx.author, embed, earned, ctx=ctx)
+        if rush_view:
+            try:
+                msg = await ctx.send(embed=embed, view=rush_view)
+                rush_view.message = msg
+                rush_view.start()
+            except Exception:
+                await ctx.send(embed=embed)
+        else:
+            await ctx.send(embed=embed)
 
     async def process_work(self, user: discord.User | discord.Member, ctx: commands.Context | None = None) -> discord.Embed:
         user_id = user.id
@@ -466,11 +495,27 @@ class GamblingHelpers(commands.Cog, name="General"):
             bonus_pct = int((marriage_multiplier - 1.0) * 100)
             marriage_info = f"\n💖 *Đã cộng thêm **{bonus_pct}%** từ Thệ ước Hôn nhân!*"
 
+        # Work XP: mỗi ca cho XP theo cấp nghề; mỗi 20 XP lên 1 cấp (tối đa 5) → +5% lương/cấp
+        inventory_preview = self.economy.get_inventory(user_id)
+        owned_degrees = [item for item, qty in inventory_preview
+                         if qty > 0 and item in CAREER_TIERS]
+        highest = max(owned_degrees, key=lambda d: CAREER_TIERS[d]["tier"]) if owned_degrees else None
+        xp_per_shift = CAREER_TIERS[highest]["xp_per_shift"] if highest else 1
+
+        work_xp = self.economy.get_work_xp(user_id)
+        self.economy.set_work_xp(user_id, work_xp + xp_per_shift)
+        work_level = min(5, (work_xp + xp_per_shift) // 20)
+        work_mult = 1.0 + 0.05 * work_level
+
+        from app.discord_bot.cogs.server_events import get_active_work_mult
+        event_mult = get_active_work_mult(self.economy)
+
         # Kiểm tra cooldown dựa trên database
         stats = self.economy.get_simulator_stats(user_id)
         last_work = stats[4] if len(stats) > 4 else 0
         now = int(time.time())
-        cooldown = 3600  # Cooldown 1 tiếng (3600 giây)
+        # Cooldown theo cấp nghề cao nhất đang sở hữu: ca làm càng cao cấp càng dài
+        cooldown = CAREER_TIERS[highest]["cooldown"] if highest else 3600
         
         if now - last_work < cooldown:
             remaining = cooldown - (now - last_work)
@@ -499,6 +544,7 @@ class GamblingHelpers(commands.Cog, name="General"):
 
         # Cập nhật thời gian làm việc mới nhất trước khi thực hiện công việc
         self.economy.set_simulator_stats(user_id, last_work=now)
+        self.economy.bump_quest(user_id, "work")
 
         # Lấy thông tin tài khoản người chơi
         profile = self.economy.get_entry(user_id)
@@ -514,7 +560,7 @@ class GamblingHelpers(commands.Cog, name="General"):
             scenario = random.choice(special_scenarios)
             reward = random.randint(1_000_000, 5_000_000)
             if marriage_multiplier > 1.0:
-                reward = int(reward * marriage_multiplier)
+                reward = int(reward * marriage_multiplier * work_mult * event_mult)
             
             # Cộng tiền vào tài khoản
             self.economy.add_money(user_id, reward)
@@ -552,16 +598,22 @@ class GamblingHelpers(commands.Cog, name="General"):
                 owned_careers.append(item)
 
         if owned_careers:
-            # Chọn ngẫu nhiên một trong các nghề nghiệp đang sở hữu
-            chosen_career = random.choice(owned_careers)
+            # Ưu tiên nghề cao nhất đang sở hữu (60%) để xứng với cooldown dài
+            degreed = [c for c in owned_careers if c in CAREER_TIERS]
+            if degreed:
+                top = max(degreed, key=lambda d: CAREER_TIERS[d]["tier"])
+                others = [c for c in owned_careers if c != top]
+                chosen_career = top if (not others or random.random() < 0.6) else random.choice(others)
+            else:
+                chosen_career = random.choice(owned_careers)
             
             if chosen_career == 'bang_cap':
                 # Kỹ thuật công nghệ (Rủi ro 10%)
                 if random.random() < 0.10:
-                    penalty = 500_000
+                    penalty = 400_000
                     actual_deduction = min(current_money, penalty)
                     self.economy.add_money(user_id, -penalty)
-                    
+
                     log_wallet_change(
                         logger,
                         event="work_tech_badluck",
@@ -574,7 +626,7 @@ class GamblingHelpers(commands.Cog, name="General"):
                         title="🔥 SỰ CỐ CÔNG NGHỆ! 🔥",
                         description=(
                             f"**{user.name}** gặp sự cố kỹ thuật:\n"
-                            f"👉 *\"Bạn làm chập cháy mạch, phải đền bù 500,000 VND.\"*\n\n"
+                            f"👉 *\"Bạn làm chập cháy mạch, phải đền bù 400,000 VND.\"*\n\n"
                             f"💸 **Thất thoát:** `-{actual_deduction:,} VND`\n"
                             f"💳 **Số dư mới:** `{new_balance:,} VND`"
                         ),
@@ -582,14 +634,14 @@ class GamblingHelpers(commands.Cog, name="General"):
                     )
                 else:
                     tech_jobs = [
-                        ("Thiết kế cho công ty khởi nghiệp 🛠️", 1_350_000),
-                        ("Setup thành công server cho khách hàng 🎮", 720_000),
-                        ("Phát triển ứng dụng Mobile mini cho shop quần áo 📱", 1_080_000),
-                        ("Khắc phục sự cố mạng doanh nghiệp trong đêm 🌐", 900_000)
+                        ("Thiết kế cho công ty khởi nghiệp 🛠️", 1_000_000),
+                        ("Setup thành công server cho khách hàng 🎮", 550_000),
+                        ("Phát triển ứng dụng Mobile mini cho shop quần áo 📱", 800_000),
+                        ("Khắc phục sự cố mạng doanh nghiệp trong đêm 🌐", 700_000)
                     ]
                     job_desc, reward = random.choice(tech_jobs)
                     if marriage_multiplier > 1.0:
-                        reward = int(reward * marriage_multiplier)
+                        reward = int(reward * marriage_multiplier * work_mult * event_mult)
                     self.economy.add_money(user_id, reward)
                     
                     log_wallet_change(
@@ -614,10 +666,10 @@ class GamblingHelpers(commands.Cog, name="General"):
             elif chosen_career == 'bang_kien_truc':
                 # Kiến trúc sư (Rủi ro 10%)
                 if random.random() < 0.10:
-                    penalty = 800_000
+                    penalty = 600_000
                     actual_deduction = min(current_money, penalty)
                     self.economy.add_money(user_id, -penalty)
-                    
+
                     log_wallet_change(
                         logger,
                         event="work_arch_badluck",
@@ -630,7 +682,7 @@ class GamblingHelpers(commands.Cog, name="General"):
                         title="🔥 SỰ CỐ THIẾT KẾ! 🔥",
                         description=(
                             f"**{user.name}** gặp lỗi kỹ thuật bản vẽ:\n"
-                            f"👉 *\"Bạn thiết kế sai kết cấu móng nhà, bị phạt đền bù 800,000 VND.\"*\n\n"
+                            f"👉 *\"Bạn thiết kế sai kết cấu móng nhà, bị phạt đền bù 600,000 VND.\"*\n\n"
                             f"💸 **Thất thoát:** `-{actual_deduction:,} VND`\n"
                             f"💳 **Số dư mới:** `{new_balance:,} VND`"
                         ),
@@ -638,13 +690,13 @@ class GamblingHelpers(commands.Cog, name="General"):
                     )
                 else:
                     arch_jobs = [
-                        ("Vẽ bản thiết kế biệt thự nghỉ dưỡng ở Đà Lạt 📐", 2_160_000),
-                        ("Tư vấn quy hoạch đô thị cho tập đoàn bất động sản 🏙️", 1_620_000),
-                        ("Thiết kế nội thất căn hộ Penthouse sang trọng 🛋️", 2_700_000)
+                        ("Vẽ bản thiết kế biệt thự nghỉ dưỡng ở Đà Lạt 📐", 1_600_000),
+                        ("Tư vấn quy hoạch đô thị cho tập đoàn bất động sản 🏙️", 1_200_000),
+                        ("Thiết kế nội thất căn hộ Penthouse sang trọng 🛋️", 2_000_000)
                     ]
                     job_desc, reward = random.choice(arch_jobs)
                     if marriage_multiplier > 1.0:
-                        reward = int(reward * marriage_multiplier)
+                        reward = int(reward * marriage_multiplier * work_mult * event_mult)
                     self.economy.add_money(user_id, reward)
                     
                     log_wallet_change(
@@ -669,10 +721,10 @@ class GamblingHelpers(commands.Cog, name="General"):
             elif chosen_career == 'bang_phi_hanh':
                 # Phi hành gia (Rủi ro 10%)
                 if random.random() < 0.10:
-                    penalty = 1_500_000
+                    penalty = 1_200_000
                     actual_deduction = min(current_money, penalty)
                     self.economy.add_money(user_id, -penalty)
-                    
+
                     log_wallet_change(
                         logger,
                         event="work_astro_badluck",
@@ -685,7 +737,7 @@ class GamblingHelpers(commands.Cog, name="General"):
                         title="🔥 SỰ CỐ KHÔNG GIAN! 🔥",
                         description=(
                             f"**{user.name}** gặp sự cố ngoài không gian:\n"
-                            f"👉 *\"Gặp sự cố rò rỉ oxy trên trạm ISS, phải bồi thường phí xử lý khẩn cấp 1,500,000 VND.\"*\n\n"
+                            f"👉 *\"Gặp sự cố rò rỉ oxy trên trạm ISS, phải bồi thường phí xử lý khẩn cấp 1,200,000 VND.\"*\n\n"
                             f"💸 **Thất thoát:** `-{actual_deduction:,} VND`\n"
                             f"💳 **Số dư mới:** `{new_balance:,} VND`"
                         ),
@@ -693,13 +745,13 @@ class GamblingHelpers(commands.Cog, name="General"):
                     )
                 else:
                     astro_jobs = [
-                        ("Thực hiện chuyến đi bộ ngoài không gian sửa tấm pin mặt trời 🚀", 5_400_000),
-                        ("Nghiên cứu mẫu đất đá quý từ Sao Hỏa gửi về Trái Đất ☄️", 4_050_000),
-                        ("Huấn luyện phi hành đoàn kế cận tại trung tâm vũ trụ 🌌", 7_200_000)
+                        ("Thực hiện chuyến đi bộ ngoài không gian sửa tấm pin mặt trời 🚀", 4_000_000),
+                        ("Nghiên cứu mẫu đất đá quý từ Sao Hỏa gửi về Trái Đất ☄️", 3_000_000),
+                        ("Huấn luyện phi hành đoàn kế cận tại trung tâm vũ trụ 🌌", 5_400_000)
                     ]
                     job_desc, reward = random.choice(astro_jobs)
                     if marriage_multiplier > 1.0:
-                        reward = int(reward * marriage_multiplier)
+                        reward = int(reward * marriage_multiplier * work_mult * event_mult)
                     self.economy.add_money(user_id, reward)
                     
                     log_wallet_change(
@@ -724,10 +776,10 @@ class GamblingHelpers(commands.Cog, name="General"):
             elif chosen_career == 'bang_bac_si':
                 # Bác sĩ (Rủi ro 10%)
                 if random.random() < 0.10:
-                    penalty = 3_000_000
+                    penalty = 2_500_000
                     actual_deduction = min(current_money, penalty)
                     self.economy.add_money(user_id, -penalty)
-                    
+
                     log_wallet_change(
                         logger,
                         event="work_doc_badluck",
@@ -740,7 +792,7 @@ class GamblingHelpers(commands.Cog, name="General"):
                         title="🔥 TAI NẠN Y KHOA! 🔥",
                         description=(
                             f"**{user.name}** gặp sự cố chuyên môn:\n"
-                            f"👉 *\"Kê nhầm đơn thuốc bổ đắt đỏ cho khách VIP, bị bệnh viện trừ lương đền bù 3,000,000 VND.\"*\n\n"
+                            f"👉 *\"Kê nhầm đơn thuốc bổ đắt đỏ cho khách VIP, bị bệnh viện trừ lương đền bù 2,500,000 VND.\"*\n\n"
                             f"💸 **Thất thoát:** `-{actual_deduction:,} VND`\n"
                             f"💳 **Số dư mới:** `{new_balance:,} VND`"
                         ),
@@ -748,13 +800,13 @@ class GamblingHelpers(commands.Cog, name="General"):
                     )
                 else:
                     doc_jobs = [
-                        ("Phẫu thuật thành công ca ghép tim phức tạp 🩺", 16_200_000),
-                        ("Điều trị phục hồi sức khỏe VIP cho tỷ phú 🏥", 10_800_000),
-                        ("Nghiên cứu lâm sàng vắc-xin thế hệ mới 🧪", 18_000_000)
+                        ("Phẫu thuật thành công ca ghép tim phức tạp 🩺", 12_000_000),
+                        ("Điều trị phục hồi sức khỏe VIP cho tỷ phú 🏥", 8_000_000),
+                        ("Nghiên cứu lâm sàng vắc-xin thế hệ mới 🧪", 13_500_000)
                     ]
                     job_desc, reward = random.choice(doc_jobs)
                     if marriage_multiplier > 1.0:
-                        reward = int(reward * marriage_multiplier)
+                        reward = int(reward * marriage_multiplier * work_mult * event_mult)
                     self.economy.add_money(user_id, reward)
                     
                     log_wallet_change(
@@ -779,10 +831,10 @@ class GamblingHelpers(commands.Cog, name="General"):
             else: # the_tho_san
                 # Thợ săn kho báu (Rủi ro 10%)
                 if random.random() < 0.10:
-                    penalty = 5_000_000
+                    penalty = 4_000_000
                     actual_deduction = min(current_money, penalty)
                     self.economy.add_money(user_id, -penalty)
-                    
+
                     log_wallet_change(
                         logger,
                         event="work_hunter_badluck",
@@ -795,7 +847,7 @@ class GamblingHelpers(commands.Cog, name="General"):
                         title="🔥 BẪY CỔ ĐẠI KÍCH HOẠT! 🔥",
                         description=(
                             f"**{user.name}** bị sập bẫy trong hầm mộ:\n"
-                            f"👉 *\"Bị sập bẫy đá cổ trong hầm mộ, phải chi tiền viện phí điều trị vết thương 5,000,000 VND.\"*\n\n"
+                            f"👉 *\"Bị sập bẫy đá cổ trong hầm mộ, phải chi tiền viện phí điều trị vết thương 4,000,000 VND.\"*\n\n"
                             f"💸 **Thất thoát:** `-{actual_deduction:,} VND`\n"
                             f"💳 **Số dư mới:** `{new_balance:,} VND`"
                         ),
@@ -805,15 +857,16 @@ class GamblingHelpers(commands.Cog, name="General"):
                     from app.discord_bot.cogs.simulator import TREASURES
                     
                     r = random.random()
-                    if r < 0.40:
+                    # Tỉ lệ nerfed: Rác 50% / Thường 30% / Hiếm 16% / Quý 3,85% / Huyền thoại 0,135% / Thần thoại 0,015%
+                    if r < 0.50:
                         rarity_pool = [k for k, v in TREASURES.items() if v["rarity"] == "Rác thải"]
-                    elif r < 0.75:
+                    elif r < 0.80:
                         rarity_pool = [k for k, v in TREASURES.items() if v["rarity"] == "Thường"]
-                    elif r < 0.93:
+                    elif r < 0.96:
                         rarity_pool = [k for k, v in TREASURES.items() if v["rarity"] == "Hiếm"]
-                    elif r < 0.998:
+                    elif r < 0.9985:
                         rarity_pool = [k for k, v in TREASURES.items() if v["rarity"] == "Quý hiếm"]
-                    elif r < 0.9998:
+                    elif r < 0.99985:
                         rarity_pool = [k for k, v in TREASURES.items() if v["rarity"] == "Huyền thoại"]
                     else:
                         rarity_pool = [k for k, v in TREASURES.items() if v["rarity"] == "Thần thoại"]
@@ -884,7 +937,7 @@ class GamblingHelpers(commands.Cog, name="General"):
             job = random.choice(jobs)
             reward = random.randint(18_000, 45_000)
             if marriage_multiplier > 1.0:
-                reward = int(reward * marriage_multiplier)
+                reward = int(reward * marriage_multiplier * work_mult * event_mult)
             
             # Cộng tiền vào tài khoản
             self.economy.add_money(user_id, reward)
@@ -951,6 +1004,47 @@ class GamblingHelpers(commands.Cog, name="General"):
                 embed.set_thumbnail(url=user.display_avatar.url)
             return embed
 
+    def build_work_rush_view(self, user: discord.User | discord.Member, embed: discord.Embed, earned: int | None, ctx=None):
+        """Chỉ mở mini game 'Bốc hàng đúng nhịp' cho ca làm được trả lương bình thường.
+
+        Không áp dụng cho: ca bị phạt (earned <= 0), ca thợ săn nhận cổ vật (earned == 0)
+        và sự kiện đặc biệt (đã là thưởng lớn sẵn).
+        """
+        if earned is None or earned <= 0:
+            return None
+        if "SỰ KIỆN ĐẶC BIỆT" in (embed.title or ""):
+            return None
+        return WorkRushView(self.grant_work_bonus, user, earned, embed, ctx=ctx)
+
+    async def grant_work_bonus(self, user: discord.User | discord.Member, base_reward: int, ctx=None) -> int:
+        """Cộng thưởng mini game 15-25% lương; có nhẫn Bướm Vĩnh Hằng thì chia 5% cho bạn đời."""
+        bonus = max(1, int(base_reward * random.uniform(0.15, 0.25)))
+        self.economy.add_money(user.id, bonus)
+        log_wallet_change(
+            logger,
+            event="work_bonus_minigame",
+            user_id=user.id,
+            money_delta=bonus,
+            ctx=ctx,
+            base_reward=base_reward,
+        )
+
+        marriage = self.economy.get_marriage(user.id)
+        if marriage and marriage[2] == "ring_eternal_butterfly":
+            share_bonus = int(bonus * 0.05)
+            if share_bonus > 0:
+                spouse_id = marriage[1] if user.id == marriage[0] else marriage[0]
+                self.economy.add_money(spouse_id, share_bonus)
+                log_wallet_change(
+                    logger,
+                    event="work_bonus_spouse_share",
+                    user_id=spouse_id,
+                    money_delta=share_bonus,
+                    ctx=ctx,
+                    base_bonus=bonus,
+                )
+        return bonus
+
     @commands.command(
         brief="Nhận quà khởi nghiệp lần đầu tiên đặt chân lên thành phố",
         usage="khoinghiep",
@@ -999,6 +1093,137 @@ class GamblingHelpers(commands.Cog, name="General"):
             color=discord.Color.purple(), # Màu tím/hồng
         )
         embed.set_thumbnail(url=ctx.author.display_avatar.url)
+        await ctx.send(embed=embed)
+
+    @commands.command(
+        brief="Nhập mã quà tặng (gift code) để nhận phần thưởng đặc biệt.",
+        usage="redeem <mã_code>",
+        aliases=["nhapcode", "giftredeem"],
+    )
+    async def redeem(self, ctx: commands.Context, code: str = None):
+        if not code:
+            prefix = self.client.command_prefix
+            if isinstance(prefix, list):
+                prefix = prefix[0]
+            await ctx.send(f"❌ Vui lòng nhập mã code. Cú pháp: `{prefix}redeem <mã_code>`")
+            return
+
+        user_id = ctx.author.id
+        success, message, reward_money, reward_credits = self.economy.redeem_gift_code(user_id, code)
+
+        if not success:
+            embed = make_embed(
+                title="❌ Nhập code thất bại",
+                description=f"**{ctx.author.name}**, {message}",
+                color=discord.Color.red(),
+            )
+            embed.set_thumbnail(url=ctx.author.display_avatar.url)
+            await ctx.send(embed=embed)
+            return
+
+        # Thành công
+        reward_lines = []
+        if reward_money > 0:
+            reward_lines.append(f"💰 **+{reward_money:,} VND**")
+        if reward_credits > 0:
+            reward_lines.append(f"🪙 **+{reward_credits:,.1f} Gold**")
+
+        new_balance = self.economy.get_entry(user_id)
+        embed = make_embed(
+            title="🎁 NHẬP CODE THÀNH CÔNG! 🎁",
+            description=(
+                f"Chúc mừng **{ctx.author.name}**! Bạn đã nhận được phần thưởng từ mã code **`{code.upper()}`**:\n\n"
+                + "\n".join(reward_lines)
+                + f"\n\n💳 **Số dư hiện tại:** `{new_balance[1]:,} VND` | `{new_balance[2]:,.1f} Gold`"
+            ),
+            color=discord.Color.green(),
+        )
+        embed.set_thumbnail(url=ctx.author.display_avatar.url)
+        await ctx.send(embed=embed)
+
+        log_wallet_change(
+            logger,
+            event="redeem_gift_code",
+            user_id=user_id,
+            money_delta=reward_money,
+            credits_delta=reward_credits,
+            ctx=ctx,
+            code=code.upper(),
+        )
+
+    @commands.group(
+        hidden=True,
+        invoke_without_command=True,
+    )
+    @commands.is_owner()
+    async def giftcode(self, ctx: commands.Context):
+        """Quản lý gift code (Owner only)."""
+        prefix = self.client.command_prefix
+        if isinstance(prefix, list):
+            prefix = prefix[0]
+        await ctx.send(
+            f"📦 **Gift Code Commands:**\n"
+            f"`{prefix}giftcode create <code> <tiền> [vàng] [max_uses]` — Tạo code\n"
+            f"`{prefix}giftcode delete <code>` — Xóa code\n"
+            f"`{prefix}giftcode list` — Xem danh sách codes"
+        )
+
+    @giftcode.command(name="create")
+    @commands.is_owner()
+    async def giftcode_create(self, ctx: commands.Context, code: str, money: int, credits: float = 0.0, max_uses: int = 0):
+        """Tạo gift code mới."""
+        success = self.economy.create_gift_code(code, reward_money=money, reward_credits=credits, max_uses=max_uses)
+        if success:
+            uses_text = f"{max_uses} lượt" if max_uses > 0 else "Không giới hạn"
+            embed = make_embed(
+                title="✅ Tạo Gift Code thành công!",
+                description=(
+                    f"**Code:** `{code.upper()}`\n"
+                    f"💰 **Thưởng tiền:** `{money:,} VND`\n"
+                    f"🪙 **Thưởng vàng:** `{credits:,.1f} Gold`\n"
+                    f"📊 **Số lượt dùng:** {uses_text}"
+                ),
+                color=discord.Color.green(),
+            )
+            await ctx.send(embed=embed)
+        else:
+            await ctx.send(f"❌ Code `{code.upper()}` đã tồn tại!")
+
+    @giftcode.command(name="delete")
+    @commands.is_owner()
+    async def giftcode_delete(self, ctx: commands.Context, code: str):
+        """Xóa gift code."""
+        deleted = self.economy.delete_gift_code(code)
+        if deleted:
+            await ctx.send(f"✅ Đã xóa code `{code.upper()}` và toàn bộ lịch sử nhập code.")
+        else:
+            await ctx.send(f"❌ Không tìm thấy code `{code.upper()}`.")
+
+    @giftcode.command(name="list")
+    @commands.is_owner()
+    async def giftcode_list(self, ctx: commands.Context):
+        """Xem danh sách tất cả gift codes."""
+        codes = self.economy.list_gift_codes()
+        if not codes:
+            await ctx.send("📦 Chưa có gift code nào được tạo.")
+            return
+
+        lines = []
+        for code, money, credits, max_uses, used_count, expires_at, created_at in codes:
+            uses_text = f"{used_count}/{max_uses}" if max_uses > 0 else f"{used_count}/∞"
+            reward_parts = []
+            if money > 0:
+                reward_parts.append(f"{money:,} VND")
+            if credits > 0:
+                reward_parts.append(f"{credits:,.1f} Gold")
+            reward_text = " + ".join(reward_parts) if reward_parts else "Không có"
+            lines.append(f"• `{code}` — {reward_text} | Đã dùng: {uses_text}")
+
+        embed = make_embed(
+            title="📦 Danh sách Gift Codes",
+            description="\n".join(lines),
+            color=discord.Color.blurple(),
+        )
         await ctx.send(embed=embed)
 
     @commands.command(
@@ -1121,6 +1346,12 @@ class GamblingHelpers(commands.Cog, name="General"):
         if target.id == ctx.author.id:
             await ctx.send("❌ **Lỗi:** Bạn không thể tự chuyển tiền cho chính mình!")
             return
+        if self.economy.is_banned(target.id):
+            await ctx.send(f"❌ **Lỗi:** **{target.display_name}** đã bị khóa tài khoản (banned), không thể nhận tiền!")
+            return
+        if self.economy.is_in_jail(target.id):
+            await ctx.send(f"❌ **Lỗi:** **{target.display_name}** đang ở trong tù, không thể nhận tiền!")
+            return
         if amount <= 0:
             await ctx.send("❌ **Lỗi:** Số tiền chuyển phải lớn hơn 0 VND.")
             return
@@ -1130,8 +1361,17 @@ class GamblingHelpers(commands.Cog, name="General"):
             await ctx.send(f"❌ **Lỗi:** Bạn không có đủ tiền. Số dư hiện tại của bạn là **{sender_money:,} VND**.")
             return
 
-        self.economy.add_money(ctx.author.id, -amount)
-        self.economy.add_money(target.id, amount)
+        # Giới hạn cho/nhận theo cấp độ thành viên (owner bot được bỏ qua)
+        if not (ctx.author.id in config.bot.owner_ids or await ctx.bot.is_owner(ctx.author)):
+            allowed, limit_error = check_give_limit(self.economy, ctx.author.id, target.id, amount, "money")
+            if not allowed:
+                await ctx.send(limit_error)
+                return
+
+        with self.economy.transaction():
+            self.economy.add_money(ctx.author.id, -amount)
+            self.economy.add_money(target.id, amount)
+        record_give(self.economy, ctx.author.id, target.id, amount, "money")
 
         log_wallet_change(
             logger,
@@ -1150,11 +1390,14 @@ class GamblingHelpers(commands.Cog, name="General"):
             sender_id=ctx.author.id,
         )
 
+        sender_remaining = remaining_daily(self.economy, ctx.author.id, "money")["sent_remaining"]
+        receiver_remaining = remaining_daily(self.economy, target.id, "money")["received_remaining"]
         embed = make_embed(
             title="💸 CHUYỂN TIỀN THÀNH CÔNG 💸",
             description=(
                 f"**{ctx.author.mention}** đã chuyển thành công **{amount:,} VND** cho **{target.mention}**!\n\n"
-                f"💳 **Số dư mới của bạn:** `{self.economy.get_entry(ctx.author.id)[1]:,} VND`"
+                f"💳 **Số dư mới của bạn:** `{self.economy.get_entry(ctx.author.id)[1]:,} VND`\n"
+                f"📈 **Hạn mức hôm nay:** còn có thể cho `{sender_remaining:,} VND` — người nhận còn nhận được `{receiver_remaining:,} VND`"
             ),
             color=discord.Color.green(),
         )
@@ -1173,6 +1416,12 @@ class GamblingHelpers(commands.Cog, name="General"):
         if target.id == ctx.author.id:
             await ctx.send("❌ **Lỗi:** Bạn không thể tự chuyển vàng cho chính mình!")
             return
+        if self.economy.is_banned(target.id):
+            await ctx.send(f"❌ **Lỗi:** **{target.display_name}** đã bị khóa tài khoản (banned), không thể nhận vàng!")
+            return
+        if self.economy.is_in_jail(target.id):
+            await ctx.send(f"❌ **Lỗi:** **{target.display_name}** đang ở trong tù, không thể nhận vàng!")
+            return
         if amount <= 0:
             await ctx.send("❌ **Lỗi:** Số thỏi vàng chuyển phải lớn hơn 0.")
             return
@@ -1182,8 +1431,17 @@ class GamblingHelpers(commands.Cog, name="General"):
             await ctx.send(f"❌ **Lỗi:** Bạn không có đủ thỏi vàng. Số dư hiện tại của bạn là **{sender_gold:,}** thỏi vàng.")
             return
 
-        self.economy.add_credits(ctx.author.id, -amount)
-        self.economy.add_credits(target.id, amount)
+        # Giới hạn cho/nhận theo cấp độ thành viên (owner bot được bỏ qua)
+        if not (ctx.author.id in config.bot.owner_ids or await ctx.bot.is_owner(ctx.author)):
+            allowed, limit_error = check_give_limit(self.economy, ctx.author.id, target.id, amount, "gold")
+            if not allowed:
+                await ctx.send(limit_error)
+                return
+
+        with self.economy.transaction():
+            self.economy.add_credits(ctx.author.id, -amount)
+            self.economy.add_credits(target.id, amount)
+        record_give(self.economy, ctx.author.id, target.id, amount, "gold")
 
         log_wallet_change(
             logger,
@@ -1202,11 +1460,14 @@ class GamblingHelpers(commands.Cog, name="General"):
             sender_id=ctx.author.id,
         )
 
+        sender_remaining = remaining_daily(self.economy, ctx.author.id, "gold")["sent_remaining"]
+        receiver_remaining = remaining_daily(self.economy, target.id, "gold")["received_remaining"]
         embed = make_embed(
             title="<:32100goldbarsfortnite:1514192020921651251> CHUYỂN VÀNG THÀNH CÔNG <:32100goldbarsfortnite:1514192020921651251>",
             description=(
                 f"**{ctx.author.mention}** đã chuyển thành công **{amount:,}** thỏi vàng cho **{target.mention}**!\n\n"
-                f"💳 **Số dư mới của bạn:** `{self.economy.get_entry(ctx.author.id)[2]:,}` thỏi vàng"
+                f"💳 **Số dư mới của bạn:** `{self.economy.get_entry(ctx.author.id)[2]:,}` thỏi vàng\n"
+                f"📈 **Hạn mức hôm nay:** còn có thể cho `{sender_remaining:,}` thỏi vàng — người nhận còn nhận được `{receiver_remaining:,}`"
             ),
             color=discord.Color.gold(),
         )
@@ -1995,6 +2256,16 @@ class GamblingHelpers(commands.Cog, name="General"):
             
         if target.id == ctx.author.id:
             await ctx.send("❌ **Lỗi:** Bạn tự xin tiền chính mình à? Kỳ quặc thế.")
+            ctx.command.reset_cooldown(ctx)
+            return
+
+        if self.economy.is_banned(target.id):
+            await ctx.send(f"❌ **Lỗi:** **{target.display_name}** đã bị khóa tài khoản (banned), không thể xin tiền người này!")
+            ctx.command.reset_cooldown(ctx)
+            return
+
+        if self.economy.is_in_jail(target.id):
+            await ctx.send(f"❌ **Lỗi:** **{target.display_name}** đang ở trong tù, không thể xin tiền người này!")
             ctx.command.reset_cooldown(ctx)
             return
 
@@ -3243,6 +3514,27 @@ class BegConfirmView(discord.ui.View):
         self.resolved = True
         self.stop()
         
+        if self.economy.is_banned(self.target.id):
+            await interaction.response.edit_message(
+                content=f"❌ **{self.target.mention}** đã bị khóa tài khoản (banned), không thể thực hiện giao dịch này!",
+                view=None
+            )
+            return
+
+        if self.economy.is_in_jail(self.target.id):
+            await interaction.response.edit_message(
+                content=f"❌ **{self.target.mention}** đang ở trong tù, không thể cho tiền!",
+                view=None
+            )
+            return
+
+        if self.economy.is_banned(self.beggar.id):
+            await interaction.response.edit_message(
+                content=f"❌ Người xin tiền **{self.beggar.mention}** đã bị khóa tài khoản (banned)!",
+                view=None
+            )
+            return
+
         target_money = self.economy.get_entry(self.target.id)[1]
         if target_money < self.amount:
             await interaction.response.edit_message(
@@ -3251,8 +3543,16 @@ class BegConfirmView(discord.ui.View):
             )
             return
 
-        self.economy.add_money(self.target.id, -self.amount)
-        self.economy.add_money(self.beggar.id, self.amount)
+        # Giới hạn cho/nhận theo cấp độ thành viên (áp dụng cho cả bố thị beg)
+        allowed, limit_error = check_give_limit(self.economy, self.target.id, self.beggar.id, self.amount, "money")
+        if not allowed:
+            await interaction.response.edit_message(content=limit_error, view=None)
+            return
+
+        with self.economy.transaction():
+            self.economy.add_money(self.target.id, -self.amount)
+            self.economy.add_money(self.beggar.id, self.amount)
+        record_give(self.economy, self.target.id, self.beggar.id, self.amount, "money")
 
         log_wallet_change(
             logger,
@@ -3309,6 +3609,12 @@ class BegConfirmView(discord.ui.View):
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.target.id:
             await interaction.response.send_message("❌ Chỉ người bị xin tiền mới có quyền bấm nút này!", ephemeral=True)
+            return False
+        if self.economy.is_banned(interaction.user.id):
+            await interaction.response.send_message("❌ Tài khoản của bạn đã bị khóa (banned), không thể tương tác!", ephemeral=True)
+            return False
+        if self.economy.is_in_jail(interaction.user.id):
+            await interaction.response.send_message("❌ Bạn đang ở trong tù, không thể tương tác!", ephemeral=True)
             return False
         return True
 

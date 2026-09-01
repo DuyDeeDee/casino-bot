@@ -8,7 +8,7 @@ import discord
 from discord.ext import commands
 
 from app.config import config
-from app.discord_bot.modules.betting import validate_money_bet
+from app.discord_bot.modules.betting import parse_bet_amount, validate_money_bet
 from app.discord_bot.modules.economy import Economy
 from app.discord_bot.modules.helpers import make_embed
 from app.discord_bot.modules.wallet_logging import log_wallet_change
@@ -105,34 +105,6 @@ def check_and_unlock_achievements(stats: dict, last_bet: int) -> list[str]:
     return newly_unlocked
 
 
-def parse_bet_amount(val_str: str, current_money: int) -> int:
-    val_str = val_str.strip().lower()
-    if val_str in ["all", "allin", "all-in", "tất tay"]:
-        from app.discord_bot.modules.betting import get_capped_all_in_amount
-        return get_capped_all_in_amount(current_money)
-    
-    has_suffix = val_str.endswith("k") or val_str.endswith("m")
-    
-    if has_suffix:
-        val_str = val_str.replace(",", "")
-        multiplier = 1000 if val_str.endswith("k") else 1000000
-        val_str = val_str[:-1].strip()
-    else:
-        val_str = val_str.replace(",", "")
-        if "." in val_str:
-            parts = val_str.split(".")
-            if len(parts[-1]) == 3:
-                val_str = val_str.replace(".", "")
-            else:
-                val_str = "".join(parts[:-1]) + "." + parts[-1]
-        multiplier = 1
-        
-    try:
-        return int(float(val_str) * multiplier)
-    except ValueError:
-        return 0
-
-
 class CoinFlipLobbyView(discord.ui.View):
     def __init__(self, cog: "CoinFlip", user_id: int):
         super().__init__(timeout=60.0)
@@ -222,7 +194,7 @@ class CoinFlipLobbyView(discord.ui.View):
             title="🍀 MẶT MAY MẮN CỦA BẠN HÔM NAY",
             description=(
                 f"🪙 Lucky Side hôm nay của bạn là: **{side_vn}**\n\n"
-                f"💡 **Mẹo:** Cược mặt này trong lệnh `i?cf` và chiến thắng để nhận phần thưởng gấp **x2.2** tiền cược!"
+                f"💡 **Mẹo:** Cược mặt này trong lệnh `i?cf` để gia tăng may mắn và mở khóa thành tựu VIP!"
             ),
             color=discord.Color.green()
         )
@@ -279,21 +251,23 @@ class CoinFlipPlayView(discord.ui.View):
         await self.message.edit(embed=embed, view=view)
 
     async def on_timeout(self):
-        if not self.handled and self.message:
-            embed = make_embed(
-                title="⏱️ VÁN CƯỢC BỊ HỦY",
-                description=f"👤 **Người chơi:** {self.ctx.author.mention}\n\n*Hết thời gian chọn cược. Tiền cược đã được hoàn lại.*",
-                color=discord.Color.red()
-            )
-            try:
-                # Refund
-                self.cog.economy.add_money(self.user_id, self.bet_amount)
-                log_wallet_change(logger, event="coinflip_timeout_refund", user_id=self.user_id, money_delta=self.bet_amount)
-                for child in self.children:
-                    child.disabled = True
-                await self.message.edit(embed=embed, view=self)
-            except Exception:
-                pass
+        if not self.handled:
+            self.cog.active_users.discard(self.user_id)
+            if self.message:
+                embed = make_embed(
+                    title="⏱️ VÁN CƯỢC BỊ HỦY",
+                    description=f"👤 **Người chơi:** {self.ctx.author.mention}\n\n*Hết thời gian chọn cược. Tiền cược đã được hoàn lại.*",
+                    color=discord.Color.red()
+                )
+                try:
+                    # Refund
+                    self.cog.economy.add_money(self.user_id, self.bet_amount)
+                    log_wallet_change(logger, event="coinflip_timeout_refund", user_id=self.user_id, money_delta=self.bet_amount)
+                    for child in self.children:
+                        child.disabled = True
+                    await self.message.edit(embed=embed, view=self)
+                except Exception:
+                    pass
 
 
 class DoubleCoinChoiceView(discord.ui.View):
@@ -359,20 +333,22 @@ class DoubleCoinChoiceView(discord.ui.View):
         await self.message.edit(embed=embed, view=view)
 
     async def on_timeout(self):
-        if not self.handled and self.message:
-            embed = make_embed(
-                title="⏱️ VÁN CƯỢC BỊ HỦY",
-                description=f"👤 **Người chơi:** {self.ctx.author.mention}\n\n*Hết thời gian chọn cược. Tiền cược đã được hoàn lại.*",
-                color=discord.Color.red()
-            )
-            try:
-                self.cog.economy.add_money(self.user_id, self.bet_amount)
-                log_wallet_change(logger, event="coinflip_timeout_refund", user_id=self.user_id, money_delta=self.bet_amount)
-                for child in self.children:
-                    child.disabled = True
-                await self.message.edit(embed=embed, view=self)
-            except Exception:
-                pass
+        if not self.handled:
+            self.cog.active_users.discard(self.user_id)
+            if self.message:
+                embed = make_embed(
+                    title="⏱️ VÁN CƯỢC BỊ HỦY",
+                    description=f"👤 **Người chơi:** {self.ctx.author.mention}\n\n*Hết thời gian chọn cược. Tiền cược đã được hoàn lại.*",
+                    color=discord.Color.red()
+                )
+                try:
+                    self.cog.economy.add_money(self.user_id, self.bet_amount)
+                    log_wallet_change(logger, event="coinflip_timeout_refund", user_id=self.user_id, money_delta=self.bet_amount)
+                    for child in self.children:
+                        child.disabled = True
+                    await self.message.edit(embed=embed, view=self)
+                except Exception:
+                    pass
 
 
 class DoubleOrNothingView(discord.ui.View):
@@ -386,7 +362,7 @@ class DoubleOrNothingView(discord.ui.View):
         lucky_side_match: bool,
         user_choice: str
     ):
-        super().__init__(timeout=30.0)
+        super().__init__(timeout=45.0)
         self.ctx = ctx
         self.cog = cog
         self.user_id = user_id
@@ -403,8 +379,8 @@ class DoubleOrNothingView(discord.ui.View):
             return False
         return True
 
-    @discord.ui.button(label="💰 Nhận thưởng", style=discord.ButtonStyle.success, custom_id="cf_collect")
-    async def collect(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(label="💰 Nhận Thưởng (Cash Out)", style=discord.ButtonStyle.success, custom_id="cf_collect")
+    async def collect_money(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
         await self.collect_reward()
 
@@ -419,9 +395,10 @@ class DoubleOrNothingView(discord.ui.View):
             return
         self.collected = True
         self.stop()
+        self.cog.active_users.discard(self.user_id)
 
         # Add winnings back to wallet
-        self.cog.economy.add_money(self.user_id, self.current_pool)
+        self.cog.economy.payout_winnings(self.user_id, self.current_pool, self.initial_bet)
         log_wallet_change(logger, event="coinflip_double_collect", user_id=self.user_id, money_delta=self.current_pool, ctx=self.ctx)
 
         # Update stats
@@ -453,14 +430,14 @@ class DoubleOrNothingView(discord.ui.View):
         )
 
         embed = make_embed(
-            title="🏆 CHỐT LỜI THÀNH CÔNG!",
+            title="💰 ĐÃ NHẬN THƯỞNG COIN FLIP!",
             description=(
-                f"👤 **Người chơi:** {self.ctx.author.mention}\n"
-                f"💰 **Tiền mang về:** `{self.current_pool:,} VNĐ`\n"
-                f"📈 **Lợi nhuận ròng:** `+{net_profit:,} VNĐ`\n"
-                f"🔥 **Chuỗi thắng hiện tại:** `{new_streak}`"
+                f"👤 **Người chơi:** {self.ctx.author.mention}\n\n"
+                f"🎉 Bạn đã chốt lời thành công: **`+{self.current_pool:,} VNĐ`**!\n"
+                f"📈 Lợi nhuận ròng: `+{net_profit:,} VNĐ`\n"
+                f"🔥 Chuỗi thắng hiện tại: `{new_streak}`"
             ),
-            color=discord.Color.gold()
+            color=discord.Color.green()
         )
         if newly_unlocked:
             achievement_texts = "\n".join([f"✨ **{ACHIEVEMENTS[a]}**" for a in newly_unlocked])
@@ -484,6 +461,7 @@ class CoinFlip(commands.Cog, name="CoinFlip"):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.economy = getattr(bot, "economy", None) or Economy()
+        self.active_users = set()
 
     @commands.command(
         brief="Chơi Tung Đồng Xu 50/50 bằng nút bấm.",
@@ -509,6 +487,10 @@ class CoinFlip(commands.Cog, name="CoinFlip"):
             view.message = await ctx.send(embed=embed, view=view)
             return
 
+        if user_id in self.active_users:
+            await ctx.send("❌ Bạn đang có một ván CoinFlip đang diễn ra. Vui lòng hoàn thành ván đó trước!", delete_after=5)
+            return
+
         current_money = self.economy.get_entry(user_id)[1]
         
         # Parse Bet Amount
@@ -525,6 +507,8 @@ class CoinFlip(commands.Cog, name="CoinFlip"):
         except Exception as e:
             await ctx.send(f"❌ {e}")
             return
+
+        self.active_users.add(user_id)
 
         # Show cược options view
         view = CoinFlipPlayView(ctx, self, user_id, bet_amount)
@@ -565,7 +549,7 @@ class CoinFlip(commands.Cog, name="CoinFlip"):
         if coin_result == user_choice:
             # User Won
             lucky_match = (user_choice == lucky_side)
-            multiplier = 2.2 if lucky_match else 2.0
+            multiplier = 2.0
             winnings = int(bet_amount * multiplier)
             
             desc = (
@@ -574,7 +558,7 @@ class CoinFlip(commands.Cog, name="CoinFlip"):
                 f"🏆 **Bạn thắng!**\n"
             )
             if lucky_match:
-                desc += f"🍀 Trùng **Lucky Side** hôm nay ({lucky_side_vn})! Nhận **x2.2** thưởng!\n"
+                desc += f"🍀 Trùng **Lucky Side** hôm nay ({lucky_side_vn})!\n"
             desc += f"💰 Tiền thắng: `+{winnings:,} VNĐ`"
             
             embed = make_embed(
@@ -596,6 +580,7 @@ class CoinFlip(commands.Cog, name="CoinFlip"):
             view.message = play_msg
         else:
             # User Lost
+            self.active_users.discard(user_id)
             desc = (
                 f"Kết quả: **{coin_result_vn}**\n"
                 f"Bạn chọn: **{user_choice_vn}**\n\n"
@@ -657,8 +642,9 @@ class CoinFlip(commands.Cog, name="CoinFlip"):
         c2_res_vn = "🦅 NGỬA" if coin2_res == "heads" else "🌸 SẤP"
 
         if is_win:
+            self.active_users.discard(user_id)
             winnings = bet_amount * 4
-            self.economy.add_money(user_id, winnings)
+            self.economy.payout_winnings(user_id, winnings, bet_amount)
             log_wallet_change(logger, event="doublecoin_win", user_id=user_id, money_delta=winnings, ctx=ctx)
 
             desc = (
@@ -701,6 +687,7 @@ class CoinFlip(commands.Cog, name="CoinFlip"):
                 achievements=new_achievements
             )
         else:
+            self.active_users.discard(user_id)
             desc = (
                 f"Kết quả:\n"
                 f"• Đồng xu 1: **{c1_res_vn}**\n"
@@ -794,6 +781,7 @@ class CoinFlip(commands.Cog, name="CoinFlip"):
             await play_msg.edit(content=None, embed=embed, view=next_view)
             next_view.message = play_msg
         else:
+            self.active_users.discard(user_id)
             desc = (
                 f"Kết quả: **{coin_result_vn}**\n"
                 f"Bạn chọn: **{user_choice_vn}**\n\n"

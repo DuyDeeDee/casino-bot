@@ -8,6 +8,7 @@ import discord
 from discord.ext import commands
 
 from app.config import config
+from app.discord_bot.modules.betting import validate_money_bet
 from app.discord_bot.modules.economy import Economy
 from app.discord_bot.modules.helpers import make_embed
 from app.discord_bot.modules.wallet_logging import log_wallet_change
@@ -255,8 +256,9 @@ class CancelCardButton(discord.ui.Button):
     async def callback(self, interaction: discord.Interaction):
         view: ScratchCardPlayView = self.view
 
-        if view.revealed_count == 0:
-            # Full refund
+        if view.revealed_count == 0 and not view.settled:
+            # Full refund (chốt một lần để chặn double-click)
+            view.settled = True
             view.cog.economy.add_money(view.author.id, view.card_cfg["price"])
             log_wallet_change(
                 logger,
@@ -311,6 +313,7 @@ class ScratchCardPlayView(discord.ui.View):
         self.revealed = [False] * 9
         self.revealed_count = 0
         self.message: Optional[discord.Message] = None
+        self.settled = False
 
         # Build the button layout
         for i in range(9):
@@ -359,6 +362,9 @@ class ScratchCardPlayView(discord.ui.View):
 
     async def update_display(self):
         if self.revealed_count >= 9:
+            if self.settled:
+                return
+            self.settled = True
             self.stop()
             embed = self._evaluate_payout()
             post_view = ScratchCardPostView(self.cog, self.author, self.card_cfg)
@@ -388,7 +394,7 @@ class ScratchCardPlayView(discord.ui.View):
         if won_shared_jackpot:
             jackpot_str = self.cog.economy.get_setting("scratchcard_jackpot")
             shared_jackpot_amount = int(jackpot_str) if jackpot_str else 50_000_000
-            self.cog.economy.add_money(self.author.id, shared_jackpot_amount)
+            self.cog.economy.payout_winnings(self.author.id, shared_jackpot_amount, self.card_cfg["price"])
             
             seed_str = self.cog.economy.get_setting("scratch_jackpot_seed")
             seed_val = int(seed_str) if seed_str else 50_000_000
@@ -408,7 +414,7 @@ class ScratchCardPlayView(discord.ui.View):
         if self.is_win and self.win_sym:
             mult = self.card_cfg["multipliers"][self.win_sym]
             payout = int(self.card_cfg["price"] * mult)
-            self.cog.economy.add_money(self.author.id, payout)
+            self.cog.economy.payout_winnings(self.author.id, payout, self.card_cfg["price"])
             log_wallet_change(
                 logger,
                 event="scratch_win",
@@ -503,13 +509,42 @@ class ScratchCardPlayView(discord.ui.View):
             pass
 
     async def on_timeout(self):
+        if self.settled:
+            return
+        self.settled = True
+        self.stop()
         for child in self.children:
             child.disabled = True
-        try:
-            if self.message:
-                await self.message.edit(view=self)
-        except Exception:
-            pass
+
+        if self.revealed_count == 0:
+            # Player never interacted with card -> refund
+            self.cog.economy.add_money(self.author.id, self.card_cfg["price"])
+            log_wallet_change(
+                logger,
+                event="scratch_timeout_refund",
+                user_id=self.author.id,
+                money_delta=self.card_cfg["price"],
+                card_type=self.card_cfg["id"],
+            )
+            embed = make_embed(
+                title="⏱️ THẺ CÀO HẾT HẠN - ĐÃ HOÀN TIỀN",
+                description=f"👤 **Người chơi:** {self.author.mention}\n\n*Hết thời gian cào thẻ. Đã hoàn lại `{self.card_cfg['price']:,} VND`.*",
+                color=discord.Color.red(),
+            )
+            try:
+                if self.message:
+                    await self.message.edit(embed=embed, view=self)
+            except Exception:
+                pass
+        else:
+            # Auto-reveal all remaining cells and evaluate payout
+            embed = self._evaluate_payout()
+            post_view = ScratchCardPostView(self.cog, self.author, self.card_cfg)
+            try:
+                if self.message:
+                    await self.message.edit(embed=embed, view=post_view)
+            except Exception:
+                pass
 
 
 # ── Post-Game View ───────────────────────────────────────────────────────────
@@ -520,6 +555,7 @@ class ScratchCardPostView(discord.ui.View):
         self.cog = cog
         self.author = author
         self.card_cfg = card_cfg
+        self.is_buying = False
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.author.id:
@@ -531,12 +567,24 @@ class ScratchCardPostView(discord.ui.View):
 
     @discord.ui.button(label="Mua Thẻ Mới", style=discord.ButtonStyle.success, emoji="🎴")
     async def buy_new(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.is_buying:
+            return
+        self.is_buying = True
+
         profile = self.cog.economy.get_entry(self.author.id)
         if profile[1] < self.card_cfg["price"]:
+            self.is_buying = False
             await interaction.response.send_message(
                 f"❌ Không đủ tiền! Cần **{self.card_cfg['price']:,} VND**.",
                 ephemeral=True,
             )
+            return
+
+        try:
+            validate_money_bet(self.cog.economy, self.author.id, self.card_cfg["price"])
+        except Exception as e:
+            self.is_buying = False
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
             return
 
         self.cog.economy.add_money(self.author.id, -self.card_cfg["price"])
@@ -598,6 +646,13 @@ class ScratchBulkPostView(discord.ui.View):
             )
             return
 
+        # Enforce global bet limits (total purchase counts as one wager)
+        try:
+            validate_money_bet(self.cog.economy, self.author.id, total_price)
+        except Exception as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+            return
+
         # Deduct money
         self.cog.economy.add_money(self.author.id, -total_price)
         log_wallet_change(
@@ -656,7 +711,7 @@ class ScratchBulkPostView(discord.ui.View):
 class ScratchCard(commands.Cog, name="ScratchCard"):
     def __init__(self, client: commands.Bot):
         self.client = client
-        self.economy: Economy = getattr(client, "economy", Economy())
+        self.economy: Economy = getattr(client, "economy", None) or Economy()
 
     @commands.command(
         brief="Chơi Thẻ Cào May Mắn.",
@@ -723,6 +778,13 @@ class ScratchCard(commands.Cog, name="ScratchCard"):
                 f"❌ Không đủ tiền! Cần **{total_price:,} VND** "
                 f"để mua {quantity}× `{card_cfg['name']}`."
             )
+            return
+
+        # Enforce global bet limits (total purchase counts as one wager)
+        try:
+            validate_money_bet(self.economy, user_id, total_price)
+        except Exception as e:
+            await ctx.send(f"❌ {e}")
             return
 
         # Deduct

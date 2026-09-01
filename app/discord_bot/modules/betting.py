@@ -18,6 +18,93 @@ def validate_positive_amount(amount: int) -> int:
     return parsed
 
 
+from decimal import Decimal, InvalidOperation
+
+
+def parse_bet_amount(val_str: str | int | float, current_money: int) -> int:
+    if isinstance(val_str, (int, float)):
+        if isinstance(val_str, float) and (val_str != val_str or val_str == float("inf") or val_str == float("-inf")):
+            return 0
+        return max(0, int(val_str))
+
+    if not val_str:
+        return 0
+
+    val_str = str(val_str).strip().lower()
+    if val_str in ["all", "allin", "all-in", "tất tay", "tat tay", "tattay"]:
+        return max(0, get_capped_all_in_amount(current_money))
+
+    # Remove any extra internal spaces
+    val_str = val_str.replace(" ", "")
+
+    # Multipliers
+    multiplier = Decimal(1)
+    suffix_found = False
+
+    if val_str.endswith(("b", "tỷ", "ty")):
+        multiplier = Decimal(1_000_000_000)
+        for s in ("tỷ", "ty", "b"):
+            if val_str.endswith(s):
+                val_str = val_str[:-len(s)].strip()
+                break
+        suffix_found = True
+    elif val_str.endswith(("m", "tr", "triệu", "trieu")):
+        multiplier = Decimal(1_000_000)
+        for s in ("triệu", "trieu", "tr", "m"):
+            if val_str.endswith(s):
+                val_str = val_str[:-len(s)].strip()
+                break
+        suffix_found = True
+    elif val_str.endswith(("k", "nghìn", "nghin")):
+        multiplier = Decimal(1_000)
+        for s in ("nghìn", "nghin", "k"):
+            if val_str.endswith(s):
+                val_str = val_str[:-len(s)].strip()
+                break
+        suffix_found = True
+
+    if suffix_found:
+        # Suffix present: comma is likely a decimal separator (e.g. 1,5m -> 1.5m)
+        val_str = val_str.replace(",", ".")
+    else:
+        # No suffix: handle thousand separators and decimal points
+        if "," in val_str and "." in val_str:
+            if val_str.rfind(",") > val_str.rfind("."):
+                # 1.000,50 -> 1000.50
+                val_str = val_str.replace(".", "").replace(",", ".")
+            else:
+                # 1,000.50 -> 1000.50
+                val_str = val_str.replace(",", "")
+        elif "," in val_str:
+            parts = val_str.split(",")
+            if len(parts) > 1 and all(len(p) == 3 for p in parts[1:]):
+                # 1,000,000 -> 1000000
+                val_str = "".join(parts)
+            elif len(parts) == 2 and len(parts[1]) != 3:
+                # 1,5 -> 1.5
+                val_str = f"{parts[0]}.{parts[1]}"
+            else:
+                val_str = val_str.replace(",", "")
+        elif "." in val_str:
+            parts = val_str.split(".")
+            if len(parts) > 1 and all(len(p) == 3 for p in parts[1:]):
+                # 1.000.000 -> 1000000
+                val_str = "".join(parts)
+            elif len(parts) == 2 and len(parts[1]) != 3:
+                # 1.5 -> 1.5
+                val_str = f"{parts[0]}.{parts[1]}"
+            else:
+                val_str = val_str.replace(".", "")
+
+    try:
+        dec = Decimal(val_str)
+        if dec.is_nan() or dec.is_infinite():
+            return 0
+        return max(0, int(dec * multiplier))
+    except (InvalidOperation, ValueError, TypeError):
+        return 0
+
+
 def get_capped_all_in_amount(current_money: int) -> int:
     try:
         from app.discord_bot.modules.economy import Economy
@@ -29,6 +116,7 @@ def get_capped_all_in_amount(current_money: int) -> int:
     except Exception:
         pass
     return current_money
+
 
 
 def validate_money_bet(

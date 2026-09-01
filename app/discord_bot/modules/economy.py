@@ -1,10 +1,13 @@
 from collections.abc import Callable
+import functools
 import json
 import logging
 import random
 import shutil
 import sqlite3
+import threading
 import time
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Tuple, List
 
@@ -13,10 +16,21 @@ from app.config import config
 Entry = Tuple[int, int, int]
 DATABASE_PATH = Path(config.storage.database_path)
 LEGACY_DATABASE_PATH = Path(__file__).resolve().parents[3] / "economy.db"
-SCHEMA_VERSION = 43
+SCHEMA_VERSION = 50
 
 
 logger = logging.getLogger(__name__)
+
+
+# Daily quest templates: 3 random quests per day, progress tracked by event hooks.
+DAILY_QUEST_POOL: list[dict] = [
+    {"id": "mine", "event": "mine", "desc": "Đào mỏ {target} lần", "target": 2, "reward_money": 250_000, "reward_gold": 0.2, "emoji": "⛏️"},
+    {"id": "work", "event": "work", "desc": "Làm việc {target} lần", "target": 3, "reward_money": 150_000, "reward_gold": 0.0, "emoji": "💼"},
+    {"id": "casino", "event": "casino_win", "desc": "Thắng {target} ván cờ bạc", "target": 3, "reward_money": 400_000, "reward_gold": 0.1, "emoji": "🎰"},
+    {"id": "buy", "event": "buyitem", "desc": "Mua {target} vật phẩm ở cửa hàng", "target": 1, "reward_money": 100_000, "reward_gold": 0.0, "emoji": "🛒"},
+    {"id": "rob", "event": "rob", "desc": "Cướp thành công {target} lần", "target": 1, "reward_money": 250_000, "reward_gold": 0.0, "emoji": "🔪"},
+    {"id": "collect", "event": "collect", "desc": "Thu hoạch doanh nghiệp {target} lần", "target": 1, "reward_money": 150_000, "reward_gold": 0.1, "emoji": "🏭"},
+]
 
 
 def _migration_1_create_economy(cur: sqlite3.Cursor) -> None:
@@ -753,52 +767,6 @@ def _migration_40_add_masoi_tables(cur: sqlite3.Cursor) -> None:
         pass
 
 
-MIGRATIONS: dict[int, Callable[[sqlite3.Cursor], None]] = {
-    1: _migration_1_create_economy,
-    2: _migration_2_add_indexes,
-    3: _migration_3_add_claimed_start,
-    4: _migration_4_add_loan_columns,
-    5: _migration_5_add_market_table,
-    6: _migration_6_add_simulator_tables,
-    7: _migration_7_add_daily_columns,
-    8: _migration_8_add_daga_tables,
-    9: _migration_9_add_equipped_banner,
-    10: _migration_10_add_garage_tables,
-    11: _migration_11_update_car_names,
-    12: _migration_12_add_last_work,
-    13: _migration_13_add_cock_stars_and_shards,
-    14: _migration_14_add_roulette_table,
-    15: _migration_15_add_coinflip_table,
-    16: _migration_16_add_showcase_treasure,
-    17: _migration_17_add_bkb_tables,
-    18: _migration_18_add_baito_table,
-    19: _migration_19_add_pve_tables,
-    20: _migration_20_add_banned_users_table,
-    21: _migration_21_add_mines_table,
-    22: _migration_22_add_plinko_table,
-    23: _migration_23_add_highlow_table,
-    24: _migration_24_add_stock_history_table,
-    25: _migration_25_add_limit_orders,
-    26: _migration_26_add_simulator_upgrades,
-    27: _migration_27_initialize_all_cryptos,
-    28: _migration_28_add_marry_tables,
-    29: _migration_29_add_marry_custom_columns,
-    30: _migration_30_add_marry_saying_column,
-    31: _migration_31_add_tower_table,
-    32: _migration_32_add_user_titles_table,
-    33: _migration_33_add_achievements_log_table,
-    34: _migration_34_add_marry_interest_and_wish_columns,
-    35: _migration_35_add_giaima_table,
-    36: _migration_36_add_couple_assets,
-    37: _migration_37_update_gold_price_to_30m,
-    38: _migration_38_reset_gold_price_prev_to_30m,
-    39: _migration_39_add_user_topups_table,
-    40: _migration_40_add_masoi_tables,
-    41: _migration_41_add_masoi_vip_table,
-    42: _migration_42_add_masoi_custom_badge,
-}
-
-
 def _migration_43_add_jail_table(cur: sqlite3.Cursor) -> None:
     try:
         cur.execute("PRAGMA table_info(user_jail)")
@@ -820,6 +788,108 @@ def _migration_43_add_jail_table(cur: sqlite3.Cursor) -> None:
             PRIMARY KEY (user_id, guild_id)
         )"""
         )
+    except sqlite3.OperationalError:
+        pass
+
+
+def _migration_44_add_missing_indexes(cur: sqlite3.Cursor) -> None:
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_portfolio_symbol ON user_portfolio(symbol)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_stock_history_symbol ON stock_price_history(symbol, id)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_limit_orders_symbol ON limit_orders(symbol)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_marry_user_one ON user_marry(user_one)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_marry_user_two ON user_marry(user_two)")
+
+
+def _migration_45_add_daily_quests(cur: sqlite3.Cursor) -> None:
+    cur.execute(
+        """CREATE TABLE IF NOT EXISTS user_daily_quests (
+        user_id INTEGER PRIMARY KEY,
+        quest_date TEXT NOT NULL,
+        quests_json TEXT NOT NULL
+    )"""
+    )
+
+def _migration_46_add_work_xp(cur: sqlite3.Cursor) -> None:
+    try:
+        cur.execute("ALTER TABLE user_simulator_stats ADD COLUMN work_xp INTEGER DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
+
+def _migration_47_add_bank_and_sports_tables(cur: sqlite3.Cursor) -> None:
+    cur.execute(
+        """CREATE TABLE IF NOT EXISTS user_bank_deposits (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        amount INTEGER NOT NULL,
+        term_days INTEGER NOT NULL,
+        rate REAL NOT NULL,
+        deposit_at INTEGER NOT NULL,
+        FOREIGN KEY(user_id) REFERENCES economy(user_id)
+    )"""
+    )
+    cur.execute(
+        """CREATE TABLE IF NOT EXISTS match_bets (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        match_id INTEGER NOT NULL,
+        user_id INTEGER NOT NULL,
+        outcome TEXT NOT NULL,
+        amount INTEGER NOT NULL
+    )"""
+    )
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_bank_deposits_user ON user_bank_deposits(user_id)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_match_bets_match ON match_bets(match_id, outcome)")
+
+
+def _migration_48_add_gift_code_tables(cur: sqlite3.Cursor) -> None:
+    cur.execute(
+        """CREATE TABLE IF NOT EXISTS gift_codes (
+        code TEXT PRIMARY KEY,
+        reward_money INTEGER DEFAULT 0,
+        reward_credits REAL DEFAULT 0,
+        max_uses INTEGER DEFAULT 0,
+        used_count INTEGER DEFAULT 0,
+        expires_at INTEGER DEFAULT 0,
+        created_at INTEGER NOT NULL
+    )"""
+    )
+    cur.execute(
+        """CREATE TABLE IF NOT EXISTS gift_code_claims (
+        code TEXT NOT NULL,
+        user_id INTEGER NOT NULL,
+        claimed_at INTEGER NOT NULL,
+        PRIMARY KEY (code, user_id)
+    )"""
+    )
+
+
+
+
+
+def _migration_49_add_member_levels(cur: sqlite3.Cursor) -> None:
+    cur.execute(
+        """CREATE TABLE IF NOT EXISTS member_levels (
+        user_id INTEGER PRIMARY KEY,
+        xp INTEGER NOT NULL DEFAULT 0,
+        level INTEGER NOT NULL DEFAULT 0,
+        last_chat_xp REAL NOT NULL DEFAULT 0
+    )"""
+    )
+    cur.execute(
+        """CREATE TABLE IF NOT EXISTS give_daily (
+        user_id INTEGER NOT NULL,
+        day TEXT NOT NULL,
+        sent_money INTEGER NOT NULL DEFAULT 0,
+        received_money INTEGER NOT NULL DEFAULT 0,
+        sent_gold INTEGER NOT NULL DEFAULT 0,
+        received_gold INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (user_id, day)
+    )"""
+    )
+
+
+def _migration_50_portfolio_avg_cost(cur: sqlite3.Cursor) -> None:
+    try:
+        cur.execute("ALTER TABLE user_portfolio ADD COLUMN avg_cost REAL NOT NULL DEFAULT 0")
     except sqlite3.OperationalError:
         pass
 
@@ -868,6 +938,13 @@ MIGRATIONS: dict[int, Callable[[sqlite3.Cursor], None]] = {
     41: _migration_41_add_masoi_vip_table,
     42: _migration_42_add_masoi_custom_badge,
     43: _migration_43_add_jail_table,
+    44: _migration_44_add_missing_indexes,
+    45: _migration_45_add_daily_quests,
+    46: _migration_46_add_work_xp,
+    47: _migration_47_add_bank_and_sports_tables,
+    48: _migration_48_add_gift_code_tables,
+    49: _migration_49_add_member_levels,
+    50: _migration_50_portfolio_avg_cost,
 }
 
 
@@ -875,7 +952,33 @@ class Economy:
     """A wrapper for the economy database"""
 
     def __init__(self):
+        self._lock = threading.RLock()
+        self._txn_depth = 0
         self.open()
+
+    @contextmanager
+    def transaction(self):
+        """Groups multiple statements into one atomic commit.
+
+        Usage:
+            with economy.transaction():
+                economy.add_money(a, -100)
+                economy.add_money(b, 100)
+        Nested calls reuse the outer transaction; only the outermost
+        block commits.
+        """
+        with self._lock:
+            self._txn_depth += 1
+            try:
+                yield self
+                if self._txn_depth == 1:
+                    self.conn.commit()
+            except Exception:
+                if self._txn_depth == 1:
+                    self.conn.rollback()
+                raise
+            finally:
+                self._txn_depth -= 1
 
     def open(self):
         """Initializes the database"""
@@ -979,14 +1082,60 @@ class Economy:
         self.conn.commit()
 
     def reset_all_data(self) -> None:
-        self.cur.execute("UPDATE economy SET money=0, credits=0, loan_amount=0, loan_due=0, last_daily=0, daily_streak=0, equipped_banner=NULL")
-        self.cur.execute("DELETE FROM user_businesses")
-        self.cur.execute("DELETE FROM user_portfolio")
-        self.cur.execute("DELETE FROM user_inventory")
-        self.cur.execute("DELETE FROM user_simulator_stats")
-        self.cur.execute("DELETE FROM user_roulette")
-        self.cur.execute("DELETE FROM user_tower")
-        self.cur.execute("DELETE FROM user_giaima")
+        """Reset toàn bộ dữ liệu kinh tế, ví tiền, tài sản và tiến trình của tất cả người chơi."""
+        tables_to_clear = [
+            "economy",
+            "user_businesses",
+            "user_portfolio",
+            "limit_orders",
+            "stock_price_history",
+            "user_inventory",
+            "user_simulator_stats",
+            "user_baito",
+            "user_bank_deposits",
+            "user_topups",
+            "user_cars",
+            "car_market",
+            "user_cocks",
+            "user_marry",
+            "couple_assets",
+            "user_jail",
+            "user_daily_quests",
+            "match_bets",
+            "gift_code_claims",
+            "member_levels",
+            "give_daily",
+            "user_titles",
+            "user_achievements_log",
+            "user_roulette",
+            "user_tower",
+            "user_giaima",
+            "user_mines",
+            "user_plinko",
+            "user_highlow",
+            "user_coinflip",
+            "user_bkb",
+            "bkb_h2h",
+            "user_pve_cooldowns",
+            "user_world_boss_damage",
+            "masoi_vip",
+            "user_masoi_stats",
+            "wallet_transactions",
+        ]
+        for tbl in tables_to_clear:
+            try:
+                self.cur.execute(f"DELETE FROM {tbl}")
+            except sqlite3.OperationalError:
+                pass
+
+        # Reset giá cổ phiếu về mức cơ sở
+        try:
+            self.cur.execute("UPDATE stock_prices SET price=1000000, prev_price=1000000, change_percent=0.0 WHERE symbol='BTC'")
+            self.cur.execute("UPDATE stock_prices SET price=100000, prev_price=100000, change_percent=0.0 WHERE symbol='CASINO'")
+            self.cur.execute("UPDATE stock_prices SET price=10000, prev_price=10000, change_percent=0.0 WHERE symbol='AGV'")
+        except sqlite3.OperationalError:
+            pass
+
         self.conn.commit()
 
     def has_claimed_start(self, user_id: int) -> bool:
@@ -1065,8 +1214,235 @@ class Economy:
         self.conn.commit()
         return self._fetch_entry(user_id)
 
+    def _record_gold_flow(self, delta: int) -> None:
+        """Tracks weekly gold supply/demand used by the gold price updater."""
+        if not delta:
+            return
+        key = "gold_mined_week" if delta > 0 else "gold_spent_week"
+        self.cur.execute(
+            "UPDATE system_settings SET value = CAST(CAST(value AS INTEGER) + ? AS TEXT) WHERE key = ?",
+            (abs(delta), key),
+        )
+        if self.cur.rowcount == 0:
+            self.cur.execute(
+                "INSERT INTO system_settings(key, value) VALUES(?, ?)",
+                (key, str(abs(delta))),
+            )
+
+    def payout_winnings(self, user_id: int, gross_winnings: int, stake: int = 0) -> int:
+        """Credits gambling winnings after the global casino tax.
+
+        Tax only applies to net profit (gross - stake); the returned stake
+        is never taxed. Deducted tax goes into the shared jackpot pool
+        (system_settings key 'jackpot_pool'). Returns the net amount paid.
+        """
+        gross_winnings = max(0, int(gross_winnings))
+        profit = max(0, gross_winnings - max(0, int(stake)))
+        if profit == 0:
+            self.add_money(user_id, gross_winnings)
+            return gross_winnings
+
+        rate = float(self.get_setting("casino_tax_rate", "0.05"))
+        tax = min(int(profit * rate), profit)
+        net = gross_winnings - tax
+
+        with self.transaction():
+            self.add_money(user_id, net)
+            pool = int(self.get_setting("jackpot_pool", "0"))
+            self.set_setting("jackpot_pool", str(pool + tax))
+        self.bump_quest(user_id, "casino_win")
+        return net
+
+    def get_jackpot_pool(self) -> int:
+        return int(self.get_setting("jackpot_pool", "0"))
+
+    # --- BANK DEPOSITS ---
+    def get_bank_deposits(self, user_id: int) -> list:
+        self.cur.execute(
+            "SELECT id, amount, term_days, rate, deposit_at FROM user_bank_deposits WHERE user_id=? ORDER BY deposit_at",
+            (user_id,),
+        )
+        return self.cur.fetchall()
+
+    def get_bank_total(self, user_id: int) -> int:
+        self.cur.execute("SELECT COALESCE(SUM(amount), 0) FROM user_bank_deposits WHERE user_id=?", (user_id,))
+        return int(self.cur.fetchone()[0])
+
+    def add_bank_deposit(self, user_id: int, amount: int, term_days: int, rate: float) -> int:
+        self._ensure_entry(user_id)
+        self.cur.execute(
+            "INSERT INTO user_bank_deposits(user_id, amount, term_days, rate, deposit_at) VALUES(?, ?, ?, ?, ?)",
+            (user_id, int(amount), int(term_days), float(rate), int(time.time())),
+        )
+        self.conn.commit()
+        return self.cur.lastrowid
+
+    def get_bank_deposit(self, deposit_id: int) -> tuple | None:
+        self.cur.execute("SELECT id, user_id, amount, term_days, rate, deposit_at FROM user_bank_deposits WHERE id=?", (deposit_id,))
+        return self.cur.fetchone()
+
+    def remove_bank_deposit(self, deposit_id: int) -> None:
+        self.cur.execute("DELETE FROM user_bank_deposits WHERE id=?", (deposit_id,))
+        self.conn.commit()
+
+    def get_bank_stats(self) -> tuple[int, int]:
+        self.cur.execute("SELECT COALESCE(SUM(amount), 0), COUNT(*) FROM user_bank_deposits")
+        row = self.cur.fetchone()
+        return (int(row[0]), int(row[1]))
+
+    # --- SPORTS MATCH BETS ---
+    def add_match_bet(self, match_id: int, user_id: int, outcome: str, amount: int) -> int:
+        self._ensure_entry(user_id)
+        self.cur.execute(
+            "INSERT INTO match_bets(match_id, user_id, outcome, amount) VALUES(?, ?, ?, ?)",
+            (int(match_id), int(user_id), outcome, int(amount)),
+        )
+        self.conn.commit()
+        return self.cur.lastrowid
+
+    def get_match_bets(self, match_id: int) -> list:
+        self.cur.execute("SELECT id, user_id, outcome, amount FROM match_bets WHERE match_id=?", (match_id,))
+        return self.cur.fetchall()
+
+    def get_match_pool(self, match_id: int) -> dict[str, int]:
+        self.cur.execute("SELECT outcome, SUM(amount) FROM match_bets WHERE match_id=? GROUP BY outcome", (match_id,))
+        return {row[0]: int(row[1]) for row in self.cur.fetchall()}
+
+    def clear_match_bets(self, match_id: int) -> None:
+        self.cur.execute("DELETE FROM match_bets WHERE match_id=?", (match_id,))
+        self.conn.commit()
+
+    # --- WORK XP ---
+    def get_work_xp(self, user_id: int) -> int:
+        self._ensure_entry(user_id)
+        self.cur.execute("SELECT work_xp FROM user_simulator_stats WHERE user_id=?", (user_id,))
+        row = self.cur.fetchone()
+        return row[0] if row and row[0] else 0
+
+    def set_work_xp(self, user_id: int, xp: int) -> None:
+        self._ensure_entry(user_id)
+        self.cur.execute(
+            "INSERT OR IGNORE INTO user_simulator_stats(user_id, work_xp) VALUES(?, ?)",
+            (user_id, int(xp)),
+        )
+        self.cur.execute("UPDATE user_simulator_stats SET work_xp=? WHERE user_id=?", (int(xp), user_id))
+        self.conn.commit()
+
+    # --- MEMBER CHAT LEVELS & GIVE DAILY LIMITS ---
+    def get_member_level(self, user_id: int) -> tuple[int, int, float]:
+        """Returns (level, xp, last_chat_xp); users never seen chat as (0, 0, 0.0)."""
+        self.cur.execute(
+            "SELECT level, xp, last_chat_xp FROM member_levels WHERE user_id=?",
+            (user_id,),
+        )
+        row = self.cur.fetchone()
+        if not row:
+            return (0, 0, 0.0)
+        return (int(row[0]), int(row[1]), float(row[2]))
+
+    def set_member_level(self, user_id: int, level: int, xp: int, last_chat_xp: float) -> None:
+        self.cur.execute(
+            """INSERT INTO member_levels(user_id, level, xp, last_chat_xp)
+            VALUES(?, ?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+                level=excluded.level, xp=excluded.xp, last_chat_xp=excluded.last_chat_xp""",
+            (user_id, int(level), int(xp), float(last_chat_xp)),
+        )
+        self.conn.commit()
+
+    def get_give_daily(self, user_id: int, day: str) -> tuple[int, int, int, int]:
+        """Returns (sent_money, received_money, sent_gold, received_gold) for the day key."""
+        self.cur.execute(
+            "SELECT sent_money, received_money, sent_gold, received_gold "
+            "FROM give_daily WHERE user_id=? AND day=?",
+            (user_id, day),
+        )
+        row = self.cur.fetchone()
+        if not row:
+            return (0, 0, 0, 0)
+        return (int(row[0]), int(row[1]), int(row[2]), int(row[3]))
+
+    def add_give_daily(
+        self,
+        user_id: int,
+        day: str,
+        sent_money: int = 0,
+        received_money: int = 0,
+        sent_gold: int = 0,
+        received_gold: int = 0,
+    ) -> None:
+        self.cur.execute(
+            """INSERT INTO give_daily(user_id, day, sent_money, received_money, sent_gold, received_gold)
+            VALUES(?, ?, ?, ?, ?, ?)
+            ON CONFLICT(user_id, day) DO UPDATE SET
+                sent_money = sent_money + excluded.sent_money,
+                received_money = received_money + excluded.received_money,
+                sent_gold = sent_gold + excluded.sent_gold,
+                received_gold = received_gold + excluded.received_gold""",
+            (user_id, day, int(sent_money), int(received_money), int(sent_gold), int(received_gold)),
+        )
+        self.conn.commit()
+
+    # --- DAILY QUESTS ---
+    def get_daily_quests(self, user_id: int) -> list[dict]:
+        """Returns today's 3 quests, rolling new ones on a new day (UTC+7)."""
+        import datetime
+        today = (datetime.datetime.utcnow() + datetime.timedelta(hours=7)).strftime("%Y-%m-%d")
+        self.cur.execute("SELECT quest_date, quests_json FROM user_daily_quests WHERE user_id=?", (user_id,))
+        row = self.cur.fetchone()
+        if row and row[0] == today:
+            return json.loads(row[1])
+
+        quests = random.sample(DAILY_QUEST_POOL, 3)
+        quests = [dict(q, progress=0, claimed=False) for q in quests]
+        self.cur.execute(
+            "INSERT OR REPLACE INTO user_daily_quests(user_id, quest_date, quests_json) VALUES(?, ?, ?)",
+            (user_id, today, json.dumps(quests, ensure_ascii=False)),
+        )
+        self.conn.commit()
+        return quests
+
+    def bump_quest(self, user_id: int, event: str, amount: int = 1) -> None:
+        """Increments progress of today's unclaimed quests matching event."""
+        import datetime
+        today = (datetime.datetime.utcnow() + datetime.timedelta(hours=7)).strftime("%Y-%m-%d")
+        self.cur.execute("SELECT quest_date, quests_json FROM user_daily_quests WHERE user_id=?", (user_id,))
+        row = self.cur.fetchone()
+        if not row or row[0] != today:
+            return
+        quests = json.loads(row[1])
+        changed = False
+        for q in quests:
+            if q.get("event") == event and not q["claimed"] and q["progress"] < q["target"]:
+                q["progress"] = min(q["target"], q["progress"] + amount)
+                changed = True
+        if changed:
+            self.cur.execute(
+                "UPDATE user_daily_quests SET quests_json=? WHERE user_id=?",
+                (json.dumps(quests, ensure_ascii=False), user_id),
+            )
+            self.conn.commit()
+
+    def claim_daily_quest(self, user_id: int, index: int) -> dict | None:
+        """Claims quest at index (0-2) if complete. Returns the quest or None."""
+        quests = self.get_daily_quests(user_id)
+        if index < 0 or index >= len(quests):
+            return None
+        q = quests[index]
+        if q["claimed"] or q["progress"] < q["target"]:
+            return None
+        q["claimed"] = True
+        self.cur.execute("UPDATE user_daily_quests SET quests_json=? WHERE user_id=?",
+                         (json.dumps(quests, ensure_ascii=False), user_id))
+        self.conn.commit()
+        self.add_money(user_id, q["reward_money"])
+        if q.get("reward_gold"):
+            self.add_credits(user_id, q["reward_gold"])
+        return q
+
     def add_credits(self, user_id: int, credits_to_add: int) -> Entry:
         self._ensure_entry(user_id)
+        self._record_gold_flow(int(credits_to_add))
         self.cur.execute(
             "UPDATE economy SET credits=MAX(0, credits + ?) WHERE user_id=?",
             (int(credits_to_add), user_id),
@@ -1103,18 +1479,6 @@ class Economy:
         self.cur.execute(
             "INSERT OR REPLACE INTO system_settings(key, value) VALUES('gold_price_prev', ?)",
             (str(prev_price),),
-        )
-        self.conn.commit()
-
-    def get_setting(self, key: str) -> str | None:
-        self.cur.execute("SELECT value FROM system_settings WHERE key=?", (key,))
-        row = self.cur.fetchone()
-        return row[0] if row else None
-
-    def set_setting(self, key: str, value: str) -> None:
-        self.cur.execute(
-            "INSERT OR REPLACE INTO system_settings(key, value) VALUES(?, ?)",
-            (key, value),
         )
         self.conn.commit()
 
@@ -1279,11 +1643,49 @@ class Economy:
 
     def set_portfolio_shares(self, user_id: int, symbol: str, shares: float) -> None:
         self._ensure_entry(user_id)
+        if shares <= 0:
+            self.cur.execute("DELETE FROM user_portfolio WHERE user_id=? AND symbol=?", (user_id, symbol.upper()))
+        else:
+            # ON CONFLICT giữ nguyên avg_cost (chỉ INSERT OR REPLACE mới reset nó)
+            self.cur.execute(
+                """INSERT INTO user_portfolio(user_id, symbol, shares, avg_cost) VALUES(?, ?, ?, 0)
+                   ON CONFLICT(user_id, symbol) DO UPDATE SET shares=excluded.shares""",
+                (user_id, symbol.upper(), float(shares)),
+            )
+        self.conn.commit()
+
+    def apply_stock_buy(self, user_id: int, symbol: str, shares: float, price: float) -> float:
+        """Cộng cổ phiếu mua vào portfolio và cập nhật giá vốn bình quân gia quyền.
+
+        Trả về giá vốn trung bình mới. Giá vốn chỉ có ý nghĩa khi shares > 0.
+        """
+        self._ensure_entry(user_id)
+        symbol = symbol.upper()
         self.cur.execute(
-            "INSERT OR REPLACE INTO user_portfolio(user_id, symbol, shares) VALUES(?, ?, ?)",
-            (user_id, symbol, max(0.0, shares)),
+            "SELECT shares, avg_cost FROM user_portfolio WHERE user_id=? AND symbol=?",
+            (user_id, symbol),
+        )
+        row = self.cur.fetchone()
+        old_shares = float(row[0]) if row and row[0] > 0 else 0.0
+        old_avg = float(row[1]) if row else 0.0
+        total_shares = old_shares + float(shares)
+        new_avg = ((old_shares * old_avg) + (float(shares) * float(price))) / total_shares if total_shares else 0.0
+        self.cur.execute(
+            """INSERT INTO user_portfolio(user_id, symbol, shares, avg_cost) VALUES(?, ?, ?, ?)
+               ON CONFLICT(user_id, symbol) DO UPDATE SET shares=excluded.shares, avg_cost=excluded.avg_cost""",
+            (user_id, symbol, total_shares, new_avg),
         )
         self.conn.commit()
+        return new_avg
+
+    def get_portfolio_with_cost(self, user_id: int) -> list[tuple[str, float, float]]:
+        """(symbol, shares, avg_cost) cho các mã đang nắm giữ thực tế (shares > 0)."""
+        self._ensure_entry(user_id)
+        self.cur.execute(
+            "SELECT symbol, shares, avg_cost FROM user_portfolio WHERE user_id=? AND shares > 0",
+            (user_id,),
+        )
+        return self.cur.fetchall()
 
     def get_stock_holders(self, symbol: str) -> list[tuple[int, float]]:
         self.cur.execute("SELECT user_id, shares FROM user_portfolio WHERE symbol=? AND shares > 0.0", (symbol.upper(),))
@@ -1293,6 +1695,53 @@ class Economy:
     def get_stock_prices(self) -> list[tuple[str, int, int, float]]:
         self.cur.execute("SELECT symbol, price, prev_price, change_percent FROM stock_prices")
         return self.cur.fetchall()
+
+    def get_portfolio_value(self, user_id: int) -> int:
+        """Current market value of the user's whole stock portfolio."""
+        self.cur.execute(
+            """SELECT COALESCE(SUM(p.shares * s.price), 0)
+               FROM user_portfolio p
+               LEFT JOIN stock_prices s ON s.symbol = p.symbol
+               WHERE p.user_id = ?""",
+            (user_id,),
+        )
+        row = self.cur.fetchone()
+        return int(row[0]) if row else 0
+
+    def get_economy_totals(self) -> dict:
+        """Server-wide money stats for the admin overview."""
+        self.cur.execute("SELECT COALESCE(SUM(money), 0), COUNT(*) FROM economy")
+        total_money, user_count = self.cur.fetchone()
+        self.cur.execute("SELECT user_id, money FROM economy ORDER BY money DESC LIMIT 10")
+        top = [(r[0], r[1]) for r in self.cur.fetchall()]
+        return {
+            "total_money": int(total_money),
+            "user_count": int(user_count),
+            "top": top,
+            "jackpot_pool": self.get_jackpot_pool(),
+            "gold_mined_week": int(self.get_setting("gold_mined_week", "0")),
+            "gold_spent_week": int(self.get_setting("gold_spent_week", "0")),
+            "gold_price": self.get_gold_price(),
+        }
+
+    def get_rich_rank(self, user_id: int) -> int:
+        """1-based rank of the user by wallet money (-1 if unranked)."""
+        money = self.get_entry(user_id)[1]
+        self.cur.execute("SELECT COUNT(*) + 1 FROM economy WHERE money > ?", (money,))
+        return int(self.cur.fetchone()[0])
+
+    def adjust_stock_price(self, symbol: str, pct: float) -> int | None:
+        """Applies a lasting market-impact nudge from player trades (clamped ±10%)."""
+        self.cur.execute("SELECT price, prev_price FROM stock_prices WHERE symbol=?", (symbol,))
+        row = self.cur.fetchone()
+        if not row:
+            return None
+        price, prev_price = row
+        clamped = max(-0.10, min(0.10, pct))
+        new_price = max(1, int(price * (1 + clamped)))
+        change = ((new_price - prev_price) / prev_price * 100) if prev_price else 0.0
+        self.update_stock_price(symbol, new_price, prev_price, change)
+        return new_price
 
     def update_stock_price(self, symbol: str, price: int, prev_price: int, change_percent: float) -> None:
         self.cur.execute(
@@ -1321,145 +1770,6 @@ class Economy:
         )
         rows = self.cur.fetchall()
         return [(row[0], row[1]) for row in reversed(rows)]
-
-    def get_pity_golden(self, user_id: int) -> int:
-        self._ensure_entry(user_id)
-        self.cur.execute("SELECT pity_golden FROM economy WHERE user_id=?", (user_id,))
-        row = self.cur.fetchone()
-        return row[0] if row else 0
-
-    def set_pity_golden(self, user_id: int, pity: int) -> None:
-        self._ensure_entry(user_id)
-        self.cur.execute("UPDATE economy SET pity_golden=? WHERE user_id=?", (int(pity), user_id))
-        self.conn.commit()
-
-    def add_cock(self, user_id: int, name: str, rarity: str, hp: int, atk: int, df: int, spd: int, luk: int) -> tuple[int, bool, bool, int, int, int, dict]:
-        # Check if the user already has a cock with this name (breed)
-        breed_names = [name]
-        if name in ("Luffy", "Luffy Gear 4"):
-            breed_names = ["Luffy", "Luffy Gear 4"]
-        
-        placeholders = ", ".join("?" for _ in breed_names)
-        self.cur.execute(
-            f"SELECT id, name, stars, shards, hp, atk, df, spd, luk FROM user_cocks WHERE user_id=? AND name IN ({placeholders}) LIMIT 1",
-            tuple([user_id] + breed_names)
-        )
-        row = self.cur.fetchone()
-        
-        if row:
-            cock_id, cur_name, cur_stars, cur_shards, cur_hp, cur_atk, cur_df, cur_spd, cur_luk = row
-            new_shards = cur_shards + 1
-            
-            self.cur.execute(
-                """UPDATE user_cocks 
-                   SET shards=? 
-                   WHERE id=?""",
-                (new_shards, cock_id)
-            )
-            self.conn.commit()
-            return cock_id, True, False, cur_stars, cur_stars, new_shards, {"hp": cur_hp, "atk": cur_atk, "df": cur_df, "spd": cur_spd, "luk": cur_luk}
-            
-        else:
-            self.cur.execute("SELECT count(*) FROM user_cocks WHERE user_id=?", (user_id,))
-            count = self.cur.fetchone()[0]
-            is_active = 1 if count == 0 else 0
-
-            self.cur.execute(
-                """INSERT INTO user_cocks(user_id, name, rarity, hp, atk, df, spd, luk, is_active, stars, shards)
-                   VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)""",
-                (user_id, name, rarity, hp, atk, df, spd, luk, is_active),
-            )
-            self.conn.commit()
-            return self.cur.lastrowid, False, False, 0, 0, 0, {"hp": hp, "atk": atk, "df": df, "spd": spd, "luk": luk}
-
-    def get_cocks(self, user_id: int) -> list:
-        self.cur.execute("SELECT * FROM user_cocks WHERE user_id=?", (user_id,))
-        return self.cur.fetchall()
-
-    def get_cock(self, cock_id: int) -> tuple | None:
-        self.cur.execute("SELECT * FROM user_cocks WHERE id=?", (cock_id,))
-        return self.cur.fetchone()
-
-    def get_active_cock(self, user_id: int) -> tuple | None:
-        self.cur.execute("SELECT * FROM user_cocks WHERE user_id=? AND is_active=1", (user_id,))
-        return self.cur.fetchone()
-
-    def set_active_cock(self, user_id: int, cock_id: int) -> None:
-        # Check if this cock is already in position 2 or 3
-        self.cur.execute("SELECT is_active FROM user_cocks WHERE user_id=? AND id=?", (user_id, cock_id))
-        row = self.cur.fetchone()
-        if row and row[0] in (2, 3):
-            # Clear its old position
-            self.cur.execute("UPDATE user_cocks SET is_active=0 WHERE user_id=? AND is_active=?", (user_id, row[0]))
-        # Clear the old position 1 (set it to inactive)
-        self.cur.execute("UPDATE user_cocks SET is_active=0 WHERE user_id=? AND is_active=1", (user_id,))
-        # Set new cock to position 1
-        self.cur.execute("UPDATE user_cocks SET is_active=1 WHERE user_id=? AND id=?", (user_id, cock_id))
-        self.conn.commit()
-
-    def get_team_cocks(self, user_id: int) -> dict:
-        self.cur.execute("SELECT * FROM user_cocks WHERE user_id=? AND is_active IN (1, 2, 3)", (user_id,))
-        rows = self.cur.fetchall()
-        team = {1: None, 2: None, 3: None}
-        for r in rows:
-            pos = r[14]  # is_active column index
-            if pos in (1, 2, 3):
-                team[pos] = r
-        return team
-
-    def set_team_position(self, user_id: int, cock_id: int, position: int) -> None:
-        if position not in (1, 2, 3):
-            return
-            
-        # 1. Check if the cock is already in the team at some position
-        self.cur.execute("SELECT is_active FROM user_cocks WHERE user_id=? AND id=?", (user_id, cock_id))
-        row = self.cur.fetchone()
-        if not row:
-            return  # Cock not owned or doesn't exist
-            
-        current_pos = row[0]
-        
-        # 2. Check if another cock is currently in the target position
-        self.cur.execute("SELECT id FROM user_cocks WHERE user_id=? AND is_active=?", (user_id, position))
-        target_row = self.cur.fetchone()
-        
-        if current_pos in (1, 2, 3):
-            # If already on the team: Swap!
-            if target_row:
-                # Move the occupant of the target position to the current position
-                self.cur.execute("UPDATE user_cocks SET is_active=? WHERE id=?", (current_pos, target_row[0]))
-            # Move the setting cock to the new target position
-            self.cur.execute("UPDATE user_cocks SET is_active=? WHERE id=?", (position, cock_id))
-        else:
-            # If new to the team:
-            if target_row:
-                # Displace the occupant (set is_active to 0)
-                self.cur.execute("UPDATE user_cocks SET is_active=0 WHERE id=?", (target_row[0],))
-            # Set the cock to the target position
-            self.cur.execute("UPDATE user_cocks SET is_active=? WHERE id=?", (position, cock_id))
-            
-        self.conn.commit()
-
-    def remove_from_team(self, user_id: int, position: int) -> None:
-        self.cur.execute("UPDATE user_cocks SET is_active=0 WHERE user_id=? AND is_active=?", (user_id, position))
-        self.conn.commit()
-
-    def clear_team(self, user_id: int) -> None:
-        self.cur.execute("UPDATE user_cocks SET is_active=0 WHERE user_id=? AND is_active IN (1, 2, 3)", (user_id,))
-        self.conn.commit()
-
-    def update_cock(self, cock_id: int, **kwargs) -> None:
-        if not kwargs:
-            return
-        fields = ", ".join(f"{k}=?" for k in kwargs.keys())
-        params = list(kwargs.values())
-        params.append(cock_id)
-        self.cur.execute(f"UPDATE user_cocks SET {fields} WHERE id=?", tuple(params))
-        self.conn.commit()
-
-    def delete_cock(self, cock_id: int) -> None:
-        self.cur.execute("DELETE FROM user_cocks WHERE id=?", (cock_id,))
-        self.conn.commit()
 
     # --- GARAGE SYSTEMS ---
     def add_user_car(self, user_id: int, model: str, rarity: str, serial: int, edition: str, collection: str) -> int:
@@ -2671,15 +2981,20 @@ class Economy:
         return self.cur.fetchall()
 
 
-    def create_marriage(self, user_one: int, user_two: int, ring_type: str) -> None:
-        """Registers a new marriage in the database"""
+    def create_marriage(self, user_one: int, user_two: int, ring_type: str) -> bool:
+        """Registers a new marriage in the database.
+
+        Returns False without touching the existing row when this exact pair is
+        already married (INSERT OR IGNORE protects their joint wallet/points).
+        """
         import time
         now = int(time.time())
         self.cur.execute(
-            "INSERT OR REPLACE INTO user_marry (user_one, user_two, ring_type, love_points, joint_wallet, married_at, last_interact_time, interacts_today) VALUES (?, ?, ?, 0, 0, ?, 0, 0)",
+            "INSERT OR IGNORE INTO user_marry (user_one, user_two, ring_type, love_points, joint_wallet, married_at, last_interact_time, interacts_today) VALUES (?, ?, ?, 0, 0, ?, 0, 0)",
             (user_one, user_two, ring_type, now)
         )
         self.conn.commit()
+        return self.cur.rowcount > 0
 
     def delete_marriage(self, user_one: int, user_two: int) -> None:
         """Deletes a marriage registration"""
@@ -2754,7 +3069,12 @@ class Economy:
         row = self.cur.fetchone()
         if not row:
             return 0
-            
+
+        if row[0] + delta < 0:
+            logger.warning(
+                "update_joint_wallet clamped negative balance for marriage (%s, %s): %s + %s -> 0",
+                user_one, user_two, row[0], delta,
+            )
         new_balance = max(0, row[0] + delta)
         self.cur.execute(
             "UPDATE user_marry SET joint_wallet = ? WHERE user_one = ? AND user_two = ?",
@@ -2763,52 +3083,227 @@ class Economy:
         self.conn.commit()
         return new_balance
 
+    def apply_marriage_interest(self, user_one: int, user_two: int) -> tuple[int, int]:
+        """Accrues pending joint-wallet interest (3%/ngày, trần 15M/ngày, tối đa 30 ngày) for a marriage.
+
+        Only meaningful for ring_eternal_butterfly couples. Interest accrues strictly
+        forward from last_interest_time; a compare-and-swap on that timestamp makes
+        concurrent callers apply the same window exactly once.
+        Returns (total_interest, new_joint_balance).
+        """
+        self.cur.execute(
+            "SELECT joint_wallet, married_at, last_interest_time FROM user_marry WHERE user_one = ? AND user_two = ?",
+            (user_one, user_two)
+        )
+        row = self.cur.fetchone()
+        if not row:
+            return (0, 0)
+        joint_wallet, married_at, last_interest = row[0], row[1], row[2] or 0
+        if joint_wallet <= 0:
+            return (0, joint_wallet)
+        if last_interest == 0:
+            last_interest = married_at
+
+        import datetime
+        last_date = datetime.date.fromtimestamp(last_interest)
+        now_date = datetime.date.fromtimestamp(int(time.time()))
+        days_passed = (now_date - last_date).days
+        if days_passed <= 0:
+            return (0, joint_wallet)
+
+        now = int(time.time())
+        # Claim the interest window first: only one concurrent caller wins the CAS,
+        # so the interest is computed and paid exactly once.
+        self.cur.execute(
+            "UPDATE user_marry SET last_interest_time = ? WHERE user_one = ? AND user_two = ? AND last_interest_time = ?",
+            (now, user_one, user_two, last_interest)
+        )
+        if self.cur.rowcount == 0:
+            return (0, joint_wallet)
+
+        total_interest = 0
+        temp_wallet = joint_wallet
+        for _ in range(min(days_passed, 30)):  # Cap at 30 days of inactivity to prevent overflow
+            day_interest = min(15_000_000, int(temp_wallet * 0.03))
+            total_interest += day_interest
+            temp_wallet += day_interest
+
+        if total_interest > 0:
+            self.cur.execute(
+                "UPDATE user_marry SET joint_wallet = joint_wallet + ? WHERE user_one = ? AND user_two = ?",
+                (total_interest, user_one, user_two)
+            )
+        self.conn.commit()
+        return (total_interest, joint_wallet + total_interest)
+
+    def couple_deposit_joint(self, user_id: int, user_one: int, user_two: int, amount: int) -> tuple[bool, int]:
+        """Atomically moves `amount` cash from the user's wallet into the couple's joint wallet.
+
+        Returns (success, new_joint_balance)."""
+        if amount <= 0:
+            return (False, 0)
+        self._ensure_entry(user_id)
+        try:
+            self.cur.execute("SELECT money FROM economy WHERE user_id=?", (user_id,))
+            row = self.cur.fetchone()
+            if not row or row[0] < amount:
+                return (False, 0)
+
+            self.cur.execute(
+                "SELECT joint_wallet FROM user_marry WHERE user_one = ? AND user_two = ?",
+                (user_one, user_two)
+            )
+            marriage_row = self.cur.fetchone()
+            if not marriage_row:
+                return (False, 0)
+
+            self.cur.execute("UPDATE economy SET money = MAX(0, money - ?) WHERE user_id=?", (amount, user_id))
+            self.cur.execute(
+                "UPDATE user_marry SET joint_wallet = joint_wallet + ? WHERE user_one = ? AND user_two = ?",
+                (amount, user_one, user_two)
+            )
+            new_joint = marriage_row[0] + amount
+            self.conn.commit()
+            return (True, new_joint)
+        except Exception:
+            self.conn.rollback()
+            raise
+
+    def couple_withdraw_joint(self, requester_id: int, user_one: int, user_two: int, amount: int) -> tuple[bool, int]:
+        """Atomically moves `amount` from the couple's joint wallet into the requester's cash.
+
+        Returns (success, new_joint_balance)."""
+        if amount <= 0:
+            return (False, 0)
+        self._ensure_entry(requester_id)
+        try:
+            self.cur.execute(
+                "SELECT joint_wallet FROM user_marry WHERE user_one = ? AND user_two = ?",
+                (user_one, user_two)
+            )
+            row = self.cur.fetchone()
+            if not row or row[0] < amount:
+                return (False, row[0] if row else 0)
+
+            self.cur.execute(
+                "UPDATE user_marry SET joint_wallet = joint_wallet - ? WHERE user_one = ? AND user_two = ?",
+                (amount, user_one, user_two)
+            )
+            self.cur.execute("UPDATE economy SET money = MAX(0, money + ?) WHERE user_id=?", (amount, requester_id))
+            new_joint = row[0] - amount
+            self.conn.commit()
+            return (True, new_joint)
+        except Exception:
+            self.conn.rollback()
+            raise
+
+    def purchase_couple_asset(self, buyer_id: int, user_one: int, user_two: int, kind: str, item_id: str, price: int) -> tuple[str, int, int, str | None]:
+        """Atomically buys a couple asset (kind: 'estate' | 'vehicle' | 'pet') with the buyer's gold.
+
+        The replaced asset in the same slot is liquidated: 25% of its recorded price is
+        refunded to its original buyer. Everything commits once or not at all.
+        Returns (status, refund_amount, refund_target_id, replaced_item_id) where status is
+        "ok" | "insufficient" | "owned"."""
+        column = {"estate": "estate", "vehicle": "vehicle", "pet": "pet"}.get(kind)
+        if not column or price <= 0:
+            return ("insufficient", 0, 0, None)
+        self._ensure_entry(buyer_id)
+        try:
+            self.cur.execute("SELECT credits FROM economy WHERE user_id=?", (buyer_id,))
+            row = self.cur.fetchone()
+            if not row or row[0] < price:
+                return ("insufficient", 0, 0, None)
+
+            self.cur.execute(
+                "SELECT estate_id, estate_price, estate_bought_by, vehicle_id, vehicle_price, vehicle_bought_by, pet_id, pet_price, pet_bought_by FROM couple_assets WHERE (user_one = ? AND user_two = ?) OR (user_one = ? AND user_two = ?)",
+                (user_one, user_two, user_two, user_one)
+            )
+            assets = self.cur.fetchone()
+
+            col_index = {"estate": 0, "vehicle": 3, "pet": 6}[column]
+            refund_amount = 0
+            refund_target = 0
+            replaced_id = None
+            if assets and assets[col_index] and assets[col_index + 1] > 0 and assets[col_index + 2] > 0:
+                replaced_id = assets[col_index]
+                refund_amount = int(assets[col_index + 1] * 0.25)
+                refund_target = assets[col_index + 2]
+            if replaced_id == item_id:
+                return ("owned", 0, 0, None)
+
+            self.cur.execute("UPDATE economy SET credits = MAX(0, credits - ?) WHERE user_id=?", (price, buyer_id))
+            self._record_gold_flow(-price)
+            if refund_amount > 0 and refund_target > 0:
+                self.cur.execute("UPDATE economy SET credits = MAX(0, credits + ?) WHERE user_id=?", (refund_amount, refund_target))
+                self._record_gold_flow(refund_amount)
+
+            id_col, price_col, buyer_col = f"{column}_id", f"{column}_price", f"{column}_bought_by"
+            if assets:
+                self.cur.execute(
+                    f"UPDATE couple_assets SET {id_col} = ?, {price_col} = ?, {buyer_col} = ? WHERE (user_one = ? AND user_two = ?) OR (user_one = ? AND user_two = ?)",
+                    (item_id, price, buyer_id, user_one, user_two, user_two, user_one)
+                )
+            else:
+                self.cur.execute(
+                    f"INSERT INTO couple_assets (user_one, user_two, {id_col}, {price_col}, {buyer_col}) VALUES (?, ?, ?, ?, ?)",
+                    (user_one, user_two, item_id, price, buyer_id)
+                )
+            self.conn.commit()
+            return ("ok", refund_amount, refund_target, replaced_id)
+        except Exception:
+            self.conn.rollback()
+            raise
+
+    def add_marriage_love_points_raw(self, user_one: int, user_two: int, points: int) -> int:
+        """Adds love points bypassing the daily cap (e.g. wish blessings). Returns the new total."""
+        self.cur.execute(
+            "UPDATE user_marry SET love_points = love_points + ? WHERE user_one = ? AND user_two = ?",
+            (points, user_one, user_two)
+        )
+        if self.cur.rowcount == 0:
+            return 0
+        self.cur.execute(
+            "SELECT love_points FROM user_marry WHERE user_one = ? AND user_two = ?",
+            (user_one, user_two)
+        )
+        row = self.cur.fetchone()
+        self.conn.commit()
+        return row[0] if row else 0
+
     def get_marriage_multiplier(self, user_id: int) -> float:
-        """Calculates the wage/work multiplier for a user based on their marriage status and ring type."""
+        """Calculates the wage/work multiplier for a user based on their marriage ring type.
+
+        Multipliers are flat per ring and no longer scale with intimacy points."""
         marriages = self.get_marriages(user_id)
         if not marriages:
             return 1.0
-            
+
         ring_buffs = {
-            "ring_grass": (1.0, 0.0),
-            "ring_quartz": (1.02, 0.005),
-            "ring_aquamarine": (1.03, 0.005),
-            "ring_emerald": (1.04, 0.005),
-            "ring_amethyst": (1.05, 0.007),
-            "ring_cupid": (1.07, 0.008),
-            "ring_nhankat": (1.30, 0.005),
-            "ring_citrine": (1.09, 0.010),
-            "ring_ruby": (1.12, 0.012),
-            "ring_sapphire": (1.15, 0.015),
-            "ring_sunburst": (1.20, 0.020),
-            "ring_gothic": (1.25, 0.025),
-            "ring_angel": (1.30, 0.030),
-            "ring_divine": (1.40, 0.005, 1.50),
-            "ring_eternal_butterfly": (1.12, 0.010),
+            "ring_grass": 1.0,
+            "ring_quartz": 1.02,
+            "ring_aquamarine": 1.03,
+            "ring_emerald": 1.04,
+            "ring_amethyst": 1.05,
+            "ring_cupid": 1.07,
+            "ring_nhankat": 1.30,
+            "ring_citrine": 1.09,
+            "ring_ruby": 1.12,
+            "ring_sapphire": 1.15,
+            "ring_sunburst": 1.20,
+            "ring_gothic": 1.25,
+            "ring_angel": 1.30,
+            "ring_divine": 1.40,
+            "ring_eternal_butterfly": 1.12,
+            "ring_silver": 1.02,   # legacy ring types
+            "ring_gold": 1.05,
         }
-        
+
         max_mult = 1.0
         for marriage in marriages:
-            user_one, user_two, ring_type, love_points, joint_wallet, married_at, _, _ = marriage
-            love_level = love_points // 100
-            
-            if ring_type in ring_buffs:
-                buff_info = ring_buffs[ring_type]
-                base = buff_info[0]
-                step = buff_info[1]
-                mult = base + (love_level * step)
-                if len(buff_info) > 2:
-                    mult = min(mult, buff_info[2])
-            elif ring_type == "ring_silver":
-                mult = 1.02 + (love_level * 0.005)
-            elif ring_type == "ring_gold":
-                mult = 1.05 + (love_level * 0.01)
-            else:
-                mult = 1.0
-                
+            mult = ring_buffs.get(marriage[2], 1.0)
             if mult > max_mult:
                 max_mult = mult
-                
+
         return max_mult
 
     def get_marriage_times(self, user_one: int, user_two: int) -> tuple[int, int]:
@@ -3404,7 +3899,91 @@ class Economy:
         return result
 
 
+    # --- GIFT CODE SYSTEM ---
+
+    def create_gift_code(
+        self, code: str, reward_money: int = 0, reward_credits: float = 0.0,
+        max_uses: int = 0, expires_at: int = 0,
+    ) -> bool:
+        """Tạo gift code mới. Trả về True nếu tạo thành công, False nếu code đã tồn tại."""
+        try:
+            self.cur.execute(
+                "INSERT INTO gift_codes(code, reward_money, reward_credits, max_uses, used_count, expires_at, created_at) "
+                "VALUES(?, ?, ?, ?, 0, ?, ?)",
+                (code.upper(), int(reward_money), float(reward_credits), int(max_uses), int(expires_at), int(time.time())),
+            )
+            self.conn.commit()
+            return True
+        except sqlite3.IntegrityError:
+            return False
+
+    def redeem_gift_code(self, user_id: int, code: str) -> tuple[bool, str, int, float]:
+        """Nhập gift code. Trả về (success, message, money_reward, credits_reward)."""
+        code = code.upper()
+        self.cur.execute("SELECT reward_money, reward_credits, max_uses, used_count, expires_at FROM gift_codes WHERE code=?", (code,))
+        row = self.cur.fetchone()
+        if not row:
+            return (False, "❌ Mã code không hợp lệ hoặc không tồn tại.", 0, 0.0)
+
+        reward_money, reward_credits, max_uses, used_count, expires_at = row
+
+        # Kiểm tra đã nhập chưa
+        self.cur.execute("SELECT 1 FROM gift_code_claims WHERE code=? AND user_id=?", (code, user_id))
+        if self.cur.fetchone():
+            return (False, "⚠️ Bạn đã nhập mã code này rồi.", 0, 0.0)
+
+        # Kiểm tra hết hạn
+        if expires_at > 0 and int(time.time()) > expires_at:
+            return (False, "⏰ Mã code này đã hết hạn.", 0, 0.0)
+
+        # Kiểm tra hết lượt
+        if max_uses > 0 and used_count >= max_uses:
+            return (False, "📛 Mã code này đã hết lượt sử dụng.", 0, 0.0)
+
+        # Cộng thưởng
+        self._ensure_entry(user_id)
+        if reward_money > 0:
+            self.cur.execute("UPDATE economy SET money=MAX(0, money + ?) WHERE user_id=?", (int(reward_money), user_id))
+        if reward_credits > 0:
+            self.cur.execute("UPDATE economy SET credits=MAX(0, credits + ?) WHERE user_id=?", (reward_credits, user_id))
+
+        # Ghi nhận claim
+        self.cur.execute(
+            "INSERT INTO gift_code_claims(code, user_id, claimed_at) VALUES(?, ?, ?)",
+            (code, user_id, int(time.time())),
+        )
+        self.cur.execute("UPDATE gift_codes SET used_count=used_count+1 WHERE code=?", (code,))
+        self.conn.commit()
+        return (True, "✅ Nhập code thành công!", reward_money, reward_credits)
+
+    def delete_gift_code(self, code: str) -> bool:
+        """Xóa gift code. Trả về True nếu xóa thành công."""
+        code = code.upper()
+        self.cur.execute("DELETE FROM gift_codes WHERE code=?", (code,))
+        self.cur.execute("DELETE FROM gift_code_claims WHERE code=?", (code,))
+        deleted = self.cur.rowcount > 0
+        self.conn.commit()
+        return deleted
+
+    def list_gift_codes(self) -> list[tuple]:
+        """Liệt kê tất cả gift codes."""
+        self.cur.execute(
+            "SELECT code, reward_money, reward_credits, max_uses, used_count, expires_at, created_at FROM gift_codes ORDER BY created_at DESC"
+        )
+        return self.cur.fetchall()
 
 
+def _locked(method):
+    """Serializes public Economy methods behind the shared reentrant lock."""
+    @functools.wraps(method)
+    def wrapper(self, *args, **kwargs):
+        with self._lock:
+            return method(self, *args, **kwargs)
+    return wrapper
 
 
+for _name, _member in list(vars(Economy).items()):
+    if _name.startswith("_") or _name == "transaction":
+        continue
+    if callable(_member) and not isinstance(_member, (classmethod, staticmethod)):
+        setattr(Economy, _name, _locked(_member))
