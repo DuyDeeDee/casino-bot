@@ -1010,6 +1010,7 @@ class OreMineExpeditionView(discord.ui.View):
         self.final_embed: Optional[discord.Embed] = None
         self.lock = asyncio.Lock()
         self.created_at = int(time.time())
+        self.economy = getattr(cog, "economy", None)
 
         eff_lvl = min(max(0, pickaxe_level), 6)
         self.pickaxe_info = PICKAXE_CONFIG.get(pickaxe_level, PICKAXE_CONFIG[eff_lvl])
@@ -1174,7 +1175,7 @@ class OreMineExpeditionView(discord.ui.View):
             harvest_summary[name_key]["money"] += m_val
             harvest_summary[name_key]["gold"] += g_val
 
-        total_money = int(total_money * get_active_mine_mult(self.economy))
+        total_money = int(total_money * get_active_mine_mult(self.cog.economy))
 
         self.cog.economy.add_money(self.user_id, total_money)
 
