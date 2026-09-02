@@ -16,7 +16,7 @@ from app.config import config
 Entry = Tuple[int, int, int]
 DATABASE_PATH = Path(config.storage.database_path)
 LEGACY_DATABASE_PATH = Path(__file__).resolve().parents[3] / "economy.db"
-SCHEMA_VERSION = 52
+SCHEMA_VERSION = 53
 
 
 logger = logging.getLogger(__name__)
@@ -987,6 +987,24 @@ def _migration_52_add_sports_engine_v2(cur: sqlite3.Cursor) -> None:
     cur.execute("CREATE INDEX IF NOT EXISTS idx_sports_events_match ON sports_match_events(match_id, minute)")
 
 
+def _migration_53_add_marry_contributions(cur: sqlite3.Cursor) -> None:
+    try:
+        cur.execute("ALTER TABLE user_marry ADD COLUMN deposit_one INTEGER DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        cur.execute("ALTER TABLE user_marry ADD COLUMN deposit_two INTEGER DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        # Initialize legacy balances evenly so existing married couples retain their quota
+        cur.execute(
+            "UPDATE user_marry SET deposit_one = joint_wallet / 2, deposit_two = joint_wallet - (joint_wallet / 2) WHERE joint_wallet > 0 AND deposit_one = 0 AND deposit_two = 0"
+        )
+    except sqlite3.OperationalError:
+        pass
+
+
 MIGRATIONS: dict[int, Callable[[sqlite3.Cursor], None]] = {
     1: _migration_1_create_economy,
     2: _migration_2_add_indexes,
@@ -1040,6 +1058,7 @@ MIGRATIONS: dict[int, Callable[[sqlite3.Cursor], None]] = {
     50: _migration_50_portfolio_avg_cost,
     51: _migration_51_update_gold_price_to_10m,
     52: _migration_52_add_sports_engine_v2,
+    53: _migration_53_add_marry_contributions,
 }
 
 
@@ -3690,24 +3709,36 @@ class Economy:
         return new_love_points
 
     def update_joint_wallet(self, user_one: int, user_two: int, delta: int) -> int:
-        """Updates joint wallet balance and returns new balance"""
+        """Updates joint wallet balance and returns new balance.
+        If delta > 0, distributes the bonus equally to both partners' deposit balances."""
         self.cur.execute(
-            "SELECT joint_wallet FROM user_marry WHERE user_one = ? AND user_two = ?",
+            "SELECT joint_wallet, deposit_one, deposit_two FROM user_marry WHERE user_one = ? AND user_two = ?",
             (user_one, user_two)
         )
         row = self.cur.fetchone()
         if not row:
             return 0
 
-        if row[0] + delta < 0:
+        joint_wallet, d1, d2 = row[0], row[1] or 0, row[2] or 0
+        if joint_wallet + delta < 0:
             logger.warning(
                 "update_joint_wallet clamped negative balance for marriage (%s, %s): %s + %s -> 0",
-                user_one, user_two, row[0], delta,
+                user_one, user_two, joint_wallet, delta,
             )
-        new_balance = max(0, row[0] + delta)
+        new_balance = max(0, joint_wallet + delta)
+        if delta > 0:
+            d1_bonus = delta // 2
+            d2_bonus = delta - d1_bonus
+            new_d1 = d1 + d1_bonus
+            new_d2 = d2 + d2_bonus
+        else:
+            ratio = new_balance / joint_wallet if joint_wallet > 0 else 0
+            new_d1 = min(new_balance, int(d1 * ratio))
+            new_d2 = min(new_balance - new_d1, int(d2 * ratio))
+
         self.cur.execute(
-            "UPDATE user_marry SET joint_wallet = ? WHERE user_one = ? AND user_two = ?",
-            (new_balance, user_one, user_two)
+            "UPDATE user_marry SET joint_wallet = ?, deposit_one = ?, deposit_two = ? WHERE user_one = ? AND user_two = ?",
+            (new_balance, new_d1, new_d2, user_one, user_two)
         )
         self.conn.commit()
         return new_balance
@@ -3758,15 +3789,17 @@ class Economy:
             temp_wallet += day_interest
 
         if total_interest > 0:
+            d1_bonus = total_interest // 2
+            d2_bonus = total_interest - d1_bonus
             self.cur.execute(
-                "UPDATE user_marry SET joint_wallet = joint_wallet + ? WHERE user_one = ? AND user_two = ?",
-                (total_interest, user_one, user_two)
+                "UPDATE user_marry SET joint_wallet = joint_wallet + ?, deposit_one = deposit_one + ?, deposit_two = deposit_two + ? WHERE user_one = ? AND user_two = ?",
+                (total_interest, d1_bonus, d2_bonus, user_one, user_two)
             )
         self.conn.commit()
         return (total_interest, joint_wallet + total_interest)
 
     def couple_deposit_joint(self, user_id: int, user_one: int, user_two: int, amount: int) -> tuple[bool, int]:
-        """Atomically moves `amount` cash from the user's wallet into the couple's joint wallet.
+        """Atomically moves `amount` cash from the user's wallet into the couple's joint wallet and records contribution.
 
         Returns (success, new_joint_balance)."""
         if amount <= 0:
@@ -3779,7 +3812,7 @@ class Economy:
                 return (False, 0)
 
             self.cur.execute(
-                "SELECT joint_wallet FROM user_marry WHERE user_one = ? AND user_two = ?",
+                "SELECT joint_wallet, deposit_one, deposit_two FROM user_marry WHERE user_one = ? AND user_two = ?",
                 (user_one, user_two)
             )
             marriage_row = self.cur.fetchone()
@@ -3787,10 +3820,16 @@ class Economy:
                 return (False, 0)
 
             self.cur.execute("UPDATE economy SET money = MAX(0, money - ?) WHERE user_id=?", (amount, user_id))
-            self.cur.execute(
-                "UPDATE user_marry SET joint_wallet = joint_wallet + ? WHERE user_one = ? AND user_two = ?",
-                (amount, user_one, user_two)
-            )
+            if user_id == user_one:
+                self.cur.execute(
+                    "UPDATE user_marry SET joint_wallet = joint_wallet + ?, deposit_one = deposit_one + ? WHERE user_one = ? AND user_two = ?",
+                    (amount, amount, user_one, user_two)
+                )
+            else:
+                self.cur.execute(
+                    "UPDATE user_marry SET joint_wallet = joint_wallet + ?, deposit_two = deposit_two + ? WHERE user_one = ? AND user_two = ?",
+                    (amount, amount, user_one, user_two)
+                )
             new_joint = marriage_row[0] + amount
             self.conn.commit()
             return (True, new_joint)
@@ -3798,30 +3837,64 @@ class Economy:
             self.conn.rollback()
             raise
 
-    def couple_withdraw_joint(self, requester_id: int, user_one: int, user_two: int, amount: int) -> tuple[bool, int]:
+    def get_couple_deposits(self, user_one: int, user_two: int) -> tuple[int, int]:
+        """Returns (deposit_one, deposit_two) for the given marriage."""
+        self.cur.execute(
+            "SELECT deposit_one, deposit_two FROM user_marry WHERE user_one = ? AND user_two = ?",
+            (user_one, user_two)
+        )
+        row = self.cur.fetchone()
+        if not row:
+            return (0, 0)
+        return (row[0] or 0, row[1] or 0)
+
+    def couple_withdraw_joint(self, requester_id: int, user_one: int, user_two: int, amount: int) -> tuple[bool, int, int]:
         """Atomically moves `amount` from the couple's joint wallet into the requester's cash.
 
-        Returns (success, new_joint_balance)."""
+        Returns (success, new_joint_balance, cross_amount) where cross_amount is the portion
+        withdrawn from the spouse's deposit balance."""
         if amount <= 0:
-            return (False, 0)
+            return (False, 0, 0)
         self._ensure_entry(requester_id)
         try:
             self.cur.execute(
-                "SELECT joint_wallet FROM user_marry WHERE user_one = ? AND user_two = ?",
+                "SELECT joint_wallet, deposit_one, deposit_two FROM user_marry WHERE user_one = ? AND user_two = ?",
                 (user_one, user_two)
             )
             row = self.cur.fetchone()
             if not row or row[0] < amount:
-                return (False, row[0] if row else 0)
+                return (False, row[0] if row else 0, 0)
 
+            joint_wallet, d1, d2 = row[0], row[1] or 0, row[2] or 0
+            if requester_id == user_one:
+                req_dep, spouse_dep = d1, d2
+                if amount <= req_dep:
+                    new_d1 = req_dep - amount
+                    new_d2 = spouse_dep
+                    cross_amount = 0
+                else:
+                    cross_amount = amount - req_dep
+                    new_d1 = 0
+                    new_d2 = max(0, spouse_dep - cross_amount)
+            else:
+                req_dep, spouse_dep = d2, d1
+                if amount <= req_dep:
+                    new_d2 = req_dep - amount
+                    new_d1 = spouse_dep
+                    cross_amount = 0
+                else:
+                    cross_amount = amount - req_dep
+                    new_d2 = 0
+                    new_d1 = max(0, spouse_dep - cross_amount)
+
+            new_joint = joint_wallet - amount
             self.cur.execute(
-                "UPDATE user_marry SET joint_wallet = joint_wallet - ? WHERE user_one = ? AND user_two = ?",
-                (amount, user_one, user_two)
+                "UPDATE user_marry SET joint_wallet = ?, deposit_one = ?, deposit_two = ? WHERE user_one = ? AND user_two = ?",
+                (new_joint, new_d1, new_d2, user_one, user_two)
             )
             self.cur.execute("UPDATE economy SET money = MAX(0, money + ?) WHERE user_id=?", (amount, requester_id))
-            new_joint = row[0] - amount
             self.conn.commit()
-            return (True, new_joint)
+            return (True, new_joint, cross_amount)
         except Exception:
             self.conn.rollback()
             raise

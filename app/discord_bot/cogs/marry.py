@@ -12,6 +12,7 @@ import requests
 from app.config import config
 from app.discord_bot.modules.economy import Economy
 from app.discord_bot.modules.helpers import make_embed, ABS_PATH, parse_amount
+from app.discord_bot.modules.member_levels import check_give_limit, record_give
 from app.discord_bot.modules.profile_renderer import load_font
 from app.discord_bot.modules.wallet_logging import log_wallet_change
 
@@ -806,7 +807,18 @@ class DivorceView(discord.ui.View):
 
         if marriage:
             user_one, user_two, ring_type, love_points, joint_wallet, married_at, _, _ = marriage
-            split = joint_wallet // 2
+            deposit_one, deposit_two = self.economy.get_couple_deposits(user_one, user_two)
+            total_deposits = deposit_one + deposit_two
+            if joint_wallet > total_deposits:
+                surplus = joint_wallet - total_deposits
+                p1 = deposit_one + (surplus // 2)
+                p2 = deposit_two + (surplus - surplus // 2)
+            elif total_deposits > 0:
+                p1 = int(round(joint_wallet * (deposit_one / total_deposits)))
+                p2 = joint_wallet - p1
+            else:
+                p1 = joint_wallet // 2
+                p2 = joint_wallet - p1
             
             with self.economy.transaction():
                 # Refund assets 25%
@@ -814,13 +826,14 @@ class DivorceView(discord.ui.View):
 
                 # Delete marriage and return wallet cash
                 self.economy.delete_marriage(user_one, user_two)
-                if split > 0:
-                    self.economy.add_money(user_one, split)
-                    self.economy.add_money(user_two, split)
+                if p1 > 0:
+                    self.economy.add_money(user_one, p1)
+                if p2 > 0:
+                    self.economy.add_money(user_two, p2)
                 
             desc = (
                 f"💔 Hai bạn đã chính thức đường ai nấy đi.\n"
-                f"🏦 **Quỹ chung chia đôi:** Mỗi người nhận lại `+{split:,} VND` vào tài khoản ví."
+                f"🏦 **Hoàn trả quỹ chung:** <@{user_one}> nhận lại `+{p1:,} VND` — <@{user_two}> nhận lại `+{p2:,} VND` vào tài khoản ví."
                 f"{refund_str}"
             )
         else:
@@ -976,11 +989,38 @@ class CoupleWithdrawView(discord.ui.View):
             await interaction.channel.send(f"❌ Thất bại: Quỹ chung hiện tại không đủ để rút (Chỉ còn `{joint_wallet:,} VND`!)")
             return
 
+        deposit_one, deposit_two = self.economy.get_couple_deposits(user_one, user_two)
+        req_dep = deposit_one if self.proposer.id == user_one else deposit_two
+        cross_amount = max(0, self.amount - req_dep)
+
+        if cross_amount > 0:
+            valid, err_msg = check_give_limit(
+                self.economy,
+                sender_id=self.spouse.id,
+                receiver_id=self.proposer.id,
+                amount=cross_amount,
+                currency="money",
+            )
+            if not valid:
+                await interaction.channel.send(
+                    f"❌ **Rút tiền không thành công:** Hạn mức cấp độ không thỏa mãn để rút phần tiền của bạn đời ({cross_amount:,} VND)!\n> {err_msg}"
+                )
+                return
+
         # Perform withdrawal atomically (re-checks balance inside the same transaction)
-        success, new_joint = self.economy.couple_withdraw_joint(self.proposer.id, user_one, user_two, self.amount)
+        success, new_joint, actual_cross = self.economy.couple_withdraw_joint(self.proposer.id, user_one, user_two, self.amount)
         if not success:
             await interaction.channel.send("❌ Thất bại: Hôn nhân không còn tồn tại hoặc quỹ chung không đủ để rút!")
             return
+
+        if actual_cross > 0:
+            record_give(
+                self.economy,
+                sender_id=self.spouse.id,
+                receiver_id=self.proposer.id,
+                amount=actual_cross,
+                currency="money",
+            )
 
         log_wallet_change(
             logger,
@@ -988,14 +1028,24 @@ class CoupleWithdrawView(discord.ui.View):
             user_id=self.proposer.id,
             money_delta=self.amount,
             joint_balance=new_joint,
+            cross_amount=actual_cross,
             ctx=self.ctx
         )
+
+        detail_str = ""
+        if actual_cross > 0:
+            self_part = self.amount - actual_cross
+            detail_str = (
+                f"> • *Tiền tự nạp rút lại:* `{self_part:,} VND`\n"
+                f"> • *Hỗ trợ từ bạn đời:* `{actual_cross:,} VND` *(đã tính vào hạn mức ngày)*\n\n"
+            )
 
         embed = make_embed(
             title="🏦 RÚT TIỀN QUỸ CHUNG THÀNH CÔNG 🏦",
             description=(
                 f"**{self.spouse.name}** đã đồng ý cho **{self.proposer.name}** rút tiền từ quỹ phu thê:\n\n"
                 f"💰 **Nhận lại ví:** `+{self.amount:,} VND`\n"
+                f"{detail_str}"
                 f"🏦 **Số dư quỹ chung còn lại:** `{new_joint:,} VND`"
             ),
             color=discord.Color.green()
@@ -1572,11 +1622,15 @@ class Marry(commands.Cog):
             ctx=ctx
         )
 
+        d1, d2 = self.economy.get_couple_deposits(user_one, user_two)
+        author_dep = d1 if ctx.author.id == user_one else d2
+
         embed = make_embed(
             title="🏦 GÓP TIỀN QUỸ CHUNG THÀNH CÔNG 🏦",
             description=(
                 f"**{ctx.author.name}** đã góp thành công vào quỹ gia đình:\n\n"
                 f"💸 **Tiền góp:** `-{money_val:,} VND`\n"
+                f"👤 **Phần đóng góp của bạn:** `{author_dep:,} VND`\n"
                 f"🏦 **Số dư quỹ chung mới:** `{new_joint:,} VND`"
             ),
             color=discord.Color.green()
@@ -1627,18 +1681,87 @@ class Marry(commands.Cog):
         if not spouse:
             await ctx.send("❌ Không thể tìm thấy thông tin bạn đời để yêu cầu đồng ý!")
             return
+
+        deposit_one, deposit_two = self.economy.get_couple_deposits(user_one, user_two)
+        author_dep = deposit_one if ctx.author.id == user_one else deposit_two
+
+        cross_amount = max(0, money_val - author_dep)
+        if cross_amount > 0:
+            valid, err_msg = check_give_limit(
+                self.economy,
+                sender_id=spouse_id,
+                receiver_id=ctx.author.id,
+                amount=cross_amount,
+                currency="money",
+            )
+            if not valid:
+                await ctx.send(
+                    f"❌ **Không thể yêu cầu rút tiền:** Số tiền rút (`{money_val:,} VND`) vượt quá phần đóng góp cá nhân của bạn (`{author_dep:,} VND`).\n"
+                    f"> Bạn đang yêu cầu rút thêm **`{cross_amount:,} VND`** từ phần của bạn đời.\n"
+                    f"> {err_msg}"
+                )
+                return
             
         view = CoupleWithdrawView(ctx.author, spouse, money_val, self.economy, ctx)
+
+        detail_txt = ""
+        if cross_amount > 0:
+            self_part = money_val - cross_amount
+            detail_txt = (
+                f"> • *Tiền tự nạp rút lại:* `{self_part:,} VND`\n"
+                f"> • *Rút từ bạn đời:* `{cross_amount:,} VND` *(sẽ tính vào hạn mức ngày)*\n\n"
+            )
+
         embed = make_embed(
             title="🏦 YÊU CẦU RÚT TIỀN QUỸ PHU THÊ 🏦",
             description=(
-                f"💍 **{ctx.author.mention}** muốn rút **`{money_val:,} VND`** từ quỹ chung.\n\n"
+                f"💍 **{ctx.author.mention}** muốn rút **`{money_val:,} VND`** từ quỹ chung.\n"
+                f"{detail_txt}"
                 f"🔔 Bạn đời **{spouse.mention}** vui lòng xác nhận đồng ý hoặc từ chối yêu cầu này!"
             ),
             color=discord.Color.magenta()
         )
         msg = await ctx.send(embed=embed, view=view)
         view.message = msg
+
+    @couple_cmd.command(name="vault", aliases=["quy", "fund", "balance"], brief="Xem chi tiết số dư và phần đóng góp trong quỹ chung.", usage="couple vault [chỉ_số]")
+    async def couple_vault(self, ctx: commands.Context, *, args_str: str = ""):
+        args = args_str.split()
+        marriage, _ = self._resolve_marriage_and_args(ctx.author.id, args)
+        if not marriage:
+            await ctx.send("❌ Bạn phải kết hôn mới có thể xem thông tin quỹ chung!")
+            return
+
+        user_one, user_two, ring_type, love_points, joint_wallet, married_at, _, _ = marriage
+        deposit_one, deposit_two = self.economy.get_couple_deposits(user_one, user_two)
+
+        user_one_obj = self.bot.get_user(user_one)
+        if not user_one_obj:
+            try:
+                user_one_obj = await self.bot.fetch_user(user_one)
+            except Exception:
+                pass
+        user_one_name = user_one_obj.name if user_one_obj else f"User_{user_one}"
+
+        user_two_obj = self.bot.get_user(user_two)
+        if not user_two_obj:
+            try:
+                user_two_obj = await self.bot.fetch_user(user_two)
+            except Exception:
+                pass
+        user_two_name = user_two_obj.name if user_two_obj else f"User_{user_two}"
+
+        embed = make_embed(
+            title="🏦 THÔNG TIN QUỸ CHUNG PHU THÊ 🏦",
+            description=(
+                f"💎 **Tổng số dư quỹ chung:** `{joint_wallet:,} VND`\n\n"
+                f"👤 **{user_one_name}:** `{deposit_one:,} VND` đóng góp\n"
+                f"👤 **{user_two_name}:** `{deposit_two:,} VND` đóng góp\n\n"
+                f"💡 *Ghi chú: Bạn có thể rút tự do phần tiền do chính mình đóng góp. Khi rút vượt mức (lấy tiền của bạn đời), giao dịch sẽ được kiểm tra theo hạn mức cấp độ chat hàng ngày.*"
+            ),
+            color=discord.Color.gold()
+        )
+        await ctx.send(embed=embed)
 
 
     @couple_cmd.command(name="wish", aliases=["uoc", "uocnguyen"], brief="Cầu chúc phúc phu thê nhận quà mỗi ngày (Chỉ dành cho Nhẫn Song Điệp Vĩnh Hằng).", usage="couple wish [chỉ_số]")
@@ -2094,11 +2217,20 @@ class Marry(commands.Cog):
                 await ctx.send(f"❌ Bạn không đủ tiền mặt trong ví để trả án phí ly hôn đơn phương! Cần `{unilateral_cost:,} VND` nhưng bạn chỉ có `{cash:,} VND`.")
                 return
                 
-            # Refund assets 25%
-            refund_str = refund_couple_assets_on_divorce(self.economy, user_one, user_two)
+            # Calculate return amounts from joint wallet based on deposits
+            deposit_one, deposit_two = self.economy.get_couple_deposits(user_one, user_two)
+            total_deposits = deposit_one + deposit_two
+            if joint_wallet > total_deposits:
+                surplus = joint_wallet - total_deposits
+                p1 = deposit_one + (surplus // 2)
+                p2 = deposit_two + (surplus - surplus // 2)
+            elif total_deposits > 0:
+                p1 = int(round(joint_wallet * (deposit_one / total_deposits)))
+                p2 = joint_wallet - p1
+            else:
+                p1 = joint_wallet // 2
+                p2 = joint_wallet - p1
 
-            # Execute force divorce
-            split = joint_wallet // 2
             self.economy.delete_marriage(user_one, user_two)
             
             # Apply economic penalty
@@ -2107,10 +2239,11 @@ class Marry(commands.Cog):
             compensation = unilateral_cost // 2
             self.economy.add_money(spouse_id, compensation)
             
-            # Split joint wallet
-            if split > 0:
-                self.economy.add_money(user_one, split)
-                self.economy.add_money(user_two, split)
+            # Return contributions
+            if p1 > 0:
+                self.economy.add_money(user_one, p1)
+            if p2 > 0:
+                self.economy.add_money(user_two, p2)
             
         log_wallet_change(
             logger,
@@ -2119,7 +2252,8 @@ class Marry(commands.Cog):
             money_delta=-unilateral_cost,
             spouse_id=spouse_id,
             compensation=compensation,
-            split=split,
+            p1=p1,
+            p2=p2,
             ctx=ctx
         )
         
@@ -2129,7 +2263,7 @@ class Marry(commands.Cog):
                 f"**{ctx.author.mention}** đã đơn phương ly hôn cùng bạn đời.\n\n"
                 f"💸 **Án phí khấu trừ:** `-{unilateral_cost:,} VND` từ ví của bạn.\n"
                 f"🎁 **Bồi thường tổn thất phu thê:** chuyển `+{compensation:,} VND` cho <@{spouse_id}>.\n"
-                f"🏦 **Quỹ chung chia đôi:** Mỗi người nhận lại `+{split:,} VND`."
+                f"🏦 **Hoàn trả quỹ chung:** <@{user_one}> nhận lại `+{p1:,} VND` — <@{user_two}> nhận lại `+{p2:,} VND`.\n"
                 f"{refund_str}"
             ),
             color=discord.Color.red()
