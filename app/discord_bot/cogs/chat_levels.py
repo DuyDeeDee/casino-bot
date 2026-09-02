@@ -1,4 +1,6 @@
 import logging
+import time
+import typing
 
 import discord
 from discord.ext import commands
@@ -242,6 +244,105 @@ class ChatLevels(commands.Cog, name="ChatLevels"):
             ),
             color=discord.Color.gold(),
         )
+        await ctx.send(embed=embed)
+
+    # ─────────────────────────────────────────────
+    # Admin / Owner: $setlevel <@user/ID> <cấp 0-50> [xp]
+    # ─────────────────────────────────────────────
+    @commands.command(
+        name="setlevel",
+        aliases=["setcap", "setcapdo", "setmemberlevel", "setchatlevel"],
+        brief="[ADMIN] Đặt cấp độ chat & hạn mức cho/nhận tiền cho một thành viên.",
+        usage="setlevel <@thành_viên/ID> <cấp 0-50> [xp]",
+    )
+    async def setlevel(
+        self,
+        ctx: commands.Context,
+        target: typing.Union[discord.Member, discord.User, str] = None,
+        level: int = None,
+        xp: int = 0,
+    ):
+        """Đặt cấp độ thành viên (chỉ dành cho Quản trị viên server hoặc Bot Owner/Admin)."""
+        cfg_bot = getattr(config, "bot", None)
+        owner_ids = set(getattr(cfg_bot, "owner_ids", None) or [])
+        admin_ids = set(getattr(cfg_bot, "admin_ids", None) or [])
+        try:
+            is_app_owner = await ctx.bot.is_owner(ctx.author)
+        except Exception:
+            is_app_owner = False
+        is_bot_admin = ctx.author.id in owner_ids or ctx.author.id in admin_ids or is_app_owner
+        is_guild_admin = bool(ctx.guild) and ctx.author.guild_permissions.administrator
+
+        if not (is_bot_admin or is_guild_admin):
+            await ctx.send("❌ **Lỗi:** Chỉ Quản trị viên server hoặc Bot Admin/Owner mới có quyền đặt cấp độ thành viên!")
+            return
+
+        if target is None or level is None:
+            await ctx.send(
+                f"❌ **Cú pháp:** `{ctx.prefix}setlevel <@thành_viên/ID> <cấp 0-{MAX_MEMBER_LEVEL}> [xp]`\n"
+                f"👉 *Ví dụ:* `{ctx.prefix}setlevel @Member 20` hoặc `{ctx.prefix}setlevel 123456789 35 500`"
+            )
+            return
+
+        # Resolve target user
+        target_user = None
+        target_id = None
+        if isinstance(target, (discord.Member, discord.User)):
+            target_user = target
+            target_id = target.id
+        elif isinstance(target, str):
+            clean_str = target.strip("<@!> ")
+            if clean_str.isdigit():
+                target_id = int(clean_str)
+                target_user = ctx.guild.get_member(target_id) if ctx.guild else None
+                if not target_user:
+                    target_user = self.client.get_user(target_id)
+            else:
+                await ctx.send("❌ **Lỗi:** Vui lòng tag hoặc nhập ID hợp lệ của thành viên!")
+                return
+
+        if not target_id:
+            await ctx.send("❌ **Lỗi:** Không tìm thấy thông tin thành viên được chỉ định!")
+            return
+
+        if target_user and target_user.bot:
+            await ctx.send("❌ Không thể đặt cấp độ cho Bot!")
+            return
+
+        if not (0 <= level <= MAX_MEMBER_LEVEL):
+            await ctx.send(f"❌ **Lỗi:** Cấp độ phải nằm trong khoảng từ `0` đến `{MAX_MEMBER_LEVEL}`.")
+            return
+
+        if xp < 0:
+            xp = 0
+
+        now = time.time()
+        self.economy.set_member_level(target_id, level, xp, now)
+
+        # Lấy thông tin hạn mức mới
+        info = remaining_daily(self.economy, target_id, "money")
+        info_gold = remaining_daily(self.economy, target_id, "gold")
+
+        mention_str = target_user.mention if target_user else f"<@{target_id}>"
+        avatar_url = target_user.display_avatar.url if (target_user and hasattr(target_user, "display_avatar")) else None
+
+        embed = make_embed(
+            title="⭐ CẬP NHẬT CẤP ĐỘ THÀNH VIÊN ⭐",
+            description=(
+                f"✅ Đã đặt cấp độ thành công cho **{mention_str}**!\n\n"
+                f"⭐ **Cấp độ mới:** `{level}/{MAX_MEMBER_LEVEL}` (XP: `{xp:,}`)\n\n"
+                f"💸 **Hạn mức chuyển VND (mỗi lần):** `{info['transfer_cap']:,} VND`\n"
+                f"📤 **Quỹ cho VND hôm nay:** `{info['give_cap']:,} VND`\n"
+                f"📥 **Quỹ nhận VND hôm nay:** `{info['receive_cap']:,} VND`\n\n"
+                f"🥇 **Hạn mức chuyển Vàng (mỗi lần):** `{info_gold['transfer_cap']:,} thỏi vàng`\n"
+                f"📤 **Quỹ cho Vàng hôm nay:** `{info_gold['give_cap']:,} thỏi`\n"
+                f"📥 **Quỹ nhận Vàng hôm nay:** `{info_gold['receive_cap']:,} thỏi`"
+            ),
+            color=discord.Color.green(),
+        )
+        if avatar_url:
+            embed.set_thumbnail(url=avatar_url)
+        embed.set_footer(text=f"Thực hiện bởi: {ctx.author.display_name} • Cấp độ thành viên")
         await ctx.send(embed=embed)
 
 

@@ -541,6 +541,480 @@ class AdminHelpPaginationView(View):
 
 
 # ──────────────────────────────────────────────
+#  Hệ Thống Lệnh Quản Trị Server (Server Admin Help)
+# ──────────────────────────────────────────────
+SERVER_ADMIN_SECTIONS = {
+    "channel": {
+        "title": "🛡️ Quản Lý Kênh & Phân Quyền Bot",
+        "short": "Kênh & Phân Quyền",
+        "emoji": "🛡️",
+        "desc": "Cấu hình chặn / cho phép bot hoạt động tại các kênh văn bản trong server.",
+        "commands": [
+            {
+                "name": "camkenh <#kênh>",
+                "aliases": ["setcamkenh", "blockchannel"],
+                "perm": "Quản trị viên (Administrator)",
+                "desc": "Bật / Tắt cấm dùng các lệnh giải trí, cờ bạc của Bot tại kênh chỉ định (lệnh Function vẫn dùng được).",
+                "example": "camkenh #chat-chung",
+            },
+            {
+                "name": "gocamkenh <#kênh>",
+                "aliases": ["unblockchannel"],
+                "perm": "Quản trị viên (Administrator)",
+                "desc": "Gỡ cấm dùng Bot tại kênh chỉ định để bot hoạt động bình thường.",
+                "example": "gocamkenh #chat-chung",
+            },
+            {
+                "name": "setkenhchoiduoc <#kênh>",
+                "aliases": ["allowchannel", "setallowedchannel"],
+                "perm": "Quản trị viên (Administrator)",
+                "desc": "Thêm hoặc bớt kênh vào danh sách kênh được phép chơi (dùng để điều hướng người chơi).",
+                "example": "setkenhchoiduoc #casino-games",
+            },
+            {
+                "name": "danhsachkenhcam",
+                "aliases": ["listcamkenh", "blockedchannels"],
+                "perm": "Thành viên / Admin",
+                "desc": "Xem danh sách tất cả các kênh đang bị cấm sử dụng Bot trong server.",
+                "example": "danhsachkenhcam",
+            },
+        ],
+    },
+    "jail": {
+        "title": "⚖️ Nhà Tù & Kỷ Luật Thành Viên",
+        "short": "Nhà Tù & Kỷ Luật",
+        "emoji": "⚖️",
+        "desc": "Hệ thống tống giam người chơi vi phạm, bắt buộc thực hiện lắc đít cải tạo để ra tù.",
+        "commands": [
+            {
+                "name": "setkenhtu <#kênh>",
+                "aliases": ["setjailchannel"],
+                "perm": "Quản trị viên (Administrator)",
+                "desc": "Thiết lập Kênh Nhà Tù của server (nơi tù nhân phải vào thực hiện lắc đít cải tạo).",
+                "example": "setkenhtu #nha-tu",
+            },
+            {
+                "name": "setvaitrotu <@Role>",
+                "aliases": ["setjailrole"],
+                "perm": "Quản trị viên (Administrator)",
+                "desc": "Thiết lập Role Tù Nhân (tự động gán cho người bị tống giam để hạn chế quyền chat ngoài tù).",
+                "example": "setvaitrotu @Tù Nhân",
+            },
+            {
+                "name": "phattu <@user> [số_lần] [lý_do]",
+                "aliases": ["jail", "tonggiam"],
+                "perm": "Quản lý tin nhắn (Manage Messages)",
+                "desc": "Tống giam người chơi vi phạm. Người chơi phải gõ `lacdit` đủ số lần chỉ định mới được tha bổng (mặc định: 100 lần).",
+                "example": "phattu @User 200 Spam link cấm",
+            },
+            {
+                "name": "anxatu <@user>",
+                "aliases": ["unjail", "thabong"],
+                "perm": "Quản lý tin nhắn (Manage Messages)",
+                "desc": "Tha bổng / Ân xá cho tù nhân trước thời hạn và tự động gỡ bỏ Role Tù Nhân.",
+                "example": "anxatu @User",
+            },
+        ],
+    },
+    "giveaway": {
+        "title": "🎉 Quản Trị Giveaway Chuyên Nghiệp",
+        "short": "Giveaway Studio",
+        "emoji": "🎉",
+        "desc": "Hệ thống tổ chức và quản lý phát quà / Giveaways tự động chuyên sâu.",
+        "commands": [
+            {
+                "name": "ga <thời_gian> <số_win> <quà> [flags]",
+                "aliases": ["giveaway"],
+                "perm": "Quản lý Server / Host",
+                "desc": "Tạo giveaway với đầy đủ cờ tùy biến: `--banner <link>`, `--color <màu>`, `--thumb <host/server>`, `--role <@Role>`, `--bonus <@Role> <vé>`, `--bonus-prize <@Role> <quà_thêm>`, `--ping <role/all>`, `--desc <ghi_chú>`, `--channel <#kênh>`.",
+                "example": "ga 1h 1 100k Xu --banner https://... --role @VIP --bonus-prize @Booster \"+50k\"",
+            },
+            {
+                "name": "ga edit [id_tin_nhắn]",
+                "aliases": ["sua", "chinhsua", "custom", "studio"],
+                "perm": "Quản lý Server / Host",
+                "desc": "Mở Bảng điều khiển tương tác (Mimu-style Studio) với nút bấm riêng tư để sửa Live Preview hoặc cấu hình Mẫu Giveaway Mặc Định.",
+                "example": "ga edit",
+            },
+            {
+                "name": "ga setbonus <id> @Role <quà_thêm>",
+                "aliases": [],
+                "perm": "Quản lý Server / Host",
+                "desc": "Thiết lập phần thưởng thêm cho Role chỉ định nếu thành viên có role đó trúng giải.",
+                "example": "ga setbonus 123456789 @Booster +1 Thẻ Tháng",
+            },
+            {
+                "name": "ga delbonus <id> @Role",
+                "aliases": [],
+                "perm": "Quản lý Server / Host",
+                "desc": "Xóa phần thưởng thêm của Role trong Giveaway chỉ định.",
+                "example": "ga delbonus 123456789 @Booster",
+            },
+            {
+                "name": "ga listbonus <id>",
+                "aliases": [],
+                "perm": "Quản lý Server / Host",
+                "desc": "Xem danh sách các role nhận quà bonus thêm của giveaway.",
+                "example": "ga listbonus 123456789",
+            },
+            {
+                "name": "ga ketthuc <id>",
+                "aliases": ["end", "gstop"],
+                "perm": "Quản lý Server / Host",
+                "desc": "Kết thúc sớm giveaway và tiến hành quay số chốt người thắng ngay lập tức.",
+                "example": "ga ketthuc 123456789",
+            },
+            {
+                "name": "ga quaylai <id> [số_lượng]",
+                "aliases": ["reroll"],
+                "perm": "Quản lý Server / Host",
+                "desc": "Quay lại kết quả (Reroll) để chọn người chiến thắng mới.",
+                "example": "ga quaylai 123456789 1",
+            },
+            {
+                "name": "ga huy <id>",
+                "aliases": ["cancel", "gdelete"],
+                "perm": "Quản lý Server / Host",
+                "desc": "Hủy bỏ giveaway đang chạy.",
+                "example": "ga huy 123456789",
+            },
+            {
+                "name": "ga check <id> [@user]",
+                "aliases": [],
+                "perm": "Quản lý Server / Host",
+                "desc": "Tổng kết quà gốc + các bonus role người đó trúng được ra tin nhắn riêng (không sửa embed).",
+                "example": "ga check 123456789 @Winner",
+            },
+        ],
+    },
+    "events": {
+        "title": "🧩 Sự Kiện Mini-Game & Quản Lý Phòng Chơi",
+        "short": "Mini-Games & Events",
+        "emoji": "🧩",
+        "desc": "Quản lý sự kiện Boss Server, phòng chơi Ma Sói, bài UNO và thời sự server.",
+        "commands": [
+            {
+                "name": "giaimaboss start [jackpot]",
+                "aliases": [],
+                "perm": "Quản trị viên (Administrator)",
+                "desc": "Bắt đầu sự kiện Boss Server Giải Mã Mật Mã 6 số với hũ Jackpot khởi điểm (VD: `100k`, `1m`).",
+                "example": "giaimaboss start 500k",
+            },
+            {
+                "name": "giaimaboss stop",
+                "aliases": [],
+                "perm": "Quản trị viên (Administrator)",
+                "desc": "Dừng và hủy bỏ sự kiện Boss Server Giải Mã hiện tại.",
+                "example": "giaimaboss stop",
+            },
+            {
+                "name": "stopmasoi",
+                "aliases": ["endmasoi", "cancelmasoi", "masoiend"],
+                "perm": "Host / Quản trị viên",
+                "desc": "Hủy / Kết thúc khẩn cấp ván Ma Sói đang diễn ra hoặc phòng chờ ở kênh hiện tại.",
+                "example": "stopmasoi",
+            },
+            {
+                "name": "uno stop",
+                "aliases": ["cancel", "forceclose"],
+                "perm": "Host / Quản trị viên",
+                "desc": "Dừng ván bài UNO đang chơi tại kênh và hoàn trả 100% tiền cọc cho mọi người chơi.",
+                "example": "uno stop",
+            },
+            {
+                "name": "setmasoivip @user <số_ngày>",
+                "aliases": ["setvipmasoi", "addmasoivip"],
+                "perm": "Quản lý Server / Quản trị viên",
+                "desc": "Cấp quyền VIP Ma Sói cho thành viên (thêm lời trăn trối, hiệu ứng danh vọng).",
+                "example": "setmasoivip @User 30",
+            },
+            {
+                "name": "removemasoivip @user",
+                "aliases": ["delmasoivip", "huyvipmasoi"],
+                "perm": "Quản lý Server / Quản trị viên",
+                "desc": "Hủy gói VIP Ma Sói của thành viên.",
+                "example": "removemasoivip @User",
+            },
+            {
+                "name": "setmasoibadge @user <emoji/id>",
+                "aliases": ["setbadge", "sethuyhieu"],
+                "perm": "Quản lý Server / Quản trị viên",
+                "desc": "Cài đặt huy hiệu / icon hiển thị đặc biệt cạnh tên người chơi trong game Ma Sói.",
+                "example": "setmasoibadge @User 🔥",
+            },
+            {
+                "name": "removemasoibadge @user",
+                "aliases": ["delbadge", "huyhuyhieu"],
+                "perm": "Quản lý Server / Quản trị viên",
+                "desc": "Xóa huy hiệu tự chọn trong Ma Sói của người chơi.",
+                "example": "removemasoibadge @User",
+            },
+            {
+                "name": "masoiviplist",
+                "aliases": ["listvipmasoi"],
+                "perm": "Quản lý Server / Quản trị viên",
+                "desc": "Xem danh sách tất cả các tài khoản VIP Ma Sói đang hoạt động.",
+                "example": "masoiviplist",
+            },
+            {
+                "name": "event",
+                "aliases": [],
+                "perm": "Admin / Owner",
+                "desc": "Xem trạng thái các sự kiện server thời vụ (Giờ Vàng x2 lương/đào quặng, Bão Tuyết, Flash Sale, Boss Cướp Phố).",
+                "example": "event",
+            },
+        ],
+    },
+    "economy": {
+        "title": "💍 Quản Trị Hôn Nhân & Giới Hạn Kinh Tế",
+        "short": "Hôn Nhân & Kinh Tế",
+        "emoji": "💍",
+        "desc": "Quản trị quan hệ hôn nhân và thiết lập giới hạn sở hữu đầu tư cho server.",
+        "commands": [
+            {
+                "name": "admindel_marry <@user/ID>",
+                "aliases": ["admin_divorce", "xoahonnhan"],
+                "perm": "Quản trị viên (Administrator)",
+                "desc": "Buộc ly hôn / Xóa hôn nhân của một người dùng bất kỳ trong server mà không mất phí.",
+                "example": "admindel_marry @User",
+            },
+            {
+                "name": "invest max <mã> <số_lượng>",
+                "aliases": [],
+                "perm": "Quản trị viên (Administrator)",
+                "desc": "Đặt giới hạn sở hữu cổ phiếu / coin tối đa của từng mã (`BTC`, `ETH`, `USDT`, `AGV`, `SOL`, `DOGE`, `CASINO`) hoặc `reset` để mở vô hạn.",
+                "example": "invest max BTC 50",
+            },
+            {
+                "name": "setlevel <@user/ID> <cấp 0-50> [xp]",
+                "aliases": ["setcap", "setcapdo", "setmemberlevel", "setchatlevel"],
+                "perm": "Quản trị viên (Administrator)",
+                "desc": "Cài đặt cấp độ chat (0-50) và hạn mức cho/nhận tiền, vàng của một thành viên trong server.",
+                "example": "setlevel @Member 20",
+            },
+            {
+                "name": "invest max",
+                "aliases": [],
+                "perm": "Quản trị viên / Mọi người",
+                "desc": "Xem danh sách các giới hạn sở hữu tối đa hiện tại của từng mã đầu tư.",
+                "example": "invest max",
+            },
+        ],
+    },
+}
+
+
+def _can_use_server_help(ctx: commands.Context) -> bool:
+    """Kiểm tra quyền sử dụng lệnh shelp (Quản trị viên, Quản lý Server, Quản lý Tin nhắn hoặc Bot Owner)."""
+    if not ctx.guild:
+        return True
+    cfg_bot = getattr(config, "bot", None)
+    owner_ids = set(getattr(cfg_bot, "owner_ids", None) or [])
+    admin_ids = set(getattr(cfg_bot, "admin_ids", None) or [])
+    if ctx.author.id in owner_ids or ctx.author.id in admin_ids:
+        return True
+    perms = ctx.author.guild_permissions
+    return perms.administrator or perms.manage_guild or perms.manage_messages or perms.manage_channels
+
+
+def _server_admin_home_embed(prefix: str) -> discord.Embed:
+    """Tạo Embed Trang Chủ cho Lệnh Help Quản Trị Server."""
+    total_cmds = sum(len(sec["commands"]) for sec in SERVER_ADMIN_SECTIONS.values())
+    embed = make_embed(
+        title="🛡️ TRUNG TÂM LỆNH QUẢN TRỊ SERVER (SERVER ADMIN HELP) 🛡️",
+        description=(
+            f"Prefix của bot: **`{prefix}`** • Tổng cộng: **{total_cmds} lệnh quản trị server**\n\n"
+            "Chào mừng Quản trị viên! Đây là bảng điều khiển lệnh quản trị độc quyền giúp bạn cấu hình kênh, kỷ luật nhà tù, tổ chức giveaway, quản lý mini-game và kinh tế server.\n\n"
+            "👉 **Cách xem lệnh:** Sử dụng **Menu chọn bên dưới** hoặc bấm các **Nút chức năng** để duyệt từng danh mục.\n"
+            f"👉 **Tra cứu nhanh:** Gõ `{prefix}shelp <tên_lệnh>` (Ví dụ: `{prefix}shelp ga`, `{prefix}shelp phattu`)."
+        ),
+        color=discord.Color.gold(),
+    )
+
+    for key, sec in SERVER_ADMIN_SECTIONS.items():
+        cmd_names = [f"`{prefix}{c['name'].split()[0]}`" for c in sec["commands"]]
+        sample_text = " • ".join(cmd_names[:4])
+        if len(cmd_names) > 4:
+            sample_text += f" *(+{len(cmd_names) - 4} lệnh khác)*"
+        embed.add_field(
+            name=f"{sec['title']} ({len(sec['commands'])} lệnh)",
+            value=f"{sec['desc']}\n> 📌 Lệnh tiêu biểu: {sample_text}",
+            inline=False,
+        )
+
+    embed.set_footer(text=f"Dành riêng cho Quản trị viên Server • Prefix: {prefix}")
+    return embed
+
+
+def _server_admin_section_embed(section_key: str, prefix: str) -> discord.Embed:
+    """Tạo Embed hiển thị chi tiết các lệnh trong 1 danh mục quản trị."""
+    sec = SERVER_ADMIN_SECTIONS.get(section_key)
+    if not sec:
+        return _server_admin_home_embed(prefix)
+
+    embed = make_embed(
+        title=f"{sec['title']}",
+        description=(
+            f"{sec['desc']}\n"
+            f"Prefix: **`{prefix}`** • Tổng: **{len(sec['commands'])}** lệnh trong danh mục này\n"
+            "────────────────────────────────────────────"
+        ),
+        color=discord.Color.gold(),
+    )
+
+    for cmd in sec["commands"]:
+        aliases_str = f" `({', '.join(cmd['aliases'])})`" if cmd["aliases"] else ""
+        embed.add_field(
+            name=f"> `{prefix}{cmd['name']}`{aliases_str}",
+            value=(
+                f"🔑 *Yêu cầu:* **{cmd['perm']}**\n"
+                f"📝 *Chi tiết:* {cmd['desc']}\n"
+                f"💡 *Ví dụ:* `{prefix}{cmd['example']}`"
+            ),
+            inline=False,
+        )
+
+    embed.set_footer(text=f"Dùng {prefix}shelp <tên_lệnh> để xem chi tiết • Trang quản trị Server")
+    return embed
+
+
+def _find_server_admin_command(query: str) -> tuple[dict, str] | None:
+    """Tìm kiếm lệnh quản trị server theo tên hoặc alias."""
+    clean_q = query.strip().lower()
+    for p in ["i?", "!", "$", "?", "/"]:
+        if clean_q.startswith(p):
+            clean_q = clean_q[len(p):].strip()
+            break
+
+    for sec_key, sec in SERVER_ADMIN_SECTIONS.items():
+        for cmd in sec["commands"]:
+            cmd_root = cmd["name"].split()[0].lower()
+            if clean_q == cmd_root:
+                return cmd, sec["title"]
+            if any(clean_q == a.lower() for a in cmd["aliases"]):
+                return cmd, sec["title"]
+            full_name = cmd["name"].split("<")[0].split("[")[0].strip().lower()
+            if clean_q == full_name or clean_q == full_name.replace(" ", ""):
+                return cmd, sec["title"]
+    return None
+
+
+def _server_admin_detail_embed(cmd_data: dict, section_title: str, prefix: str) -> discord.Embed:
+    """Tạo Embed tra cứu chi tiết 1 lệnh quản trị."""
+    embed = make_embed(
+        title=f"🔍 Chi Tiết Lệnh Quản Trị: `{prefix}{cmd_data['name'].split()[0]}`",
+        description=f"Danh mục: **{section_title}**\n──────────────────────────────",
+        color=discord.Color.gold(),
+    )
+    embed.add_field(name="📌 Cú pháp sử dụng", value=f"`{prefix}{cmd_data['name']}`", inline=False)
+    embed.add_field(name="🔑 Quyền hạn yêu cầu", value=f"**{cmd_data['perm']}**", inline=False)
+
+    aliases_str = "  ".join(f"`{prefix}{a}`" for a in cmd_data["aliases"]) if cmd_data["aliases"] else "Không có"
+    embed.add_field(name="🔀 Bí danh (Aliases)", value=aliases_str, inline=False)
+    embed.add_field(name="📝 Mô tả chức năng", value=cmd_data["desc"], inline=False)
+    embed.add_field(name="💡 Ví dụ mẫu", value=f"`{prefix}{cmd_data['example']}`", inline=False)
+    embed.set_footer(text=f"Dùng {prefix}shelp để xem toàn bộ danh mục quản trị")
+    return embed
+
+
+class ServerAdminCategorySelect(Select):
+    def __init__(self, prefix: str):
+        self.prefix = prefix
+        options = [
+            discord.SelectOption(
+                label="Trang Chủ Quản Trị",
+                value="__home__",
+                emoji="🏠",
+                description="Bảng tổng quan trung tâm quản trị server",
+            )
+        ]
+        for key, sec in SERVER_ADMIN_SECTIONS.items():
+            options.append(
+                discord.SelectOption(
+                    label=sec["short"],
+                    value=key,
+                    emoji=sec["emoji"],
+                    description=f"{len(sec['commands'])} lệnh • {sec['title'][:35]}",
+                )
+            )
+
+        super().__init__(
+            placeholder="🛡️ Chọn danh mục quản trị cần xem…",
+            min_values=1,
+            max_values=1,
+            options=options,
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        try:
+            chosen = self.values[0]
+            if chosen == "__home__":
+                embed = _server_admin_home_embed(self.prefix)
+            else:
+                embed = _server_admin_section_embed(chosen, self.prefix)
+            await interaction.response.edit_message(embed=embed)
+        except Exception as e:
+            try:
+                await interaction.response.send_message(f"❌ Lỗi khi tải danh mục: {e}", ephemeral=True)
+            except Exception:
+                pass
+
+
+class ServerAdminHelpView(View):
+    def __init__(self, prefix: str, author_id: int):
+        super().__init__(timeout=180)
+        self.prefix = prefix
+        self.author_id = author_id
+        self.message: discord.Message | None = None
+        self.add_item(ServerAdminCategorySelect(prefix))
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.author_id:
+            await interaction.response.send_message("❌ Menu này chỉ dành cho người vừa gọi lệnh.", ephemeral=True)
+            return False
+        return True
+
+    @discord.ui.button(label="Trang Chủ", emoji="🏠", style=discord.ButtonStyle.secondary, row=1)
+    async def btn_home(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed = _server_admin_home_embed(self.prefix)
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    @discord.ui.button(label="Kênh & Quyền", emoji="🛡️", style=discord.ButtonStyle.primary, row=1)
+    async def btn_channel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed = _server_admin_section_embed("channel", self.prefix)
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    @discord.ui.button(label="Nhà Tù", emoji="⚖️", style=discord.ButtonStyle.primary, row=1)
+    async def btn_jail(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed = _server_admin_section_embed("jail", self.prefix)
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    @discord.ui.button(label="Giveaway", emoji="🎉", style=discord.ButtonStyle.primary, row=1)
+    async def btn_giveaway(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed = _server_admin_section_embed("giveaway", self.prefix)
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    @discord.ui.button(label="Mini-Game", emoji="🧩", style=discord.ButtonStyle.success, row=2)
+    async def btn_events(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed = _server_admin_section_embed("events", self.prefix)
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    @discord.ui.button(label="Hôn Nhân & Kinh Tế", emoji="💍", style=discord.ButtonStyle.success, row=2)
+    async def btn_economy(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed = _server_admin_section_embed("economy", self.prefix)
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    async def on_timeout(self):
+        for item in self.children:
+            item.disabled = True
+        if self.message:
+            try:
+                await self.message.edit(view=self)
+            except Exception:
+                pass
+
+
+# ──────────────────────────────────────────────
 #  Cog
 # ──────────────────────────────────────────────
 class Help(commands.Cog, name="help"):
@@ -599,14 +1073,59 @@ class Help(commands.Cog, name="help"):
         await ctx.send(embed=embed, view=view)
 
     @commands.command(
+        name="shelp",
+        aliases=["serverhelp", "adminhelp", "serveradmin", "sadmin", "guildhelp", "modhelp", "hdadmin"],
+        brief="[ADMIN] Trung tâm hướng dẫn lệnh quản trị server dành riêng cho Admin.",
+        usage="shelp [tên_lệnh]",
+    )
+    async def shelp(self, ctx: commands.Context, request: str | None = None):
+        """Lệnh help chuyên biệt dành riêng cho Quản trị viên Server."""
+        if not _can_use_server_help(ctx):
+            await ctx.send(
+                "❌ **Bạn không có quyền sử dụng lệnh này!** Lệnh `shelp` dành riêng cho Quản trị viên / Quản lý Server.",
+                delete_after=10,
+            )
+            return
+
+        prefix = self.client.command_prefix
+        if isinstance(prefix, list):
+            prefix = prefix[0]
+
+        # ── Tra cứu 1 lệnh cụ thể ──
+        if request:
+            found = _find_server_admin_command(request)
+            if found:
+                cmd_data, sec_title = found
+                embed = _server_admin_detail_embed(cmd_data, sec_title, prefix)
+                await ctx.send(embed=embed)
+                return
+
+            # Nếu không tìm thấy trong danh mục server admin, thử tìm lệnh bot chung
+            bot_cmd = self.client.get_command(request)
+            if bot_cmd and not _is_owner_command(bot_cmd):
+                await ctx.invoke(self.client.get_command("help"), request=request)
+                return
+
+            await ctx.send(
+                f"❌ Không tìm thấy lệnh quản trị nào có tên hoặc bí danh là `{request}`. Dùng `{prefix}shelp` để xem danh sách.",
+                delete_after=10,
+            )
+            return
+
+        # ── Trang chủ Server Admin Help Dashboard ──
+        embed = _server_admin_home_embed(prefix)
+        view = ServerAdminHelpView(prefix=prefix, author_id=ctx.author.id)
+        view.message = await ctx.send(embed=embed, view=view)
+
+    @commands.command(
         name="adhelp",
         hidden=True,
-        aliases=["adminhelp", "ownerhelp"],
-        brief="[ADMIN] Danh sách các lệnh chỉ dành cho Owner / Admin.",
+        aliases=["ownerhelp", "devhelp"],
+        brief="[ADMIN] Danh sách các lệnh chỉ dành cho Owner / Admin Bot.",
         usage="adhelp",
     )
     async def adhelp(self, ctx: commands.Context):
-        """[ADMIN] Danh sách các lệnh ẩn chỉ dành cho Owner / Admin (quét tự động)."""
+        """[ADMIN] Danh sách các lệnh ẩn chỉ dành cho Owner / Admin Bot (quét tự động)."""
         cfg_bot = getattr(config, "bot", None)
         owner_ids = set(getattr(cfg_bot, "owner_ids", None) or [])
         admin_ids = set(getattr(cfg_bot, "admin_ids", None) or [])
@@ -615,9 +1134,19 @@ class Help(commands.Cog, name="help"):
         except Exception:
             is_app_owner = False
         is_bot_admin = ctx.author.id in owner_ids or ctx.author.id in admin_ids or is_app_owner
-        is_guild_admin = bool(ctx.guild) and ctx.author.guild_permissions.administrator
+        is_guild_admin = bool(ctx.guild) and (
+            ctx.author.guild_permissions.administrator
+            or ctx.author.guild_permissions.manage_guild
+            or ctx.author.guild_permissions.manage_messages
+        )
+
         if not (is_bot_admin or is_guild_admin):
             return  # Không phản hồi gì hết, tàng hình hoàn toàn với người chơi thường
+
+        # Nếu là Quản trị viên Server (nhưng không phải Bot Owner) -> Điều hướng trực tiếp sang shelp chuyên nghiệp
+        if is_guild_admin and not is_bot_admin:
+            await ctx.invoke(self.client.get_command("shelp"))
+            return
 
         prefix = self.client.command_prefix
         if isinstance(prefix, list):
@@ -639,3 +1168,4 @@ class Help(commands.Cog, name="help"):
 
 async def setup(client: commands.Bot):
     await client.add_cog(Help(client))
+
