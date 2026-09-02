@@ -16,7 +16,7 @@ from app.config import config
 Entry = Tuple[int, int, int]
 DATABASE_PATH = Path(config.storage.database_path)
 LEGACY_DATABASE_PATH = Path(__file__).resolve().parents[3] / "economy.db"
-SCHEMA_VERSION = 51
+SCHEMA_VERSION = 52
 
 
 logger = logging.getLogger(__name__)
@@ -901,6 +901,92 @@ def _migration_51_update_gold_price_to_10m(cur: sqlite3.Cursor) -> None:
         pass
 
 
+def _migration_52_add_sports_engine_v2(cur: sqlite3.Cursor) -> None:
+    cur.execute(
+        """CREATE TABLE IF NOT EXISTS sports_matches (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        season_id INTEGER DEFAULT 1,
+        round_num INTEGER DEFAULT 1,
+        t1 TEXT NOT NULL,
+        t2 TEXT NOT NULL,
+        t1_rating REAL DEFAULT 4.0,
+        t2_rating REAL DEFAULT 4.0,
+        kickoff INTEGER NOT NULL,
+        status TEXT NOT NULL DEFAULT 'upcoming',
+        score_t1 INTEGER DEFAULT 0,
+        score_t2 INTEGER DEFAULT 0,
+        minute INTEGER DEFAULT 0,
+        result TEXT DEFAULT NULL,
+        sim_seed TEXT DEFAULT NULL,
+        channel_id INTEGER DEFAULT 0,
+        message_id INTEGER DEFAULT 0,
+        created_at INTEGER NOT NULL,
+        settled_at INTEGER DEFAULT 0
+    )"""
+    )
+    cur.execute(
+        """CREATE TABLE IF NOT EXISTS sports_bet_tickets (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        match_id INTEGER NOT NULL,
+        user_id INTEGER NOT NULL,
+        market TEXT NOT NULL DEFAULT '1X2',
+        outcome TEXT NOT NULL,
+        amount INTEGER NOT NULL,
+        base_odds REAL NOT NULL DEFAULT 1.0,
+        status TEXT NOT NULL DEFAULT 'pending',
+        payout INTEGER DEFAULT 0,
+        created_at INTEGER NOT NULL,
+        settled_at INTEGER DEFAULT 0,
+        FOREIGN KEY(match_id) REFERENCES sports_matches(id)
+    )"""
+    )
+    cur.execute(
+        """CREATE TABLE IF NOT EXISTS sports_match_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        match_id INTEGER NOT NULL,
+        minute INTEGER NOT NULL,
+        event_type TEXT NOT NULL,
+        team TEXT,
+        text TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        FOREIGN KEY(match_id) REFERENCES sports_matches(id)
+    )"""
+    )
+    cur.execute(
+        """CREATE TABLE IF NOT EXISTS sports_settlements (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        match_id INTEGER NOT NULL UNIQUE,
+        total_pool INTEGER NOT NULL,
+        rake_amount INTEGER NOT NULL,
+        rounding_to_jackpot INTEGER NOT NULL,
+        total_payout INTEGER NOT NULL,
+        house_contribution INTEGER NOT NULL DEFAULT 0,
+        result TEXT NOT NULL,
+        settled_at INTEGER NOT NULL,
+        FOREIGN KEY(match_id) REFERENCES sports_matches(id)
+    )"""
+    )
+    cur.execute(
+        """CREATE TABLE IF NOT EXISTS sports_league_table (
+        season_id INTEGER NOT NULL,
+        team_code TEXT NOT NULL,
+        played INTEGER DEFAULT 0,
+        won INTEGER DEFAULT 0,
+        drawn INTEGER DEFAULT 0,
+        lost INTEGER DEFAULT 0,
+        gf INTEGER DEFAULT 0,
+        ga INTEGER DEFAULT 0,
+        points INTEGER DEFAULT 0,
+        form TEXT DEFAULT '',
+        PRIMARY KEY (season_id, team_code)
+    )"""
+    )
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_sports_matches_status ON sports_matches(status, kickoff)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_sports_tickets_match ON sports_bet_tickets(match_id, status)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_sports_tickets_user ON sports_bet_tickets(user_id, status)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_sports_events_match ON sports_match_events(match_id, minute)")
+
+
 MIGRATIONS: dict[int, Callable[[sqlite3.Cursor], None]] = {
     1: _migration_1_create_economy,
     2: _migration_2_add_indexes,
@@ -953,6 +1039,7 @@ MIGRATIONS: dict[int, Callable[[sqlite3.Cursor], None]] = {
     49: _migration_49_add_member_levels,
     50: _migration_50_portfolio_avg_cost,
     51: _migration_51_update_gold_price_to_10m,
+    52: _migration_52_add_sports_engine_v2,
 }
 
 
@@ -1110,6 +1197,11 @@ class Economy:
             "user_jail",
             "user_daily_quests",
             "match_bets",
+            "sports_matches",
+            "sports_bet_tickets",
+            "sports_match_events",
+            "sports_settlements",
+            "sports_league_table",
             "gift_code_claims",
             "member_levels",
             "give_daily",
@@ -1300,26 +1392,521 @@ class Economy:
         row = self.cur.fetchone()
         return (int(row[0]), int(row[1]))
 
-    # --- SPORTS MATCH BETS ---
-    def add_match_bet(self, match_id: int, user_id: int, outcome: str, amount: int) -> int:
-        self._ensure_entry(user_id)
+    # --- SPORTS MATCHES & TICKETS V2 ---
+    def create_sports_match(
+        self,
+        t1: str,
+        t2: str,
+        kickoff: int,
+        t1_rating: float = 4.0,
+        t2_rating: float = 4.0,
+        season_id: int = 1,
+        round_num: int = 1,
+        sim_seed: str = "",
+    ) -> int:
         self.cur.execute(
-            "INSERT INTO match_bets(match_id, user_id, outcome, amount) VALUES(?, ?, ?, ?)",
-            (int(match_id), int(user_id), outcome, int(amount)),
+            """INSERT INTO sports_matches(season_id, round_num, t1, t2, t1_rating, t2_rating, kickoff, status, sim_seed, created_at)
+            VALUES(?, ?, ?, ?, ?, ?, ?, 'upcoming', ?, ?)""",
+            (int(season_id), int(round_num), t1, t2, float(t1_rating), float(t2_rating), int(kickoff), sim_seed, int(time.time())),
         )
         self.conn.commit()
         return self.cur.lastrowid
 
-    def get_match_bets(self, match_id: int) -> list:
-        self.cur.execute("SELECT id, user_id, outcome, amount FROM match_bets WHERE match_id=?", (match_id,))
-        return self.cur.fetchall()
+    def get_sports_match(self, match_id: int) -> dict | None:
+        self.cur.execute(
+            """SELECT id, season_id, round_num, t1, t2, t1_rating, t2_rating, kickoff, status,
+                      score_t1, score_t2, minute, result, sim_seed, channel_id, message_id, created_at, settled_at
+            FROM sports_matches WHERE id=?""",
+            (int(match_id),),
+        )
+        row = self.cur.fetchone()
+        if not row:
+            return None
+        return {
+            "id": row[0], "season_id": row[1], "round_num": row[2], "t1": row[3], "t2": row[4],
+            "t1_rating": row[5], "t2_rating": row[6], "kickoff": row[7], "status": row[8],
+            "score_t1": row[9], "score_t2": row[10], "minute": row[11], "result": row[12],
+            "sim_seed": row[13], "channel_id": row[14], "message_id": row[15],
+            "created_at": row[16], "settled_at": row[17],
+        }
 
-    def get_match_pool(self, match_id: int) -> dict[str, int]:
-        self.cur.execute("SELECT outcome, SUM(amount) FROM match_bets WHERE match_id=? GROUP BY outcome", (match_id,))
+    def get_upcoming_sports_matches(self, limit: int = 10) -> list[dict]:
+        self.cur.execute(
+            """SELECT id, season_id, round_num, t1, t2, t1_rating, t2_rating, kickoff, status,
+                      score_t1, score_t2, minute, result, sim_seed, channel_id, message_id, created_at, settled_at
+            FROM sports_matches
+            WHERE status='upcoming'
+            ORDER BY kickoff ASC LIMIT ?""",
+            (int(limit),),
+        )
+        rows = self.cur.fetchall()
+        return [
+            {
+                "id": r[0], "season_id": r[1], "round_num": r[2], "t1": r[3], "t2": r[4],
+                "t1_rating": r[5], "t2_rating": r[6], "kickoff": r[7], "status": r[8],
+                "score_t1": r[9], "score_t2": r[10], "minute": r[11], "result": r[12],
+                "sim_seed": r[13], "channel_id": r[14], "message_id": r[15],
+                "created_at": r[16], "settled_at": r[17],
+            }
+            for r in rows
+        ]
+
+    def get_live_sports_matches(self) -> list[dict]:
+        self.cur.execute(
+            """SELECT id, season_id, round_num, t1, t2, t1_rating, t2_rating, kickoff, status,
+                      score_t1, score_t2, minute, result, sim_seed, channel_id, message_id, created_at, settled_at
+            FROM sports_matches
+            WHERE status='live'
+            ORDER BY kickoff ASC""",
+        )
+        rows = self.cur.fetchall()
+        return [
+            {
+                "id": r[0], "season_id": r[1], "round_num": r[2], "t1": r[3], "t2": r[4],
+                "t1_rating": r[5], "t2_rating": r[6], "kickoff": r[7], "status": r[8],
+                "score_t1": r[9], "score_t2": r[10], "minute": r[11], "result": r[12],
+                "sim_seed": r[13], "channel_id": r[14], "message_id": r[15],
+                "created_at": r[16], "settled_at": r[17],
+            }
+            for r in rows
+        ]
+
+    def update_sports_match_live(
+        self,
+        match_id: int,
+        minute: int,
+        score_t1: int,
+        score_t2: int,
+        message_id: int = 0,
+        channel_id: int = 0,
+        status: str = "live",
+    ) -> None:
+        params = [int(minute), int(score_t1), int(score_t2), status]
+        query = "UPDATE sports_matches SET minute=?, score_t1=?, score_t2=?, status=?"
+        if message_id > 0:
+            query += ", message_id=?"
+            params.append(int(message_id))
+        if channel_id > 0:
+            query += ", channel_id=?"
+            params.append(int(channel_id))
+        query += " WHERE id=?"
+        params.append(int(match_id))
+        self.cur.execute(query, tuple(params))
+        self.conn.commit()
+
+    def add_sports_event(self, match_id: int, minute: int, event_type: str, team: str, text: str) -> int:
+        self.cur.execute(
+            """INSERT INTO sports_match_events(match_id, minute, event_type, team, text, created_at)
+            VALUES(?, ?, ?, ?, ?, ?)""",
+            (int(match_id), int(minute), event_type, team, text, int(time.time())),
+        )
+        self.conn.commit()
+        return self.cur.lastrowid
+
+    def get_sports_events(self, match_id: int, limit: int = 20) -> list[dict]:
+        self.cur.execute(
+            """SELECT id, match_id, minute, event_type, team, text, created_at
+            FROM sports_match_events
+            WHERE match_id=?
+            ORDER BY minute ASC, id ASC LIMIT ?""",
+            (int(match_id), int(limit)),
+        )
+        rows = self.cur.fetchall()
+        return [
+            {
+                "id": r[0], "match_id": r[1], "minute": r[2], "event_type": r[3],
+                "team": r[4], "text": r[5], "created_at": r[6],
+            }
+            for r in rows
+        ]
+
+    def place_sports_bet(
+        self,
+        match_id: int,
+        user_id: int,
+        outcome: str,
+        amount: int,
+        base_odds: float = 1.0,
+        market: str = "1X2",
+    ) -> int:
+        amount = int(amount)
+        if amount <= 0:
+            raise ValueError("Bet amount must be positive")
+        with self.transaction():
+            if user_id > 0:
+                self._ensure_entry(user_id)
+                bal = self._fetch_entry(user_id)[1]
+                if bal < amount:
+                    raise ValueError("Insufficient funds")
+                self.add_money(user_id, -amount)
+            self.cur.execute(
+                """INSERT INTO sports_bet_tickets(match_id, user_id, market, outcome, amount, base_odds, status, created_at)
+                VALUES(?, ?, ?, ?, ?, ?, 'pending', ?)""",
+                (int(match_id), int(user_id), market, outcome, amount, float(base_odds), int(time.time())),
+            )
+            ticket_id = self.cur.lastrowid
+            self.cur.execute(
+                "INSERT INTO match_bets(match_id, user_id, outcome, amount) VALUES(?, ?, ?, ?)",
+                (int(match_id), int(user_id), outcome, amount),
+            )
+        return ticket_id
+
+    def get_sports_tickets_for_match(self, match_id: int) -> list[dict]:
+        self.cur.execute(
+            """SELECT id, match_id, user_id, market, outcome, amount, base_odds, status, payout, created_at, settled_at
+            FROM sports_bet_tickets
+            WHERE match_id=?""",
+            (int(match_id),),
+        )
+        rows = self.cur.fetchall()
+        return [
+            {
+                "id": r[0], "match_id": r[1], "user_id": r[2], "market": r[3],
+                "outcome": r[4], "amount": r[5], "base_odds": r[6], "status": r[7],
+                "payout": r[8], "created_at": r[9], "settled_at": r[10],
+            }
+            for r in rows
+        ]
+
+    def get_sports_pool(self, match_id: int) -> dict[str, int]:
+        self.cur.execute(
+            """SELECT outcome, COALESCE(SUM(amount), 0)
+            FROM sports_bet_tickets
+            WHERE match_id=? AND status NOT IN ('refunded', 'cashed_out')
+            GROUP BY outcome""",
+            (int(match_id),),
+        )
         return {row[0]: int(row[1]) for row in self.cur.fetchall()}
 
+    def get_user_sports_tickets(self, user_id: int, limit: int = 10, offset: int = 0) -> list[dict]:
+        self.cur.execute(
+            """SELECT t.id, t.match_id, t.user_id, t.market, t.outcome, t.amount, t.base_odds,
+                      t.status, t.payout, t.created_at, t.settled_at,
+                      m.t1, m.t2, m.score_t1, m.score_t2, m.status, m.result
+            FROM sports_bet_tickets t
+            LEFT JOIN sports_matches m ON t.match_id = m.id
+            WHERE t.user_id=?
+            ORDER BY t.id DESC LIMIT ? OFFSET ?""",
+            (int(user_id), int(limit), int(offset)),
+        )
+        rows = self.cur.fetchall()
+        return [
+            {
+                "id": r[0], "match_id": r[1], "user_id": r[2], "market": r[3],
+                "outcome": r[4], "amount": r[5], "base_odds": r[6], "status": r[7],
+                "payout": r[8], "created_at": r[9], "settled_at": r[10],
+                "t1": r[11], "t2": r[12], "score_t1": r[13], "score_t2": r[14],
+                "match_status": r[15], "match_result": r[16],
+            }
+            for r in rows
+        ]
+
+    def get_sports_history(self, limit: int = 15) -> list[dict]:
+        self.cur.execute(
+            """SELECT m.id, m.season_id, m.t1, m.t2, m.score_t1, m.score_t2, m.result, m.kickoff, m.settled_at,
+                      COALESCE(s.total_pool, 0), COALESCE(s.total_payout, 0), COALESCE(s.rake_amount, 0)
+            FROM sports_matches m
+            LEFT JOIN sports_settlements s ON m.id = s.match_id
+            WHERE m.status='finished'
+            ORDER BY m.settled_at DESC, m.id DESC LIMIT ?""",
+            (int(limit),),
+        )
+        rows = self.cur.fetchall()
+        return [
+            {
+                "id": r[0], "season_id": r[1], "t1": r[2], "t2": r[3],
+                "score_t1": r[4], "score_t2": r[5], "result": r[6],
+                "kickoff": r[7], "settled_at": r[8],
+                "total_pool": r[9], "total_payout": r[10], "rake_amount": r[11],
+            }
+            for r in rows
+        ]
+
+    def get_sports_league_table(self, season_id: int = 1) -> list[dict]:
+        self.cur.execute(
+            """SELECT team_code, played, won, drawn, lost, gf, ga, points, form
+            FROM sports_league_table
+            WHERE season_id=?
+            ORDER BY points DESC, (gf - ga) DESC, gf DESC, team_code ASC""",
+            (int(season_id),),
+        )
+        rows = self.cur.fetchall()
+        return [
+            {
+                "team_code": r[0], "played": r[1], "won": r[2], "drawn": r[3],
+                "lost": r[4], "gf": r[5], "ga": r[6], "gd": r[5] - r[6],
+                "points": r[7], "form": r[8] or "",
+            }
+            for r in rows
+        ]
+
+    def update_sports_league_match(self, season_id: int, t1: str, t2: str, s1: int, s2: int) -> None:
+        for t_code in (t1, t2):
+            self.cur.execute(
+                "INSERT OR IGNORE INTO sports_league_table(season_id, team_code) VALUES(?, ?)",
+                (int(season_id), t_code),
+            )
+        
+        if s1 > s2:
+            res1, res2 = "W", "L"
+            pts1, pts2 = 3, 0
+            w1, d1, l1 = 1, 0, 0
+            w2, d2, l2 = 0, 0, 1
+        elif s1 < s2:
+            res1, res2 = "L", "W"
+            pts1, pts2 = 0, 3
+            w1, d1, l1 = 0, 0, 1
+            w2, d2, l2 = 1, 0, 0
+        else:
+            res1, res2 = "D", "D"
+            pts1, pts2 = 1, 1
+            w1, d1, l1 = 0, 1, 0
+            w2, d2, l2 = 0, 1, 0
+
+        self.cur.execute(
+            """UPDATE sports_league_table
+            SET played = played + 1, won = won + ?, drawn = drawn + ?, lost = lost + ?,
+                gf = gf + ?, ga = ga + ?, points = points + ?,
+                form = SUBSTR(? || form, 1, 5)
+            WHERE season_id = ? AND team_code = ?""",
+            (w1, d1, l1, int(s1), int(s2), pts1, res1, int(season_id), t1),
+        )
+        self.cur.execute(
+            """UPDATE sports_league_table
+            SET played = played + 1, won = won + ?, drawn = drawn + ?, lost = lost + ?,
+                gf = gf + ?, ga = ga + ?, points = points + ?,
+                form = SUBSTR(? || form, 1, 5)
+            WHERE season_id = ? AND team_code = ?""",
+            (w2, d2, l2, int(s2), int(s1), pts2, res2, int(season_id), t2),
+        )
+
+    def settle_sports_match(self, match_id: int, result: str, score_t1: int, score_t2: int) -> dict:
+        from app.discord_bot.modules.sports_engine import calculate_hybrid_payout
+
+        with self.transaction():
+            self.cur.execute("SELECT id, status FROM sports_matches WHERE id=?", (int(match_id),))
+            m_row = self.cur.fetchone()
+            if not m_row:
+                raise ValueError(f"Match {match_id} not found")
+            if m_row[1] == "finished":
+                self.cur.execute(
+                    "SELECT total_pool, rake_amount, rounding_to_jackpot, total_payout, house_contribution, result FROM sports_settlements WHERE match_id=?",
+                    (int(match_id),),
+                )
+                s_row = self.cur.fetchone()
+                return {
+                    "already_settled": True,
+                    "match_id": match_id,
+                    "result": s_row[5] if s_row else result,
+                    "total_pool": s_row[0] if s_row else 0,
+                    "total_payout": s_row[3] if s_row else 0,
+                    "payouts": {},
+                }
+
+            tickets = self.get_sports_tickets_for_match(match_id)
+            # Filter out cashed out and refunded tickets
+            active_tickets = [t for t in tickets if t["status"] == "pending"]
+            pool = self.get_sports_pool(match_id)
+            total_pool = sum(pool.values())
+            now = int(time.time())
+
+            user_payouts, total_payout, rake_amount, rounding_to_jackpot, house_contribution = calculate_hybrid_payout(
+                pool, result, active_tickets
+            )
+
+            # Mark tickets
+            for ticket in active_tickets:
+                tid = ticket["id"]
+                uid = ticket["user_id"]
+                if ticket["outcome"] == result:
+                    payout_amt = int(user_payouts.get(uid, 0) * (ticket["amount"] / max(1, pool.get(result, 1))))
+                    payout_amt = max(int(ticket["amount"] * 1.05), payout_amt)
+                    self.cur.execute(
+                        "UPDATE sports_bet_tickets SET status='won', payout=?, settled_at=? WHERE id=?",
+                        (payout_amt, now, tid),
+                    )
+                else:
+                    self.cur.execute(
+                        "UPDATE sports_bet_tickets SET status='lost', payout=0, settled_at=? WHERE id=?",
+                        (now, tid),
+                    )
+
+            # Credit winnings directly to players (AI winners deposit into jackpot pool instead of wallet)
+            ai_winnings_to_jackpot = 0
+            for uid, net_win in user_payouts.items():
+                if net_win > 0:
+                    if uid > 0:
+                        self.add_money(uid, net_win)
+                        self.bump_quest(uid, "casino_win")
+                    else:
+                        ai_winnings_to_jackpot += net_win
+
+            # Update jackpot pool
+            jackpot_addition = rake_amount + rounding_to_jackpot + ai_winnings_to_jackpot
+            if jackpot_addition > 0:
+                cur_jp = int(self.get_setting("jackpot_pool", "0"))
+                self.set_setting("jackpot_pool", str(cur_jp + jackpot_addition))
+
+            # Mark match finished
+            self.cur.execute(
+                """UPDATE sports_matches
+                SET status='finished', score_t1=?, score_t2=?, result=?, minute=90, settled_at=?
+                WHERE id=?""",
+                (int(score_t1), int(score_t2), result, now, int(match_id)),
+            )
+
+            # Record settlement
+            self.cur.execute(
+                """INSERT OR REPLACE INTO sports_settlements(
+                    match_id, total_pool, rake_amount, rounding_to_jackpot, total_payout, house_contribution, result, settled_at
+                ) VALUES(?, ?, ?, ?, ?, ?, ?, ?)""",
+                (int(match_id), total_pool, rake_amount, rounding_to_jackpot, total_payout, house_contribution, result, now),
+            )
+
+            # Update Standings
+            self.cur.execute("SELECT t1, t2, season_id FROM sports_matches WHERE id=?", (int(match_id),))
+            t_info = self.cur.fetchone()
+            if t_info:
+                self.update_sports_league_match(t_info[2], t_info[0], t_info[1], score_t1, score_t2)
+
+            self.cur.execute("DELETE FROM match_bets WHERE match_id=?", (int(match_id),))
+
+        return {
+            "already_settled": False,
+            "match_id": match_id,
+            "result": result,
+            "score_t1": score_t1,
+            "score_t2": score_t2,
+            "total_pool": total_pool,
+            "total_payout": total_payout,
+            "rake_amount": rake_amount,
+            "rounding_to_jackpot": rounding_to_jackpot,
+            "house_contribution": house_contribution,
+            "payouts": user_payouts,
+        }
+
+    def cashout_sports_ticket(self, ticket_id: int, user_id: int, cashout_amount: int) -> dict:
+        """Processes an early cash-out for a pending bet ticket before minute 80."""
+        with self.transaction():
+            self.cur.execute(
+                """SELECT t.id, t.match_id, t.user_id, t.amount, t.status, m.status, m.minute
+                FROM sports_bet_tickets t
+                LEFT JOIN sports_matches m ON t.match_id = m.id
+                WHERE t.id=? AND t.user_id=?""",
+                (int(ticket_id), int(user_id)),
+            )
+            row = self.cur.fetchone()
+            if not row:
+                return {"success": False, "error": "Vé cược không tồn tại hoặc không thuộc về bạn."}
+            if row[4] != "pending":
+                return {"success": False, "error": f"Vé này đã ở trạng thái {row[4]}, không thể xả kèo."}
+            if row[5] != "live" or row[6] >= 80:
+                return {"success": False, "error": "Tính năng xả kèo chỉ mở khi trận đấu đang live và trước phút 80'."}
+
+            now = int(time.time())
+            cashout_amount = max(1000, int(cashout_amount))
+            self.add_money(user_id, cashout_amount)
+            self.cur.execute(
+                "UPDATE sports_bet_tickets SET status='cashed_out', payout=?, settled_at=? WHERE id=?",
+                (cashout_amount, now, int(ticket_id)),
+            )
+
+        return {
+            "success": True,
+            "ticket_id": ticket_id,
+            "cashout_amount": cashout_amount,
+        }
+
+    def get_top_tipsters(self, limit: int = 10) -> list[dict]:
+        self.cur.execute(
+            """SELECT user_id,
+                      COUNT(*) as total_bets,
+                      SUM(CASE WHEN status='won' THEN 1 ELSE 0 END) as won_bets,
+                      SUM(CASE WHEN status='won' THEN payout - amount ELSE -amount END) as net_profit,
+                      SUM(amount) as total_staked
+            FROM sports_bet_tickets
+            WHERE user_id > 0 AND status IN ('won', 'lost')
+            GROUP BY user_id
+            HAVING total_bets >= 1
+            ORDER BY net_profit DESC, won_bets DESC LIMIT ?""",
+            (int(limit),),
+        )
+        rows = self.cur.fetchall()
+        return [
+            {
+                "user_id": r[0],
+                "total_bets": r[1],
+                "won_bets": r[2],
+                "win_rate": round((r[2] / max(1, r[1])) * 100, 1),
+                "net_profit": r[3],
+                "total_staked": r[4],
+            }
+            for r in rows
+        ]
+
+    def refund_sports_match(self, match_id: int, reason: str = "") -> dict:
+        with self.transaction():
+            tickets = self.get_sports_tickets_for_match(match_id)
+            refunded_count = 0
+            refunded_total = 0
+            now = int(time.time())
+            for t in tickets:
+                if t["status"] == "pending":
+                    self.add_money(t["user_id"], t["amount"])
+                    self.cur.execute(
+                        "UPDATE sports_bet_tickets SET status='refunded', payout=?, settled_at=? WHERE id=?",
+                        (t["amount"], now, t["id"]),
+                    )
+                    refunded_count += 1
+                    refunded_total += t["amount"]
+
+            self.cur.execute(
+                "UPDATE sports_matches SET status='cancelled', settled_at=? WHERE id=?",
+                (now, int(match_id)),
+            )
+            self.cur.execute("DELETE FROM match_bets WHERE match_id=?", (int(match_id),))
+
+        return {
+            "match_id": match_id,
+            "refunded_count": refunded_count,
+            "refunded_total": refunded_total,
+            "reason": reason,
+        }
+
+    def get_sports_stats_dashboard(self) -> dict:
+        self.cur.execute("SELECT COUNT(*), COALESCE(SUM(total_pool), 0), COALESCE(SUM(total_payout), 0), COALESCE(SUM(rake_amount), 0) FROM sports_settlements")
+        s_row = self.cur.fetchone()
+        self.cur.execute("SELECT COUNT(*) FROM sports_matches WHERE status='upcoming'")
+        upcoming_count = self.cur.fetchone()[0]
+        self.cur.execute("SELECT COUNT(*) FROM sports_matches WHERE status='live'")
+        live_count = self.cur.fetchone()[0]
+        self.cur.execute("SELECT COUNT(*), COALESCE(SUM(amount), 0) FROM sports_bet_tickets WHERE status='pending'")
+        t_row = self.cur.fetchone()
+        return {
+            "settled_matches": s_row[0] or 0,
+            "total_volume": s_row[1] or 0,
+            "total_payout": s_row[2] or 0,
+            "total_rake_to_jackpot": s_row[3] or 0,
+            "upcoming_matches": upcoming_count or 0,
+            "live_matches": live_count or 0,
+            "pending_tickets": t_row[0] or 0,
+            "pending_tickets_volume": t_row[1] or 0,
+        }
+
+    # --- Legacy Match Bet Compatibility ---
+    def add_match_bet(self, match_id: int, user_id: int, outcome: str, amount: int) -> int:
+        return self.place_sports_bet(match_id, user_id, outcome, amount)
+
+    def get_match_bets(self, match_id: int) -> list:
+        tickets = self.get_sports_tickets_for_match(match_id)
+        return [(t["id"], t["user_id"], t["outcome"], t["amount"]) for t in tickets]
+
+    def get_match_pool(self, match_id: int) -> dict[str, int]:
+        return self.get_sports_pool(match_id)
+
     def clear_match_bets(self, match_id: int) -> None:
-        self.cur.execute("DELETE FROM match_bets WHERE match_id=?", (match_id,))
+        self.cur.execute("DELETE FROM sports_bet_tickets WHERE match_id=?", (int(match_id),))
+        self.cur.execute("DELETE FROM match_bets WHERE match_id=?", (int(match_id),))
         self.conn.commit()
 
     # --- WORK XP ---
