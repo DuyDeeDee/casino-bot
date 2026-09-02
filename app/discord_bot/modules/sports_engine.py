@@ -508,24 +508,70 @@ def calculate_cashout_value(
     score_t2: int,
 ) -> int:
     """
-    Calculates dynamic real-time cashout value for an active bet ticket.
+    Calculates dynamic real-time cashout value for an active bet ticket across all markets.
     Locked (returns 0) after minute 80.
     """
     if minute >= 80 or minute <= 0:
         return 0
 
-    # Determine current leading outcome
-    if score_t1 > score_t2:
-        current_leading = "1"
-    elif score_t1 < score_t2:
-        current_leading = "2"
-    else:
-        current_leading = "X"
-
     potential_payout = int(stake * max(1.20, base_odds))
     time_factor = (80 - minute) / 80.0
+    total_goals = score_t1 + score_t2
 
-    if outcome == current_leading:
+    is_winning = False
+    is_decided_won = False
+    is_decided_lost = False
+
+    if outcome in ("1", "X", "2"):
+        if score_t1 > score_t2:
+            current_leading = "1"
+        elif score_t1 < score_t2:
+            current_leading = "2"
+        else:
+            current_leading = "X"
+        is_winning = (outcome == current_leading)
+
+    elif outcome == "OU_OVER":
+        if total_goals >= 3:
+            is_decided_won = True
+            is_winning = True
+        elif total_goals == 2:
+            is_winning = (minute < 65)
+        else:
+            is_winning = False
+
+    elif outcome == "OU_UNDER":
+        if total_goals >= 3:
+            is_decided_lost = True
+            is_winning = False
+        else:
+            is_winning = True
+
+    elif outcome == "BTTS_YES":
+        if score_t1 > 0 and score_t2 > 0:
+            is_decided_won = True
+            is_winning = True
+        elif score_t1 > 0 or score_t2 > 0:
+            is_winning = (minute < 65)
+        else:
+            is_winning = False
+
+    elif outcome == "BTTS_NO":
+        if score_t1 > 0 and score_t2 > 0:
+            is_decided_lost = True
+            is_winning = False
+        else:
+            is_winning = True
+
+    elif outcome in ("HDP_1", "HDP_2"):
+        is_winning = (outcome == "HDP_1" and score_t1 > score_t2) or (outcome == "HDP_2" and score_t2 >= score_t1)
+
+    if is_decided_lost:
+        return 0
+    if is_decided_won:
+        return int(potential_payout * 0.92)
+
+    if is_winning:
         # Winning position: offer 70% to 90% of potential payout
         rate = 0.70 + (0.20 * (minute / 80.0))
         return int(potential_payout * rate)

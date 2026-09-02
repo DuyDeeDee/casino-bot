@@ -1681,7 +1681,7 @@ class Economy:
         )
 
     def settle_sports_match(self, match_id: int, result: str, score_t1: int, score_t2: int) -> dict:
-        from app.discord_bot.modules.sports_engine import calculate_hybrid_payout
+        from app.discord_bot.modules.sports_engine import calculate_hybrid_payout, evaluate_market_results
 
         with self.transaction():
             self.cur.execute("SELECT id, status FROM sports_matches WHERE id=?", (int(match_id),))
@@ -1706,34 +1706,65 @@ class Economy:
             tickets = self.get_sports_tickets_for_match(match_id)
             # Filter out cashed out and refunded tickets
             active_tickets = [t for t in tickets if t["status"] == "pending"]
-            pool = self.get_sports_pool(match_id)
-            total_pool = sum(pool.values())
             now = int(time.time())
 
-            user_payouts, total_payout, rake_amount, rounding_to_jackpot, house_contribution = calculate_hybrid_payout(
-                pool, result, active_tickets
-            )
+            market_results = evaluate_market_results(score_t1, score_t2)
+            result_1x2 = market_results.get("1X2", result)
 
-            # Mark tickets
-            for ticket in active_tickets:
-                tid = ticket["id"]
-                uid = ticket["user_id"]
-                if ticket["outcome"] == result:
-                    payout_amt = int(user_payouts.get(uid, 0) * (ticket["amount"] / max(1, pool.get(result, 1))))
-                    payout_amt = max(int(ticket["amount"] * 1.05), payout_amt)
-                    self.cur.execute(
-                        "UPDATE sports_bet_tickets SET status='won', payout=?, settled_at=? WHERE id=?",
-                        (payout_amt, now, tid),
-                    )
-                else:
-                    self.cur.execute(
-                        "UPDATE sports_bet_tickets SET status='lost', payout=0, settled_at=? WHERE id=?",
-                        (now, tid),
-                    )
+            markets = set(t.get("market", "1X2") for t in active_tickets)
+            if not markets:
+                markets = {"1X2"}
+
+            combined_user_payouts: dict[int, int] = {}
+            total_match_pool = 0
+            total_match_payout = 0
+            total_rake_amount = 0
+            total_rounding_to_jackpot = 0
+            total_house_contribution = 0
+
+            for m_key in markets:
+                m_tickets = [t for t in active_tickets if t.get("market", "1X2") == m_key]
+                win_outcome = market_results.get(m_key, result_1x2)
+
+                m_pool: dict[str, int] = {}
+                for t in m_tickets:
+                    m_pool[t["outcome"]] = m_pool.get(t["outcome"], 0) + t["amount"]
+
+                m_total_pool = sum(m_pool.values())
+                total_match_pool += m_total_pool
+
+                user_payouts, total_payout, rake_amount, rounding_to_jackpot, house_contribution = calculate_hybrid_payout(
+                    m_pool, win_outcome, m_tickets
+                )
+
+                total_match_payout += total_payout
+                total_rake_amount += rake_amount
+                total_rounding_to_jackpot += rounding_to_jackpot
+                total_house_contribution += house_contribution
+
+                # Mark tickets for this market
+                for ticket in m_tickets:
+                    tid = ticket["id"]
+                    uid = ticket["user_id"]
+                    if ticket["outcome"] == win_outcome:
+                        payout_amt = int(user_payouts.get(uid, 0) * (ticket["amount"] / max(1, m_pool.get(win_outcome, 1))))
+                        payout_amt = max(int(ticket["amount"] * 1.05), payout_amt)
+                        self.cur.execute(
+                            "UPDATE sports_bet_tickets SET status='won', payout=?, settled_at=? WHERE id=?",
+                            (payout_amt, now, tid),
+                        )
+                    else:
+                        self.cur.execute(
+                            "UPDATE sports_bet_tickets SET status='lost', payout=0, settled_at=? WHERE id=?",
+                            (now, tid),
+                        )
+
+                for uid, amt in user_payouts.items():
+                    combined_user_payouts[uid] = combined_user_payouts.get(uid, 0) + amt
 
             # Credit winnings directly to players (AI winners deposit into jackpot pool instead of wallet)
             ai_winnings_to_jackpot = 0
-            for uid, net_win in user_payouts.items():
+            for uid, net_win in combined_user_payouts.items():
                 if net_win > 0:
                     if uid > 0:
                         self.add_money(uid, net_win)
@@ -1742,7 +1773,7 @@ class Economy:
                         ai_winnings_to_jackpot += net_win
 
             # Update jackpot pool
-            jackpot_addition = rake_amount + rounding_to_jackpot + ai_winnings_to_jackpot
+            jackpot_addition = total_rake_amount + total_rounding_to_jackpot + ai_winnings_to_jackpot
             if jackpot_addition > 0:
                 cur_jp = int(self.get_setting("jackpot_pool", "0"))
                 self.set_setting("jackpot_pool", str(cur_jp + jackpot_addition))
@@ -1752,7 +1783,7 @@ class Economy:
                 """UPDATE sports_matches
                 SET status='finished', score_t1=?, score_t2=?, result=?, minute=90, settled_at=?
                 WHERE id=?""",
-                (int(score_t1), int(score_t2), result, now, int(match_id)),
+                (int(score_t1), int(score_t2), result_1x2, now, int(match_id)),
             )
 
             # Record settlement
@@ -1760,7 +1791,7 @@ class Economy:
                 """INSERT OR REPLACE INTO sports_settlements(
                     match_id, total_pool, rake_amount, rounding_to_jackpot, total_payout, house_contribution, result, settled_at
                 ) VALUES(?, ?, ?, ?, ?, ?, ?, ?)""",
-                (int(match_id), total_pool, rake_amount, rounding_to_jackpot, total_payout, house_contribution, result, now),
+                (int(match_id), total_match_pool, total_rake_amount, total_rounding_to_jackpot, total_match_payout, total_house_contribution, result_1x2, now),
             )
 
             # Update Standings
@@ -1774,15 +1805,15 @@ class Economy:
         return {
             "already_settled": False,
             "match_id": match_id,
-            "result": result,
+            "result": result_1x2,
             "score_t1": score_t1,
             "score_t2": score_t2,
-            "total_pool": total_pool,
-            "total_payout": total_payout,
-            "rake_amount": rake_amount,
-            "rounding_to_jackpot": rounding_to_jackpot,
-            "house_contribution": house_contribution,
-            "payouts": user_payouts,
+            "total_pool": total_match_pool,
+            "total_payout": total_match_payout,
+            "rake_amount": total_rake_amount,
+            "rounding_to_jackpot": total_rounding_to_jackpot,
+            "house_contribution": total_house_contribution,
+            "payouts": combined_user_payouts,
         }
 
     def cashout_sports_ticket(self, ticket_id: int, user_id: int, cashout_amount: int) -> dict:
@@ -1852,7 +1883,8 @@ class Economy:
             now = int(time.time())
             for t in tickets:
                 if t["status"] == "pending":
-                    self.add_money(t["user_id"], t["amount"])
+                    if t["user_id"] > 0:
+                        self.add_money(t["user_id"], t["amount"])
                     self.cur.execute(
                         "UPDATE sports_bet_tickets SET status='refunded', payout=?, settled_at=? WHERE id=?",
                         (t["amount"], now, t["id"]),

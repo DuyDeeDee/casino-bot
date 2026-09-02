@@ -189,6 +189,31 @@ class TestSportsAIUniverse(unittest.TestCase):
         final_jp = int(self.economy.get_setting("jackpot_pool", "0"))
         self.assertGreater(final_jp, initial_jp + 1_000_000)
 
+    def test_multi_market_settlement(self):
+        """Verify that multiple markets (1X2 and Over/Under) settle independently and correctly."""
+        match_id = self.economy.create_sports_match(t1="MCI", t2="LIV", kickoff=int(time.time()) + 600)
+
+        # Player 1001 bets 1M on '1' (1X2 market)
+        self.economy.place_sports_bet(match_id, 1001, "1", 1_000_000, base_odds=1.80, market="1X2")
+        # Player 1002 bets 1M on 'OU_OVER' (OU market)
+        self.economy.place_sports_bet(match_id, 1002, "OU_OVER", 1_000_000, base_odds=1.75, market="OU")
+        # AI Bettor bets 1M on 'OU_UNDER' (OU market)
+        self.economy.place_sports_bet(match_id, -1, "OU_UNDER", 1_000_000, base_odds=2.10, market="OU")
+
+        # Match finishes 3 - 0 (Home wins, Over 2.5 hits)
+        settle_res = self.economy.settle_sports_match(match_id, "1", 3, 0)
+
+        # Both 1001 (1X2 winner) and 1002 (OU winner) should win!
+        tickets = self.economy.get_sports_tickets_for_match(match_id)
+        t_1001 = next(t for t in tickets if t["user_id"] == 1001)
+        t_1002 = next(t for t in tickets if t["user_id"] == 1002)
+        t_ai = next(t for t in tickets if t["user_id"] == -1)
+
+        self.assertEqual(t_1001["status"], "won")
+        self.assertEqual(t_1002["status"], "won")
+        self.assertEqual(t_ai["status"], "lost")
+        self.assertGreater(t_1002["payout"], 1_000_000)
+
     def test_tipster_leaderboard(self):
         """Verify tipster queries compute correct stats and win rates."""
         match_id = self.economy.create_sports_match(t1="BAY", t2="BVB", kickoff=int(time.time()) + 600)
