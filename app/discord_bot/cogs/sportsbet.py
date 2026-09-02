@@ -172,10 +172,17 @@ class SportsMatchView(discord.ui.View):
             probs = calculate_match_probabilities(t1, t2)
             odds = calculate_base_odds(probs)
 
+            e1 = t1.get("emoji", "👑")
+            if not e1 or len(e1) > 2:
+                e1 = "👑"
+            e2 = t2.get("emoji", "🦅")
+            if not e2 or len(e2) > 2:
+                e2 = "🦅"
+
             btn_1 = discord.ui.Button(
                 label=f"1 ({t1['name'][:10]}) x{odds['1']:.2f}",
                 style=discord.ButtonStyle.primary,
-                emoji=t1.get("emoji", "👑"),
+                emoji=e1,
                 row=0,
             )
             btn_1.callback = self._make_callback("1", odds["1"], "1X2")
@@ -193,7 +200,7 @@ class SportsMatchView(discord.ui.View):
             btn_2 = discord.ui.Button(
                 label=f"2 ({t2['name'][:10]}) x{odds['2']:.2f}",
                 style=discord.ButtonStyle.primary,
-                emoji=t2.get("emoji", "🦅"),
+                emoji=e2,
                 row=0,
             )
             btn_2.callback = self._make_callback("2", odds["2"], "1X2")

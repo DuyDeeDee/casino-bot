@@ -50,7 +50,7 @@ TEAMS: dict[str, dict[str, Any]] = {
     },
     "BAR": {
         "name": "Barcelona",
-        "emoji": "🔵🔴",
+        "emoji": "🔵",
         "att": 4.7,
         "def": 4.2,
         "mid": 4.7,
@@ -160,7 +160,7 @@ TEAMS: dict[str, dict[str, Any]] = {
     },
     "MIL": {
         "name": "AC Milan",
-        "emoji": "🔴⚫",
+        "emoji": "🔴",
         "att": 4.2,
         "def": 4.1,
         "mid": 4.1,
@@ -204,7 +204,7 @@ TEAMS: dict[str, dict[str, Any]] = {
     },
     "NEW": {
         "name": "Newcastle United",
-        "emoji": "⬛⬜",
+        "emoji": "⬛",
         "att": 4.1,
         "def": 4.1,
         "mid": 4.1,
