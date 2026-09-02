@@ -1,7 +1,9 @@
 from collections.abc import Callable
+from decimal import Decimal, ROUND_HALF_UP
 import functools
 import json
 import logging
+import math
 import random
 import shutil
 import sqlite3
@@ -1068,11 +1070,17 @@ class Economy:
     def __init__(self):
         self._lock = threading.RLock()
         self._txn_depth = 0
+        self._invest_trade_flow: dict[str, float] = {}
         self.open()
+
+    def commit(self):
+        """Commits pending operations only if not nested inside a transaction block."""
+        if self._txn_depth == 0 and getattr(self, "conn", None):
+            self.conn.commit()
 
     @contextmanager
     def transaction(self):
-        """Groups multiple statements into one atomic commit.
+        """Groups multiple statements into one atomic commit with rollback support.
 
         Usage:
             with economy.transaction():
@@ -1085,10 +1093,10 @@ class Economy:
             self._txn_depth += 1
             try:
                 yield self
-                if self._txn_depth == 1:
+                if self._txn_depth == 1 and getattr(self, "conn", None):
                     self.conn.commit()
             except Exception:
-                if self._txn_depth == 1:
+                if self._txn_depth == 1 and getattr(self, "conn", None):
                     self.conn.rollback()
                 raise
             finally:
@@ -2418,6 +2426,583 @@ class Economy:
         )
         rows = self.cur.fetchall()
         return [(row[0], row[1]) for row in reversed(rows)]
+
+    # === INVEST ATOMIC OPERATIONS & METRICS ===
+    def record_invest_trade_flow(self, symbol: str, net_shares_delta: float) -> None:
+        """Tracks net shares bought (+) or sold (-) for tick-based market impact."""
+        sym = symbol.upper()
+        with self._lock:
+            self._invest_trade_flow[sym] = self._invest_trade_flow.get(sym, 0.0) + float(net_shares_delta)
+
+    def get_and_reset_invest_trade_flow(self) -> dict[str, float]:
+        """Returns the accumulated trade flow per symbol and resets it."""
+        with self._lock:
+            flow = dict(self._invest_trade_flow)
+            self._invest_trade_flow.clear()
+            return flow
+
+    def track_invest_metrics(self, *, fee_burned: int = 0, volume_vnd: int = 0, restructures: int = 0) -> None:
+        """Updates cumulative invest metrics in system_settings."""
+        if fee_burned > 0:
+            self.cur.execute(
+                "UPDATE system_settings SET value = CAST(CAST(value AS INTEGER) + ? AS TEXT) WHERE key = 'invest_total_fee_burned'",
+                (int(fee_burned),),
+            )
+            if self.cur.rowcount == 0:
+                self.cur.execute(
+                    "INSERT INTO system_settings(key, value) VALUES('invest_total_fee_burned', ?)",
+                    (str(int(fee_burned)),),
+                )
+        if volume_vnd > 0:
+            self.cur.execute(
+                "UPDATE system_settings SET value = CAST(CAST(value AS INTEGER) + ? AS TEXT) WHERE key = 'invest_total_volume_vnd'",
+                (int(volume_vnd),),
+            )
+            if self.cur.rowcount == 0:
+                self.cur.execute(
+                    "INSERT INTO system_settings(key, value) VALUES('invest_total_volume_vnd', ?)",
+                    (str(int(volume_vnd)),),
+                )
+        if restructures > 0:
+            self.cur.execute(
+                "UPDATE system_settings SET value = CAST(CAST(value AS INTEGER) + ? AS TEXT) WHERE key = 'invest_restructure_count'",
+                (int(restructures),),
+            )
+            if self.cur.rowcount == 0:
+                self.cur.execute(
+                    "INSERT INTO system_settings(key, value) VALUES('invest_restructure_count', ?)",
+                    (str(int(restructures)),),
+                )
+        self.commit()
+
+    def get_invest_metrics(self) -> dict:
+        """Returns dictionary of total fee burned, volume VND, and restructure count."""
+        def _get_int(key: str, default: int = 0) -> int:
+            self.cur.execute("SELECT value FROM system_settings WHERE key=?", (key,))
+            row = self.cur.fetchone()
+            try:
+                return int(row[0]) if row else default
+            except Exception:
+                return default
+
+        return {
+            "fee_burned": _get_int("invest_total_fee_burned"),
+            "volume_vnd": _get_int("invest_total_volume_vnd"),
+            "restructures": _get_int("invest_restructure_count"),
+        }
+
+    def execute_invest_buy(
+        self,
+        user_id: int,
+        symbol: str,
+        shares: float,
+        market_price: int,
+        liquidity: float = 10000.0,
+        buy_fee_pct: float = 0.02,
+        max_holding: float | None = None,
+        max_order_shares: float | None = None,
+    ) -> dict:
+        """Executes an atomic stock/crypto buy order with 2% fee included in average cost basis."""
+        shares = round(float(shares), 4)
+        if shares <= 0 or not math.isfinite(shares):
+            raise ValueError("invalid_shares")
+        if max_order_shares is not None and shares > max_order_shares:
+            raise ValueError(f"max_order_exceeded:{max_order_shares}")
+
+        symbol = symbol.upper()
+        slippage_pct = (shares / liquidity) * 0.01
+        effective_price = int(market_price * (1.0 + slippage_pct))
+        base_cost = int(shares * effective_price)
+        fee = int(base_cost * buy_fee_pct)
+        total_cost = base_cost + fee
+        cost_per_share = total_cost / shares if shares > 0 else float(effective_price)
+
+        with self.transaction():
+            self._ensure_entry(user_id)
+            self.cur.execute("SELECT money FROM economy WHERE user_id=?", (user_id,))
+            money_row = self.cur.fetchone()
+            money = money_row[0] if money_row else 0
+            if money < total_cost:
+                raise ValueError(f"insufficient_funds:{total_cost}:{money}")
+
+            self.cur.execute(
+                "SELECT shares, avg_cost FROM user_portfolio WHERE user_id=? AND symbol=?",
+                (user_id, symbol),
+            )
+            p_row = self.cur.fetchone()
+            curr_shares = float(p_row[0]) if p_row and p_row[0] > 0 else 0.0
+            curr_avg = float(p_row[1]) if p_row and p_row[0] > 0 else 0.0
+
+            new_shares = round(curr_shares + shares, 4)
+            if max_holding is not None and new_shares > max_holding:
+                raise ValueError(f"max_holding_exceeded:{max_holding}:{curr_shares}")
+
+            # Calculate new average cost basis (including buy fee as per specifications)
+            new_avg_cost = ((curr_shares * curr_avg) + total_cost) / new_shares if new_shares > 0 else 0.0
+
+            # Deduct wallet money & update portfolio
+            self.cur.execute("UPDATE economy SET money = money - ? WHERE user_id=?", (total_cost, user_id))
+            self.cur.execute(
+                """INSERT INTO user_portfolio(user_id, symbol, shares, avg_cost) VALUES(?, ?, ?, ?)
+                   ON CONFLICT(user_id, symbol) DO UPDATE SET shares=excluded.shares, avg_cost=excluded.avg_cost""",
+                (user_id, symbol, new_shares, new_avg_cost),
+            )
+            self.record_invest_trade_flow(symbol, shares)
+            self.track_invest_metrics(fee_burned=fee, volume_vnd=total_cost)
+
+        return {
+            "success": True,
+            "symbol": symbol,
+            "shares": shares,
+            "market_price": market_price,
+            "effective_price": effective_price,
+            "slippage_pct": slippage_pct,
+            "fee": fee,
+            "total_cost": total_cost,
+            "cost_per_share": cost_per_share,
+            "current_shares": new_shares,
+            "avg_cost": new_avg_cost,
+        }
+
+    def execute_invest_sell(
+        self,
+        user_id: int,
+        symbol: str,
+        shares: float,
+        market_price: int,
+        liquidity: float = 10000.0,
+        sell_fee_pct: float = 0.05,
+        max_order_shares: float | None = None,
+    ) -> dict:
+        """Executes an atomic stock/crypto sell order. Preserves average cost basis on partial sell."""
+        shares = round(float(shares), 4)
+        if shares <= 0 or not math.isfinite(shares):
+            raise ValueError("invalid_shares")
+        if max_order_shares is not None and shares > max_order_shares:
+            raise ValueError(f"max_order_exceeded:{max_order_shares}")
+
+        symbol = symbol.upper()
+        slippage_pct = (shares / liquidity) * 0.01
+        effective_price = int(market_price * (1.0 - slippage_pct))
+        effective_price = max(int(market_price * 0.10), effective_price)
+        base_payout = int(shares * effective_price)
+        fee = int(base_payout * sell_fee_pct)
+        total_payout = base_payout - fee
+
+        with self.transaction():
+            self._ensure_entry(user_id)
+            self.cur.execute(
+                "SELECT shares, avg_cost FROM user_portfolio WHERE user_id=? AND symbol=?",
+                (user_id, symbol),
+            )
+            p_row = self.cur.fetchone()
+            curr_shares = float(p_row[0]) if p_row and p_row[0] > 0 else 0.0
+            curr_avg = float(p_row[1]) if p_row and p_row[0] > 0 else 0.0
+
+            if curr_shares < shares:
+                raise ValueError(f"insufficient_shares:{curr_shares}")
+
+            remaining_shares = round(curr_shares - shares, 4)
+            if remaining_shares <= 0.0001:
+                self.cur.execute("DELETE FROM user_portfolio WHERE user_id=? AND symbol=?", (user_id, symbol))
+                remaining_shares = 0.0
+            else:
+                # Average cost basis remains unchanged on partial sell!
+                self.cur.execute(
+                    "UPDATE user_portfolio SET shares=? WHERE user_id=? AND symbol=?",
+                    (remaining_shares, user_id, symbol),
+                )
+
+            # Credit payout to wallet
+            self.cur.execute("UPDATE economy SET money = money + ? WHERE user_id=?", (total_payout, user_id))
+            self.record_invest_trade_flow(symbol, -shares)
+            self.track_invest_metrics(fee_burned=fee, volume_vnd=base_payout)
+
+        cost_basis_sold = int(shares * curr_avg) if curr_avg > 0 else 0
+        realized_pnl = total_payout - cost_basis_sold
+        realized_pnl_pct = ((total_payout / cost_basis_sold) - 1) * 100 if cost_basis_sold > 0 else 0.0
+
+        return {
+            "success": True,
+            "symbol": symbol,
+            "shares": shares,
+            "market_price": market_price,
+            "effective_price": effective_price,
+            "slippage_pct": slippage_pct,
+            "fee": fee,
+            "total_payout": total_payout,
+            "remaining_shares": remaining_shares,
+            "avg_cost": curr_avg,
+            "realized_pnl": realized_pnl,
+            "realized_pnl_pct": realized_pnl_pct,
+        }
+
+    def execute_place_limit_order(
+        self,
+        user_id: int,
+        symbol: str,
+        order_type: str,
+        target_price: int,
+        shares: float,
+        liquidity: float = 10000.0,
+        max_holding: float | None = None,
+        max_order_shares: float | None = None,
+    ) -> dict:
+        """Places a limit order atomically by locking either VND funds (BUY) or shares (SELL)."""
+        shares = round(float(shares), 4)
+        target_price = int(target_price)
+        order_type = order_type.upper()
+
+        if shares <= 0 or not math.isfinite(shares) or target_price <= 0:
+            raise ValueError("invalid_params")
+        if order_type not in ("BUY", "SELL"):
+            raise ValueError("invalid_order_type")
+        if max_order_shares is not None and shares > max_order_shares:
+            raise ValueError(f"max_order_exceeded:{max_order_shares}")
+
+        symbol = symbol.upper()
+        slippage_pct = (shares / liquidity) * 0.01
+        effective_target = int(target_price * (1.0 + slippage_pct))
+        base_cost = int(shares * effective_target)
+        fee = int(base_cost * 0.02)
+        total_lock_cost = base_cost + fee
+
+        with self.transaction():
+            self._ensure_entry(user_id)
+            if order_type == "BUY":
+                self.cur.execute("SELECT money FROM economy WHERE user_id=?", (user_id,))
+                money_row = self.cur.fetchone()
+                money = money_row[0] if money_row else 0
+                if money < total_lock_cost:
+                    raise ValueError(f"insufficient_funds:{total_lock_cost}:{money}")
+
+                self.cur.execute(
+                    "SELECT shares FROM user_portfolio WHERE user_id=? AND symbol=?",
+                    (user_id, symbol),
+                )
+                p_row = self.cur.fetchone()
+                curr_shares = float(p_row[0]) if p_row and p_row[0] > 0 else 0.0
+                if max_holding is not None and (curr_shares + shares) > max_holding:
+                    raise ValueError(f"max_holding_exceeded:{max_holding}:{curr_shares}")
+
+                # Lock money
+                self.cur.execute("UPDATE economy SET money = money - ? WHERE user_id=?", (total_lock_cost, user_id))
+            else:  # SELL
+                self.cur.execute(
+                    "SELECT shares, avg_cost FROM user_portfolio WHERE user_id=? AND symbol=?",
+                    (user_id, symbol),
+                )
+                p_row = self.cur.fetchone()
+                curr_shares = float(p_row[0]) if p_row and p_row[0] > 0 else 0.0
+                if curr_shares < shares:
+                    raise ValueError(f"insufficient_shares:{curr_shares}")
+
+                # Lock shares
+                remaining_shares = round(curr_shares - shares, 4)
+                if remaining_shares <= 0.0001:
+                    self.cur.execute(
+                        "UPDATE user_portfolio SET shares=0 WHERE user_id=? AND symbol=?",
+                        (user_id, symbol),
+                    )
+                else:
+                    self.cur.execute(
+                        "UPDATE user_portfolio SET shares=? WHERE user_id=? AND symbol=?",
+                        (remaining_shares, user_id, symbol),
+                    )
+
+            import time
+            now = int(time.time())
+            self.cur.execute(
+                "INSERT INTO limit_orders(user_id, symbol, order_type, target_price, shares, created_at) VALUES(?, ?, ?, ?, ?, ?)",
+                (user_id, symbol, order_type, target_price, shares, now),
+            )
+            order_id = self.cur.lastrowid
+
+        return {
+            "order_id": order_id,
+            "user_id": user_id,
+            "symbol": symbol,
+            "order_type": order_type,
+            "target_price": target_price,
+            "shares": shares,
+            "locked_funds": total_lock_cost if order_type == "BUY" else 0,
+            "slippage_pct": slippage_pct,
+            "fee": fee if order_type == "BUY" else 0,
+        }
+
+    def execute_cancel_limit_order(self, order_id: int, user_id: int | None = None, liquidity: float = 10000.0) -> dict:
+        """Cancels a limit order and refunds locked funds or shares atomically."""
+        with self.transaction():
+            self.cur.execute(
+                "SELECT id, user_id, symbol, order_type, target_price, shares, created_at FROM limit_orders WHERE id=?",
+                (order_id,),
+            )
+            order = self.cur.fetchone()
+            if not order:
+                raise ValueError("order_not_found")
+
+            _, owner_id, symbol, otype, target_price, shares, created_at = order
+            if user_id is not None and owner_id != user_id:
+                raise ValueError("not_order_owner")
+
+            if otype == "BUY":
+                slippage_pct = (shares / liquidity) * 0.01
+                effective_target = int(target_price * (1.0 + slippage_pct))
+                base_cost = int(shares * effective_target)
+                refund_money = base_cost + int(base_cost * 0.02)
+
+                self.cur.execute("UPDATE economy SET money = money + ? WHERE user_id=?", (refund_money, owner_id))
+                refund_desc = f"+{refund_money:,} VND"
+                refund_type = "money"
+                refund_amount = refund_money
+            else:  # SELL
+                self.cur.execute(
+                    "SELECT shares, avg_cost FROM user_portfolio WHERE user_id=? AND symbol=?",
+                    (owner_id, symbol),
+                )
+                p_row = self.cur.fetchone()
+                curr_sh = float(p_row[0]) if p_row and p_row[0] > 0 else 0.0
+                curr_avg = float(p_row[1]) if p_row else 0.0
+                new_sh = round(curr_sh + shares, 4)
+
+                self.cur.execute(
+                    """INSERT INTO user_portfolio(user_id, symbol, shares, avg_cost) VALUES(?, ?, ?, ?)
+                       ON CONFLICT(user_id, symbol) DO UPDATE SET shares=excluded.shares""",
+                    (owner_id, symbol, new_sh, curr_avg),
+                )
+                refund_desc = f"+{shares:.2f} {symbol}"
+                refund_type = "shares"
+                refund_amount = shares
+
+            self.cur.execute("DELETE FROM limit_orders WHERE id=?", (order_id,))
+
+        return {
+            "order_id": order_id,
+            "user_id": owner_id,
+            "symbol": symbol,
+            "order_type": otype,
+            "target_price": target_price,
+            "shares": shares,
+            "refund_type": refund_type,
+            "refund_amount": refund_amount,
+            "refund_desc": refund_desc,
+        }
+
+    def execute_fill_limit_buy(
+        self,
+        order_id: int,
+        curr_price: int,
+        liquidity: float = 10000.0,
+        max_holding: float | None = None,
+    ) -> dict:
+        """Executes a matching Limit BUY order atomically, handling holding checks and cost refunds/surcharges."""
+        with self.transaction():
+            self.cur.execute(
+                "SELECT id, user_id, symbol, order_type, target_price, shares, created_at FROM limit_orders WHERE id=?",
+                (order_id,),
+            )
+            order = self.cur.fetchone()
+            if not order or order[3] != "BUY":
+                raise ValueError("invalid_limit_buy_order")
+
+            _, user_id, symbol, _, target_price, shares, _ = order
+
+            # Target price cost including target slippage and fee was locked
+            target_slippage = (shares / liquidity) * 0.01
+            eff_target = int(target_price * (1.0 + target_slippage))
+            locked_funds = int(shares * eff_target) + int(int(shares * eff_target) * 0.02)
+
+            self.cur.execute(
+                "SELECT shares, avg_cost FROM user_portfolio WHERE user_id=? AND symbol=?",
+                (user_id, symbol),
+            )
+            p_row = self.cur.fetchone()
+            curr_shares = float(p_row[0]) if p_row and p_row[0] > 0 else 0.0
+            curr_avg = float(p_row[1]) if p_row and p_row[0] > 0 else 0.0
+
+            if max_holding is not None and (curr_shares + shares) > max_holding:
+                # Cancel and refund
+                self.cur.execute("UPDATE economy SET money = money + ? WHERE user_id=?", (locked_funds, user_id))
+                self.cur.execute("DELETE FROM limit_orders WHERE id=?", (order_id,))
+                return {
+                    "status": "cancelled_limit_exceeded",
+                    "order_id": order_id,
+                    "user_id": user_id,
+                    "symbol": symbol,
+                    "shares": shares,
+                    "target_price": target_price,
+                    "locked_funds": locked_funds,
+                    "max_holding": max_holding,
+                    "curr_shares": curr_shares,
+                }
+
+            # Actual fill cost at curr_price
+            slippage_pct = (shares / liquidity) * 0.01
+            effective_curr_price = int(curr_price * (1.0 + slippage_pct))
+            actual_cost_base = int(shares * effective_curr_price)
+            buy_fee = int(actual_cost_base * 0.02)
+            actual_total_cost = actual_cost_base + buy_fee
+            refund = locked_funds - actual_total_cost
+
+            # Apply refund or charge
+            self.cur.execute("UPDATE economy SET money = money + ? WHERE user_id=?", (refund, user_id))
+
+            # Apply shares with updated average cost
+            new_total_shares = round(curr_shares + shares, 4)
+            new_avg_cost = ((curr_shares * curr_avg) + actual_total_cost) / new_total_shares if new_total_shares > 0 else 0.0
+
+            self.cur.execute(
+                """INSERT INTO user_portfolio(user_id, symbol, shares, avg_cost) VALUES(?, ?, ?, ?)
+                   ON CONFLICT(user_id, symbol) DO UPDATE SET shares=excluded.shares, avg_cost=excluded.avg_cost""",
+                (user_id, symbol, new_total_shares, new_avg_cost),
+            )
+            self.cur.execute("DELETE FROM limit_orders WHERE id=?", (order_id,))
+            self.record_invest_trade_flow(symbol, shares)
+            self.track_invest_metrics(fee_burned=buy_fee, volume_vnd=actual_total_cost)
+
+        return {
+            "status": "filled",
+            "order_id": order_id,
+            "user_id": user_id,
+            "symbol": symbol,
+            "shares": shares,
+            "target_price": target_price,
+            "curr_price": curr_price,
+            "effective_price": effective_curr_price,
+            "slippage_pct": slippage_pct,
+            "buy_fee": buy_fee,
+            "actual_cost": actual_total_cost,
+            "refund": refund,
+            "new_shares": new_total_shares,
+            "new_avg_cost": new_avg_cost,
+        }
+
+    def execute_fill_limit_sell(
+        self,
+        order_id: int,
+        curr_price: int,
+        liquidity: float = 10000.0,
+    ) -> dict:
+        """Executes a matching Limit SELL order atomically, deducting fees and crediting payout."""
+        with self.transaction():
+            self.cur.execute(
+                "SELECT id, user_id, symbol, order_type, target_price, shares, created_at FROM limit_orders WHERE id=?",
+                (order_id,),
+            )
+            order = self.cur.fetchone()
+            if not order or order[3] != "SELL":
+                raise ValueError("invalid_limit_sell_order")
+
+            _, user_id, symbol, _, target_price, shares, _ = order
+
+            slippage_pct = (shares / liquidity) * 0.01
+            effective_curr_price = int(curr_price * (1.0 - slippage_pct))
+            effective_curr_price = max(int(curr_price * 0.10), effective_curr_price)
+            base_payout = int(shares * effective_curr_price)
+            sell_fee = int(base_payout * 0.05)
+            payout = base_payout - sell_fee
+
+            self.cur.execute("UPDATE economy SET money = money + ? WHERE user_id=?", (payout, user_id))
+            self.cur.execute("DELETE FROM limit_orders WHERE id=?", (order_id,))
+
+            # Clean up empty portfolio rows
+            self.cur.execute("DELETE FROM user_portfolio WHERE user_id=? AND symbol=? AND shares <= 0.0001", (user_id, symbol))
+
+            self.record_invest_trade_flow(symbol, -shares)
+            self.track_invest_metrics(fee_burned=sell_fee, volume_vnd=base_payout)
+
+        return {
+            "status": "filled",
+            "order_id": order_id,
+            "user_id": user_id,
+            "symbol": symbol,
+            "shares": shares,
+            "target_price": target_price,
+            "curr_price": curr_price,
+            "effective_price": effective_curr_price,
+            "slippage_pct": slippage_pct,
+            "sell_fee": sell_fee,
+            "payout": payout,
+        }
+
+    def execute_bankruptcy_restructuring(
+        self,
+        symbol: str,
+        default_price: int,
+        compensation_rate: float = 0.40,
+        restart_discount_rate: float = 0.30,
+        liquidity: float = 10000.0,
+    ) -> dict:
+        """Performs a controlled bankruptcy restructuring: cancels limit orders, compensates shareholders pro-rata, and restarts at discounted price without 90% instant wipeout or 100x instant price rebound."""
+        symbol = symbol.upper()
+        liquidated_users = []
+        cancelled_orders = []
+
+        with self.transaction():
+            # 1. Refund all active limit orders for this symbol
+            self.cur.execute(
+                "SELECT id, user_id, order_type, target_price, shares FROM limit_orders WHERE symbol=?",
+                (symbol,),
+            )
+            orders = self.cur.fetchall()
+            for oid, uid, otype, target_p, shares in orders:
+                if otype == "BUY":
+                    target_slippage = (shares / liquidity) * 0.01
+                    eff_target = int(target_p * (1.0 + target_slippage))
+                    refund_m = int(shares * eff_target) + int(int(shares * eff_target) * 0.02)
+                    self.cur.execute("UPDATE economy SET money = money + ? WHERE user_id=?", (refund_m, uid))
+                    cancelled_orders.append((oid, uid, otype, shares, refund_m))
+                else:  # SELL
+                    # Add shares back to portfolio for pro-rata restructuring settlement
+                    self.cur.execute(
+                        "SELECT shares, avg_cost FROM user_portfolio WHERE user_id=? AND symbol=?",
+                        (uid, symbol),
+                    )
+                    p_row = self.cur.fetchone()
+                    curr_sh = float(p_row[0]) if p_row else 0.0
+                    curr_avg = float(p_row[1]) if p_row else 0.0
+                    self.cur.execute(
+                        """INSERT INTO user_portfolio(user_id, symbol, shares, avg_cost) VALUES(?, ?, ?, ?)
+                           ON CONFLICT(user_id, symbol) DO UPDATE SET shares=excluded.shares""",
+                        (uid, symbol, curr_sh + shares, curr_avg),
+                    )
+                    cancelled_orders.append((oid, uid, otype, shares, 0))
+
+            self.cur.execute("DELETE FROM limit_orders WHERE symbol=?", (symbol,))
+
+            # 2. Liquidate existing shareholders with pro-rata compensation payout
+            self.cur.execute(
+                "SELECT user_id, shares FROM user_portfolio WHERE symbol=? AND shares > 0",
+                (symbol,),
+            )
+            holders = self.cur.fetchall()
+            comp_price_per_share = int(default_price * compensation_rate)
+
+            for uid, shares in holders:
+                if shares <= 0:
+                    continue
+                payout = max(1, int(shares * comp_price_per_share))
+                self.cur.execute("UPDATE economy SET money = money + ? WHERE user_id=?", (payout, uid))
+                liquidated_users.append((uid, shares, payout, comp_price_per_share))
+
+            self.cur.execute("DELETE FROM user_portfolio WHERE symbol=?", (symbol,))
+
+            # 3. Set discounted restart price
+            restructured_price = max(1, int(default_price * restart_discount_rate))
+            self.update_stock_price(symbol, restructured_price, comp_price_per_share, -((1.0 - restart_discount_rate) * 100))
+
+            # 4. Clear scheduled bankruptcy
+            self.cur.execute("DELETE FROM system_settings WHERE key=?", (f"scheduled_bankruptcy_{symbol}",))
+            self.track_invest_metrics(restructures=1)
+
+        return {
+            "symbol": symbol,
+            "default_price": default_price,
+            "compensation_price": comp_price_per_share,
+            "restructured_price": restructured_price,
+            "liquidated_users": liquidated_users,
+            "cancelled_orders": cancelled_orders,
+        }
 
     # --- GARAGE SYSTEMS ---
     def add_user_car(self, user_id: int, model: str, rarity: str, serial: int, edition: str, collection: str) -> int:

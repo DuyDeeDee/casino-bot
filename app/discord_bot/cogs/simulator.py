@@ -42,6 +42,37 @@ DEFAULT_PRICES = {
     "DOGE": 5_000
 }
 
+DEFAULT_MAX_HOLDINGS = {
+    "USDT": 500_000.0,
+    "AGV": 25_000.0,
+    "CASINO": 5_000.0,
+    "ETH": 1_000.0,
+    "BTC": 250.0,
+    "SOL": 2_500.0,
+    "DOGE": 250_000.0
+}
+
+MAX_ORDER_VOLUME_RATIO = 0.20  # Tối đa 20% thanh khoản / lệnh
+
+def get_symbol_max_holding(economy, symbol: str) -> float:
+    """Trả về giới hạn sở hữu của mã, ưu tiên cấu hình DB nếu có, fallback về DEFAULT_MAX_HOLDINGS."""
+    sym = symbol.upper()
+    val_str = economy.get_setting(f"max_holding_{sym}")
+    if val_str:
+        try:
+            val = float(val_str)
+            if val > 0:
+                return val
+        except ValueError:
+            pass
+    return DEFAULT_MAX_HOLDINGS.get(sym, 10_000.0)
+
+def get_symbol_max_order_shares(symbol: str) -> float:
+    """Trả về khối lượng tối đa cho 1 lệnh giao dịch của mã (20% thanh khoản)."""
+    sym = symbol.upper()
+    liq = LIQUIDITY_VOLUME.get(sym, 10_000.0)
+    return round(liq * MAX_ORDER_VOLUME_RATIO, 4)
+
 # Limit order tự hết hạn sau khoảng thời gian này; tài sản khóa được hoàn lại
 LIMIT_ORDER_TTL = 24 * 3600
 
@@ -1857,6 +1888,8 @@ class Simulator(commands.Cog):
         
         user_portfolio = dict(self.economy.get_portfolio(user.id))
         portfolio_with_cost = {sym: (sh, avg) for sym, sh, avg in self.economy.get_portfolio_with_cost(user.id)}
+        max_h = get_symbol_max_holding(self.economy, symbol)
+        max_order = get_symbol_max_order_shares(symbol)
 
         if target_row:
             sym, price, prev, change = target_row
@@ -1864,15 +1897,34 @@ class Simulator(commands.Cog):
             owned_shares = user_portfolio.get(sym, 0.0)
             value = int(owned_shares * price)
 
-            holding_lines = [f"🎒 **Bạn đang sở hữu:** `{owned_shares:.2f}` cổ (`{value:,} VND`)"]
+            holding_lines = [
+                f"🎒 **Bạn đang sở hữu:** `{owned_shares:.2f}` cổ (`{value:,} VND`)",
+                f"🔒 **Giới hạn sở hữu tối đa:** `{max_h:,.2f}` cổ | **Max/lệnh:** `{max_order:,.2f}` cổ"
+            ]
             if owned_shares > 0:
                 avg_cost = portfolio_with_cost.get(sym, (0.0, 0.0))[1]
                 if avg_cost > 0:
-                    pl = (price - avg_cost) * owned_shares
-                    pl_pct = (price / avg_cost - 1) * 100
-                    pl_icon = "📈" if pl >= 0 else "📉"
+                    # 1. Unrealized P&L (chưa bán)
+                    unrealized_pl = (price - avg_cost) * owned_shares
+                    unrealized_pct = (price / avg_cost - 1) * 100
+                    pl_icon = "📈" if unrealized_pl >= 0 else "📉"
+                    
+                    # 2. Estimated Net P&L (thực nhận ước tính nếu bán ngay sau phí bán 5% và trượt giá)
+                    liquidity = LIQUIDITY_VOLUME.get(sym, 10000.0)
+                    est_slip_pct = (owned_shares / liquidity) * 0.01
+                    est_eff_p = max(int(price * 0.10), int(price * (1.0 - est_slip_pct)))
+                    est_base_payout = int(owned_shares * est_eff_p)
+                    est_sell_fee = int(est_base_payout * 0.05)
+                    est_net_payout = est_base_payout - est_sell_fee
+                    cost_basis = int(owned_shares * avg_cost)
+                    net_pl = est_net_payout - cost_basis
+                    net_pl_pct = ((est_net_payout / cost_basis) - 1) * 100 if cost_basis > 0 else 0.0
+                    net_icon = "🟢" if net_pl >= 0 else "🔴"
+
                     holding_lines.append(
-                        f"📊 **Giá vốn TB:** `{avg_cost:,.0f} VND` → {pl_icon} **Lãi/Lỗ:** `{pl:+,.0f} VND` (`{pl_pct:+.2f}%`)"
+                        f"📊 **Giá vốn TB (gồm 2% phí):** `{avg_cost:,.0f} VND`\n"
+                        f"> {pl_icon} **Lãi/Lỗ chưa bán:** `{unrealized_pl:+,.0f} VND` (`{unrealized_pct:+.2f}%`)\n"
+                        f"> {net_icon} **Lãi/Lỗ thực nhận (sau 5% phí & trượt giá):** `{net_pl:+,.0f} VND` (`{net_pl_pct:+.2f}%`)"
                     )
                 else:
                     holding_lines.append("📊 **Giá vốn TB:** `—` (dữ liệu cũ)")
@@ -1919,7 +1971,6 @@ class Simulator(commands.Cog):
         import json
         now = int(time.time())
         try:
-            
             # --- 1. Market News Event System ---
             active_news = None
             news_data = self.economy.get_setting("active_news")
@@ -1944,218 +1995,176 @@ class Simulator(commands.Cog):
                 news_ticks = 0
                 if not active_news and random.random() < 0.35:
                     templates = [
-                        {"title": "📰 TIN TỐT: Quốc gia lớn hợp pháp hóa BTC làm phương thức thanh toán, dòng tiền đổ vào ồ ạt!", "symbol": "BTC", "direction": "up", "duration": 6},
-                        {"title": "📰 TIN XẤU: Sàn giao dịch tiền điện tử lớn bị hack, BTC giảm sâu toàn hệ thống!", "symbol": "BTC", "direction": "down", "duration": 6},
-                        {"title": "📰 TIN TỐT: Tập đoàn CASINO báo cáo lợi nhuận quý kỷ lục, giá cổ tức tăng mạnh!", "symbol": "CASINO", "direction": "up", "duration": 6},
-                        {"title": "📰 TIN XẤU: Siết chặt quy định kiểm tra cá cược trực tuyến, cổ phiếu CASINO bị bán tháo!", "symbol": "CASINO", "direction": "down", "duration": 6},
-                        {"title": "📰 TIN TỐT: AGV giới thiệu mô hình AI thế hệ mới dẫn đầu thế giới công nghệ!", "symbol": "AGV", "direction": "up", "duration": 6},
-                        {"title": "📰 TIN XẤU: AGV đối mặt với vụ kiện độc quyền dữ liệu lớn tại thị trường châu Âu!", "symbol": "AGV", "direction": "down", "duration": 6},
-                        {"title": "📰 TIN TỐT: Đồng USD tăng giá mạnh mẽ kéo theo sự tăng trưởng nhẹ của USDT!", "symbol": "USDT", "direction": "up", "duration": 6},
-                        {"title": "📰 TIN XẤU: Cục dự trữ Liên Bang phát hành stablecoin đối thủ khiến USDT bị rút nhẹ!", "symbol": "USDT", "direction": "down", "duration": 6},
-                        {"title": "📰 TIN TỐT: Bản cập nhật nâng cấp Ethereum 2.5 hoàn tất, phí gas giảm sâu!", "symbol": "ETH", "direction": "up", "duration": 6},
-                        {"title": "📰 TIN XẤU: Phát hiện lỗ hổng smart contract trên mạng lưới Ethereum, giá sụt giảm!", "symbol": "ETH", "direction": "down", "duration": 6},
-                        {"title": "📰 TIN TỐT: Quỹ đầu tư mạo hiểm công bố đầu tư 10 tỷ USD vào hệ sinh thái Solana!", "symbol": "SOL", "direction": "up", "duration": 6},
-                        {"title": "📰 TIN XẤU: Mạng lưới Solana bị nghẽn giao dịch liên tục trong 24 giờ!", "symbol": "SOL", "direction": "down", "duration": 6},
-                        {"title": "📰 TIN TỐT: Tỷ phú công nghệ đăng ảnh chú chó Shiba Inu làm đại diện, DOGE bay cao!", "symbol": "DOGE", "direction": "up", "duration": 6},
-                        {"title": "📰 TIN XẤU: Cộng đồng chốt lời meme coin khiến DOGE sụt giảm nghiêm trọng!", "symbol": "DOGE", "direction": "down", "duration": 6}
+                        {"title": "📰 TIN TỐT: Quốc gia lớn hợp pháp hóa BTC làm phương thức thanh toán, dòng tiền đổ vào ồ ạt!", "symbol": "BTC", "direction": "up"},
+                        {"title": "📰 TIN XẤU: Sàn giao dịch tiền điện tử lớn bị hack, BTC giảm sâu toàn hệ thống!", "symbol": "BTC", "direction": "down"},
+                        {"title": "📰 TIN TỐT: Tập đoàn CASINO báo cáo lợi nhuận quý kỷ lục, giá cổ tức tăng mạnh!", "symbol": "CASINO", "direction": "up"},
+                        {"title": "📰 TIN XẤU: Siết chặt quy định kiểm tra cá cược trực tuyến, cổ phiếu CASINO bị bán tháo!", "symbol": "CASINO", "direction": "down"},
+                        {"title": "📰 TIN TỐT: AGV giới thiệu mô hình AI thế hệ mới dẫn đầu thế giới công nghệ!", "symbol": "AGV", "direction": "up"},
+                        {"title": "📰 TIN XẤU: AGV đối mặt với vụ kiện độc quyền dữ liệu lớn tại thị trường châu Âu!", "symbol": "AGV", "direction": "down"},
+                        {"title": "📰 TIN TỐT: Đồng USD tăng giá mạnh mẽ kéo theo sự tăng trưởng nhẹ của USDT!", "symbol": "USDT", "direction": "up"},
+                        {"title": "📰 TIN XẤU: Cục dự trữ Liên Bang phát hành stablecoin đối thủ khiến USDT bị rút nhẹ!", "symbol": "USDT", "direction": "down"},
+                        {"title": "📰 TIN TỐT: Bản cập nhật nâng cấp Ethereum 2.5 hoàn tất, phí gas giảm sâu!", "symbol": "ETH", "direction": "up"},
+                        {"title": "📰 TIN XẤU: Phát hiện lỗ hổng smart contract trên mạng lưới Ethereum, giá sụt giảm!", "symbol": "ETH", "direction": "down"},
+                        {"title": "📰 TIN TỐT: Quỹ đầu tư mạo hiểm công bố đầu tư 10 tỷ USD vào hệ sinh thái Solana!", "symbol": "SOL", "direction": "up"},
+                        {"title": "📰 TIN XẤU: Mạng lưới Solana bị nghẽn giao dịch liên tục trong 24 giờ!", "symbol": "SOL", "direction": "down"},
+                        {"title": "📰 TIN TỐT: Tỷ phú công nghệ đăng ảnh chú chó Shiba Inu làm đại diện, DOGE bay cao!", "symbol": "DOGE", "direction": "up"},
+                        {"title": "📰 TIN XẤU: Cộng đồng chốt lời meme coin khiến DOGE sụt giảm nghiêm trọng!", "symbol": "DOGE", "direction": "down"}
                     ]
-                    active_news = random.choice(templates)
+                    chosen = random.choice(templates)
+                    active_news = {
+                        "title": chosen["title"],
+                        "symbol": chosen["symbol"],
+                        "direction": chosen["direction"],
+                        "duration": 4,
+                        "initial_tick": True
+                    }
                     self.economy.set_setting("active_news", json.dumps(active_news))
             self.economy.set_setting("news_ticks", str(news_ticks))
             
-            # --- 2. Fluctuate Stock Prices ---
+            # --- 2. Fluctuate Stock Prices with Market Impact & Multi-Stage Bankruptcy ---
             prices = self.economy.get_stock_prices()
             news_symbol = active_news.get("symbol") if active_news else None
             news_dir = active_news.get("direction") if active_news else None
+            is_news_initial = active_news.get("initial_tick", False) if active_news else False
             
-            # Configs: (min_price, max_price, base_fluctuation_range_tuple, news_up_range_tuple, news_down_range_tuple)
+            # Get net trade flow from player trades in this 5-minute tick
+            trade_flows = self.economy.get_and_reset_invest_trade_flow()
+            
+            # Configs: (min_price, max_price, base_fluctuation_range_tuple)
             stock_configs = {
-                "USDT": (24_500, 25_500, (-0.01, 0.01), (0.005, 0.015), (-0.015, -0.005)),
-                "AGV": (1_000, 100_000, (-0.03, 0.03), (0.04, 0.10), (-0.10, -0.04)),
-                "CASINO": (10_000, 1_000_000, (-0.08, 0.08), (0.08, 0.20), (-0.20, -0.08)),
-                "ETH": (50_000, 5_000_000, (-0.10, 0.10), (0.10, 0.22), (-0.22, -0.10)),
-                "BTC": (100_000, 10_000_000, (-0.15, 0.15), (0.12, 0.28), (-0.28, -0.12)),
-                "SOL": (8_000, 800_000, (-0.18, 0.18), (0.15, 0.35), (-0.35, -0.15)),
-                "DOGE": (100, 50_000, (-0.30, 0.35), (0.30, 0.60), (-0.60, -0.30))
+                "USDT": (24_500, 25_500, (-0.005, 0.005)),
+                "AGV": (1_000, 100_000, (-0.03, 0.03)),
+                "CASINO": (10_000, 1_000_000, (-0.06, 0.06)),
+                "ETH": (50_000, 5_000_000, (-0.08, 0.08)),
+                "BTC": (100_000, 10_000_000, (-0.10, 0.10)),
+                "SOL": (8_000, 800_000, (-0.12, 0.12)),
+                "DOGE": (100, 50_000, (-0.18, 0.18))
             }
             
-            bankrupted_symbols = []
             for symbol, current_price, _, _ in prices:
                 if symbol not in stock_configs:
                     continue
                     
-                min_p, max_p, base_range, up_range, down_range = stock_configs[symbol]
+                min_p, max_p, base_range = stock_configs[symbol]
+                liquidity = LIQUIDITY_VOLUME.get(symbol, 10000.0)
                 
-                # Check bankruptcy chance or countdown (Option D)
-                is_bankruptcy = False
-                countdown_str = self.economy.get_setting(f"scheduled_bankruptcy_{symbol}")
-                if countdown_str:
-                    try:
-                        countdown = int(countdown_str)
-                    except ValueError:
-                        countdown = 0
-                    
-                    if countdown == 2:
-                        # Decrement to 1 — no warning is sent by design (silent bankruptcy)
-                        self.economy.set_setting(f"scheduled_bankruptcy_{symbol}", "1")
-                    elif countdown == 1:
-                        # Time to crash!
-                        is_bankruptcy = True
-                else:
-                    # Roll normal bankruptcy chance
-                    is_bankruptcy_rolled = False
-                    if news_symbol == symbol and news_dir == "down":
-                        if random.random() < 0.05: # 5% chance under bad news
-                            is_bankruptcy_rolled = True
-                    elif random.random() < 0.005: # 0.5% chance normally
-                        is_bankruptcy_rolled = True
-
-                    if is_bankruptcy_rolled:
-                        # Schedule bankruptcy: set to 2 sessions — silent, holders get no
-                        # advance notice; they are only DM'd the forced-liquidation receipt.
-                        self.economy.set_setting(f"scheduled_bankruptcy_{symbol}", "2")
-                    
-                if is_bankruptcy:
-                    bankrupted_symbols.append(symbol)
-                    bankruptcy_price = int(min_p * 0.1)
-                    
-                    # Update stock price to crashed price in DB
-                    self.economy.update_stock_price(symbol, bankruptcy_price, current_price, -90.0)
-                    logger.warning(f"🚨 CRITICAL: Stock {symbol} went bankrupt! Price crashed to {bankruptcy_price} VND.")
-                    
-                    # Refund active limit orders for this bankrupt stock
-                    try:
-                        all_orders = self.economy.get_all_active_limit_orders()
-                        for order_id, user_id, ord_sym, order_type, target_price, shares, _ in all_orders:
-                            if ord_sym == symbol:
-                                if order_type == "BUY":
-                                    refund_money = get_limit_buy_cost(shares, target_price, symbol)
-                                    self.economy.add_money(user_id, refund_money)
-                                    log_wallet_change(logger, event="invest_bankruptcy_buy_refund", user_id=user_id, money_delta=refund_money, symbol=symbol, shares=shares, order_id=order_id)
-                                else: # SELL
-                                    # Refund locked shares back to their portfolio
-                                    portfolio = dict(self.economy.get_portfolio(user_id))
-                                    curr_shares = portfolio.get(symbol, 0.0)
-                                    self.economy.set_portfolio_shares(user_id, symbol, curr_shares + shares)
-                                    log_wallet_change(logger, event="invest_bankruptcy_sell_unlock", user_id=user_id, symbol=symbol, shares=shares, order_id=order_id)
-                                self.economy.remove_limit_order(order_id)
-                    except Exception as err:
-                        logger.error(f"Error handling limit orders for bankrupt stock {symbol}: {err}")
+                # Market Impact based on net volume traded in the tick
+                net_shares = trade_flows.get(symbol, 0.0)
+                flow_impact = max(-0.08, min(0.08, (net_shares / liquidity) * 0.01))
+                
+                # Multi-stage Bankruptcy & Restructuring (Only for high-risk speculative tokens: CASINO, DOGE)
+                if symbol in ("CASINO", "DOGE"):
+                    stage = self.economy.get_setting(f"scheduled_bankruptcy_{symbol}")
+                    if stage == "distress":
+                        # Stage 3: Restructuring execution!
+                        restructure_report = self.economy.execute_bankruptcy_restructuring(
+                            symbol,
+                            default_price=DEFAULT_PRICES.get(symbol, min_p * 2),
+                            compensation_rate=0.40,
+                            restart_discount_rate=0.30,
+                            liquidity=liquidity
+                        )
+                        logger.warning(f"🔄 Stock {symbol} completed bankruptcy restructuring: {restructure_report}")
                         
-                    # Liquidate all outstanding shares for this stock held by users
-                    try:
-                        holders = self.economy.get_stock_holders(symbol)
-                        liquidated_users = []
-                        for user_id, shares in holders:
-                            if shares <= 0:
-                                continue
-                            
-                            liquidation_value = int(shares * bankruptcy_price)
-                            fee = int(liquidation_value * 0.05)
-                            payout = liquidation_value - fee
-                            
-                            # Add payout to user and set shares to 0
-                            self.economy.add_money(user_id, payout)
-                            self.economy.set_portfolio_shares(user_id, symbol, 0.0)
-                            log_wallet_change(logger, event="invest_bankruptcy_liquidation", user_id=user_id, money_delta=payout, symbol=symbol, shares=shares, liquidation_price=bankruptcy_price)
-                            liquidated_users.append((user_id, shares, payout))
-                            
-                        # Send DM notification to players who owned the bankrupt stock
-                        for user_id, shares, payout in liquidated_users:
+                        # Notify shareholders
+                        for uid, shs, payout, comp_p in restructure_report["liquidated_users"]:
                             try:
-                                user = self.client.get_user(user_id)
-                                if user is None:
-                                    user = await self.client.fetch_user(user_id)
+                                user = self.client.get_user(uid) or await self.client.fetch_user(uid)
                                 if user:
                                     embed = make_embed(
-                                        title=f"🚨 BÁO CÁO PHÁ SẢN & THANH LÝ CƯỠNG CHẾ: {symbol} 🚨",
+                                        title=f"🔄 THÔNG BÁO TÁI CẤU TRÚC & ĐỀN BÙ: {symbol} 🔄",
                                         description=(
-                                            f"Mã đầu tư `{symbol}` mà bạn đang nắm giữ đã chính thức **phá sản**!\n\n"
-                                            f"💥 **Giá thanh lý tài sản:** `{bankruptcy_price:,} VND` / cổ\n"
-                                            f"📊 **Số lượng bị thanh lý:** `{shares:.2f} {symbol}`\n"
-                                            f"💰 **Số tiền thu hồi (sau phí 5%):** `+{payout:,} VND`\n\n"
-                                            f"💡 Số tiền thanh lý đã được tự động cộng vào tài khoản của bạn."
+                                            f"Mã đầu tư `{symbol}` đã hoàn tất thủ tục **tái cấu trúc tài chính**!\n\n"
+                                            f"📊 **Số lượng cổ phiếu sở hữu:** `{shs:.2f} {symbol}`\n"
+                                            f"💵 **Định giá đền bù bảo vệ tài sản (40%):** `{comp_p:,} VND` / cổ\n"
+                                            f"💰 **Tổng tiền đền bù nhận về ví:** `+{payout:,} VND`\n\n"
+                                            f"💡 Cổ phiếu đã được mở lại giao dịch ở mức giá tái cấu trúc chiết khấu `{restructure_report['restructured_price']:,} VND`."
                                         ),
-                                        color=discord.Color.red()
+                                        color=discord.Color.gold()
                                     )
                                     await user.send(embed=embed)
-                            except Exception as dm_err:
-                                logger.error(f"Error sending bankruptcy DM to user {user_id}: {dm_err}")
-                    except Exception as err:
-                        logger.error(f"Error liquidating portfolio for bankrupt stock {symbol}: {err}")
-                        
-                    # Immediately restructure/reset the stock price to its default starting price
-                    restructured_price = DEFAULT_PRICES.get(symbol, min_p * 2)
-                    self.economy.update_stock_price(symbol, restructured_price, bankruptcy_price, 0.0)
-                    logger.info(f"Restructured {symbol}. Price reset to {restructured_price} VND.")
-                    
-                    # Clear scheduled bankruptcy setting
-                    self.economy.set_setting(f"scheduled_bankruptcy_{symbol}", "")
-                    continue
-                
-                # Normal fluctuation
-                if news_symbol == symbol and news_dir == "up":
-                    change = random.uniform(*up_range)
-                elif news_symbol == symbol and news_dir == "down":
-                    change = random.uniform(*down_range)
+                            except Exception:
+                                pass
+                        continue
+                    elif stage == "warning":
+                        # Advance to Stage 2: Distress
+                        self.economy.set_setting(f"scheduled_bankruptcy_{symbol}", "distress")
+                    else:
+                        # Rare roll under prolonged bad news (0.1% chance) or normal (0.01%)
+                        is_risk_triggered = False
+                        if news_symbol == symbol and news_dir == "down":
+                            if random.random() < 0.001:
+                                is_risk_triggered = True
+                        elif random.random() < 0.0001:
+                            is_risk_triggered = True
+                            
+                        if is_risk_triggered:
+                            self.economy.set_setting(f"scheduled_bankruptcy_{symbol}", "warning")
+                            logger.warning(f"⚠️ Bankruptcy warning alert scheduled for {symbol}")
+
+                # News Reaction calculation
+                if news_symbol == symbol:
+                    if is_news_initial:
+                        # One-time sharp initial shock
+                        change = random.uniform(0.08, 0.14) if news_dir == "up" else random.uniform(-0.14, -0.08)
+                    else:
+                        # Fading momentum drift + random noise (allows up & down movements)
+                        drift = random.uniform(0.01, 0.03) if news_dir == "up" else random.uniform(-0.03, -0.01)
+                        change = drift + random.uniform(*base_range) + random.uniform(-0.02, 0.02)
                 else:
                     change = random.uniform(*base_range)
 
-                # Mean reversion: kéo giá nhẹ về mức gốc để không kẹt biên min/max mãi
+                # Mean reversion
                 base_price = DEFAULT_PRICES.get(symbol)
+                reversion = 0.0
                 if base_price and current_price > 0:
-                    reversion = max(-0.05, min(0.05, 0.02 * (base_price / current_price - 1)))
-                    change = max(-0.35, min(0.35, change + reversion))
+                    reversion = max(-0.04, min(0.04, 0.015 * (base_price / current_price - 1)))
 
-                new_price = int(current_price * (1 + change))
+                total_change = max(-0.35, min(0.35, change + flow_impact + reversion))
+                new_price = int(current_price * (1.0 + total_change))
                 new_price = max(min_p, min(max_p, new_price))
                 
                 change_percent = ((new_price - current_price) / current_price) * 100
                 self.economy.update_stock_price(symbol, new_price, current_price, change_percent)
-            logger.info("Stock/crypto prices updated.")
 
+            if active_news and is_news_initial:
+                active_news["initial_tick"] = False
+                self.economy.set_setting("active_news", json.dumps(active_news))
+
+            logger.info("Stock/crypto prices updated with market impact.")
 
         except Exception as e:
-            logger.error(f"Error updating stock prices: {e}")
+            logger.error(f"Error updating stock prices: {e}", exc_info=True)
 
-        # --- 3. Limit Orders Execution ---
+        # --- 3. Limit Orders Execution (Atomic) ---
         try:
             active_orders = self.economy.get_all_active_limit_orders()
             current_prices = dict((row[0], row[1]) for row in self.economy.get_stock_prices())
             
             for order_id, user_id, symbol, order_type, target_price, shares, created_at in active_orders:
-                # Quá hạn TTL: hoàn tài sản khóa, hủy lệnh và DM thông báo
+                liquidity = LIQUIDITY_VOLUME.get(symbol, 10000.0)
+                
+                # Check expiration TTL
                 if now - created_at >= LIMIT_ORDER_TTL:
-                    if order_type == "BUY":
-                        refund_money = get_limit_buy_cost(shares, target_price, symbol)
-                        self.economy.add_money(user_id, refund_money)
-                        log_wallet_change(logger, event="invest_limit_expire", user_id=user_id, money_delta=refund_money, symbol=symbol, shares=shares, order_id=order_id)
-                        refund_note = f"Đã hoàn lại `+{refund_money:,} VND` vào ví của bạn."
-                    else: # SELL
-                        portfolio = dict(self.economy.get_portfolio(user_id))
-                        self.economy.set_portfolio_shares(user_id, symbol, portfolio.get(symbol, 0.0) + shares)
+                    try:
+                        res = self.economy.execute_cancel_limit_order(order_id, liquidity=liquidity)
                         log_wallet_change(logger, event="invest_limit_expire", user_id=user_id, symbol=symbol, shares=shares, order_id=order_id)
-                        refund_note = f"Đã trả lại `+{shares:.2f} {symbol}` vào kho của bạn."
-                    self.economy.remove_limit_order(order_id)
-
-                    user = self.client.get_user(user_id)
-                    if user is None:
-                        try: user = await self.client.fetch_user(user_id)
-                        except Exception: pass
-                    if user:
-                        type_str = "🟢 MUA" if order_type == "BUY" else "🔴 BÁN"
-                        embed = make_embed(
-                            title="⏰ LỆNH TỰ ĐỘNG HẾT HẠN ⏰",
-                            description=(
-                                f"Lệnh giới hạn (Limit Order) **#{order_id}** của bạn đã quá {LIMIT_ORDER_TTL // 3600} giờ không khớp và bị hủy tự động.\n\n"
-                                f"📈 **Mã:** `{symbol}`\n"
-                                f"📊 **Loại lệnh:** {type_str} `{shares:.2f}` @ `{target_price:,} VND`\n"
-                                f"💰 {refund_note}"
-                            ),
-                            color=discord.Color.blue()
-                        )
-                        try: await user.send(embed=embed)
-                        except Exception: pass
+                        user = self.client.get_user(user_id) or await self.client.fetch_user(user_id)
+                        if user:
+                            type_str = "🟢 MUA" if order_type == "BUY" else "🔴 BÁN"
+                            embed = make_embed(
+                                title="⏰ LỆNH TỰ ĐỘNG HẾT HẠN ⏰",
+                                description=(
+                                    f"Lệnh giới hạn (Limit Order) **#{order_id}** của bạn đã quá {LIMIT_ORDER_TTL // 3600} giờ không khớp và bị hủy tự động.\n\n"
+                                    f"📈 **Mã:** `{symbol}`\n"
+                                    f"📊 **Loại lệnh:** {type_str} `{shares:.2f}` @ `{target_price:,} VND`\n"
+                                    f"💰 Đã hoàn trả: `{res['refund_desc']}`"
+                                ),
+                                color=discord.Color.blue()
+                            )
+                            await user.send(embed=embed)
+                    except Exception as exp_err:
+                        logger.error(f"Error expiring limit order #{order_id}: {exp_err}")
                     continue
 
                 curr_price = current_prices.get(symbol)
@@ -2170,122 +2179,72 @@ class Simulator(commands.Cog):
                     
                 if trigger:
                     if order_type == "BUY":
-                        portfolio = dict(self.economy.get_portfolio(user_id))
-                        curr_shares = portfolio.get(symbol, 0.0)
-                        
-                        # Check max holding limit (Option B)
-                        limit_str = self.economy.get_setting(f"max_holding_{symbol}")
-                        limit_exceeded = False
-                        if limit_str:
-                            try:
-                                limit_val = float(limit_str)
-                                if curr_shares + shares > limit_val:
-                                    limit_exceeded = True
-                            except ValueError:
-                                pass
-                                
-                        if limit_exceeded:
-                            # Refund locked funds and cancel order
-                            locked_funds = get_limit_buy_cost(shares, target_price, symbol)
-                            self.economy.add_money(user_id, locked_funds)
-                            self.economy.remove_limit_order(order_id)
-                            log_wallet_change(logger, event="invest_limit_buy_cancel_limit_exceeded", user_id=user_id, money_delta=locked_funds, symbol=symbol, shares=shares, order_id=order_id)
-                            
-                            user = self.client.get_user(user_id)
-                            if user is None:
-                                try: user = await self.client.fetch_user(user_id)
-                                except Exception: pass
+                        max_h = get_symbol_max_holding(self.economy, symbol)
+                        try:
+                            fill_res = self.economy.execute_fill_limit_buy(order_id, curr_price, liquidity=liquidity, max_holding=max_h)
+                            if fill_res.get("status") == "cancelled_limit_exceeded":
+                                log_wallet_change(logger, event="invest_limit_buy_cancel_limit_exceeded", user_id=user_id, symbol=symbol, shares=shares, order_id=order_id)
+                                user = self.client.get_user(user_id) or await self.client.fetch_user(user_id)
+                                if user:
+                                    embed = make_embed(
+                                        title="🔔 LỆNH TỰ ĐỘNG BỊ HỦY (VƯỢT GIỚI HẠN) 🔔",
+                                        description=(
+                                            f"Lệnh mua tự động (Limit Buy) của bạn đã bị hủy do số lượng nắm giữ vượt quá giới hạn thị trường!\n\n"
+                                            f"📈 **Mã:** `{symbol}`\n"
+                                            f"📊 **Số lượng lệnh:** `{shares:.2f}`\n"
+                                            f"🎒 **Số lượng hiện có:** `{fill_res['curr_shares']:.2f}`\n"
+                                            f"🚫 **Giới hạn tối đa:** `{fill_res['max_holding']:,.2f}`\n\n"
+                                            f"💰 Đã hoàn trả `+{fill_res['locked_funds']:,} VND` vào tài khoản."
+                                        ),
+                                        color=discord.Color.orange()
+                                    )
+                                    await user.send(embed=embed)
+                            else:
+                                log_wallet_change(logger, event="invest_limit_buy_fill", user_id=user_id, symbol=symbol, shares=shares, fill_price=fill_res['effective_price'], order_id=order_id)
+                                user = self.client.get_user(user_id) or await self.client.fetch_user(user_id)
+                                if user:
+                                    refund_str = f" và được hoàn trả `+{fill_res['refund']:,} VND` chênh lệch" if fill_res['refund'] > 0 else f" và khấu trừ thêm `{abs(fill_res['refund']):,} VND` chênh lệch" if fill_res['refund'] < 0 else ""
+                                    embed = make_embed(
+                                        title="🔔 LỆNH MUA TỰ ĐỘNG KHỚP 🔔",
+                                        description=(
+                                            f"Lệnh mua tự động (Limit Order) của bạn đã khớp thành công!\n\n"
+                                            f"📈 **Mã:** `{symbol}`\n"
+                                            f"📊 **Số lượng:** `{shares:.2f}`\n"
+                                            f"💵 **Giá thị trường:** `{curr_price:,} VND`\n"
+                                            f"⚡ **Trượt giá:** `+{fill_res['slippage_pct']*100:.3f}%` (Giá khớp: `{fill_res['effective_price']:,} VND`)\n"
+                                            f"🏷️ **Phí mua (2%):** `{fill_res['buy_fee']:,} VND`\n"
+                                            f"💰 Đã nhận `+{shares:.2f} {symbol}` vào tài khoản{refund_str}."
+                                        ),
+                                        color=discord.Color.green()
+                                    )
+                                    await user.send(embed=embed)
+                        except Exception as buy_fill_err:
+                            logger.error(f"Error filling limit buy order #{order_id}: {buy_fill_err}")
+                    else:  # SELL
+                        try:
+                            fill_res = self.economy.execute_fill_limit_sell(order_id, curr_price, liquidity=liquidity)
+                            log_wallet_change(logger, event="invest_limit_sell_fill", user_id=user_id, money_delta=fill_res['payout'], symbol=symbol, shares=shares, fill_price=fill_res['effective_price'], order_id=order_id)
+                            user = self.client.get_user(user_id) or await self.client.fetch_user(user_id)
                             if user:
                                 embed = make_embed(
-                                    title="🔔 LỆNH TỰ ĐỘNG BỊ HỦY (VƯỢT GIỚI HẠN) 🔔",
+                                    title="🔔 LỆNH BÁN TỰ ĐỘNG KHỚP 🔔",
                                     description=(
-                                        f"Lệnh mua tự động (Limit Buy) của bạn đã bị hủy do số lượng nắm giữ vượt quá giới hạn của server!\n\n"
+                                        f"Lệnh bán tự động (Limit Order) của bạn đã khớp thành công!\n\n"
                                         f"📈 **Mã:** `{symbol}`\n"
-                                        f"📊 **Số lượng lệnh:** `{shares:.2f}`\n"
-                                        f"🎒 **Số lượng hiện có:** `{curr_shares:.2f}`\n"
-                                        f"🚫 **Giới hạn tối đa:** `{limit_val:,}`\n\n"
-                                        f"💰 Đã hoàn trả `+{locked_funds:,} VND` vào tài khoản."
+                                        f"📊 **Số lượng:** `{shares:.2f}`\n"
+                                        f"💵 **Giá thị trường:** `{curr_price:,} VND`\n"
+                                        f"⚡ **Trượt giá:** `-{fill_res['slippage_pct']*100:.3f}%` (Giá khớp: `{fill_res['effective_price']:,} VND`)\n"
+                                        f"🏷️ **Phí bán (5%):** `{fill_res['sell_fee']:,} VND`\n"
+                                        f"💰 Nhận về ví: `+{fill_res['payout']:,} VND`."
                                     ),
-                                    color=discord.Color.orange()
+                                    color=discord.Color.green()
                                 )
-                                try: await user.send(embed=embed)
-                                except Exception: pass
-                            continue
+                                await user.send(embed=embed)
+                        except Exception as sell_fill_err:
+                            logger.error(f"Error filling limit sell order #{order_id}: {sell_fill_err}")
 
-                        # Target price cost including target slippage and fee was locked
-                        locked_funds = get_limit_buy_cost(shares, target_price, symbol)
-                        
-                        # Slippage & buy fee
-                        liquidity = LIQUIDITY_VOLUME.get(symbol, 10000.0)
-                        slippage_pct = (shares / liquidity) * 0.01
-                        effective_curr_price = int(curr_price * (1 + slippage_pct))
-                        actual_cost_base = int(shares * effective_curr_price)
-                        buy_fee = int(actual_cost_base * 0.02)
-                        actual_cost = actual_cost_base + buy_fee
-
-                        refund = locked_funds - actual_cost
-                        self.economy.add_money(user_id, refund)
-                        self.economy.apply_stock_buy(user_id, symbol, shares, effective_curr_price)
-
-                        self.economy.remove_limit_order(order_id)
-                        log_wallet_change(logger, event="invest_limit_buy_fill", user_id=user_id, money_delta=refund, symbol=symbol, shares=shares, fill_price=effective_curr_price, order_id=order_id)
-                        
-                        user = self.client.get_user(user_id)
-                        if user is None:
-                            try: user = await self.client.fetch_user(user_id)
-                            except Exception: pass
-                        if user:
-                            refund_str = f" và được hoàn trả `+{refund:,} VND` chênh lệch" if refund > 0 else f" và khấu trừ thêm `{abs(refund):,} VND` chênh lệch" if refund < 0 else ""
-                            embed = make_embed(
-                                title="🔔 LỆNH MUA TỰ ĐỘNG KHỚP 🔔",
-                                description=(
-                                    f"Lệnh mua tự động (Limit Order) của bạn đã khớp thành công!\n\n"
-                                    f"📈 **Mã:** `{symbol}`\n"
-                                    f"📊 **Số lượng:** `{shares:.2f}`\n"
-                                    f"💵 **Giá thị trường:** `{curr_price:,} VND`\n"
-                                    f"⚡ **Trượt giá:** `+{slippage_pct*100:.3f}%` (Giá khớp: `{effective_curr_price:,} VND`)\n"
-                                    f"🏷️ **Phí mua (2%):** `{buy_fee:,} VND`\n"
-                                    f"💰 Đã nhận `+{shares:.2f} {symbol}` vào tài khoản{refund_str}."
-                                ),
-                                color=discord.Color.green()
-                            )
-                            try: await user.send(embed=embed)
-                            except Exception: pass
-                    else:  # SELL
-                        # Slippage & sell fee
-                        liquidity = LIQUIDITY_VOLUME.get(symbol, 10000.0)
-                        slippage_pct = (shares / liquidity) * 0.01
-                        effective_curr_price = int(curr_price * (1 - slippage_pct))
-                        effective_curr_price = max(int(curr_price * 0.1), effective_curr_price)
-                        
-                        base_payout = int(shares * effective_curr_price)
-                        sell_fee = int(base_payout * 0.05)
-                        payout = base_payout - sell_fee
-
-                        self.economy.add_money(user_id, payout)
-                        self.economy.remove_limit_order(order_id)
-                        log_wallet_change(logger, event="invest_limit_sell_fill", user_id=user_id, money_delta=payout, symbol=symbol, shares=shares, fill_price=effective_curr_price, order_id=order_id)
-                        
-                        user = self.client.get_user(user_id)
-                        if user is None:
-                            try: user = await self.client.fetch_user(user_id)
-                            except Exception: pass
-                        if user:
-                            embed = make_embed(
-                                title="🔔 LỆNH BÁN TỰ ĐỘNG KHỚP 🔔",
-                                description=(
-                                    f"Lệnh bán tự động (Limit Order) của bạn đã khớp thành công!\n\n"
-                                    f"📈 **Mã:** `{symbol}`\n"
-                                    f"📊 **Số lượng:** `{shares:.2f}`\n"
-                                    f"💵 **Giá thị trường:** `{curr_price:,} VND`\n"
-                                    f"⚡ **Trượt giá:** `-{slippage_pct*100:.3f}%` (Giá khớp: `{effective_curr_price:,} VND`)\n"
-                                    f"🏷️ **Phí bán (5%):** `{sell_fee:,} VND`\n"
-                                    f"💰 Nhận về ví: `+{payout:,} VND`."
-                                ),
-                                color=discord.Color.green()
-                            )
-                            try: await user.send(embed=embed)
-                            except Exception: pass
+        except Exception as ex:
+            logger.error(f"Error executing limit orders: {ex}")
         except Exception as ex:
             logger.error(f"Error executing limit orders: {ex}")
 
@@ -3545,59 +3504,59 @@ class Simulator(commands.Cog):
 
         user_id = ctx.author.id
         price = prices[symbol]
-        
-        # Calculate slippage (Option C)
         liquidity = LIQUIDITY_VOLUME.get(symbol, 10000.0)
-        slippage_pct = (shares / liquidity) * 0.01
-        effective_price = int(price * (1 + slippage_pct))
-        
-        base_cost = int(shares * effective_price)
-        # Calculate buy fee (2%)
-        fee = int(base_cost * 0.02)
-        total_cost = base_cost + fee
-        
-        # Check wallet money
-        profile = self.economy.get_entry(user_id)
-        money = profile[1]
-        
-        if money < total_cost:
-            await ctx.send(
-                f"❌ Bạn không đủ tiền mặt!\n"
-                f"• Mua `{shares:.2f}` {symbol} cần tổng cộng `{total_cost:,} VND` (gồm {slippage_pct*100:.3f}% trượt giá & 2% phí mua).\n"
-                f"• Số dư ví hiện tại: `{money:,} VND`."
-            )
-            return
-            
-        portfolio = dict(self.economy.get_portfolio(user_id))
-        current_shares = portfolio.get(symbol, 0.0)
-        
-        # Check max holding limit (Option B)
-        limit_str = self.economy.get_setting(f"max_holding_{symbol}")
-        if limit_str:
-            try:
-                limit_val = float(limit_str)
-                if current_shares + shares > limit_val:
-                    await ctx.send(
-                        f"❌ **Lỗi:** Giao dịch bị từ chối do vượt quá giới hạn sở hữu tối đa của server!\n"
-                        f"• Giới hạn sở hữu `{symbol}`: `{limit_val:,}` cổ\n"
-                        f"• Bạn đang có: `{current_shares:.2f}` cổ\n"
-                        f"• Có thể mua thêm tối đa: `{max(0.0, limit_val - current_shares):.2f}` cổ."
-                    )
-                    return
-            except ValueError:
-                pass
+        max_h = get_symbol_max_holding(self.economy, symbol)
+        max_order = get_symbol_max_order_shares(symbol)
 
-        # Process transaction
-        self.economy.add_money(user_id, -total_cost)
-        self.economy.apply_stock_buy(user_id, symbol, shares, effective_price)
-        # Buy pressure nudges the market price up (lasting impact)
-        self.economy.adjust_stock_price(symbol, slippage_pct)
-        
+        try:
+            receipt = self.economy.execute_invest_buy(
+                user_id=user_id,
+                symbol=symbol,
+                shares=shares,
+                market_price=price,
+                liquidity=liquidity,
+                buy_fee_pct=0.02,
+                max_holding=max_h,
+                max_order_shares=max_order
+            )
+        except ValueError as val_err:
+            err_str = str(val_err)
+            if err_str.startswith("insufficient_funds"):
+                parts = err_str.split(":")
+                req_cost = int(parts[1]) if len(parts) > 1 else 0
+                curr_money = int(parts[2]) if len(parts) > 2 else 0
+                await ctx.send(
+                    f"❌ Bạn không đủ tiền mặt!\n"
+                    f"• Mua `{shares:.2f}` {symbol} cần tổng cộng `{req_cost:,} VND` (gồm trượt giá & 2% phí mua).\n"
+                    f"• Số dư ví hiện tại: `{curr_money:,} VND`."
+                )
+                return
+            elif err_str.startswith("max_holding_exceeded"):
+                parts = err_str.split(":")
+                limit_val = float(parts[1]) if len(parts) > 1 else max_h
+                curr_sh = float(parts[2]) if len(parts) > 2 else 0.0
+                await ctx.send(
+                    f"❌ **Lỗi:** Giao dịch bị từ chối do vượt quá giới hạn sở hữu tối đa của thị trường!\n"
+                    f"• Giới hạn sở hữu `{symbol}`: `{limit_val:,}` cổ\n"
+                    f"• Bạn đang có: `{curr_sh:.2f}` cổ\n"
+                    f"• Có thể mua thêm tối đa: `{max(0.0, limit_val - curr_sh):.2f}` cổ."
+                )
+                return
+            elif err_str.startswith("max_order_exceeded"):
+                await ctx.send(
+                    f"❌ **Lỗi:** Khối lượng đặt mua vượt quá giới hạn tối đa mỗi lệnh!\n"
+                    f"• Khối lượng tối đa 1 lệnh `{symbol}` (20% thanh khoản): `{max_order:,.2f}` cổ."
+                )
+                return
+            else:
+                await ctx.send("❌ Số lượng cổ phiếu mua không hợp lệ.")
+                return
+
         log_wallet_change(
             logger,
             event="invest_buy_shares",
             user_id=user_id,
-            money_delta=-total_cost,
+            money_delta=-receipt["total_cost"],
             symbol=symbol,
             shares_bought=shares,
             ctx=ctx
@@ -3606,12 +3565,13 @@ class Simulator(commands.Cog):
         embed = make_embed(
             title="🟢 ĐẦU TƯ THÀNH CÔNG 🟢",
             description=(
-                f"Bạn đã khớp lệnh mua thành công **{shares:.2f} {symbol}**!\n\n"
-                f"💵 **Giá thị trường:** `{price:,} VND`\n"
-                f"📊 **Trượt giá:** `+{slippage_pct*100:.3f}%` (Giá thực nhận: `{effective_price:,} VND`)\n"
-                f"🏷️ **Phí mua (2%):** `{fee:,} VND`\n"
-                f"💸 **Tổng chi phí:** `-{total_cost:,} VND`\n\n"
-                f"🎒 **Số dư cổ phiếu hiện tại:** `{current_shares + shares:.2f} {symbol}`"
+                f"Bạn đã khớp lệnh mua thành công **{receipt['shares']:.2f} {symbol}**!\n\n"
+                f"💵 **Giá thị trường:** `{receipt['market_price']:,} VND`\n"
+                f"📊 **Trượt giá:** `+{receipt['slippage_pct']*100:.3f}%` (Giá khớp: `{receipt['effective_price']:,} VND`)\n"
+                f"🏷️ **Phí mua (2%):** `{receipt['fee']:,} VND`\n"
+                f"💸 **Tổng chi phí:** `-{receipt['total_cost']:,} VND`\n\n"
+                f"📊 **Giá vốn TB mới (đã gồm phí 2%):** `{receipt['avg_cost']:,.0f} VND` / cổ\n"
+                f"🎒 **Số dư cổ phiếu hiện tại:** `{receipt['current_shares']:.2f} {symbol}`"
             ),
             color=discord.Color.green()
         )
@@ -3632,51 +3592,58 @@ class Simulator(commands.Cog):
             return
 
         user_id = ctx.author.id
-        portfolio = dict(self.economy.get_portfolio(user_id))
-        current_shares = portfolio.get(symbol, 0.0)
-        
-        if current_shares < shares:
-            await ctx.send(f"❌ Bạn không đủ cổ phiếu để bán! Bạn chỉ có `{current_shares:.2f} {symbol}`.")
-            return
-            
-        # Process transaction
         price = prices[symbol]
-        
-        # Calculate slippage (Option C)
         liquidity = LIQUIDITY_VOLUME.get(symbol, 10000.0)
-        slippage_pct = (shares / liquidity) * 0.01
-        effective_price = int(price * (1 - slippage_pct))
-        effective_price = max(int(price * 0.1), effective_price) # Không trượt quá 90%
-        
-        base_payout = int(shares * effective_price)
-        # Calculate sell fee (5%)
-        fee = int(base_payout * 0.05)
-        total_payout = base_payout - fee
-        
-        self.economy.set_portfolio_shares(user_id, symbol, current_shares - shares)
-        self.economy.add_money(user_id, total_payout)
-        # Sell pressure nudges the market price down (lasting impact)
-        self.economy.adjust_stock_price(symbol, -slippage_pct)
-        
+        max_order = get_symbol_max_order_shares(symbol)
+
+        try:
+            receipt = self.economy.execute_invest_sell(
+                user_id=user_id,
+                symbol=symbol,
+                shares=shares,
+                market_price=price,
+                liquidity=liquidity,
+                sell_fee_pct=0.05,
+                max_order_shares=max_order
+            )
+        except ValueError as val_err:
+            err_str = str(val_err)
+            if err_str.startswith("insufficient_shares"):
+                parts = err_str.split(":")
+                curr_sh = float(parts[1]) if len(parts) > 1 else 0.0
+                await ctx.send(f"❌ Bạn không đủ cổ phiếu để bán! Bạn chỉ có `{curr_sh:.2f} {symbol}`.")
+                return
+            elif err_str.startswith("max_order_exceeded"):
+                await ctx.send(
+                    f"❌ **Lỗi:** Khối lượng đặt bán vượt quá giới hạn tối đa mỗi lệnh!\n"
+                    f"• Khối lượng tối đa 1 lệnh `{symbol}` (20% thanh khoản): `{max_order:,.2f}` cổ."
+                )
+                return
+            else:
+                await ctx.send("❌ Số lượng cổ phiếu bán không hợp lệ.")
+                return
+
         log_wallet_change(
             logger,
             event="invest_sell_shares",
             user_id=user_id,
-            money_delta=total_payout,
+            money_delta=receipt["total_payout"],
             symbol=symbol,
             shares_sold=shares,
             ctx=ctx
         )
         
+        pnl_icon = "📈" if receipt["realized_pnl"] >= 0 else "📉"
         embed = make_embed(
             title="🔴 BÁN ĐẦU TƯ THÀNH CÔNG 🔴",
             description=(
-                f"Bạn đã bán thành công **{shares:.2f} {symbol}**!\n\n"
-                f"💵 **Giá thị trường:** `{price:,} VND`\n"
-                f"📊 **Trượt giá:** `-{slippage_pct*100:.3f}%` (Giá thực nhận: `{effective_price:,} VND`)\n"
-                f"🏷️ **Phí bán (5%):** `{fee:,} VND`\n"
-                f"💰 **Thực nhận về ví:** `+{total_payout:,} VND`\n\n"
-                f"🎒 **Số dư cổ phiếu còn lại:** `{current_shares - shares:.2f} {symbol}`"
+                f"Bạn đã bán thành công **{receipt['shares']:.2f} {symbol}**!\n\n"
+                f"💵 **Giá thị trường:** `{receipt['market_price']:,} VND`\n"
+                f"📊 **Trượt giá:** `-{receipt['slippage_pct']*100:.3f}%` (Giá khớp: `{receipt['effective_price']:,} VND`)\n"
+                f"🏷️ **Phí bán (5%):** `{receipt['fee']:,} VND`\n"
+                f"💰 **Thực nhận về ví:** `+{receipt['total_payout']:,} VND`\n\n"
+                f"{pnl_icon} **Lãi/Lỗ thực hiện:** `{receipt['realized_pnl']:+,.0f} VND` (`{receipt['realized_pnl_pct']:+.2f}%`)\n"
+                f"🎒 **Số dư cổ phiếu còn lại:** `{receipt['remaining_shares']:.2f} {symbol}`"
             ),
             color=discord.Color.green()
         )
@@ -3693,34 +3660,57 @@ class Simulator(commands.Cog):
 
         prices = dict((row[0], row[1]) for row in self.economy.get_stock_prices())
         lines = []
-        total_value = 0
-        total_cost = 0
+        total_market_value = 0
+        total_cost_basis = 0
+        total_est_net_payout = 0
+
         for sym, shares, avg_cost in holdings:
             price = prices.get(sym, 0)
-            value = int(shares * price)
-            cost_basis = shares * avg_cost
-            pl = value - cost_basis
-            pl_pct = (price / avg_cost - 1) * 100 if avg_cost > 0 else 0.0
-            icon = "📈" if pl >= 0 else "📉"
+            market_val = int(shares * price)
+            cost_basis = int(shares * avg_cost)
+            
+            # Unrealized P&L
+            unrealized_pl = market_val - cost_basis
+            unrealized_pct = ((price / avg_cost) - 1) * 100 if avg_cost > 0 else 0.0
+            u_icon = "📈" if unrealized_pl >= 0 else "📉"
+            
+            # Estimated Net P&L after 5% sell fee and slippage
+            liquidity = LIQUIDITY_VOLUME.get(sym, 10000.0)
+            slip_pct = (shares / liquidity) * 0.01
+            est_eff_p = max(int(price * 0.10), int(price * (1.0 - slip_pct)))
+            est_base_p = int(shares * est_eff_p)
+            est_fee = int(est_base_p * 0.05)
+            est_net_payout = est_base_p - est_fee
+            net_pl = est_net_payout - cost_basis
+            net_pl_pct = ((est_net_payout / cost_basis) - 1) * 100 if cost_basis > 0 else 0.0
+            n_icon = "🟢" if net_pl >= 0 else "🔴"
+            
             avg_str = f"`{avg_cost:,.0f} VND`" if avg_cost > 0 else "`—`"
             lines.append(
-                f"{icon} **{sym}** — `{shares:.2f}` cổ\n"
-                f"> Giá vốn: {avg_str} • Giá hiện tại: `{price:,} VND`\n"
-                f"> Giá trị: `{value:,} VND` • Lãi/Lỗ: `{pl:+,.0f} VND` (`{pl_pct:+.2f}%`)"
+                f"{u_icon} **{sym}** — `{shares:.2f}` cổ\n"
+                f"> Giá vốn (gồm 2% phí): {avg_str} • Giá hiện tại: `{price:,} VND`\n"
+                f"> Giá trị thị trường: `{market_val:,} VND` • Lãi/Lỗ chưa bán: `{unrealized_pl:+,.0f} VND` (`{unrealized_pct:+.2f}%`)\n"
+                f"> {n_icon} **Thực nhận ước tính (sau 5% phí & trượt giá):** `{net_pl:+,.0f} VND` (`{net_pl_pct:+.2f}%`)"
             )
-            total_value += value
-            total_cost += cost_basis
+            total_market_value += market_val
+            total_cost_basis += cost_basis
+            total_est_net_payout += est_net_payout
 
-        total_pl = total_value - total_cost
-        total_pl_pct = (total_value / total_cost - 1) * 100 if total_cost > 0 else 0.0
+        total_unrealized_pl = total_market_value - total_cost_basis
+        total_unrealized_pct = ((total_market_value / total_cost_basis) - 1) * 100 if total_cost_basis > 0 else 0.0
+        total_net_pl = total_est_net_payout - total_cost_basis
+        total_net_pct = ((total_est_net_payout / total_cost_basis) - 1) * 100 if total_cost_basis > 0 else 0.0
+
         embed = make_embed(
             title=f"💼 DANH MỤC ĐẦU TƯ CỦA {ctx.author.name.upper()} 💼",
             description=(
                 "\n\n".join(lines)
-                + f"\n\n💰 **TỔNG GIÁ TRỊ:** `{total_value:,} VND`\n"
-                f"📊 **TỔNG LÃI/LỖ:** `{total_pl:+,.0f} VND` (`{total_pl_pct:+.2f}%`)"
+                + f"\n\n💰 **TỔNG GIÁ TRỊ THỊ TRƯỜNG:** `{total_market_value:,} VND`\n"
+                f"📊 **TỔNG GIÁ VỐN ĐẦU TƯ:** `{total_cost_basis:,} VND`\n"
+                f"📈 **TỔNG LÃI/LỖ CHƯA BÁN:** `{total_unrealized_pl:+,.0f} VND` (`{total_unrealized_pct:+.2f}%`)\n"
+                f"💵 **TỔNG LÃI/LỖ THỰC NHẬN ƯỚC TÍNH:** `{total_net_pl:+,.0f} VND` (`{total_net_pct:+.2f}%`)"
             ),
-            color=discord.Color.green() if total_pl >= 0 else discord.Color.red()
+            color=discord.Color.green() if total_net_pl >= 0 else discord.Color.red()
         )
         embed.set_thumbnail(url=ctx.author.display_avatar.url)
         await ctx.send(embed=embed)
@@ -3744,44 +3734,58 @@ class Simulator(commands.Cog):
             return
 
         user_id = ctx.author.id
-        total_cost = get_limit_buy_cost(shares, target_price, symbol)
-        
-        # Check wallet money
-        profile = self.economy.get_entry(user_id)
-        money = profile[1]
-        
-        if money < total_cost:
-            liquidity = LIQUIDITY_VOLUME.get(symbol, 10000.0)
-            slippage_pct = (shares / liquidity) * 0.01
-            await ctx.send(
-                f"❌ Bạn không đủ VND để đặt lệnh mua này!\n"
-                f"• Cần tạm khóa: `{total_cost:,} VND` (bao gồm 2% phí mua & {slippage_pct*100:.3f}% trượt giá ước tính ở target price).\n"
-                f"• Bạn chỉ có: `{money:,} VND`."
-            )
-            return
-            
-        portfolio = dict(self.economy.get_portfolio(user_id))
-        current_shares = portfolio.get(symbol, 0.0)
-        
-        # Check max holding limit (Option B)
-        limit_str = self.economy.get_setting(f"max_holding_{symbol}")
-        if limit_str:
-            try:
-                limit_val = float(limit_str)
-                if current_shares + shares > limit_val:
-                    await ctx.send(
-                        f"❌ **Lỗi:** Lệnh mua tự động bị từ chối do tổng số lượng sở hữu sau khi mua sẽ vượt quá giới hạn của server!\n"
-                        f"• Giới hạn sở hữu `{symbol}`: `{limit_val:,}` cổ\n"
-                        f"• Bạn đang có: `{current_shares:.2f}` cổ\n"
-                        f"• Số lượng mua dự kiến: `{shares:.2f}` cổ."
-                    )
-                    return
-            except ValueError:
-                pass
+        liquidity = LIQUIDITY_VOLUME.get(symbol, 10000.0)
+        max_h = get_symbol_max_holding(self.economy, symbol)
+        max_order = get_symbol_max_order_shares(symbol)
 
-        # Lock VND
-        self.economy.add_money(user_id, -total_cost)
-        order_id = self.economy.add_limit_order(user_id, symbol, "BUY", target_price, shares)
+        try:
+            receipt = self.economy.execute_place_limit_order(
+                user_id=user_id,
+                symbol=symbol,
+                order_type="BUY",
+                target_price=target_price,
+                shares=shares,
+                liquidity=liquidity,
+                max_holding=max_h,
+                max_order_shares=max_order
+            )
+        except ValueError as val_err:
+            err_str = str(val_err)
+            if err_str.startswith("insufficient_funds"):
+                parts = err_str.split(":")
+                lock_cost = int(parts[1]) if len(parts) > 1 else 0
+                curr_money = int(parts[2]) if len(parts) > 2 else 0
+                await ctx.send(
+                    f"❌ Bạn không đủ VND để đặt lệnh mua này!\n"
+                    f"• Cần tạm khóa: `{lock_cost:,} VND` (bao gồm 2% phí mua & trượt giá ước tính ở target price).\n"
+                    f"• Bạn chỉ có: `{curr_money:,} VND`."
+                )
+                return
+            elif err_str.startswith("max_holding_exceeded"):
+                parts = err_str.split(":")
+                limit_val = float(parts[1]) if len(parts) > 1 else max_h
+                curr_sh = float(parts[2]) if len(parts) > 2 else 0.0
+                await ctx.send(
+                    f"❌ **Lỗi:** Lệnh mua tự động bị từ chối do tổng số lượng sở hữu sau khi mua sẽ vượt quá giới hạn thị trường!\n"
+                    f"• Giới hạn sở hữu `{symbol}`: `{limit_val:,}` cổ\n"
+                    f"• Bạn đang có: `{curr_sh:.2f}` cổ\n"
+                    f"• Số lượng mua dự kiến: `{shares:.2f}` cổ."
+                )
+                return
+            elif err_str.startswith("max_order_exceeded"):
+                await ctx.send(
+                    f"❌ **Lỗi:** Khối lượng đặt mua vượt quá giới hạn tối đa mỗi lệnh!\n"
+                    f"• Khối lượng tối đa 1 lệnh `{symbol}` (20% thanh khoản): `{max_order:,.2f}` cổ."
+                )
+                return
+            else:
+                await ctx.send("❌ Tham số đặt lệnh mua không hợp lệ.")
+                return
+
+        order_id = receipt["order_id"]
+        total_cost = receipt["locked_funds"]
+        slippage_pct = receipt["slippage_pct"]
+
         log_wallet_change(
             logger,
             event="invest_limit_buy_place",
@@ -3794,8 +3798,6 @@ class Simulator(commands.Cog):
             ctx=ctx
         )
         
-        liquidity = LIQUIDITY_VOLUME.get(symbol, 10000.0)
-        slippage_pct = (shares / liquidity) * 0.01
         embed = make_embed(
             title="🟢 ĐẶT LỆNH MUA TỰ ĐỘNG THÀNH CÔNG 🟢",
             description=(
@@ -3825,16 +3827,37 @@ class Simulator(commands.Cog):
             return
 
         user_id = ctx.author.id
-        portfolio = dict(self.economy.get_portfolio(user_id))
-        curr_shares = portfolio.get(symbol, 0.0)
-        
-        if curr_shares < shares:
-            await ctx.send(f"❌ Bạn không đủ cổ phiếu để đặt lệnh bán! Bạn chỉ có `{curr_shares:.2f} {symbol}`.")
-            return
-            
-        # Lock shares
-        self.economy.set_portfolio_shares(user_id, symbol, curr_shares - shares)
-        order_id = self.economy.add_limit_order(user_id, symbol, "SELL", target_price, shares)
+        liquidity = LIQUIDITY_VOLUME.get(symbol, 10000.0)
+        max_order = get_symbol_max_order_shares(symbol)
+
+        try:
+            receipt = self.economy.execute_place_limit_order(
+                user_id=user_id,
+                symbol=symbol,
+                order_type="SELL",
+                target_price=target_price,
+                shares=shares,
+                liquidity=liquidity,
+                max_order_shares=max_order
+            )
+        except ValueError as val_err:
+            err_str = str(val_err)
+            if err_str.startswith("insufficient_shares"):
+                parts = err_str.split(":")
+                curr_sh = float(parts[1]) if len(parts) > 1 else 0.0
+                await ctx.send(f"❌ Bạn không đủ cổ phiếu để đặt lệnh bán! Bạn chỉ có `{curr_sh:.2f} {symbol}`.")
+                return
+            elif err_str.startswith("max_order_exceeded"):
+                await ctx.send(
+                    f"❌ **Lỗi:** Khối lượng đặt bán vượt quá giới hạn tối đa mỗi lệnh!\n"
+                    f"• Khối lượng tối đa 1 lệnh `{symbol}` (20% thanh khoản): `{max_order:,.2f}` cổ."
+                )
+                return
+            else:
+                await ctx.send("❌ Tham số đặt lệnh bán không hợp lệ.")
+                return
+
+        order_id = receipt["order_id"]
         log_wallet_change(
             logger,
             event="invest_limit_sell_place",
@@ -3898,53 +3921,35 @@ class Simulator(commands.Cog):
     @invest_limit.command(name="cancel", aliases=["huy"])
     async def invest_limit_cancel(self, ctx: commands.Context, order_id: int):
         user_id = ctx.author.id
-        order = self.economy.get_limit_order(order_id)
-        
-        if not order:
-            await ctx.send(f"❌ Lệnh tự động **#{order_id}** không tồn tại.")
+        try:
+            res = self.economy.execute_cancel_limit_order(
+                order_id=order_id,
+                user_id=user_id,
+                liquidity=LIQUIDITY_VOLUME.get("CASINO", 10000.0)
+            )
+        except ValueError as err:
+            err_str = str(err)
+            if err_str == "order_not_found":
+                await ctx.send(f"❌ Lệnh tự động **#{order_id}** không tồn tại.")
+            elif err_str == "not_order_owner":
+                await ctx.send("❌ Bạn không thể hủy lệnh của người khác!")
+            else:
+                await ctx.send(f"❌ Không thể hủy lệnh #{order_id}.")
             return
             
-        if order[1] != user_id:
-            await ctx.send("❌ Bạn không thể hủy lệnh của người khác!")
-            return
-            
-        _, _, symbol, order_type, target_price, shares, _ = order
-        
-        # Refund locked asset
-        if order_type == "BUY":
-            refund_money = get_limit_buy_cost(shares, target_price, symbol)
-            self.economy.add_money(user_id, refund_money)
-            refund_msg = f"Đã hoàn lại `+{refund_money:,} VND` vào ví của bạn."
-            log_wallet_change(
-                logger,
-                event="invest_limit_buy_cancel",
-                user_id=user_id,
-                money_delta=refund_money,
-                symbol=symbol,
-                shares=shares,
-                order_id=order_id,
-                ctx=ctx
-            )
-        else: # SELL
-            portfolio = dict(self.economy.get_portfolio(user_id))
-            curr_shares = portfolio.get(symbol, 0.0)
-            self.economy.set_portfolio_shares(user_id, symbol, curr_shares + shares)
-            refund_msg = f"Đã trả lại `+{shares:.2f} {symbol}` vào kho của bạn."
-            log_wallet_change(
-                logger,
-                event="invest_limit_sell_cancel",
-                user_id=user_id,
-                symbol=symbol,
-                shares=shares,
-                order_id=order_id,
-                ctx=ctx
-            )
-            
-        self.economy.remove_limit_order(order_id)
+        log_wallet_change(
+            logger,
+            event="invest_limit_cancel",
+            user_id=user_id,
+            symbol=res["symbol"],
+            shares=res["shares"],
+            order_id=order_id,
+            ctx=ctx
+        )
         
         embed = make_embed(
             title="❌ HỦY LỆNH TỰ ĐỘNG THÀNH CÔNG ❌",
-            description=f"Đã hủy thành công lệnh giới hạn **#{order_id}**!\n{refund_msg}",
+            description=f"Đã hủy thành công lệnh giới hạn **#{order_id}** ({res['order_type']} {res['symbol']})!\nĐã hoàn trả: `{res['refund_desc']}`",
             color=discord.Color.red()
         )
         await ctx.send(embed=embed)
@@ -3955,13 +3960,13 @@ class Simulator(commands.Cog):
             prices = self.economy.get_stock_prices()
             desc = ""
             for sym, _, _, _ in prices:
-                limit_str = self.economy.get_setting(f"max_holding_{sym}")
-                limit_val = f"`{float(limit_str):,}` cổ" if limit_str else "**Vô hạn**"
-                desc += f"• **{sym}**: {limit_val}\n"
+                limit_val = get_symbol_max_holding(self.economy, sym)
+                max_order = get_symbol_max_order_shares(sym)
+                desc += f"• **{sym}**: Tối đa `{limit_val:,.2f}` cổ | Max/lệnh: `{max_order:,.2f}` cổ\n"
                 
             embed = make_embed(
-                title="⚙️ GIỚI HẠN SỞ HỮU TỐI ĐA CỦA CÁC MÃ ⚙️",
-                description=f"Dưới đây là giới hạn số lượng nắm giữ tối đa hiện tại của từng mã đầu tư:\n\n{desc}\n💡 *Quản trị viên có thể thay đổi bằng lệnh: `i?invest max <ticker> <số lượng>`*",
+                title="⚙️ GIỚI HẠN SỞ HỮU & GIAO DỊCH CỦA THỊ TRƯỜNG ⚙️",
+                description=f"Dưới đây là giới hạn số lượng nắm giữ tối đa và khối lượng tối đa mỗi lệnh hiện tại:\n\n{desc}\n💡 *Quản trị viên có thể thay đổi giới hạn sở hữu bằng lệnh: `i?invest max <ticker> <số lượng>`*",
                 color=discord.Color.blue()
             )
             await ctx.send(embed=embed)
@@ -3981,16 +3986,18 @@ class Simulator(commands.Cog):
             await ctx.send("❌ **Lỗi:** Chỉ có quản trị viên hoặc chủ sở hữu bot mới có quyền cấu hình giới hạn này.")
             return
             
-        if amount is None or amount.lower() in ["reset", "none", "unlimited", "vô hạn"]:
+        if amount is None or amount.lower() in ["reset", "none", "default"]:
             self.economy.set_setting(f"max_holding_{symbol}", "")
-            await ctx.send(f"✅ Đã đặt lại giới hạn sở hữu mã `{symbol}` thành **Vô hạn**.")
+            def_val = DEFAULT_MAX_HOLDINGS.get(symbol, 10000.0)
+            await ctx.send(f"✅ Đã đặt lại giới hạn sở hữu mã `{symbol}` về mặc định (`{def_val:,.2f}` cổ).")
             return
             
         try:
             val = float(amount)
             if val <= 0:
                 self.economy.set_setting(f"max_holding_{symbol}", "")
-                await ctx.send(f"✅ Đã đặt lại giới hạn sở hữu mã `{symbol}` thành **Vô hạn**.")
+                def_val = DEFAULT_MAX_HOLDINGS.get(symbol, 10000.0)
+                await ctx.send(f"✅ Đã đặt lại giới hạn sở hữu mã `{symbol}` về mặc định (`{def_val:,.2f}` cổ).")
                 return
         except ValueError:
             await ctx.send("❌ Số lượng giới hạn không hợp lệ. Vui lòng nhập số dương hoặc `reset`.")
@@ -4003,7 +4010,7 @@ class Simulator(commands.Cog):
             description=(
                 f"Đã cập nhật giới hạn sở hữu tối đa thành công!\n\n"
                 f"📈 **Mã:** `{symbol}`\n"
-                f"🔒 **Giới hạn tối đa mỗi người:** `{val:,}` cổ phiếu\n\n"
+                f"🔒 **Giới hạn tối đa mỗi người:** `{val:,.2f}` cổ phiếu\n\n"
                 f"💡 *Người chơi sẽ không thể mua thêm nếu số lượng nắm giữ hiện tại + số lượng mua vượt quá mức này.*"
             ),
             color=discord.Color.blue()
