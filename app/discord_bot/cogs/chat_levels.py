@@ -120,7 +120,7 @@ class ChatLevels(commands.Cog, name="ChatLevels"):
             bar = "█" * filled + "░" * (10 - filled)
             progress = f"`{bar}` `{xp:,}/{need:,} XP`"
 
-            embed = make_embed(
+        embed = make_embed(
             title="📊 CẤP ĐỘ THÀNH VIÊN",
             description=(
                 f"👤 **Thành viên:** {member.mention}\n"
