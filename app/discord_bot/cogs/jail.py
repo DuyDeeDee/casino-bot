@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import typing
 import discord
 from discord.ext import commands
 
@@ -15,6 +16,13 @@ class Jail(commands.Cog):
 
     async def cog_unload(self) -> None:
         self.bot.remove_check(self.global_jail_command_check)
+
+    async def _reply_or_send(self, ctx: commands.Context, content: str = None, **kwargs) -> discord.Message:
+        """Gửi tin nhắn phản hồi dưới dạng reply đến lệnh của người dùng, fallback về send nếu lỗi."""
+        try:
+            return await ctx.reply(content, **kwargs)
+        except (discord.HTTPException, discord.InvalidArgument):
+            return await ctx.send(content, **kwargs)
 
     async def global_jail_command_check(self, ctx: commands.Context) -> bool:
         """Global check: Chặn tù nhân sử dụng các lệnh bot khác ngoài lau dọn."""
@@ -92,6 +100,7 @@ class Jail(commands.Cog):
         brief="Cài đặt Kênh Nhà Tù cho server.",
         usage="setkenhtu <#kênh>",
     )
+    @commands.guild_only()
     @commands.has_permissions(administrator=True)
     async def setkenhtu(self, ctx: commands.Context, channel: discord.TextChannel) -> None:
         """Cài đặt Kênh Nhà Tù cho server."""
@@ -107,7 +116,7 @@ class Jail(commands.Cog):
                 except Exception as e:
                     logger.warning(f"Could not update channel permissions for jail role: {e}")
 
-        await ctx.send(f"✅ **Thành công!** Đã thiết lập Kênh Nhà Tù tại: {channel.mention}")
+        await self._reply_or_send(ctx, f"✅ **Thành công!** Đã thiết lập Kênh Nhà Tù tại: {channel.mention}")
 
     @commands.command(
         name="setvaitrotu",
@@ -115,11 +124,12 @@ class Jail(commands.Cog):
         brief="Cài đặt Role Tù Nhân cho server (dùng để Mute tù nhân).",
         usage="setvaitrotu <@Role>",
     )
+    @commands.guild_only()
     @commands.has_permissions(administrator=True)
     async def setvaitrotu(self, ctx: commands.Context, role: discord.Role) -> None:
         """Cài đặt Role Tù Nhân cho server (dùng để Mute tù nhân)."""
         self.bot.economy.set_jail_role(ctx.guild.id, role.id)
-        await ctx.send(f"✅ **Thành công!** Đã thiết lập Role Tù Nhân tại: {role.mention}")
+        await self._reply_or_send(ctx, f"✅ **Thành công!** Đã thiết lập Role Tù Nhân tại: {role.mention}")
 
     @commands.command(
         name="phattu",
@@ -127,22 +137,44 @@ class Jail(commands.Cog):
         brief="Tống giam người chơi với số lần lắc đít chỉ định.",
         usage="phattu <@user> [số_lần] [lý_do]",
     )
+    @commands.guild_only()
     @commands.has_permissions(manage_messages=True)
     async def phattu(
         self,
         ctx: commands.Context,
         target: discord.Member,
-        count: int = 100,
+        count: typing.Optional[int] = 100,
         *,
         reason: str = "Không có lý do",
     ) -> None:
         """Tống giam người chơi với số lần lắc đít chỉ định."""
-        if target.bot:
-            await ctx.send("❌ Không thể tống giam bot!")
+        if count is None or count <= 0:
+            count = 100
+
+        # Kiểm tra tự phạt chính mình
+        if target.id == ctx.author.id:
+            await self._reply_or_send(ctx, "❌ **Lỗi phân quyền:** Bạn không thể tự phạt chính mình.")
             return
 
-        if count <= 0:
-            await ctx.send("❌ Số lần lắc đít phải lớn hơn 0!")
+        # Kiểm tra cấp bậc Bot (Người này có cấp bậc cao hơn hoặc bằng Bot, hoặc là Server Owner)
+        if target.id == ctx.guild.owner_id or target.top_role >= ctx.guild.me.top_role:
+            await self._reply_or_send(
+                ctx,
+                f"<:zh_deo:1545378962992009217>",
+            )
+            return
+
+        # Không thể phạt bot khác
+        if target.bot:
+            await self._reply_or_send(ctx, "❌ Không thể tống giam bot!")
+            return
+
+        # Kiểm tra cấp bậc người thực hiện lệnh (Người dùng có cấp bậc cao hơn hoặc bằng người thực hiện)
+        if ctx.author.id != ctx.guild.owner_id and target.top_role >= ctx.author.top_role:
+            await self._reply_or_send(
+                ctx,
+                f"<:zh_deo:1545378962992009217>",
+            )
             return
 
         # Lưu vào Database
@@ -162,10 +194,15 @@ class Jail(commands.Cog):
             jail_role = discord.utils.get(ctx.guild.roles, name="Tù Nhân") or discord.utils.get(ctx.guild.roles, name="Tu Nhan")
 
         if jail_role:
-            try:
-                await target.add_roles(jail_role, reason=f"Phạt tù bởi {ctx.author}: {reason}")
-            except Exception as e:
-                logger.warning(f"Could not add jail role to {target}: {e}")
+            if jail_role >= ctx.guild.me.top_role:
+                logger.warning(f"Role tù nhân ({jail_role.name}) có cấp bậc cao hơn hoặc bằng Bot.")
+            else:
+                try:
+                    await target.add_roles(jail_role, reason=f"Phạt tù bởi {ctx.author}: {reason}")
+                except discord.Forbidden:
+                    logger.warning(f"Bot thiếu quyền thêm role tù nhân cho {target}")
+                except Exception as e:
+                    logger.warning(f"Could not add jail role to {target}: {e}")
 
         prefix = ctx.prefix
         if isinstance(prefix, list):
@@ -185,11 +222,11 @@ class Jail(commands.Cog):
         )
 
         try:
-            await ctx.send(sentence_text)
+            await self._reply_or_send(ctx, sentence_text)
         except Exception as e:
             logger.warning(f"Could not send sentence_text with custom emojis: {e}")
             try:
-                await ctx.send(sentence_text_fallback)
+                await self._reply_or_send(ctx, sentence_text_fallback)
             except Exception as e2:
                 logger.error(f"Failed to send fallback sentence_text: {e2}")
 
@@ -239,19 +276,20 @@ class Jail(commands.Cog):
         brief="Lắc đít cải tạo để giảm án phạt tù.",
         usage="lacdit",
     )
+    @commands.guild_only()
     @commands.cooldown(1, 2, commands.BucketType.user)
     async def lacdit(self, ctx: commands.Context) -> None:
         """Lắc đít cải tạo để giảm án tù."""
         guild_id = ctx.guild.id if ctx.guild else 0
         jail_info = self.bot.economy.get_jail_info(ctx.author.id, guild_id)
         if not jail_info:
-            await ctx.send("❌ Bạn không ở trong tù!")
+            await self._reply_or_send(ctx, "❌ Bạn không ở trong tù!")
             return
 
         # Kiểm tra nếu đã cài kênh nhà tù mà gõ sai kênh
         jail_channel_id = self.bot.economy.get_jail_channel(guild_id)
         if jail_channel_id and ctx.channel.id != jail_channel_id:
-            await ctx.send(f"❌ Bạn chỉ có thể lắc đít cải tạo trong kênh <#{jail_channel_id}>!")
+            await self._reply_or_send(ctx, f"❌ Bạn chỉ có thể lắc đít cải tạo trong kênh <#{jail_channel_id}>!")
             return
 
         # Giảm số lần lau dọn / lắc đít
@@ -270,12 +308,14 @@ class Jail(commands.Cog):
                 except Exception as e:
                     logger.warning(f"Could not remove jail role: {e}")
 
-            await ctx.send(
-                f"🎉 **MÃ HẠN TÙ!** {ctx.author.mention} đã hoàn thành tất cả `{jail_info['total_clean_count']}` lần lắc đít và chính thức được **XUẤT TÙ**!"
+            await self._reply_or_send(
+                ctx,
+                f"🎉 **MÃ HẠN TÙ!** {ctx.author.mention} đã hoàn thành tất cả `{jail_info['total_clean_count']}` lần lắc đít và chính thức được **XUẤT TÙ**!",
             )
         else:
-            await ctx.send(
-                f"<a:lacdit1:1535528561685823498> {ctx.author.mention} vừa lắc đít 1 lượt! Còn lại **{remaining}/{jail_info['total_clean_count']}** lần."
+            await self._reply_or_send(
+                ctx,
+                f"<a:lacdit1:1535528561685823498> {ctx.author.mention} vừa lắc đít 1 lượt! Còn lại **{remaining}/{jail_info['total_clean_count']}** lần.",
             )
 
     @commands.command(
@@ -284,12 +324,20 @@ class Jail(commands.Cog):
         brief="Tha bổng / Ân xá cho tù nhân trước thời hạn.",
         usage="anxatu <@user>",
     )
+    @commands.guild_only()
     @commands.has_permissions(manage_messages=True)
     async def anxatu(self, ctx: commands.Context, target: discord.Member) -> None:
         """Tha bổng / Ân xá cho tù nhân trước thời hạn."""
         guild_id = ctx.guild.id if ctx.guild else 0
         if not self.bot.economy.is_in_jail(target.id, guild_id):
-            await ctx.send(f"❌ {target.mention} hiện không ở trong tù!")
+            await self._reply_or_send(ctx, f"❌ {target.mention} hiện không ở trong tù!")
+            return
+
+        if ctx.author.id != ctx.guild.owner_id and target.top_role >= ctx.author.top_role and target.id != ctx.author.id:
+            await self._reply_or_send(
+                ctx,
+                f"❌ **Lỗi phân quyền:** Bạn không thể ân xá cho **{target.name}** vì người này có cấp bậc cao hơn (hoặc bằng) bạn.",
+            )
             return
 
         self.bot.economy.remove_from_jail(target.id, guild_id)
@@ -306,7 +354,7 @@ class Jail(commands.Cog):
             except Exception as e:
                 logger.warning(f"Could not remove jail role: {e}")
 
-        await ctx.send(f"🔓 **Ân xá thành công!** {target.mention} đã được tha bổng và giải phóng trước thời hạn.")
+        await self._reply_or_send(ctx, f"🔓 **Ân xá thành công!** {target.mention} đã được tha bổng và giải phóng trước thời hạn.")
 
     @commands.command(
         name="danhsachtu",
@@ -314,11 +362,12 @@ class Jail(commands.Cog):
         brief="Xem danh sách các tù nhân đang thụ án.",
         usage="danhsachtu",
     )
+    @commands.guild_only()
     async def danhsachtu(self, ctx: commands.Context) -> None:
         """Xem danh sách các tù nhân đang thụ án."""
         prisoners = self.bot.economy.get_all_prisoners(ctx.guild.id)
         if not prisoners:
-            await ctx.send("🕊️ Hiện tại không có tù nhân nào trong Server!")
+            await self._reply_or_send(ctx, "🕊️ Hiện tại không có tù nhân nào trong Server!")
             return
 
         lines = ["🏛️ **DANH SÁCH TÙ NHÂN ĐANG THỤ ÁN** 🏛️"]
@@ -329,7 +378,7 @@ class Jail(commands.Cog):
                 f"{idx}. {user_str} - Còn lại: `{p['clean_count']}/{p['total_clean_count']}` lần | Lý do: {p['reason']}"
             )
 
-        await ctx.send("\n".join(lines))
+        await self._reply_or_send(ctx, "\n".join(lines))
 
 
 async def setup(bot: commands.Bot) -> None:
