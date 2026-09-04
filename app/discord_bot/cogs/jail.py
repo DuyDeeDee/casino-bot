@@ -329,15 +329,30 @@ class Jail(commands.Cog):
     async def anxatu(self, ctx: commands.Context, target: discord.Member) -> None:
         """Tha bổng / Ân xá cho tù nhân trước thời hạn."""
         guild_id = ctx.guild.id if ctx.guild else 0
-        if not self.bot.economy.is_in_jail(target.id, guild_id):
-            await self._reply_or_send(ctx, f"❌ {target.mention} hiện không ở trong tù!")
+
+        # Kiểm tra tự ân xá chính mình
+        if target.id == ctx.author.id:
+            await self._reply_or_send(ctx, "❌ **Lỗi phân quyền:** Bạn không thể tự ân xá cho chính mình.")
             return
 
-        if ctx.author.id != ctx.guild.owner_id and target.top_role >= ctx.author.top_role and target.id != ctx.author.id:
+        # Kiểm tra cấp bậc Bot (Người này có cấp bậc cao hơn hoặc bằng Bot, hoặc là Server Owner)
+        if target.id == ctx.guild.owner_id or target.top_role >= ctx.guild.me.top_role:
             await self._reply_or_send(
                 ctx,
-                f"❌ **Lỗi phân quyền:** Bạn không thể ân xá cho **{target.name}** vì người này có cấp bậc cao hơn (hoặc bằng) bạn.",
+                f"<:zh_deo:1545378962992009217>",
             )
+            return
+
+        # Kiểm tra cấp bậc người thực hiện lệnh (Người dùng có cấp bậc cao hơn hoặc bằng người thực hiện)
+        if ctx.author.id != ctx.guild.owner_id and target.top_role >= ctx.author.top_role:
+            await self._reply_or_send(
+                ctx,
+                f"<:zh_deo:1545378962992009217>",
+            )
+            return
+
+        if not self.bot.economy.is_in_jail(target.id, guild_id):
+            await self._reply_or_send(ctx, f"❌ {target.mention} hiện không ở trong tù!")
             return
 
         self.bot.economy.remove_from_jail(target.id, guild_id)
