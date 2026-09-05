@@ -1299,7 +1299,7 @@ class Giveaway(commands.Cog, name="Giveaway"):
         if payload.user_id == self.bot.user.id:
             return
 
-        if not payload.emoji.is_custom_emoji() or payload.emoji.id != 1526238405061640272:
+        if not payload.emoji.is_custom_emoji() or payload.emoji.id not in (1544913759297085440, 1526238405061640272):
             return
 
         message_id = payload.message_id
@@ -1403,7 +1403,7 @@ class Giveaway(commands.Cog, name="Giveaway"):
         if payload.user_id == self.bot.user.id:
             return
 
-        if not payload.emoji.is_custom_emoji() or payload.emoji.id != 1526238405061640272:
+        if not payload.emoji.is_custom_emoji() or payload.emoji.id not in (1544913759297085440, 1526238405061640272):
             return
 
         message_id = payload.message_id
@@ -1659,7 +1659,7 @@ class Giveaway(commands.Cog, name="Giveaway"):
 
         try:
             msg = await channel.send(content=ping_header, embed=embed)
-            await msg.add_reaction("<:ghim:1526238405061640272>")
+            await msg.add_reaction("<a:zh_coinzh:1544913759297085440>")
         except discord.Forbidden:
             await ctx.send(f"❌ Bot không có quyền gửi tin nhắn hoặc embed ở kênh {channel.mention}.", delete_after=10)
             return
