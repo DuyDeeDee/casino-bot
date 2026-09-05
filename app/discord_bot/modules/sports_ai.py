@@ -3,6 +3,8 @@ import os
 import random
 from typing import Any
 
+from app.discord_bot.modules.helpers import EMOJI_VND
+
 logger = logging.getLogger(__name__)
 
 # 4 Commentator Personas with unique speech styles
@@ -279,14 +281,14 @@ def generate_ai_post_match_reaction(
 
     if won:
         win_quotes = [
-            f"{name}: *'Đã bảo rồi mà không nghe! Húp trọn `{payout:,} VND` nhẹ nhàng như đẩy xe hàng!'*",
-            f"{name}: *'Phân tích chuẩn chỉ không lệch 1 ly! Thắng lớn `+{payout-stake:,} VND`!'*",
+            f"{name}: *'Đã bảo rồi mà không nghe! Húp trọn `{payout:,}` {EMOJI_VND} nhẹ nhàng như đẩy xe hàng!'*",
+            f"{name}: *'Phân tích chuẩn chỉ không lệch 1 ly! Thắng lớn `+{payout-stake:,}` {EMOJI_VND}!'*",
             f"{name}: *'Gáy lên anh em ơi! Cửa `{result}` uy tín số 1!'*",
         ]
         return random.choice(win_quotes)
     else:
         lose_quotes = [
-            f"{name}: *'Trọng tài bắt thiên vị quá rõ! Quả đấy mà không vào thì chịu rồi... Lỗ `{stake:,} VND`!'*",
+            f"{name}: *'Trọng tài bắt thiên vị quá rõ! Quả đấy mà không vào thì chịu rồi... Lỗ `{stake:,}` {EMOJI_VND}!'*",
             f"{name}: *'Bóng đá đúng là môn thể thao nghiệt ngã... Thua keo này ta bày keo khác!'*",
             f"{name}: *'Hàng thủ đá như mơ ngủ, hỏng hết kế hoạch làm giàu của tôi!'*",
         ]

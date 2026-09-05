@@ -5,8 +5,7 @@ import typing
 import discord
 from discord.ext import commands
 
-from app.config import config
-from app.discord_bot.modules.helpers import make_embed
+from app.discord_bot.modules.helpers import EMOJI_GOLD, EMOJI_VND, make_embed
 from app.discord_bot.modules.member_levels import (
     CHAT_XP_COOLDOWN_SECONDS,
     CHAT_XP_MAX,
@@ -25,7 +24,7 @@ from app.discord_bot.modules.member_levels import (
 
 logger = logging.getLogger(__name__)
 
-CURRENCY_UNIT = {"money": "VND", "gold": "thỏi vàng"}
+CURRENCY_UNIT = {"money": EMOJI_VND, "gold": EMOJI_GOLD}
 
 
 def _parse_limit_val(val_str: str):
@@ -128,12 +127,12 @@ class ChatLevels(commands.Cog, name="ChatLevels"):
                 f"👤 **Thành viên:** {member.mention}\n"
                 f"⭐ **Cấp độ:** `{level}/{MAX_MEMBER_LEVEL}`\n"
                 f"📈 **Tiến độ:** {progress}\n\n"
-                f"**💸 Hạn mức chuyển tiền VND (mỗi lần):** `{info['transfer_cap']:,}` VND\n"
-                f"**📤 Quỹ cho hôm nay:** `{info['sent']:,}/{info['give_cap']:,}` VND — còn `{info['sent_remaining']:,}`\n"
-                f"**📥 Quỹ nhận hôm nay:** `{info['received']:,}/{info['receive_cap']:,}` VND — còn `{info['received_remaining']:,}`\n\n"
-                f"**🥇 Hạn mức vàng (mỗi lần):** `{info_gold['transfer_cap']:,}` thỏi vàng\n"
-                f"**📤 Quỹ cho vàng hôm nay:** `{info_gold['sent']:,}/{info_gold['give_cap']:,}` thỏi — còn `{info_gold['sent_remaining']:,}`\n"
-                f"**📥 Quỹ nhận vàng hôm nay:** `{info_gold['received']:,}/{info_gold['receive_cap']:,}` thỏi — còn `{info_gold['received_remaining']:,}`\n\n"
+                f"**💸 Hạn mức chuyển tiền VND (mỗi lần):** `{info['transfer_cap']:,}` {EMOJI_VND}\n"
+                f"**📤 Quỹ cho hôm nay:** `{info['sent']:,}/{info['give_cap']:,}` {EMOJI_VND} — còn `{info['sent_remaining']:,}` {EMOJI_VND}\n"
+                f"**📥 Quỹ nhận hôm nay:** `{info['received']:,}/{info['receive_cap']:,}` {EMOJI_VND} — còn `{info['received_remaining']:,}` {EMOJI_VND}\n\n"
+                f"**🥇 Hạn mức vàng (mỗi lần):** `{info_gold['transfer_cap']:,}` {EMOJI_GOLD}\n"
+                f"**📤 Quỹ cho vàng hôm nay:** `{info_gold['sent']:,}/{info_gold['give_cap']:,}` {EMOJI_GOLD} — còn `{info_gold['sent_remaining']:,}` {EMOJI_GOLD}\n"
+                f"**📥 Quỹ nhận vàng hôm nay:** `{info_gold['received']:,}/{info_gold['receive_cap']:,}` {EMOJI_GOLD} — còn `{info_gold['received_remaining']:,}` {EMOJI_GOLD}\n\n"
                 f"💡 *Chat nhiều để tăng cấp — càng lên cấp hạn mức cho/nhận càng lớn!*"
             ),
             color=discord.Color.blurple(),
@@ -173,7 +172,7 @@ class ChatLevels(commands.Cog, name="ChatLevels"):
             return
 
         is_gold = "gold" in kind
-        unit = "thỏi vàng" if is_gold else "VND"
+        unit = EMOJI_GOLD if is_gold else EMOJI_VND
         label = f"mỗi lần ({unit})" if "transfer" in kind else f"cho mỗi ngày ({unit})"
         if level is None:
             cmd = "setgivecap" if "transfer" in kind else "setgivedaily"
@@ -229,8 +228,8 @@ class ChatLevels(commands.Cog, name="ChatLevels"):
             marked = " ⚙️" if (str(start) in overrides.get("transfer", {}) or str(start) in overrides.get("daily", {})) else ""
             rows.append(
                 f"• Cấp **{start}–{end}**{marked}:\n"
-                f"  💵 **VND:** `{tcap:,}/lần` — Cho `{gcap:,}/ngày` — Nhận `{rcap:,}/ngày`\n"
-                f"  🥇 **Vàng:** `{tcap_gold:,} thỏi/lần` — Cho `{gcap_gold:,}/ngày` — Nhận `{rcap_gold:,}/ngày`"
+                f"  💵 **VND:** `{tcap:,}/lần` — Cho `{gcap:,}/ngày` — Nhận `{rcap:,}/ngày` {EMOJI_VND}\n"
+                f"  🥇 **Vàng:** `{tcap_gold:,}/lần` — Cho `{gcap_gold:,}/ngày` — Nhận `{rcap_gold:,}/ngày` {EMOJI_GOLD}"
             )
 
         embed = make_embed(
@@ -238,7 +237,7 @@ class ChatLevels(commands.Cog, name="ChatLevels"):
             description=(
                 f"Mỗi lần chuyển tối đa = **min**(hạn mức người cho, hạn mức người nhận).\n"
                 f"Mỗi ngày: tổng **cho** ≤ quỹ cho, tổng **nhận** ≤ quỹ nhận (= 1,5× quỹ cho) của từng bên.\n"
-                f"*(Hạn mức vàng được tự động quy đổi theo giá vàng hiện tại: `{gold_price:,} VND/thỏi`)*\n\n"
+                f"*(Hạn mức vàng được tự động quy đổi theo giá vàng hiện tại: `{gold_price:,}` {EMOJI_VND}/{EMOJI_GOLD})*\n\n"
                 + "\n\n".join(rows)
                 + "\n\n💡 *Chat để tăng cấp. ⚙️ = cấp đầu khung bị owner ghi đè thủ công.*"
             ),
@@ -331,12 +330,12 @@ class ChatLevels(commands.Cog, name="ChatLevels"):
             description=(
                 f"✅ Đã đặt cấp độ thành công cho **{mention_str}**!\n\n"
                 f"⭐ **Cấp độ mới:** `{level}/{MAX_MEMBER_LEVEL}` (XP: `{xp:,}`)\n\n"
-                f"💸 **Hạn mức chuyển VND (mỗi lần):** `{info['transfer_cap']:,} VND`\n"
-                f"📤 **Quỹ cho VND hôm nay:** `{info['give_cap']:,} VND`\n"
-                f"📥 **Quỹ nhận VND hôm nay:** `{info['receive_cap']:,} VND`\n\n"
-                f"🥇 **Hạn mức chuyển Vàng (mỗi lần):** `{info_gold['transfer_cap']:,} thỏi vàng`\n"
-                f"📤 **Quỹ cho Vàng hôm nay:** `{info_gold['give_cap']:,} thỏi`\n"
-                f"📥 **Quỹ nhận Vàng hôm nay:** `{info_gold['receive_cap']:,} thỏi`"
+                f"💸 **Hạn mức chuyển VND (mỗi lần):** `{info['transfer_cap']:,}` {EMOJI_VND}\n"
+                f"📤 **Quỹ cho VND hôm nay:** `{info['give_cap']:,}` {EMOJI_VND}\n"
+                f"📥 **Quỹ nhận VND hôm nay:** `{info['receive_cap']:,}` {EMOJI_VND}\n\n"
+                f"🥇 **Hạn mức chuyển Vàng (mỗi lần):** `{info_gold['transfer_cap']:,}` {EMOJI_GOLD}\n"
+                f"📤 **Quỹ cho Vàng hôm nay:** `{info_gold['give_cap']:,}` {EMOJI_GOLD}\n"
+                f"📥 **Quỹ nhận Vàng hôm nay:** `{info_gold['receive_cap']:,}` {EMOJI_GOLD}"
             ),
             color=discord.Color.green(),
         )

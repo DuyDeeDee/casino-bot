@@ -24,7 +24,7 @@ from uuid import uuid4
 
 import discord
 
-from app.discord_bot.modules.helpers import make_embed
+from app.discord_bot.modules.helpers import EMOJI_GOLD, EMOJI_VND, make_embed
 from app.discord_bot.modules.wallet_logging import log_wallet_change
 
 logger = logging.getLogger(__name__)
@@ -480,10 +480,10 @@ class DungeonCrawlView(discord.ui.View):
                 room=room_no,
                 gold=gold,
             )
-            cast_note = f" (tự động đúc `{int_gold}` thỏi vào két)" if int_gold > 0 else ""
-            self.path_log.append(f"`P{room_no}` {door_name} → ✨ Vàng +{gold:.2f}")
+            cast_note = f" (tự động đúc `{int_gold}` {EMOJI_GOLD} vào két)" if int_gold > 0 else ""
+            self.path_log.append(f"`P{room_no}` {door_name} → ✨ +{gold:.2f} {EMOJI_GOLD}")
             return (
-                f"✨ **{door_name}:** Trong góc phòng có mạch vàng nhỏ `+{gold:.2f} Vàng`{cast_note}! "
+                f"✨ **{door_name}:** Trong góc phòng có mạch vàng nhỏ `+{gold:.2f}` {EMOJI_GOLD}{cast_note}! "
                 f"(+1 điểm sạch) *Tiếp tục đi phòng sau...*"
             )
 
@@ -497,9 +497,9 @@ class DungeonCrawlView(discord.ui.View):
             ctx=self.ctx,
             room=room_no,
         )
-        self.path_log.append(f"`P{room_no}` {door_name} → 💰 +{vnd:,} VND")
+        self.path_log.append(f"`P{room_no}` {door_name} → 💰 +{vnd:,} {EMOJI_VND}")
         return (
-            f"💰 **{door_name}:** Rương phụ chứa `+{vnd:,} VND`! "
+            f"💰 **{door_name}:** Rương phụ chứa `+{vnd:,}` {EMOJI_VND}! "
             f"(+1 điểm sạch) *Tiếp tục đi phòng sau...*"
         )
 
@@ -542,7 +542,7 @@ class DungeonCrawlView(discord.ui.View):
             if correct:
                 result_line = (
                     f"🔓 **Giải mã thành công!** Cánh cửa hé mở, bạn còn lục được kho báu phụ "
-                    f"`+{self.riddle_bonus:,} VND`! *Tiếp tục đi phòng sau...*"
+                    f"`+{self.riddle_bonus:,}` {EMOJI_VND}! *Tiếp tục đi phòng sau...*"
                 )
             else:
                 result_line = (
@@ -617,7 +617,7 @@ class DungeonCrawlView(discord.ui.View):
 
         bonus_lines = []
         if self.riddle_bonus > 0:
-            bonus_lines.append(f"🔓 Giải mã đúng: `+{self.riddle_bonus:,} VND`")
+            bonus_lines.append(f"🔓 Giải mã đúng: `+{self.riddle_bonus:,}` {EMOJI_VND}")
         if self.score >= DUNGEON_ROOMS:
             p0, p1 = PERFECT_BONUS_VND.get(self.map_type, PERFECT_BONUS_VND["normal"])
             perfect_bonus = random.randint(p0, p1)
@@ -630,7 +630,7 @@ class DungeonCrawlView(discord.ui.View):
                 ctx=self.ctx,
                 score=self.score,
             )
-            bonus_lines.append(f"⭐ Hoàn hảo {self.score}/{DUNGEON_ROOMS}: `+{perfect_bonus:,} VND`")
+            bonus_lines.append(f"⭐ Hoàn hảo {self.score}/{DUNGEON_ROOMS}: `+{perfect_bonus:,}` {EMOJI_VND}")
 
         path_str = "\n".join(self.path_log) if self.path_log else "*Không đi phòng nào...*"
         desc = (
@@ -647,7 +647,7 @@ class DungeonCrawlView(discord.ui.View):
             desc += (
                 f"🏺 **Cổ vật nhận được:** {treasure['name']} (ID: `{chosen_id}`)\n"
                 f"✨ **Độ hiếm:** `{treasure['rarity']}`\n"
-                f"💰 **Giá trị:** `{treasure['value']:,} VND`\n\n"
+                f"💰 **Giá trị:** `{treasure['value']:,}` {EMOJI_VND}\n\n"
                 f"💡 *Dùng `i?sellitem {chosen_id}` để bán cho viện bảo tàng, hoặc giữ lại sưu tầm & trưng bày.*"
             )
         else:
@@ -804,7 +804,7 @@ class WorkRushView(discord.ui.View):
             if bonus > 0:
                 result = (
                     f"\n\n🎉 **CA LÀM HIỆU SUẤT CAO!** Bạn bốc hàng trúng nhịp, nhận thêm "
-                    f"**`+{bonus:,} VND`** tiền thưởng gánh hàng!"
+                    f"**`+{bonus:,}` {EMOJI_VND}** tiền thưởng gánh hàng!"
                 )
             else:
                 result = "\n\n🎉 **CA LÀM HIỆU SUẤT CAO!** (Không tính được thưởng, hẹn ca sau!)"

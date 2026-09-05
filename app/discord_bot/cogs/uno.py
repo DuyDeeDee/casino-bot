@@ -18,7 +18,7 @@ from discord.ext import commands
 from app.config import config
 from app.discord_bot.modules.betting import validate_money_bet
 from app.discord_bot.modules.economy import Economy
-from app.discord_bot.modules.helpers import make_embed
+from app.discord_bot.modules.helpers import EMOJI_VND, make_embed
 from app.discord_bot.modules.wallet_logging import log_wallet_change
 from app.discord_bot.modules.uno_engine import (
     Color, Value, UnoCard, UnoGame, UnoPlayer,
@@ -55,7 +55,7 @@ class LobbyView(discord.ui.View):
         balance = self.cog.economy.get_entry(user.id)[1]
         if balance < self.game.bet:
             await interaction.response.send_message(
-                f"❌ Bạn không đủ tiền! Cần `{self.game.bet:,} VND`.", ephemeral=True
+                f"❌ Bạn không đủ tiền! Cần `{self.game.bet:,}` {EMOJI_VND}.", ephemeral=True
             )
             return
         added = self.game.add_player(user.id, user.display_name)
@@ -66,7 +66,7 @@ class LobbyView(discord.ui.View):
             return
         self.cog.economy.add_money(user.id, -self.game.bet)
         await interaction.response.send_message(
-            f"✅ Đã tham gia! Đã trừ cọc `{self.game.bet:,} VND`.", ephemeral=True
+            f"✅ Đã tham gia! Đã trừ cọc `{self.game.bet:,}` {EMOJI_VND}.", ephemeral=True
         )
         await self.cog._update_lobby_embed(interaction.message)
 
@@ -702,7 +702,7 @@ class Uno(commands.Cog, name="UNO"):
             await ctx.send("❌ Không có phòng UNO nào đang chờ tham gia ở kênh này!", delete_after=5)
             return
         if self.economy.get_entry(ctx.author.id)[1] < game.bet:
-            await ctx.send(f"❌ Bạn không đủ tiền! Cần `{game.bet:,} VND`.", delete_after=5)
+            await ctx.send(f"❌ Bạn không đủ tiền! Cần `{game.bet:,}` {EMOJI_VND}.", delete_after=5)
             return
         if not game.add_player(ctx.author.id, ctx.author.display_name):
             await ctx.send("❌ Bạn đã ở trong phòng chơi này rồi hoặc phòng đã đầy!", delete_after=5)
@@ -870,7 +870,7 @@ class Uno(commands.Cog, name="UNO"):
             self.economy.add_money(ctx.author.id, game.bet)
             game.remove_player(ctx.author.id)
             await ctx.send(
-                f"🚪 **{ctx.author.display_name}** đã rời phòng. Hoàn lại `{game.bet:,} VND` cọc.",
+                f"🚪 **{ctx.author.display_name}** đã rời phòng. Hoàn lại `{game.bet:,}` {EMOJI_VND} cọc.",
                 delete_after=8,
             )
             if ctx.author.id == game.host_id and game.players:
@@ -906,7 +906,7 @@ class Uno(commands.Cog, name="UNO"):
                 title="🛑 VÁN CHƠI ĐÃ BỊ HỦY BỎ!",
                 description=(
                     f"Ván chơi đã bị dừng bởi <@{ctx.author.id}>.\n"
-                    f"💰 Đã hoàn trả `{game.bet:,} VND` tiền cọc cho: {', '.join(refunded)}"
+                    f"💰 Đã hoàn trả `{game.bet:,}` {EMOJI_VND} tiền cọc cho: {', '.join(refunded)}"
                 ),
                 color=discord.Color.red(),
             )
@@ -1080,7 +1080,7 @@ class Uno(commands.Cog, name="UNO"):
         return make_embed(
             title="🃏 PHÒNG UNO MỚI ĐANG CHỜ!",
             description=(
-                f"💰 **Tiền Cược:** `{game.bet:,} VND / người`\n"
+                f"💰 **Tiền Cược:** `{game.bet:,}` {EMOJI_VND} / người\n"
                 f"👥 **Danh sách ({len(game.players)}/8):**\n{lines}\n\n"
                 "⏱️ Phòng chơi sẽ đóng sau 90 giây nếu không bắt đầu."
             ),
@@ -1102,7 +1102,7 @@ class Uno(commands.Cog, name="UNO"):
             await lobby_msg.delete()
         channel = lobby_msg.channel
         desc = (
-            f"🎮 **Số người chơi:** {len(game.players)} | 💰 **Tiền cọc:** `{game.bet:,} VND`\n"
+            f"🎮 **Số người chơi:** {len(game.players)} | 💰 **Tiền cọc:** `{game.bet:,}` {EMOJI_VND}\n"
             f"🎴 **Lá mở đầu:** **{game.top_card.display()}**\n\n"
             "🔔 Bấm nút **👁️ Xem Bài Của Bạn** bên dưới bảng để xem những lá bài đang giữ!"
         )
@@ -1233,7 +1233,7 @@ class Uno(commands.Cog, name="UNO"):
             delta = rewards.get(p.user_id, 0)
             icon = "🥇 [THẮNG]" if p.user_id == winner.user_id else "😢 [THUA]"
             sign = f"+{delta:,}" if delta > 0 else f"{delta:,}"
-            result_lines.append(f"{icon} **{p.username}**: `{sign} VND`")
+            result_lines.append(f"{icon} **{p.username}**: `{sign}` {EMOJI_VND}")
         losers = [
             f"**{p.username}**: {len(p.hand)} lá bài"
             for p in game.players if p.user_id != winner.user_id

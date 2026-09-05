@@ -173,7 +173,7 @@ def check_give_limit(
     if amount <= 0:
         return (False, "❌ **Lỗi:** Số lượng chuyển phải lớn hơn 0.")
 
-    unit = "VND" if currency == "money" else "thỏi vàng"
+    unit = "<:VND:1545815183589511370>" if currency == "money" else "<:GOLD:1545815236035219637>"
     sender_level, _, _ = economy.get_member_level(sender_id)
     receiver_level, _, _ = economy.get_member_level(receiver_id)
 

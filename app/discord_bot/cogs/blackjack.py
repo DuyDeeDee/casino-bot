@@ -14,7 +14,7 @@ from app.discord_bot.modules.betting import validate_money_bet
 from app.discord_bot.modules.card import Card
 from app.discord_bot.modules.card_table import render_card_table_bytes
 from app.discord_bot.modules.economy import Economy
-from app.discord_bot.modules.helpers import make_embed
+from app.discord_bot.modules.helpers import EMOJI_VND, make_embed
 from app.discord_bot.modules.wallet_logging import log_wallet_change
 
 logger = logging.getLogger(__name__)
@@ -153,15 +153,15 @@ class Blackjack(commands.Cog):
     @staticmethod
     def format_delta(amount: int) -> str:
         if amount > 0:
-            return f"+{amount:,} VND"
+            return f"+{amount:,} {EMOJI_VND}"
         if amount < 0:
-            return f"-{abs(amount):,} VND"
-        return "0 VND"
+            return f"-{abs(amount):,} {EMOJI_VND}"
+        return f"0 {EMOJI_VND}"
 
     @commands.command(
         aliases=["bj"],
-        brief="Chơi blackjack (xì dách) với các luật casino phổ biến.\nTiền cược phải lớn hơn 0 VND",
-        usage=f"blackjack [tiền_cược - mặc định={config.bot.default_bet:,} VND]",
+        brief="Chơi blackjack (xì dách) với các luật casino phổ biến.\nTiền cược phải lớn hơn 0 {EMOJI_VND}",
+        usage=f"blackjack [tiền_cược - mặc định={config.bot.default_bet:,} {EMOJI_VND}]",
     )
     @commands.max_concurrency(1, per=commands.BucketType.user, wait=False)
     async def blackjack(
@@ -269,7 +269,7 @@ class Blackjack(commands.Cog):
                     insurance_choice = await prompt_action(
                         title="Mua bảo hiểm?",
                         description=(
-                            f"Nhà cái lật được lá A. Phí bảo hiểm là {max_insurance:,} VND.\n"
+                            f"Nhà cái lật được lá A. Phí bảo hiểm là {max_insurance:,} {EMOJI_VND}.\n"
                             "Trả thưởng tỉ lệ 2:1 nếu nhà cái có blackjack."
                         ),
                         emoji_to_action={"✅": "buy", "❌": "skip"},
@@ -304,15 +304,15 @@ class Blackjack(commands.Cog):
                 if player_blackjack:
                     total_payout += base_bet
                     self.economy.add_money(ctx.author.id, base_bet)
-                    summary.append(f"Cược chính: hòa (+{base_bet:,} VND hoàn lại)")
+                    summary.append(f"Cược chính: hòa (+{base_bet:,} {EMOJI_VND} hoàn lại)")
                 else:
-                    summary.append(f"Cược chính: nhà cái blackjack (-{base_bet:,} VND)")
+                    summary.append(f"Cược chính: nhà cái blackjack (-{base_bet:,} {EMOJI_VND})")
 
                 if insurance_bet:
                     ins_payout = insurance_bet * 3
                     total_payout += ins_payout
                     self.economy.payout_winnings(ctx.author.id, ins_payout, insurance_bet)
-                    summary.append(f"Bảo hiểm: thắng (+{ins_payout:,} VND)")
+                    summary.append(f"Bảo hiểm: thắng (+{ins_payout:,} {EMOJI_VND})")
 
                 total_invested = base_bet + insurance_bet
                 net_change = total_payout - total_invested
@@ -380,9 +380,9 @@ class Blackjack(commands.Cog):
                     hands=len(player_hands),
                 )
 
-                summary = [f"Blackjack trả thưởng 3:2 (+{bj_payout:,} VND)"]
+                summary = [f"Blackjack trả thưởng 3:2 (+{bj_payout:,} {EMOJI_VND})"]
                 if insurance_bet:
-                    summary.append(f"Bảo hiểm: thua (-{insurance_bet:,} VND)")
+                    summary.append(f"Bảo hiểm: thua (-{insurance_bet:,} {EMOJI_VND})")
 
                 color = discord.Color.green() if net_change >= 0 else discord.Color.red()
                 await out_table(
@@ -469,7 +469,7 @@ class Blackjack(commands.Cog):
                         status += ", tách đôi Ace"
 
                     lines.append(
-                        f"{marker} Tụ {i + 1}: tổng điểm `{current_total}` | cược `{current_hand.bet:,} VND` | {status}"
+                        f"{marker} Tụ {i + 1}: tổng điểm `{current_total}` | cược `{current_hand.bet:,}` {EMOJI_VND} | {status}"
                     )
 
                 lines.append("")
@@ -591,7 +591,7 @@ class Blackjack(commands.Cog):
             result_lines: list[str] = []
 
             if insurance_bet:
-                result_lines.append(f"Bảo hiểm: thua (-{insurance_bet:,} VND)")
+                result_lines.append(f"Bảo hiểm: thua (-{insurance_bet:,} {EMOJI_VND})")
 
             for i, hand in enumerate(player_hands):
                 hand_total = self.calc_hand(hand.cards)
@@ -605,7 +605,7 @@ class Blackjack(commands.Cog):
                     total_payout += refund
                     self.economy.add_money(ctx.author.id, refund)
                     delta = -(hand.bet - refund)
-                    outcome = f"Đầu hàng (+{refund:,} VND hoàn lại)"
+                    outcome = f"Đầu hàng (+{refund:,} {EMOJI_VND} hoàn lại)"
                 elif hand_total > 21:
                     delta = -hand.bet
                     outcome = "Quắc"
@@ -615,7 +615,7 @@ class Blackjack(commands.Cog):
                     total_payout += payout
                     self.economy.payout_winnings(ctx.author.id, payout, hand.bet)
                     delta = hand.bet
-                    outcome = f"Thắng (+{payout:,} VND)"
+                    outcome = f"Thắng (+{payout:,} {EMOJI_VND})"
                 elif hand_total < dealer_score:
                     delta = -hand.bet
                     outcome = "Thua"
@@ -624,7 +624,7 @@ class Blackjack(commands.Cog):
                     total_payout += hand.bet
                     self.economy.add_money(ctx.author.id, hand.bet)
                     delta = 0
-                    outcome = f"Hòa (+{hand.bet:,} VND hoàn lại)"
+                    outcome = f"Hòa (+{hand.bet:,} {EMOJI_VND} hoàn lại)"
 
                 result_lines.append(
                     f"Tụ {i + 1}: {outcome} (tổng {hand_total}, {self.format_delta(delta)})"

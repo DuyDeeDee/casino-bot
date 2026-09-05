@@ -17,7 +17,7 @@ from typing import Dict, Optional
 import discord
 from discord.ext import commands
 
-from app.discord_bot.modules.helpers import make_embed
+from app.discord_bot.modules.helpers import EMOJI_VND, make_embed
 from app.discord_bot.modules.masoi_engine import (
     Faction,
     GamePhase,
@@ -1866,14 +1866,14 @@ class Masoi(commands.Cog):
             balance = eco.get_entry(ctx.author.id)[1]  # Index 1 là VND
             if balance < MASOI_CREATE_FEE:
                 await ctx.send(
-                    f"❌ **{ctx.author.display_name}**, bạn cần tối thiểu **{MASOI_CREATE_FEE:,} VND** để tạo phòng chờ Ma Sói!\n"
-                    f"💰 Số dư VND hiện tại của bạn: **{balance:,} VND**\n"
+                    f"❌ **{ctx.author.display_name}**, bạn cần tối thiểu **{MASOI_CREATE_FEE:,}** {EMOJI_VND} để tạo phòng chờ Ma Sói!\n"
+                    f"💰 Số dư hiện tại của bạn: **{balance:,}** {EMOJI_VND}\n"
                     f"💡 *Mẹo: Sở hữu gói VIP Ma Sói (`{ctx.prefix}masoivip`) để được miễn phí tạo phòng 100%!*"
                 )
                 return
             # Trừ phí 10,000 VND khi tạo phòng
             eco.add_money(ctx.author.id, -MASOI_CREATE_FEE)
-            msg_text = f"<a:yay:1533444499827851505> **{ctx.author.display_name}** đã trả **{MASOI_CREATE_FEE:,} VND** phí tạo phòng Ma Sói!"
+            msg_text = f"<a:yay:1533444499827851505> **{ctx.author.display_name}** đã trả **{MASOI_CREATE_FEE:,}** {EMOJI_VND} phí tạo phòng Ma Sói!"
         elif is_vip:
             msg_text = f"<a:2336vipgif:1534596901834592286> **{ctx.author.display_name}** *(<a:2336vipgif:1534596901834592286> VIP Ma Sói)* được **miễn phí tạo phòng**!"
         else:
@@ -2206,7 +2206,7 @@ class Masoi(commands.Cog):
             eco = self.get_economy()
             if eco:
                 eco.add_money(game.host_id, MASOI_CREATE_FEE)
-                refund_text = f"\n<a:muiten:1533428497098473623> Đã hoàn lại **{MASOI_CREATE_FEE:,} VND** cho Host **{game.host_name}**."
+                refund_text = f"\n<a:muiten:1533428497098473623> Đã hoàn lại **{MASOI_CREATE_FEE:,}** {EMOJI_VND} cho Host **{game.host_name}**."
 
         embed = make_embed(
             title="<a:luuy:1533429265293508888> ĐÃ HỦY VÁN MA SÓI",
@@ -2458,7 +2458,7 @@ class Masoi(commands.Cog):
             f"• **Lời trăn trối VIP:** {last_words}\n\n"
             f"──────────────────────────────────────\n"
             f"🎁 **ĐẶC QUYỀN VIP MA SÓI:**\n"
-            f"1. 🆓 **Miễn phí 100% Phí Tạo Phòng** (Không tốn {MASOI_CREATE_FEE:,} VND khi mở bàn).\n"
+            f"1. 🆓 **Miễn phí 100% Phí Tạo Phòng** (Không tốn {MASOI_CREATE_FEE:,} {EMOJI_VND} khi mở bàn).\n"
             f"2. ⚙️ **Tùy chỉnh Cài Đặt Ván Premium** (Thời gian Thảo Luận, Thời gian Đêm & Hiện vai trò người chết).\n"
             f"3. 🎭 **Đặc quyền Phân Vai Tùy Chỉnh** (Mở khóa menu Custom Roles trong Cài Đặt).\n"
             f"4. <a:2336vipgif:1534596901834592286> **Huy hiệu VIP [<a:2336vipgif:1534596901834592286> VIP]** hiển thị lộng lẫy bên cạnh tên.\n"

@@ -20,9 +20,10 @@ from discord.ext.commands.errors import (
 
 from app.config import config
 from app.discord_bot.modules.helpers import (
+    BetLimitViolationException,
+    EMOJI_VND,
     InsufficientCreditsException,
     InsufficientFundsException,
-    BetLimitViolationException,
     make_embed,
 )
 from app.discord_bot.modules.economy import Economy
@@ -108,7 +109,7 @@ class Handlers(commands.Cog, name="handlers"):
                 description=(
                     f"Chào mừng **{ctx.author.name}** lần đầu tiên sử dụng Casino Bot! 🏙️🎰\n\n"
                     f"Vì bạn là người mới và chưa khởi nghiệp, ví của bạn hiện đang trống rỗng.\n"
-                    f"Hãy sử dụng lệnh khởi nghiệp dưới đây để nhận **1,000,000 VND** làm vốn ban đầu:\n\n"
+                    f"Hãy sử dụng lệnh khởi nghiệp dưới đây để nhận **1,000,000** {EMOJI_VND} làm vốn ban đầu:\n\n"
                     f"👉 👉 **`{prefix}khoinghiep`** (hoặc `{prefix}batdau`) 👈 👈\n\n"
                     f"🙏 **Cảm ơn bạn đã tham gia phiên bản Beta!**\n"
                     f"🎁 Nếu bạn có mã quà tặng, hãy dùng `{prefix}redeem <code>` để nhận phần thưởng đặc biệt!\n\n"

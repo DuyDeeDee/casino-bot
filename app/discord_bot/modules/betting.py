@@ -3,6 +3,7 @@ from discord.ext import commands
 
 from app.discord_bot.modules.economy import Economy
 from app.discord_bot.modules.helpers import (
+    EMOJI_VND,
     InsufficientCreditsException,
     InsufficientFundsException,
 )
@@ -135,7 +136,7 @@ def validate_money_bet(
             min_val = int(global_min)
             if parsed_bet < min_val:
                 from app.discord_bot.modules.helpers import BetLimitViolationException
-                raise BetLimitViolationException(f"Tiền cược tối thiểu được cấu hình là {min_val:,} VND.")
+                raise BetLimitViolationException(f"Tiền cược tối thiểu được cấu hình là {min_val:,} {EMOJI_VND}.")
         except ValueError:
             pass
 
@@ -145,7 +146,7 @@ def validate_money_bet(
             max_val = int(global_max)
             if parsed_bet > max_val:
                 from app.discord_bot.modules.helpers import BetLimitViolationException
-                raise BetLimitViolationException(f"Tiền cược tối đa được cấu hình là {max_val:,} VND.")
+                raise BetLimitViolationException(f"Tiền cược tối đa được cấu hình là {max_val:,} {EMOJI_VND}.")
         except ValueError:
             pass
 
@@ -227,8 +228,8 @@ async def reward_spouse_share(bot, user_id: int, win_amount: int, channel) -> No
         embed = discord.Embed(
             title="💖 CHIA SẺ PHẦN THƯỞNG PHU THÊ 💖",
             description=(
-                f"🎉 Người bạn đời của bạn là <@{user_id}> vừa thắng lớn `{win_amount:,} VND`!\n"
-                f"🎁 Bạn nhận được **2% tiền chia vui** ngọt ngào: `+{bonus:,} VND` vào ví của mình!"
+                f"🎉 Người bạn đời của bạn là <@{user_id}> vừa thắng lớn `{win_amount:,}` {EMOJI_VND}!\n"
+                f"🎁 Bạn nhận được **2% tiền chia vui** ngọt ngào: `+{bonus:,}` {EMOJI_VND} vào ví của mình!"
             ),
             color=discord.Color.magenta()
         )

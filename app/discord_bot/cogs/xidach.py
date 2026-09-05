@@ -12,7 +12,7 @@ from app.discord_bot.modules.betting import parse_bet_amount, validate_money_bet
 from app.discord_bot.modules.card import Card
 from app.discord_bot.modules.card_table import render_card_table_bytes, render_multiplayer_table_bytes
 from app.discord_bot.modules.economy import Economy
-from app.discord_bot.modules.helpers import InsufficientFundsException
+from app.discord_bot.modules.helpers import EMOJI_VND, InsufficientFundsException
 from app.discord_bot.modules.wallet_logging import log_wallet_change
 
 logger = logging.getLogger(__name__)
@@ -202,9 +202,9 @@ class GameSession:
                 money_delta = self.bet
             elif p_rank == max_rank and max_rank > 0:
                 if len(winners) > 1:
-                    result = f"🟡 HÒA CHIA TIỀN ({p_name}) (+{payout_per_winner:,} VND)"
+                    result = f"🟡 HÒA CHIA TIỀN ({p_name}) (+{payout_per_winner:,} {EMOJI_VND})"
                 else:
-                    result = f"👑 THẮNG CƯỢC ({p_name}) (+{payout_per_winner:,} VND)"
+                    result = f"👑 THẮNG CƯỢC ({p_name}) (+{payout_per_winner:,} {EMOJI_VND})"
                 self.economy.payout_winnings(player.id, payout_per_winner, self.bet)
                 net_profit = payout_per_winner - self.bet
                 if net_profit >= 1_000_000:
@@ -432,7 +432,7 @@ class LobbyView(discord.ui.View):
         )
         self.players.append(interaction.user)
         await interaction.response.send_message(
-            f"🔥 {interaction.user.mention} đã lên thuyền với cược {self.bet_amount:,} VND!",
+            f"🔥 {interaction.user.mention} đã lên thuyền với cược {self.bet_amount:,} {EMOJI_VND}!",
             ephemeral=False,
         )
 
@@ -585,7 +585,7 @@ class MultiBlackjack(commands.Cog):
             title="🎰 SẢNH XÌ DÁCH PVP (Tối đa 6 người)",
             description=(
                 f"**Chủ sảnh:** {ctx.author.mention}\n"
-                f"**Mức cược:** `{bet_amount:,} VND/người`\n\n"
+                f"**Mức cược:** `{bet_amount:,}` {EMOJI_VND}/người\n\n"
                 "👉 Bấm nút để góp vốn! Ai điểm cao nhất ăn tất! (Tối đa 6 người)"
             ),
             color=discord.Color.gold()

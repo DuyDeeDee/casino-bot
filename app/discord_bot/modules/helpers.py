@@ -5,6 +5,10 @@ from pathlib import Path
 from discord import Color, Embed
 
 
+EMOJI_VND = "<:VND:1545815183589511370>"
+EMOJI_GOLD = "<:GOLD:1545815236035219637>"
+
+
 class BetLimitViolationException(Exception):
     def __init__(self, message: str) -> None:
         super().__init__(message)
@@ -16,7 +20,7 @@ class InsufficientFundsException(Exception):
         super().__init__()
 
     def __str__(self) -> str:
-        return f"Bạn cần thêm {self.needs:,} VND để chơi."
+        return f"Bạn cần thêm {self.needs:,} {EMOJI_VND} để chơi."
 
 
 class InsufficientCreditsException(Exception):
@@ -25,7 +29,7 @@ class InsufficientCreditsException(Exception):
         super().__init__()
 
     def __str__(self) -> str:
-        return f"Bạn cần thêm {self.needs:,} thỏi vàng."
+        return f"Bạn cần thêm {self.needs:,} {EMOJI_GOLD}."
 
 
 ABS_PATH = Path(__file__).resolve().parent.parent

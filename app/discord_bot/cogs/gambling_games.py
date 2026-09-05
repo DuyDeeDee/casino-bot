@@ -14,7 +14,7 @@ from pathlib import Path
 from app.config import config
 from app.discord_bot.modules.betting import parse_bet_amount, validate_money_bet
 from app.discord_bot.modules.economy import Economy
-from app.discord_bot.modules.helpers import make_embed, InsufficientFundsException
+from app.discord_bot.modules.helpers import EMOJI_VND, make_embed, InsufficientFundsException
 from app.discord_bot.modules.wallet_logging import log_wallet_change
 from app.discord_bot.modules.profile_renderer import load_font
 
@@ -319,11 +319,11 @@ class TaiXiuBetModal(discord.ui.Modal):
             return
             
         if amount < 1000:
-            await interaction.response.send_message("❌ Số tiền cược tối thiểu là **1,000 VND**.", ephemeral=True)
+            await interaction.response.send_message(f"❌ Số tiền cược tối thiểu là **1,000** {EMOJI_VND}.", ephemeral=True)
             return
 
         if amount > current_money:
-            await interaction.response.send_message(f"❌ Bạn không đủ tiền! Số dư hiện tại của bạn là **{current_money:,} VND**.", ephemeral=True)
+            await interaction.response.send_message(f"❌ Bạn không đủ tiền! Số dư hiện tại của bạn là **{current_money:,}** {EMOJI_VND}.", ephemeral=True)
             return
 
         # Get configured max bet
@@ -345,7 +345,7 @@ class TaiXiuBetModal(discord.ui.Modal):
             current_bet = self.lobby_view.number_bets[num].get(user.id, 0)
             
         if current_bet + amount > max_bet:
-            await interaction.response.send_message(f"❌ **Lỗi:** Giới hạn cược tối đa mỗi cửa là **{max_bet:,} VND**. Bạn đã cược `{current_bet:,} VND` ở cửa này trước đó, và muốn cược thêm `{amount:,} VND`.", ephemeral=True)
+            await interaction.response.send_message(f"❌ **Lỗi:** Giới hạn cược tối đa mỗi cửa là **{max_bet:,}** {EMOJI_VND}. Bạn đã cược `{current_bet:,}` {EMOJI_VND} ở cửa này trước đó, và muốn cược thêm `{amount:,}` {EMOJI_VND}.", ephemeral=True)
             return
 
         # Deduct balance immediately to prevent exploits
@@ -374,7 +374,7 @@ class TaiXiuBetModal(discord.ui.Modal):
             bet_amount=amount,
         )
 
-        await interaction.response.send_message(f"✅ Đã đặt cược **{amount:,} VND** vào cửa **{self.side.upper()}** thành công!", ephemeral=True)
+        await interaction.response.send_message(f"✅ Đã đặt cược **{amount:,}** {EMOJI_VND} vào cửa **{self.side.upper()}** thành công!", ephemeral=True)
         await self.lobby_view.update_message()
 
 
@@ -438,22 +438,22 @@ class TaiXiuLobbyView(discord.ui.View):
         tai_list = []
         for uid, amt in self.tai_bets.items():
             name = self.user_names.get(uid, f"User {uid}")
-            tai_list.append(f"• **{name}**: `{amt:,} VND`")
+            tai_list.append(f"• **{name}**: `{amt:,}` {EMOJI_VND}")
             
         xiu_list = []
         for uid, amt in self.xiu_bets.items():
             name = self.user_names.get(uid, f"User {uid}")
-            xiu_list.append(f"• **{name}**: `{amt:,} VND`")
+            xiu_list.append(f"• **{name}**: `{amt:,}` {EMOJI_VND}")
 
         chan_list = []
         for uid, amt in self.chan_bets.items():
             name = self.user_names.get(uid, f"User {uid}")
-            chan_list.append(f"• **{name}**: `{amt:,} VND`")
+            chan_list.append(f"• **{name}**: `{amt:,}` {EMOJI_VND}")
 
         le_list = []
         for uid, amt in self.le_bets.items():
             name = self.user_names.get(uid, f"User {uid}")
-            le_list.append(f"• **{name}**: `{amt:,} VND`")
+            le_list.append(f"• **{name}**: `{amt:,}` {EMOJI_VND}")
             
         tai_list_str = "\n".join(tai_list) if tai_list else "*Chưa có*"
         xiu_list_str = "\n".join(xiu_list) if xiu_list else "*Chưa có*"
@@ -471,8 +471,8 @@ class TaiXiuLobbyView(discord.ui.View):
         embed = make_embed(
             title=f"🎲 PHIÊN TÀI XỈU #{self.session_id} 🎲",
             description=(
-                f"🎰 **HŨ JACKPOT TÀI XỈU:** `{jackpot_val:,} VND` 🎰\n"
-                f"🔥 *Nổ Hũ khi ra Bão 1 (1-1-1) hoặc Bão 6 (6-6-6). Chỉ chia cho người thắng cửa Xỉu (nếu ra 1-1-1) hoặc cửa Tài (nếu ra 6-6-6) với mức cược tối thiểu từ {jackpot_min_bet:,} VND!*\n\n"
+                f"🎰 **HŨ JACKPOT TÀI XỈU:** `{jackpot_val:,}` {EMOJI_VND} 🎰\n"
+                f"🔥 *Nổ Hũ khi ra Bão 1 (1-1-1) hoặc Bão 6 (6-6-6). Chỉ chia cho người thắng cửa Xỉu (nếu ra 1-1-1) hoặc cửa Tài (nếu ra 6-6-6) với mức cược tối thiểu từ {jackpot_min_bet:,} {EMOJI_VND}!*\n\n"
                 f"⏳ **Thời gian đặt cược còn lại:** `{self.seconds_remaining} giây`\n\n"
                 f"👉 Nhấp vào nút/chọn menu bên dưới để chọn cửa cược."
             ),
@@ -513,7 +513,7 @@ class TaiXiuLobbyView(discord.ui.View):
                 for uid, amt in self.number_bets[n].items():
                     name = self.user_names.get(uid, f"User {uid}")
                     users.append(f"**{name}** (`{amt:,}`)")
-                num_lines.append(f"🎲 **Số {n}**: Tổng `{tot:,}` VND ({', '.join(users)})")
+                num_lines.append(f"🎲 **Số {n}**: Tổng `{tot:,}` {EMOJI_VND} ({', '.join(users)})")
 
         num_str = "\n".join(num_lines) if num_lines else "*Chưa có*"
         embed.add_field(
@@ -570,25 +570,25 @@ class TaiXiuLobbyView(discord.ui.View):
         if user.id in self.tai_bets:
             amt = self.tai_bets.pop(user.id)
             refund_amount += amt
-            refund_details.append(f"TAI: {amt:,} VND")
+            refund_details.append(f"TAI: {amt:,} {EMOJI_VND}")
         if user.id in self.xiu_bets:
             amt = self.xiu_bets.pop(user.id)
             refund_amount += amt
-            refund_details.append(f"XIU: {amt:,} VND")
+            refund_details.append(f"XIU: {amt:,} {EMOJI_VND}")
         if user.id in self.chan_bets:
             amt = self.chan_bets.pop(user.id)
             refund_amount += amt
-            refund_details.append(f"CHAN: {amt:,} VND")
+            refund_details.append(f"CHAN: {amt:,} {EMOJI_VND}")
         if user.id in self.le_bets:
             amt = self.le_bets.pop(user.id)
             refund_amount += amt
-            refund_details.append(f"LE: {amt:,} VND")
+            refund_details.append(f"LE: {amt:,} {EMOJI_VND}")
             
         for n in range(1, 7):
             if user.id in self.number_bets[n]:
                 amt = self.number_bets[n].pop(user.id)
                 refund_amount += amt
-                refund_details.append(f"SO_{n}: {amt:,} VND")
+                refund_details.append(f"SO_{n}: {amt:,} {EMOJI_VND}")
             
         if refund_amount > 0:
             self.cog.economy.add_money(user.id, refund_amount)
@@ -601,7 +601,7 @@ class TaiXiuLobbyView(discord.ui.View):
                 refund_details="; ".join(refund_details),
                 bet_amount=refund_amount,
             )
-            await interaction.response.send_message(f"✅ Đã hủy cược thành công! Hoàn lại **{refund_amount:,} VND** vào ví.", ephemeral=True)
+            await interaction.response.send_message(f"✅ Đã hủy cược thành công! Hoàn lại **{refund_amount:,}** {EMOJI_VND} vào ví.", ephemeral=True)
             await self.update_message()
         else:
             await interaction.response.send_message("❌ Bạn chưa đặt cược trong phiên này!", ephemeral=True)
@@ -660,7 +660,7 @@ class BauCuaBetModal(discord.ui.Modal):
             return
             
         if amount < 1000:
-            await interaction.response.send_message("❌ Số tiền cược tối thiểu là **1,000 VND**.", ephemeral=True)
+            await interaction.response.send_message(f"❌ Số tiền cược tối thiểu là **1,000** {EMOJI_VND}.", ephemeral=True)
             return
 
         try:
@@ -670,7 +670,7 @@ class BauCuaBetModal(discord.ui.Modal):
             return
 
         if amount > current_money:
-            await interaction.response.send_message(f"❌ Bạn không đủ tiền! Số dư hiện tại của bạn là **{current_money:,} VND**.", ephemeral=True)
+            await interaction.response.send_message(f"❌ Bạn không đủ tiền! Số dư hiện tại của bạn là **{current_money:,}** {EMOJI_VND}.", ephemeral=True)
             return
 
         # Deduct balance immediately
@@ -689,7 +689,7 @@ class BauCuaBetModal(discord.ui.Modal):
         )
 
         vietnamese_name = {"nai": "NAI", "bau": "BẦU", "ga": "GÀ", "ca": "CÁ", "cua": "CUA", "tom": "TÔM"}
-        await interaction.response.send_message(f"✅ Đã đặt cược **{amount:,} VND** vào con **{vietnamese_name[self.mascot]}** thành công!", ephemeral=True)
+        await interaction.response.send_message(f"✅ Đã đặt cược **{amount:,}** {EMOJI_VND} vào con **{vietnamese_name[self.mascot]}** thành công!", ephemeral=True)
         await self.lobby_view.update_message()
 
 
@@ -734,7 +734,7 @@ class BauCuaLobbyView(discord.ui.View):
         embed = make_embed(
             title=f"🦀 PHIÊN BẦU CUA #{self.session_id} 🦀",
             description=(
-                f"🎰 **HŨ JACKPOT BẦU CUA:** `{jackpot_val:,} VND` 🎰\n"
+                f"🎰 **HŨ JACKPOT BẦU CUA:** `{jackpot_val:,}` {EMOJI_VND} 🎰\n"
                 f"🔥 *Bão (3 linh vật giống nhau) nổ Hũ chia tỉ lệ cược của tất cả người chơi!*\n\n"
                 f"⏳ **Thời gian đặt cược còn lại:** `{self.seconds_remaining} giây`\n\n"
                 f"👉 Nhấp vào các nút bên dưới để chọn linh vật cược."
@@ -748,7 +748,7 @@ class BauCuaLobbyView(discord.ui.View):
             user_bets = []
             for uid, amt in self.bets[mascot].items():
                 name = self.user_names.get(uid, f"User {uid}")
-                user_bets.append(f"• **{name}**: `{amt:,} VND`")
+                user_bets.append(f"• **{name}**: `{amt:,}` {EMOJI_VND}")
             bets_str = "\n".join(user_bets) if user_bets else "*Chưa có*"
             embed.add_field(
                 name=label,
@@ -814,7 +814,7 @@ class BauCuaLobbyView(discord.ui.View):
             if user.id in self.bets[mascot]:
                 amt = self.bets[mascot].pop(user.id)
                 refund_amount += amt
-                refund_details.append(f"{mascot.upper()}: {amt:,} VND")
+                refund_details.append(f"{mascot.upper()}: {amt:,} {EMOJI_VND}")
                 
         if refund_amount > 0:
             self.cog.economy.add_money(user.id, refund_amount)
@@ -826,7 +826,7 @@ class BauCuaLobbyView(discord.ui.View):
                 refund_amount=refund_amount,
                 refund_details="; ".join(refund_details)
             )
-            await interaction.response.send_message(f"✅ Đã hủy cược thành công! Hoàn lại **{refund_amount:,} VND** vào ví.", ephemeral=True)
+            await interaction.response.send_message(f"✅ Đã hủy cược thành công! Hoàn lại **{refund_amount:,}** {EMOJI_VND} vào ví.", ephemeral=True)
             await self.update_message()
         else:
             await interaction.response.send_message("❌ Bạn chưa đặt cược trong phiên này!", ephemeral=True)
@@ -1340,9 +1340,9 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
                         total_payout_before_tax += 2 * amt
                         winning_bet_amt += amt
                         bet_tax = int(amt * tax_rate)
-                        details.append(f"Tài: +{amt - bet_tax:,} VND")
+                        details.append(f"Tài: +{amt - bet_tax:,} {EMOJI_VND}")
                     else:
-                        details.append(f"Tài: -{amt:,} VND")
+                        details.append(f"Tài: -{amt:,} {EMOJI_VND}")
                         
                 # Xiu
                 if uid in view.xiu_bets:
@@ -1351,9 +1351,9 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
                         total_payout_before_tax += 2 * amt
                         winning_bet_amt += amt
                         bet_tax = int(amt * tax_rate)
-                        details.append(f"Xỉu: +{amt - bet_tax:,} VND")
+                        details.append(f"Xỉu: +{amt - bet_tax:,} {EMOJI_VND}")
                     else:
-                        details.append(f"Xỉu: -{amt:,} VND")
+                        details.append(f"Xỉu: -{amt:,} {EMOJI_VND}")
                         
                 # Chan
                 if uid in view.chan_bets:
@@ -1362,9 +1362,9 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
                         total_payout_before_tax += 2 * amt
                         winning_bet_amt += amt
                         bet_tax = int(amt * tax_rate)
-                        details.append(f"Chẵn: +{amt - bet_tax:,} VND")
+                        details.append(f"Chẵn: +{amt - bet_tax:,} {EMOJI_VND}")
                     else:
-                        details.append(f"Chẵn: -{amt:,} VND")
+                        details.append(f"Chẵn: -{amt:,} {EMOJI_VND}")
                         
                 # Le
                 if uid in view.le_bets:
@@ -1373,9 +1373,9 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
                         total_payout_before_tax += 2 * amt
                         winning_bet_amt += amt
                         bet_tax = int(amt * tax_rate)
-                        details.append(f"Lẻ: +{amt - bet_tax:,} VND")
+                        details.append(f"Lẻ: +{amt - bet_tax:,} {EMOJI_VND}")
                     else:
-                        details.append(f"Lẻ: -{amt:,} VND")
+                        details.append(f"Lẻ: -{amt:,} {EMOJI_VND}")
                         
                 # Numbers 1-6
                 for n in range(1, 7):
@@ -1388,9 +1388,9 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
                             winning_bet_amt += amt
                             net_win_bet = matches * amt
                             bet_tax = int(net_win_bet * tax_rate)
-                            details.append(f"Số {n} (x{matches}): +{net_win_bet - bet_tax:,} VND")
+                            details.append(f"Số {n} (x{matches}): +{net_win_bet - bet_tax:,} {EMOJI_VND}")
                         else:
-                            details.append(f"Số {n}: -{amt:,} VND")
+                            details.append(f"Số {n}: -{amt:,} {EMOJI_VND}")
                             
                 # Calculate tax
                 net_win = total_payout_before_tax - winning_bet_amt
@@ -1410,12 +1410,12 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
                     new_bal = self.economy.get_entry(uid)[1]
                     details_str = ", ".join(details)
                     if net_profit > 0:
-                        winners.append(f"• **{name}**: Thắng `+{net_profit:,} VND` ({details_str}) (Số dư: `{new_bal:,} VND`)")
+                        winners.append(f"• **{name}**: Thắng `+{net_profit:,}` {EMOJI_VND} ({details_str}) (Số dư: `{new_bal:,}` {EMOJI_VND})")
                         winner_mentions.append(f"<@{uid}>")
                     elif net_profit == 0:
-                        winners.append(f"• **{name}**: Hòa vốn `{net_profit:,} VND` ({details_str}) (Số dư: `{new_bal:,} VND`)")
+                        winners.append(f"• **{name}**: Hòa vốn `{net_profit:,}` {EMOJI_VND} ({details_str}) (Số dư: `{new_bal:,}` {EMOJI_VND})")
                     else:
-                        losers.append(f"• **{name}**: Thua lỗ `-{abs(net_profit):,} VND` ({details_str}) (Số dư: `{new_bal:,} VND`)")
+                        losers.append(f"• **{name}**: Thua lỗ `-{abs(net_profit):,}` {EMOJI_VND} ({details_str}) (Số dư: `{new_bal:,}` {EMOJI_VND})")
                         
                     log_wallet_change(
                         logger,
@@ -1430,7 +1430,7 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
                 else:
                     new_bal = self.economy.get_entry(uid)[1]
                     details_str = ", ".join(details)
-                    losers.append(f"• **{name}**: Thua `-{total_bet_for_user:,} VND` ({details_str}) (Số dư: `{new_bal:,} VND`)")
+                    losers.append(f"• **{name}**: Thua `-{total_bet_for_user:,}` {EMOJI_VND} ({details_str}) (Số dư: `{new_bal:,}` {EMOJI_VND})")
                     log_wallet_change(
                         logger,
                         event="taixiu_payout_resolved",
@@ -1463,7 +1463,7 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
                     jw_lines = []
                     for uid, share in jackpot_winners:
                         name = view.user_names.get(uid, f"User {uid}")
-                        jw_lines.append(f"🎉 **{name}**: Nhận `+{share:,} VND` từ Hũ Jackpot!")
+                        jw_lines.append(f"🎉 **{name}**: Nhận `+{share:,}` {EMOJI_VND} từ Hũ Jackpot!")
                     jackpot_section = f"\n\n💥 **NỔ HŨ JACKPOT TÀI XỈU!** 💥\n" + "\n".join(jw_lines)
                 else:
                     jackpot_section = f"\n\n💥 **NỔ HŨ JACKPOT TÀI XỈU!** 💥\n*Không có người chơi thắng cuộc hợp lệ.*"
@@ -1503,7 +1503,7 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
             
             if is_jackpot_triggered and jackpot_winners:
                 jw_mentions = [f"<@{uid}>" for uid, _ in jackpot_winners]
-                await ctx.send(f"🎉💥 **JACKPOT CỰC ĐẠI ĐÃ NỔ!** Chúc mừng {', '.join(jw_mentions)} đã chia nhau hũ Jackpot trị giá **{jackpot_val_won:,} VND**! 💥🎉")
+                await ctx.send(f"🎉💥 **JACKPOT CỰC ĐẠI ĐÃ NỔ!** Chúc mừng {', '.join(jw_mentions)} đã chia nhau hũ Jackpot trị giá **{jackpot_val_won:,}** {EMOJI_VND}! 💥🎉")
             
             if winner_mentions:
                 await ctx.send(f"🎉 Chúc mừng các đại gia đã chiến thắng phiên #{session_id}: {', '.join(winner_mentions)}!")
@@ -1658,9 +1658,9 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
                             winning_bet_amt += amt
                             net_win_bet = count * amt
                             bet_tax = int(net_win_bet * tax_rate)
-                            details.append(f"{mascot_names_viet[mascot]} (x{count}): +{net_win_bet - bet_tax:,} VND")
+                            details.append(f"{mascot_names_viet[mascot]} (x{count}): +{net_win_bet - bet_tax:,} {EMOJI_VND}")
                         else:
-                            details.append(f"{mascot_names_viet[mascot]}: -{amt:,} VND")
+                            details.append(f"{mascot_names_viet[mascot]}: -{amt:,} {EMOJI_VND}")
 
                 # Calculate tax on net winning amount
                 net_win = total_payout_before_tax - winning_bet_amt
@@ -1679,12 +1679,12 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
                     new_bal = self.economy.get_entry(uid)[1]
                     details_str = ", ".join(details)
                     if net_profit > 0:
-                        winners.append(f"• **{name}**: Thắng `+{net_profit:,} VND` ({details_str}) (Số dư: `{new_bal:,} VND`)")
+                        winners.append(f"• **{name}**: Thắng `+{net_profit:,}` {EMOJI_VND} ({details_str}) (Số dư: `{new_bal:,}` {EMOJI_VND})")
                         winner_mentions.append(f"<@{uid}>")
                     elif net_profit == 0:
-                        winners.append(f"• **{name}**: Hòa vốn `{net_profit:,} VND` ({details_str}) (Số dư: `{new_bal:,} VND`)")
+                        winners.append(f"• **{name}**: Hòa vốn `{net_profit:,}` {EMOJI_VND} ({details_str}) (Số dư: `{new_bal:,}` {EMOJI_VND})")
                     else:
-                        losers.append(f"• **{name}**: Thua lỗ `-{abs(net_profit):,} VND` ({details_str}) (Số dư: `{new_bal:,} VND`)")
+                        losers.append(f"• **{name}**: Thua lỗ `-{abs(net_profit):,}` {EMOJI_VND} ({details_str}) (Số dư: `{new_bal:,}` {EMOJI_VND})")
                         
                     log_wallet_change(
                         logger,
@@ -1699,7 +1699,7 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
                 else:
                     new_bal = self.economy.get_entry(uid)[1]
                     details_str = ", ".join(details)
-                    losers.append(f"• **{name}**: Thua `-{total_bet_for_user:,} VND` ({details_str}) (Số dư: `{new_bal:,} VND`)")
+                    losers.append(f"• **{name}**: Thua `-{total_bet_for_user:,}` {EMOJI_VND} ({details_str}) (Số dư: `{new_bal:,}` {EMOJI_VND})")
                     log_wallet_change(
                         logger,
                         event="baucua_payout_resolved",
@@ -1732,7 +1732,7 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
                     jw_lines = []
                     for uid, share in jackpot_winners:
                         name = view.user_names.get(uid, f"User {uid}")
-                        jw_lines.append(f"🎉 **{name}**: Nhận `+{share:,} VND` từ Hũ Jackpot!")
+                        jw_lines.append(f"🎉 **{name}**: Nhận `+{share:,}` {EMOJI_VND} từ Hũ Jackpot!")
                     jackpot_section = f"\n\n💥 **NỔ HŨ JACKPOT BẦU CUA!** 💥\n" + "\n".join(jw_lines)
                 else:
                     jackpot_section = f"\n\n💥 **NỔ HŨ JACKPOT BẦU CUA!** 💥\n*Không có người chơi thắng cuộc hợp lệ.*"
@@ -1769,7 +1769,7 @@ class GamblingGames(commands.Cog, name="GamblingGames"):
             
             if is_jackpot_triggered and jackpot_winners:
                 jw_mentions = [f"<@{uid}>" for uid, _ in jackpot_winners]
-                await ctx.send(f"🎉💥 **JACKPOT BẦU CUA CỰC ĐẠI ĐÃ NỔ!** Chúc mừng {', '.join(jw_mentions)} đã chia nhau hũ Jackpot trị giá **{jackpot_val_won:,} VND**! 💥🎉")
+                await ctx.send(f"🎉💥 **JACKPOT BẦU CUA CỰC ĐẠI ĐÃ NỔ!** Chúc mừng {', '.join(jw_mentions)} đã chia nhau hũ Jackpot trị giá **{jackpot_val_won:,}** {EMOJI_VND}! 💥🎉")
 
             if winner_mentions:
                 await ctx.send(f"🎉 Chúc mừng các đại gia đã chiến thắng phiên #{session_id}: {', '.join(winner_mentions)}!")

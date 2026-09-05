@@ -2752,7 +2752,7 @@ class Economy:
                 refund_money = base_cost + int(base_cost * 0.02)
 
                 self.cur.execute("UPDATE economy SET money = money + ? WHERE user_id=?", (refund_money, owner_id))
-                refund_desc = f"+{refund_money:,} VND"
+                refund_desc = f"+{refund_money:,} <:VND:1545815183589511370>"
                 refund_type = "money"
                 refund_amount = refund_money
             else:  # SELL

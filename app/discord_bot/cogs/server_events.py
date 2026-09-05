@@ -7,7 +7,7 @@ from discord.ext import commands, tasks
 
 from app.config import config
 from app.discord_bot.modules.economy import Economy
-from app.discord_bot.modules.helpers import make_embed, ABS_PATH
+from app.discord_bot.modules.helpers import EMOJI_VND, make_embed, ABS_PATH
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +79,7 @@ class RainView(discord.ui.View):
         share = min(share, max(0, self.pot - sum(self.collectors.values())))
         self.collectors[interaction.user.id] = share
         self.cog.economy.add_money(interaction.user.id, share)
-        await interaction.response.send_message(f"💸 Bạn hứng được **{share:,} VND** rơi từ trời!", ephemeral=True)
+        await interaction.response.send_message(f"💸 Bạn hứng được **{share:,}** {EMOJI_VND} rơi từ trời!", ephemeral=True)
 
     async def on_timeout(self):
         for child in self.children:
@@ -91,7 +91,7 @@ class RainView(discord.ui.View):
                 embed = make_embed(
                     title="🌧️ MƯA VÀNG KẾT THÚC",
                     description=(
-                        f"💰 **Tổng số vàng đã rơi:** `{total:,} VND`\n"
+                        f"💰 **Tổng số tiền đã rơi:** `{total:,}` {EMOJI_VND}\n"
                         f"🙌 **Số người hứng được:** `{len(self.collectors)}`\n\n{names}"
                     ),
                     color=discord.Color.gold()
@@ -181,9 +181,9 @@ class ServerEvents(commands.Cog):
             embed = make_embed(
                 title="🌧️ MƯA VÀNG 🌧️",
                 description=(
-                    f"Trời bất chợt đổ mưa **{pot:,} VND** tiền lẻ!\n\n"
+                    f"Trời bất chợt đổ mưa **{pot:,}** {EMOJI_VND} tiền lẻ!\n\n"
                     f"🏆 **{RAIN_COLLECTORS} người đầu tiên** bấm nút sẽ hứng được "
-                    f"`{RAIN_MIN:,}–{RAIN_MAX:,} VND` mỗi người!\n"
+                    f"`{RAIN_MIN:,}–{RAIN_MAX:,}` {EMOJI_VND} mỗi người!\n"
                     f"⏱️ Mưa kéo dài **60 giây** — nhanh tay!"
                 ),
                 color=discord.Color.gold()
@@ -242,7 +242,7 @@ class ServerEvents(commands.Cog):
                 f"Một băng cướp khét tiếng đang càn phá khu mua sắm!\n\n"
                 f"❤️ **Sức khỏe băng cướp:** `{max_hp}`\n"
                 f"⚔️ Gõ `i?boss attack` để tham gia chiến đấu "
-                f"(tốn `{BOSS_ATTACK_COST:,} VND` phí vũ khí, gây **{BOSS_DAMAGE_RANGE[0]}–{BOSS_DAMAGE_RANGE[1]}** sát thương)\n"
+                f"(tốn `{BOSS_ATTACK_COST:,}` {EMOJI_VND} phí vũ khí, gây **{BOSS_DAMAGE_RANGE[0]}–{BOSS_DAMAGE_RANGE[1]}** sát thương)\n"
                 f"🎁 Hạ được: mỗi người tham gia nhận `200k` + top 1-2-3 sát thương nhận thêm `1M/500k/300k`!\n"
                 f"💀 Nếu **30 phút** không hạ được: băng cướp cướp **5% ví** (tối đa 2M) của tối đa 10 người đã tham chiến!"
             ),
@@ -301,7 +301,7 @@ class ServerEvents(commands.Cog):
 
         money = self.economy.get_entry(user_id)[1]
         if money < BOSS_ATTACK_COST:
-            await ctx.send(f"❌ Cần `{BOSS_ATTACK_COST:,} VND` phí vũ khí mà ví bạn chỉ có `{money:,} VND`!")
+            await ctx.send(f"❌ Cần `{BOSS_ATTACK_COST:,}` {EMOJI_VND} phí vũ khí mà ví bạn chỉ có `{money:,}` {EMOJI_VND}!")
             return
 
         damage = random.randint(*BOSS_DAMAGE_RANGE)
@@ -341,14 +341,14 @@ class ServerEvents(commands.Cog):
             for i, (uid, _) in enumerate(top):
                 self.economy.add_money(uid, bonuses[i])
             podium = "\n".join(
-                f"🥇🥈🥉"[i] + f" <@{uid}> — `{dmg}` sát thương (+{bonuses[i]:,} VND)"
+                f"🥇🥈🥉"[i] + f" <@{uid}> — `{dmg}` sát thương (+{bonuses[i]:,} {EMOJI_VND})"
                 for i, (uid, dmg) in enumerate(top)
             )
             embed = make_embed(
                 title="🎉 BĂNG CƯỚP ĐÃ BỊ QUẪN SẠCH!",
                 description=(
                     f"Cả phố cùng nhau đánh đuổi băng cướp!\n\n"
-                    f"💰 **{len(attackers)} người** tham chiến mỗi người nhận `200,000 VND`.\n\n"
+                    f"💰 **{len(attackers)} người** tham chiến mỗi người nhận `200,000` {EMOJI_VND}.\n\n"
                     f"**Bảng vàng sát thương:**\n{podium}"
                 ),
                 color=discord.Color.green()
@@ -363,12 +363,12 @@ class ServerEvents(commands.Cog):
                 if stolen > 0:
                     self.economy.add_money(uid, -stolen)
                     stolen_total += stolen
-                    lines.append(f"• <@{uid}> mất `{stolen:,} VND`")
+                    lines.append(f"• <@{uid}> mất `{stolen:,}` {EMOJI_VND}")
             embed = make_embed(
                 title="💀 BĂNG CƯỚP THOÁT THÀNH CÔNG!",
                 description=(
                     f"Không ai hạ được băng cướp kịp giờ...\n\n"
-                    f"💸 Chúng đã cướp tổng `{stolen_total:,} VND`:\n" + "\n".join(lines) +
+                    f"💸 Chúng đã cướp tổng `{stolen_total:,}` {EMOJI_VND}:\n" + "\n".join(lines) +
                     f"\n\n*Lần sau hãy đừng để chúng thoát!*"
                 ),
                 color=discord.Color.dark_red()

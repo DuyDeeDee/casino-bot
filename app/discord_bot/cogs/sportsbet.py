@@ -10,7 +10,7 @@ from discord.ext import commands, tasks
 from app.config import config
 from app.discord_bot.modules import betting
 from app.discord_bot.modules.economy import Economy
-from app.discord_bot.modules.helpers import make_embed
+from app.discord_bot.modules.helpers import EMOJI_VND, make_embed
 from app.discord_bot.modules.sports_ai import (
     AI_BETTOR_PERSONAS,
     COMMENTATOR_PERSONAS,
@@ -85,7 +85,7 @@ class SportsBetModal(discord.ui.Modal):
             return
 
         if parsed_bet < DEFAULT_MIN_BET:
-            await interaction.response.send_message(f"❌ Tiền cược tối thiểu là `{DEFAULT_MIN_BET:,} VND`.", ephemeral=True)
+            await interaction.response.send_message(f"❌ Tiền cược tối thiểu là `{DEFAULT_MIN_BET:,}` {EMOJI_VND}.", ephemeral=True)
             return
 
         try:
@@ -112,9 +112,9 @@ class SportsBetModal(discord.ui.Modal):
                 f"📋 **Mã vé:** `#{ticket_id}` | **Trận:** `#{self.match_id}`\n"
                 f"🏟️ **Cặp đấu:** {t1['emoji']} **{t1['name']}** vs **{t2['name']}** {t2['emoji']}\n"
                 f"🎯 **Thị trường / Cửa:** `{OUTCOME_LABELS.get(self.outcome, self.outcome)}`\n"
-                f"💵 **Tiền cược:** `{parsed_bet:,} VND`\n"
+                f"💵 **Tiền cược:** `{parsed_bet:,}` {EMOJI_VND}\n"
                 f"📊 **Kèo cơ sở (Base Odds):** `x{self.base_odds:.2f}`\n"
-                f"💰 **Tổng pool hiện tại:** `{total_pool:,} VND`\n\n"
+                f"💰 **Tổng pool hiện tại:** `{total_pool:,}` {EMOJI_VND}\n\n"
                 f"⏰ **Bóng lăn:** <t:{int(match['kickoff'])}:R> — Theo dõi tại `i?sports live`!"
             ),
             color=discord.Color.gold(),
@@ -149,7 +149,7 @@ class SportsCashoutButton(discord.ui.Button):
             title="💸 XẢ KÈO THÀNH CÔNG (CASHOUT)",
             description=(
                 f"📋 **Mã vé:** `#{self.ticket_id}`\n"
-                f"💵 **Số tiền đã thu về:** `+{self.cashout_val:,} VND` vào ví của bạn!\n"
+                f"💵 **Số tiền đã thu về:** `+{self.cashout_val:,}` {EMOJI_VND} vào ví của bạn!\n"
                 f"🔒 Vé cược đã được chốt và không bị ảnh hưởng bởi kết quả chung cuộc."
             ),
             color=discord.Color.green(),
@@ -346,7 +346,7 @@ class SportsBet(commands.Cog):
         ai_lines = []
         for t in ai_bets:
             p = AI_BETTOR_PERSONAS.get(t["user_id"], {})
-            ai_lines.append(f"• {p.get('emoji', '🤖')} **{p.get('name', 'AI')}**: Cửa `{t['outcome']}` (`{t['amount']:,} VND`)")
+            ai_lines.append(f"• {p.get('emoji', '🤖')} **{p.get('name', 'AI')}**: Cửa `{t['outcome']}` (`{t['amount']:,}` {EMOJI_VND})")
 
         ai_section = "\n".join(ai_lines) if ai_lines else "• Chưa có chuyên gia nào chốt kèo"
 
@@ -355,12 +355,12 @@ class SportsBet(commands.Cog):
             f"👔 **HLV:** `{t1.get('coach')}` ({t1.get('tactic')}) vs `{t2.get('coach')}` ({t2.get('tactic')})\n"
             f"⏰ **Bóng lăn:** {kickoff_str}\n\n"
             f"📊 **KÈO CƠ SỞ & XÁC SUẤT:**\n"
-            f"• `[1]` {t1['name']}: **x{odds['1']:.2f}** ({probs['1']*100:.1f}%) | Pool: `{pool.get('1', 0):,} VND`\n"
-            f"• `[X]` Hòa: **x{odds['X']:.2f}** ({probs['X']*100:.1f}%) | Pool: `{pool.get('X', 0):,} VND`\n"
-            f"• `[2]` {t2['name']}: **x{odds['2']:.2f}** ({probs['2']*100:.1f}%) | Pool: `{pool.get('2', 0):,} VND`\n"
+            f"• `[1]` {t1['name']}: **x{odds['1']:.2f}** ({probs['1']*100:.1f}%) | Pool: `{pool.get('1', 0):,}` {EMOJI_VND}\n"
+            f"• `[X]` Hòa: **x{odds['X']:.2f}** ({probs['X']*100:.1f}%) | Pool: `{pool.get('X', 0):,}` {EMOJI_VND}\n"
+            f"• `[2]` {t2['name']}: **x{odds['2']:.2f}** ({probs['2']*100:.1f}%) | Pool: `{pool.get('2', 0):,}` {EMOJI_VND}\n"
             f"• `[OU]` Tài 2.5: **x{odds['OU_OVER']:.2f}** | Xỉu 2.5: **x{odds['OU_UNDER']:.2f}**\n\n"
             f"🤖 **DÒNG TIỀN AI BETTORS:**\n{ai_section}\n\n"
-            f"💰 **Tổng quỹ Pool:** `{total_pool:,} VND`"
+            f"💰 **Tổng quỹ Pool:** `{total_pool:,}` {EMOJI_VND}"
         )
 
         return make_embed(
@@ -611,10 +611,10 @@ class SportsBet(commands.Cog):
         payout_lines = []
         for uid, amount in sorted(user_payouts.items(), key=lambda x: x[1], reverse=True)[:10]:
             if uid > 0:
-                payout_lines.append(f"• <@{uid}>: nhận thưởng **`{amount:,} VND`**")
+                payout_lines.append(f"• <@{uid}>: nhận thưởng **`{amount:,}` {EMOJI_VND}**")
             else:
                 p = AI_BETTOR_PERSONAS.get(uid, {})
-                payout_lines.append(f"• {p.get('emoji', '🤖')} **{p.get('name', 'AI')}**: thắng `{amount:,} VND` *(chuyển về quỹ Jackpot)*")
+                payout_lines.append(f"• {p.get('emoji', '🤖')} **{p.get('name', 'AI')}**: thắng `{amount:,}` {EMOJI_VND} *(chuyển về quỹ Jackpot)*")
 
         if not payout_lines:
             payout_lines.append("*(Không ai trúng thưởng — toàn bộ tiền cược nạp vào Jackpot)*")
@@ -626,7 +626,7 @@ class SportsBet(commands.Cog):
             f"{ft_quote}\n\n"
             f"🏆 **Cửa thắng (1X2):** `{result_1x2}` ({OUTCOME_LABELS.get(result_1x2, '')})\n"
             f"📈 **Tài/Xỉu:** `{market_results['OU']}` | **BTTS:** `{market_results['BTTS']}`\n"
-            f"💰 **Tổng Pool:** `{total_pool:,} VND` | **Tổng trả:** `{total_payout:,} VND`\n\n"
+            f"💰 **Tổng Pool:** `{total_pool:,}` {EMOJI_VND} | **Tổng trả:** `{total_payout:,}` {EMOJI_VND}\n\n"
             f"**Danh sách trả thưởng:**\n" + "\n".join(payout_lines)
         )
 
@@ -693,7 +693,7 @@ class SportsBet(commands.Cog):
             upcoming_lines.append(
                 f"🏟️ **#{m['id']}** {t1['emoji']} **{t1['name']}** vs **{t2['name']}** {t2['emoji']}\n"
                 f"└ ⏰ {kickoff} | Kèo 1X2: `1` x{odds['1']:.2f} — `X` x{odds['X']:.2f} — `2` x{odds['2']:.2f}\n"
-                f"└ Tài 2.5: x{odds['OU_OVER']:.2f} — Xỉu 2.5: x{odds['OU_UNDER']:.2f} | Pool: `{total:,} VND`"
+                f"└ Tài 2.5: x{odds['OU_OVER']:.2f} — Xỉu 2.5: x{odds['OU_UNDER']:.2f} | Pool: `{total:,}` {EMOJI_VND}"
             )
 
         if upcoming_lines:
@@ -758,7 +758,7 @@ class SportsBet(commands.Cog):
             return
 
         if parsed_bet < DEFAULT_MIN_BET:
-            await ctx.send(f"❌ Tiền cược tối thiểu là `{DEFAULT_MIN_BET:,} VND`.")
+            await ctx.send(f"❌ Tiền cược tối thiểu là `{DEFAULT_MIN_BET:,}` {EMOJI_VND}.")
             return
 
         t1 = TEAMS.get(match["t1"], {"name": match["t1"], "emoji": "👑", "att": 4.0, "def": 4.0})
@@ -787,9 +787,9 @@ class SportsBet(commands.Cog):
                 f"📋 **Mã vé:** `#{ticket_id}` | **Trận:** `#{match_id}`\n"
                 f"🏟️ **Trận:** {t1['emoji']} **{t1['name']}** vs **{t2['name']}** {t2['emoji']}\n"
                 f"🎯 **Cửa chọn:** `{OUTCOME_LABELS.get(outcome, outcome)}`\n"
-                f"💵 **Tiền cược:** `{parsed_bet:,} VND`\n"
+                f"💵 **Tiền cược:** `{parsed_bet:,}` {EMOJI_VND}\n"
                 f"📊 **Kèo cơ sở (Base Odds):** `x{base_odds:.2f}`\n"
-                f"💰 **Tổng pool:** `{total_pool:,} VND`\n\n"
+                f"💰 **Tổng pool:** `{total_pool:,}` {EMOJI_VND}\n\n"
                 f"⏰ **Bóng lăn:** <t:{int(match['kickoff'])}:R> — Theo dõi tại `i?sports live`!"
             ),
             color=discord.Color.gold(),
@@ -844,8 +844,8 @@ class SportsBet(commands.Cog):
             title="💸 XẢ KÈO THÀNH CÔNG (CASHOUT)",
             description=(
                 f"📋 **Mã vé:** `#{ticket_id}` | Trận #{target['match_id']}\n"
-                f"💵 **Tiền cược ban đầu:** `{target['amount']:,} VND`\n"
-                f"💰 **Số tiền đã thu về ví:** `+{cashout_val:,} VND`\n"
+                f"💵 **Tiền cược ban đầu:** `{target['amount']:,}` {EMOJI_VND}\n"
+                f"💰 **Số tiền đã thu về ví:** `+{cashout_val:,}` {EMOJI_VND}\n"
                 f"⏱️ **Thời điểm chốt:** Phút `{match['minute']}'` (Tỉ số: `{match['score_t1']}-{match['score_t2']}`)\n\n"
                 f"🔒 *Vé đã được khóa an toàn, kết quả sau này không ảnh hưởng đến tiền của bạn.*"
             ),
@@ -873,10 +873,10 @@ class SportsBet(commands.Cog):
 
             status_icon = {
                 "pending": "⏳ **Chờ đá**",
-                "won": f"🏆 **Thắng** (+`{t['payout']:,} VND`)",
+                "won": f"🏆 **Thắng** (+`{t['payout']:,}` {EMOJI_VND})",
                 "lost": "❌ **Thua**",
-                "cashed_out": f"💸 **Đã xả kèo** (+`{t['payout']:,} VND`)",
-                "refunded": f"🔄 **Hoàn tiền** (`{t['payout']:,} VND`)",
+                "cashed_out": f"💸 **Đã xả kèo** (+`{t['payout']:,}` {EMOJI_VND})",
+                "refunded": f"🔄 **Hoàn tiền** (`{t['payout']:,}` {EMOJI_VND})",
             }.get(t["status"], t["status"])
 
             cashout_btn_str = ""
@@ -885,12 +885,12 @@ class SportsBet(commands.Cog):
                 if match and match["minute"] < 80:
                     c_val = calculate_cashout_value(t["amount"], t["base_odds"], t["outcome"], match["minute"], match["score_t1"], match["score_t2"])
                     if c_val > 0:
-                        cashout_btn_str = f" | 💸 Xả kèo: `i?sports cashout {t['id']}` (`{c_val:,} VND`)"
+                        cashout_btn_str = f" | 💸 Xả kèo: `i?sports cashout {t['id']}` (`{c_val:,}` {EMOJI_VND})"
                         view.add_item(SportsCashoutButton(self, t["id"], ctx.author.id, c_val))
 
             lines.append(
                 f"🎟️ **Vé #{t['id']}** — Trận #{t['match_id']} ({t1_name} vs {t2_name})\n"
-                f"└ Cửa: `{OUTCOME_LABELS.get(t['outcome'], t['outcome'])}` | Cược: `{t['amount']:,} VND` | Kèo: `x{t['base_odds']:.2f}`\n"
+                f"└ Cửa: `{OUTCOME_LABELS.get(t['outcome'], t['outcome'])}` | Cược: `{t['amount']:,}` {EMOJI_VND} | Kèo: `x{t['base_odds']:.2f}`\n"
                 f"└ Trạng thái: {status_icon}{cashout_btn_str}"
             )
 
@@ -917,7 +917,7 @@ class SportsBet(commands.Cog):
             t2 = TEAMS.get(m["t2"], {"name": m["t2"], "emoji": "⚽"})
             lines.append(
                 f"🏁 **#{m['id']}** {t1['emoji']} **{t1['name']}** `{m['score_t1']} - {m['score_t2']}` **{t2['name']}** {t2['emoji']}\n"
-                f"└ Kết quả: `{m['result']}` | Tổng Pool: `{m['total_pool']:,} VND` | Tổng trả: `{m['total_payout']:,} VND`"
+                f"└ Kết quả: `{m['result']}` | Tổng Pool: `{m['total_pool']:,}` {EMOJI_VND} | Tổng trả: `{m['total_payout']:,}` {EMOJI_VND}"
             )
 
         embed = make_embed(
@@ -990,7 +990,7 @@ class SportsBet(commands.Cog):
         lines = []
         for i, tip in enumerate(top_tipsters, 1):
             badge = "👑" if i == 1 else ("🥈" if i == 2 else ("🥉" if i == 3 else "⭐"))
-            profit_str = f"+{tip['net_profit']:,} VND" if tip["net_profit"] >= 0 else f"{tip['net_profit']:,} VND"
+            profit_str = f"+{tip['net_profit']:,} {EMOJI_VND}" if tip["net_profit"] >= 0 else f"{tip['net_profit']:,} {EMOJI_VND}"
             lines.append(
                 f"{badge} **Top {i}:** <@{tip['user_id']}>\n"
                 f"└ Tỷ lệ thắng: **`{tip['win_rate']}%`** ({tip['won_bets']}/{tip['total_bets']} vé) | Lợi nhuận: `{profit_str}`"
@@ -1081,11 +1081,11 @@ class SportsBet(commands.Cog):
             description=(
                 f"🏟️ **Trận đã kết thúc:** `{stats['settled_matches']:,}`\n"
                 f"⏳ **Trận sắp đá:** `{stats['upcoming_matches']:,}` | **Đang live:** `{stats['live_matches']:,}`\n"
-                f"🎟️ **Vé đang chờ kết quả:** `{stats['pending_tickets']:,}` (Tổng tiền: `{stats['pending_tickets_volume']:,} VND`)\n"
-                f"💵 **Tổng Volume cược lịch sử:** `{stats['total_volume']:,} VND`\n"
-                f"🏆 **Tổng tiền đã trả thưởng:** `{stats['total_payout']:,} VND`\n"
-                f"🎰 **Tổng Rake đã nạp Jackpot:** `{stats['total_rake_to_jackpot']:,} VND`\n"
-                f"💎 **Quỹ Jackpot hiện tại:** `{jackpot:,} VND`"
+                f"🎟️ **Vé đang chờ kết quả:** `{stats['pending_tickets']:,}` (Tổng tiền: `{stats['pending_tickets_volume']:,}` {EMOJI_VND})\n"
+                f"💵 **Tổng Volume cược lịch sử:** `{stats['total_volume']:,}` {EMOJI_VND}\n"
+                f"🏆 **Tổng tiền đã trả thưởng:** `{stats['total_payout']:,}` {EMOJI_VND}\n"
+                f"🎰 **Tổng Rake đã nạp Jackpot:** `{stats['total_rake_to_jackpot']:,}` {EMOJI_VND}\n"
+                f"💎 **Quỹ Jackpot hiện tại:** `{jackpot:,}` {EMOJI_VND}"
             ),
             color=discord.Color.dark_green(),
         )
@@ -1107,7 +1107,7 @@ class SportsBet(commands.Cog):
         if match_id in self.live_cache:
             del self.live_cache[match_id]
 
-        await ctx.send(f"✅ Đã hủy trận **#{match_id}**! Hoàn lại `{res['refunded_total']:,} VND` cho `{res['refunded_count']}` vé cược.")
+        await ctx.send(f"✅ Đã hủy trận **#{match_id}**! Hoàn lại `{res['refunded_total']:,}` {EMOJI_VND} cho `{res['refunded_count']}` vé cược.")
 
     @sports_admin.command(name="channel")
     @commands.has_permissions(administrator=True)

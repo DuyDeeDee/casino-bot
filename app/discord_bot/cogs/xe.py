@@ -8,7 +8,7 @@ from discord.ext import commands
 from app.config import config
 from app.discord_bot.modules.betting import validate_money_bet
 from app.discord_bot.modules.economy import Economy
-from app.discord_bot.modules.helpers import make_embed, ABS_PATH
+from app.discord_bot.modules.helpers import EMOJI_VND, make_embed, ABS_PATH
 from app.discord_bot.modules.wallet_logging import log_wallet_change
 
 logger = logging.getLogger(__name__)
@@ -831,7 +831,7 @@ class Xe(commands.Cog, name="Xe"):
 
             buyer_money = self.economy.get_entry(ctx.author.id)[1]
             if buyer_money < price:
-                await ctx.send(f"❌ Bạn không đủ tiền! Cần `{price:,} VND` nhưng ví chỉ có `{buyer_money:,} VND`.")
+                await ctx.send(f"❌ Bạn không đủ tiền! Cần `{price:,}` {EMOJI_VND} nhưng ví chỉ có `{buyer_money:,}` {EMOJI_VND}.")
                 return
 
             car = self.economy.get_user_car(car_id)

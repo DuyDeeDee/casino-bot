@@ -11,7 +11,7 @@ from discord.ext import commands
 
 from app.discord_bot.modules.betting import parse_bet_amount, validate_money_bet
 from app.discord_bot.modules.economy import Economy
-from app.discord_bot.modules.helpers import make_embed
+from app.discord_bot.modules.helpers import EMOJI_VND, make_embed
 from app.discord_bot.modules.wallet_logging import log_wallet_change
 from app.discord_bot.modules.giaima_renderer import render_guess_image
 
@@ -142,7 +142,7 @@ def make_game_embed(view: "GiaiMaGameView") -> discord.Embed:
     
     desc = (
         f"🔐 **GIẢI MÃ BÍ MẬT — Độ khó: {view.cfg['name']}**\n"
-        f"🪙 **Cược:** `{view.bet_amount:,} VND` | **Combo:** `x{1 + 0.1 * min(view.streak, 5):.1f}`\n\n"
+        f"🪙 **Cược:** `{view.bet_amount:,}` {EMOJI_VND} | **Combo:** `x{1 + 0.1 * min(view.streak, 5):.1f}`\n\n"
     )
     
     if view.guesses:
@@ -175,7 +175,7 @@ def make_pvp_embed(view: "GiaiMaPvPMatchView") -> discord.Embed:
     
     desc = (
         f"⚔️ **ĐỐI ĐẦU GIẢI MÃ BÍ MẬT** ⚔️\n"
-        f"💰 **Bể cược:** `{2 * view.bet:,} VND` | ⏳ **Thời gian:** `{time_str}`\n\n"
+        f"💰 **Bể cược:** `{2 * view.bet:,}` {EMOJI_VND} | ⏳ **Thời gian:** `{time_str}`\n\n"
     )
     
     p1_status = "Đang đoán..." if not view.p1_done else "Hoàn thành"
@@ -214,8 +214,8 @@ def make_boss_embed(jackpot: int, history: list) -> discord.Embed:
     desc = (
         f"Một mật mã siêu khó gồm **6 chữ số** đã được thiết lập cho cả server!\n"
         f"Mọi người hãy cùng thử tài đoán mật mã để giải mã Boss.\n\n"
-        f"💰 **JACKPOT HIỆN TẠI:** **`{jackpot:,} VND`**\n"
-        f"⚙️ **Cơ chế:** Mỗi lượt đoán sai của bất kỳ ai sẽ **cộng thêm 1,000 VND** vào Jackpot!\n"
+        f"💰 **JACKPOT HIỆN TẠI:** **`{jackpot:,}` {EMOJI_VND}**\n"
+        f"⚙️ **Cơ chế:** Mỗi lượt đoán sai của bất kỳ ai sẽ **cộng thêm 1,000** {EMOJI_VND} vào Jackpot!\n"
         f"👉 Bấm nút **[🔓 Thử Vận May]** dưới đây để nhập dự đoán (cooldown 30s).\n\n"
     )
     
@@ -276,7 +276,7 @@ class GiaiMaLobbyView(discord.ui.View):
             f"✅ **Số ván thắng:** `{stats['wins']}`\n"
             f"❌ **Số ván thua:** `{stats['losses']}`\n"
             f"📈 **Tỷ lệ thắng:** `{stats['wins'] / max(1, stats['plays']) * 100:.1f}%`\n"
-            f"💰 **Tổng lợi nhuận:** `{stats['profit']:,} VND`\n"
+            f"💰 **Tổng lợi nhuận:** `{stats['profit']:,}` {EMOJI_VND}\n"
             f"🔥 **Chuỗi thắng hiện tại:** `{stats['streak']}`\n"
             f"⚡ **Chuỗi thắng dài nhất:** `{stats['max_streak']}`\n\n"
             f"🏆 **Thành tựu đã mở khóa ({len(ach_unlocked)}/{len(GIAIMA_ACHIEVEMENTS)}):**\n"
@@ -304,7 +304,7 @@ class GiaiMaLobbyView(discord.ui.View):
         else:
             for idx, (uid, wins, profit) in enumerate(rows):
                 name = await get_user_name(self.cog.bot, uid)
-                desc += f"{idx+1}. **{name}** — `{wins} thắng` (Lợi nhuận: `{profit:,} VND`)\n"
+                desc += f"{idx+1}. **{name}** — `{wins} thắng` (Lợi nhuận: `{profit:,}` {EMOJI_VND})\n"
                 
         embed = make_embed(
             title="🏆 BẢNG XẾP HẠNG GIẢI MÃ",
@@ -367,7 +367,7 @@ class GiaiMaLobbyView(discord.ui.View):
                     title="🎁 LƯỢT CHƠI MIỄN PHÍ HẰNG NGÀY",
                     description=(
                         f"Chào {interaction.user.mention}, bạn có **1 lượt chơi độ DỄ miễn phí** hôm nay!\n\n"
-                        f"• Nếu chọn **Chơi Miễn Phí**: Bạn không cần đặt cược. Thắng nhận thưởng cố định lên tới `500 VND`.\n"
+                        f"• Nếu chọn **Chơi Miễn Phí**: Bạn không cần đặt cược. Thắng nhận thưởng cố định lên tới `500` {EMOJI_VND}.\n"
                         f"• Nếu chọn **Đặt Cược**: Bạn sẽ đặt cược bình thường và được áp dụng hệ số nhân độ khó x1.2."
                     ),
                     color=discord.Color.purple()
@@ -449,7 +449,7 @@ class GiaiMaBetModal(discord.ui.Modal):
         bet_amount = parse_bet_amount(self.bet_input.value, current_money)
         
         if bet_amount < 1000:
-            await interaction.followup.send("❌ Tiền cược tối thiểu là 1,000 VND.", ephemeral=True)
+            await interaction.followup.send(f"❌ Tiền cược tối thiểu là 1,000 {EMOJI_VND}.", ephemeral=True)
             return
             
         try:
@@ -537,12 +537,12 @@ class GiaiMaGameView(discord.ui.View):
                 discord.SelectOption(
                     label="Gợi ý nhẹ",
                     value="light",
-                    description=f"Giá: {2000 if self.is_free_play else int(2000 + 0.2 * self.bet_amount):,} VND - Tiết lộ 1 vị trí"
+                    description=f"Giá: {2000 if self.is_free_play else int(2000 + 0.2 * self.bet_amount):,} {EMOJI_VND} - Tiết lộ 1 vị trí"
                 ),
                 discord.SelectOption(
                     label="Gợi ý mạnh",
                     value="strong",
-                    description=f"Giá: {5000 if self.is_free_play else int(5000 + 0.4 * self.bet_amount):,} VND - Loại trừ 2 số sai"
+                    description=f"Giá: {5000 if self.is_free_play else int(5000 + 0.4 * self.bet_amount):,} {EMOJI_VND} - Loại trừ 2 số sai"
                 )
             ]
         )
@@ -737,8 +737,8 @@ class GiaiMaGameView(discord.ui.View):
             f"🎯 **Số lượt đoán:** `{len(self.guesses)}/{self.cfg['guesses']}`\n"
             f"⏳ **Thời gian giải:** `{elapsed} giây`\n"
             f"📈 **Hệ số thưởng:** `x{net_mult:.2f}`\n"
-            f"💰 **Tiền thưởng nhận được:** **`{payout:,} VND`**\n"
-            f"📈 **Lợi nhuận ròng:** **`{profit:+,} VND`**\n"
+            f"💰 **Tiền thưởng nhận được:** **`{payout:,}` {EMOJI_VND}**\n"
+            f"📈 **Lợi nhuận ròng:** **`{profit:+,}` {EMOJI_VND}**\n"
             f"🔥 **Chuỗi thắng hiện tại:** `{new_streak}` (Combo: `x{1 + 0.1 * min(new_streak, 5):.1f}`)\n\n"
             f"Kết quả lượt đoán cuối: {emoji_str}"
         )
@@ -789,7 +789,7 @@ class GiaiMaGameView(discord.ui.View):
             f"👤 **Người chơi:** {self.user.mention}\n"
             f"🔐 **Mật mã đúng là:** **`{code_str}`**\n"
             f"❌ **Lý do:** {reason_str}\n"
-            f"📉 **Lợi nhuận:** **`-{self.bet_amount:,} VND`**\n"
+            f"📉 **Lợi nhuận:** **`-{self.bet_amount:,}` {EMOJI_VND}**\n"
             f"🔥 Chuỗi thắng đã reset về `0`.\n\n"
         )
         
@@ -863,7 +863,7 @@ class GiaiMaPvPBetModal(discord.ui.Modal):
         bet_amount = parse_bet_amount(self.bet_input.value, challenger_money)
         
         if bet_amount < 1000:
-            await interaction.followup.send("❌ Tiền cược tối thiểu là 1,000 VND.", ephemeral=True)
+            await interaction.followup.send(f"❌ Tiền cược tối thiểu là 1,000 {EMOJI_VND}.", ephemeral=True)
             return
             
         opponent_money = self.cog.economy.get_entry(self.opponent.id)[1]
@@ -871,7 +871,7 @@ class GiaiMaPvPBetModal(discord.ui.Modal):
             await interaction.followup.send("❌ Bạn không đủ tiền trong tài khoản!", ephemeral=True)
             return
         if opponent_money < bet_amount:
-            await interaction.followup.send(f"❌ Đối thủ ({self.opponent.display_name}) không đủ tiền cược ({bet_amount:,} VND)!", ephemeral=True)
+            await interaction.followup.send(f"❌ Đối thủ ({self.opponent.display_name}) không đủ tiền cược ({bet_amount:,} {EMOJI_VND})!", ephemeral=True)
             return
             
         view = GiaiMaPvPInviteView(self.cog, self.challenger, self.opponent, bet_amount)
@@ -879,7 +879,7 @@ class GiaiMaPvPBetModal(discord.ui.Modal):
             title="⚔️ THÁCH ĐẤU GIẢI MÃ BÍ MẬT ⚔️",
             description=(
                 f"{self.challenger.mention} đã gửi lời thách đấu Giải Mã Bí Mật đến {self.opponent.mention}!\n\n"
-                f"💰 **Mức cược:** `{bet_amount:,} VND` mỗi người (Tổng bể: `{2 * bet_amount:,} VND`)\n"
+                f"💰 **Mức cược:** `{bet_amount:,}` {EMOJI_VND} mỗi người (Tổng bể: `{2 * bet_amount:,}` {EMOJI_VND})\n"
                 f"⚙️ **Độ khó:** Thường (5 chữ số, không trùng lặp, 5 phút, 5 lượt đoán)\n\n"
                 f"👉 {self.opponent.mention}, hãy chọn **Chấp Nhận** hoặc **Từ Chối** trong 60 giây!"
             ),
@@ -1100,8 +1100,8 @@ class GiaiMaPvPMatchView(discord.ui.View):
             
             desc = (
                 f"🏆 **TRẬN ĐẤU KẾT THÚC — CHIẾN THẮNG THUỘC VỀ {winner.mention}!**\n\n"
-                f"👤 **Người thắng:** {winner.mention} (+`{pool:,} VND`)\n"
-                f"👤 **Người thua:** {loser.mention} (-`{self.bet:,} VND`)\n"
+                f"👤 **Người thắng:** {winner.mention} (+`{pool:,}` {EMOJI_VND})\n"
+                f"👤 **Người thua:** {loser.mention} (-`{self.bet:,}` {EMOJI_VND})\n"
                 f"🔐 **Mật mã đúng là:** **`{code_str}`**\n\n"
             )
             if reason == "forfeit":
@@ -1120,7 +1120,7 @@ class GiaiMaPvPMatchView(discord.ui.View):
             desc = (
                 f"🤝 **TRẬN ĐẤU KẾT THÚC — HÒA!**\n\n"
                 f"🔐 **Mật mã đúng là:** **`{code_str}`**\n"
-                f"💰 Cả 2 người chơi đều được hoàn tiền cược (`{self.bet:,} VND`).\n\n"
+                f"💰 Cả 2 người chơi đều được hoàn tiền cược (`{self.bet:,}` {EMOJI_VND}).\n\n"
             )
             if reason == "timeout":
                 desc += "⏰ **Lý do:** Đã hết 5 phút thời gian thi đấu."
@@ -1246,7 +1246,7 @@ class GiaiMaBossInputModal(discord.ui.Modal):
             desc = (
                 f"🎉🎉 **CHÚC MỪNG {interaction.user.mention} ĐÃ GIẢI MÃ THÀNH CÔNG BOSS SERVER!** 🎉🎉\n\n"
                 f"🔐 **Mật mã đúng của Boss:** **`{guess_str}`**\n"
-                f"💰 **Phần thưởng Jackpot:** **`{jackpot:,} VND`**\n\n"
+                f"💰 **Phần thưởng Jackpot:** **`{jackpot:,}` {EMOJI_VND}**\n\n"
                 f"Sự kiện Boss Server đã chính thức khép lại. Cảm ơn mọi người đã tham gia đoán!"
             )
             embed = make_embed(
@@ -1271,7 +1271,7 @@ class GiaiMaBossInputModal(discord.ui.Modal):
                 except Exception as e:
                     logger.error(f"Failed to edit boss message: {e}")
                     
-            await interaction.followup.send(f"🎉 Tuyệt vời! Bạn đã mở khóa mật mã Boss và nhận **{jackpot:,} VND**!", ephemeral=True)
+            await interaction.followup.send(f"🎉 Tuyệt vời! Bạn đã mở khóa mật mã Boss và nhận **{jackpot:,}** {EMOJI_VND}!", ephemeral=True)
         else:
             new_jackpot = jackpot + 1000
             self.cog.economy.set_setting("giaima_boss_jackpot", str(new_jackpot))
@@ -1301,7 +1301,7 @@ class GiaiMaBossInputModal(discord.ui.Modal):
                 except Exception as e:
                     logger.error(f"Failed to update boss message: {e}")
                     
-            await interaction.followup.send(f"❌ Sai rồi! Kết quả của bạn: {emoji_str}\n💰 Jackpot tăng thêm 1,000 VND!", file=file, ephemeral=True)
+            await interaction.followup.send(f"❌ Sai rồi! Kết quả của bạn: {emoji_str}\n💰 Jackpot tăng thêm 1,000 {EMOJI_VND}!", file=file, ephemeral=True)
 
 
 class GiaiMa(commands.Cog, name="GiaiMa"):
@@ -1381,7 +1381,7 @@ class GiaiMa(commands.Cog, name="GiaiMa"):
         bet_amount = parse_bet_amount(bet_amount_str, challenger_money)
         
         if bet_amount < 1000:
-            await ctx.send("❌ Tiền cược tối thiểu là 1,000 VND.")
+            await ctx.send(f"❌ Tiền cược tối thiểu là 1,000 {EMOJI_VND}.")
             return
             
         opponent_money = self.economy.get_entry(opponent.id)[1]
@@ -1389,7 +1389,7 @@ class GiaiMa(commands.Cog, name="GiaiMa"):
             await ctx.send("❌ Bạn không đủ tiền trong tài khoản!")
             return
         if opponent_money < bet_amount:
-            await ctx.send(f"❌ Đối thủ ({opponent.display_name}) không đủ tiền cược ({bet_amount:,} VND)!")
+            await ctx.send(f"❌ Đối thủ ({opponent.display_name}) không đủ tiền cược ({bet_amount:,} {EMOJI_VND})!")
             return
             
         view = GiaiMaPvPInviteView(self, ctx.author, opponent, bet_amount)
@@ -1397,7 +1397,7 @@ class GiaiMa(commands.Cog, name="GiaiMa"):
             title="⚔️ THÁCH ĐẤU GIẢI MÃ BÍ MẬT ⚔️",
             description=(
                 f"{ctx.author.mention} đã gửi lời thách đấu Giải Mã Bí Mật đến {opponent.mention}!\n\n"
-                f"💰 **Mức cược:** `{bet_amount:,} VND` mỗi người (Tổng bể: `{2 * bet_amount:,} VND`)\n"
+                f"💰 **Mức cược:** `{bet_amount:,}` {EMOJI_VND} mỗi người (Tổng bể: `{2 * bet_amount:,}` {EMOJI_VND})\n"
                 f"⚙️ **Độ khó:** Thường (5 chữ số, không trùng lặp, 5 phút, 5 lượt đoán)\n\n"
                 f"👉 {opponent.mention}, hãy chọn **Chấp Nhận** hoặc **Từ Chối** trong 60 giây!"
             ),
@@ -1463,7 +1463,7 @@ class GiaiMa(commands.Cog, name="GiaiMa"):
         msg = await ctx.send(embed=embed, view=view)
         
         self.economy.set_setting("giaima_boss_message_id", str(msg.id))
-        await ctx.send(f"✅ Đã khởi chạy sự kiện Boss Server thành công với Jackpot khởi điểm: `{jackpot_start:,} VND`!")
+        await ctx.send(f"✅ Đã khởi chạy sự kiện Boss Server thành công với Jackpot khởi điểm: `{jackpot_start:,}` {EMOJI_VND}!")
 
     @giaimaboss_group.command(name="stop", brief="Dừng sự kiện Boss Server (Admin).")
     @commands.has_permissions(administrator=True)

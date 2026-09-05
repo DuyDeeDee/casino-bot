@@ -8,7 +8,7 @@ from discord.ext import commands
 
 from app.discord_bot.modules.betting import parse_bet_amount
 from app.discord_bot.modules.economy import Economy
-from app.discord_bot.modules.helpers import make_embed
+from app.discord_bot.modules.helpers import EMOJI_VND, make_embed
 from app.discord_bot.modules.wallet_logging import log_wallet_change
 
 logger = logging.getLogger(__name__)
@@ -69,7 +69,7 @@ class LixiView(discord.ui.View):
         
         desc += (
             f"👤 **Người phát:** {self.sender.mention}\n"
-            f"💵 **Tổng lì xì:** `{self.total_amount:,} VND`\n"
+            f"💵 **Tổng lì xì:** `{self.total_amount:,}` {EMOJI_VND}\n"
             f"👥 **Số người bốc:** `{self.num_parts}`\n"
             f"📥 **Đã bốc:** `{len(self.claims)}/{self.num_parts}` phần\n\n"
         )
@@ -77,7 +77,7 @@ class LixiView(discord.ui.View):
         if self.claims:
             desc += "🏆 **Danh sách đã bốc được lì xì:**\n"
             for i, (uid, name, amount) in enumerate(self.claims, 1):
-                desc += f"{i}. **{name}** bốc được `{amount:,} VND` 🧧\n"
+                desc += f"{i}. **{name}** bốc được `{amount:,}` {EMOJI_VND} 🧧\n"
         else:
             desc += "*Chưa có ai bốc lì xì này, nhanh tay lên nào!*"
 
@@ -175,7 +175,7 @@ class LixiView(discord.ui.View):
                 money_delta=leftover,
                 total_lixi_pool=self.total_amount
             )
-            status_text = f"⏱️ **Hết thời gian!** Số tiền dư `{leftover:,} VND` đã được trả lại cho {self.sender.mention}."
+            status_text = f"⏱️ **Hết thời gian!** Số tiền dư `{leftover:,}` {EMOJI_VND} đã được trả lại cho {self.sender.mention}."
         else:
             status_text = "⏱️ **Hết thời gian!** Lì xì đã kết thúc."
 
@@ -186,7 +186,7 @@ class LixiView(discord.ui.View):
         
         desc += (
             f"👤 **Người phát:** {self.sender.mention}\n"
-            f"💵 **Tổng lì xì:** `{self.total_amount:,} VND`\n"
+            f"💵 **Tổng lì xì:** `{self.total_amount:,}` {EMOJI_VND}\n"
             f"👥 **Số người bốc:** `{self.num_parts}`\n"
             f"📥 **Đã bốc:** `{len(self.claims)}/{self.num_parts}` phần\n\n"
         )
@@ -194,7 +194,7 @@ class LixiView(discord.ui.View):
         if self.claims:
             desc += "🏆 **Danh sách đã bốc được lì xì:**\n"
             for i, (uid, name, amount) in enumerate(self.claims, 1):
-                desc += f"{i}. **{name}** bốc được `{amount:,} VND` 🧧\n"
+                desc += f"{i}. **{name}** bốc được `{amount:,}` {EMOJI_VND} 🧧\n"
         else:
             desc += "*Không có ai bốc lì xì này.*\n"
             
@@ -267,11 +267,11 @@ class Lixi(commands.Cog, name="Lixi"):
 
         min_required = num_parts * 1000
         if total_amount < min_required:
-            await ctx.send(f"❌ Với `{num_parts}` người bốc, tổng số tiền tối thiểu phải là `{min_required:,} VND` (mỗi phần tối thiểu 1,000 VND).")
+            await ctx.send(f"❌ Với `{num_parts}` người bốc, tổng số tiền tối thiểu phải là `{min_required:,}` {EMOJI_VND} (mỗi phần tối thiểu 1,000 {EMOJI_VND}).")
             return
 
         if current_money < total_amount:
-            await ctx.send(f"❌ Bạn không đủ tiền để phát lì xì! Số dư của bạn: `{current_money:,} VND` (thiếu `{(total_amount - current_money):,} VND`).")
+            await ctx.send(f"❌ Bạn không đủ tiền để phát lì xì! Số dư của bạn: `{current_money:,}` {EMOJI_VND} (thiếu `{(total_amount - current_money):,}` {EMOJI_VND}).")
             return
 
         # Deduct total amount from creator's balance immediately
@@ -305,7 +305,7 @@ class Lixi(commands.Cog, name="Lixi"):
         
         desc += (
             f"👤 **Người phát:** {ctx.author.mention}\n"
-            f"💵 **Tổng lì xì:** `{total_amount:,} VND`\n"
+            f"💵 **Tổng lì xì:** `{total_amount:,}` {EMOJI_VND}\n"
             f"👥 **Số người bốc:** `{num_parts}`\n"
             f"📥 **Đã bốc:** `0/{num_parts}` phần\n\n"
             f"*Chưa có ai bốc lì xì này, nhanh tay lên nào!*"

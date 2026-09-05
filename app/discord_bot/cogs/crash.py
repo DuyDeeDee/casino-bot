@@ -11,7 +11,7 @@ from discord.ext import commands
 from app.config import config
 from app.discord_bot.modules.betting import parse_bet_amount
 from app.discord_bot.modules.economy import Economy
-from app.discord_bot.modules.helpers import make_embed
+from app.discord_bot.modules.helpers import EMOJI_VND, make_embed
 from app.discord_bot.modules.wallet_logging import log_wallet_change
 
 logger = logging.getLogger(__name__)
@@ -71,19 +71,19 @@ class CrashBetModal(discord.ui.Modal):
             return
         except InsufficientFundsException as e:
             await interaction.response.send_message(
-                f"❌ Bạn không đủ tiền! Số dư ví hiện tại của bạn là **{current_money:,} VND**.",
+                f"❌ Bạn không đủ tiền! Số dư ví hiện tại của bạn là **{current_money:,}** {EMOJI_VND}.",
                 ephemeral=True,
             )
             return
         except Exception:
             if amount < 1000:
                 await interaction.response.send_message(
-                    "❌ Số tiền cược tối thiểu là **1,000 VND**.", ephemeral=True
+                    f"❌ Số tiền cược tối thiểu là **1,000** {EMOJI_VND}.", ephemeral=True
                 )
                 return
             if amount > current_money:
                 await interaction.response.send_message(
-                    f"❌ Bạn không đủ tiền! Số dư ví hiện tại của bạn là **{current_money:,} VND**.",
+                    f"❌ Bạn không đủ tiền! Số dư ví hiện tại của bạn là **{current_money:,}** {EMOJI_VND}.",
                     ephemeral=True,
                 )
                 return
@@ -107,7 +107,7 @@ class CrashBetModal(discord.ui.Modal):
         )
 
         await interaction.response.send_message(
-            f"✅ Đã đặt cược thành công **{amount:,} VND** vào vòng chơi!",
+            f"✅ Đã đặt cược thành công **{amount:,}** {EMOJI_VND} vào vòng chơi!",
             ephemeral=True,
         )
         await self.lobby_view.update_message()
@@ -150,14 +150,14 @@ class CrashLobbyView(discord.ui.View):
         player_list = []
         total_bet = 0
         for uid, p in self.participants.items():
-            player_list.append(f"• **{p['user'].display_name}**: `{p['bet']:,} VND`")
+            player_list.append(f"• **{p['user'].display_name}**: `{p['bet']:,}` {EMOJI_VND}")
             total_bet += p["bet"]
 
         player_str = "\n".join(player_list) if player_list else "*Chưa có ai tham gia*"
 
         embed.add_field(
             name=f"👥 Người chơi đã cược ({len(self.participants)})",
-            value=f"💰 Tổng tiền cược: **{total_bet:,} VND**\n{player_str}",
+            value=f"💰 Tổng tiền cược: **{total_bet:,}** {EMOJI_VND}\n{player_str}",
             inline=False,
         )
         embed.set_footer(text="Gõ i?crash để bắt đầu phòng cược")
@@ -200,7 +200,7 @@ class CrashLobbyView(discord.ui.View):
         )
 
         await interaction.response.send_message(
-            f"✅ Đã hủy cược thành công! Hoàn lại **{refund:,} VND** vào ví.",
+            f"✅ Đã hủy cược thành công! Hoàn lại **{refund:,}** {EMOJI_VND} vào ví.",
             ephemeral=True,
         )
         await self.update_message()
@@ -287,7 +287,7 @@ class CrashActiveView(discord.ui.View):
         )
 
         await interaction.response.send_message(
-            f"✅ Rút tiền thành công ở **{mult:.2f}x**! Nhận **+{winnings:,} VND**.",
+            f"✅ Rút tiền thành công ở **{mult:.2f}x**! Nhận **+{winnings:,}** {EMOJI_VND}.",
             ephemeral=True,
         )
 
@@ -421,12 +421,12 @@ class Crash(commands.Cog, name="Crash"):
             if p["cashed_out"]:
                 payout = int(p["bet"] * p["multiplier"])
                 player_status.append(
-                    f"✅ **{p['user'].display_name}**: Đã rút cược ở `{p['multiplier']:.2f}x` ➔ nhận **+{payout:,} VND**"
+                    f"✅ **{p['user'].display_name}**: Đã rút cược ở `{p['multiplier']:.2f}x` ➔ nhận **+{payout:,}** {EMOJI_VND}"
                 )
             else:
                 current_value = int(p["bet"] * lobby.current_multiplier)
                 player_status.append(
-                    f"• **{p['user'].display_name}**: `{p['bet']:,} VND` ➔ `💰 {current_value:,} VND` nếu rút ngay"
+                    f"• **{p['user'].display_name}**: `{p['bet']:,}` {EMOJI_VND} ➔ `💰 {current_value:,}` {EMOJI_VND} nếu rút ngay"
                 )
 
         status_str = "\n".join(player_status)
@@ -454,11 +454,11 @@ class Crash(commands.Cog, name="Crash"):
                 payout = int(p["bet"] * p["multiplier"])
                 net = payout - p["bet"]
                 player_results.append(
-                    f"🟢 **{p['user'].display_name}**: Rút thành công ở `{p['multiplier']:.2f}x` ➔ Nhận `{payout:,} VND` (Lời `+{net:,} VND`)"
+                    f"🟢 **{p['user'].display_name}**: Rút thành công ở `{p['multiplier']:.2f}x` ➔ Nhận `{payout:,}` {EMOJI_VND} (Lời `+{net:,}` {EMOJI_VND})"
                 )
             else:
                 player_results.append(
-                    f"🔴 **{p['user'].display_name}**: Không kịp rút ở `{lobby.crash_point:.2f}x` ➔ Mất sạch `-{p['bet']:,} VND`"
+                    f"🔴 **{p['user'].display_name}**: Không kịp rút ở `{lobby.crash_point:.2f}x` ➔ Mất sạch `-{p['bet']:,}` {EMOJI_VND}"
                 )
                 log_wallet_change(
                     logger,

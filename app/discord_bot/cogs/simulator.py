@@ -11,7 +11,7 @@ from discord.ext import commands, tasks
 
 from app.config import config
 from app.discord_bot.modules.economy import Economy
-from app.discord_bot.modules.helpers import make_embed, ABS_PATH
+from app.discord_bot.modules.helpers import EMOJI_GOLD, EMOJI_VND, make_embed, ABS_PATH
 from app.discord_bot.modules.mini_games import DungeonCrawlView
 from app.discord_bot.cogs.gambling_helpers import CAREER_PREREQUISITES
 from app.discord_bot.cogs.server_events import get_mine_slow_factor, get_active_mine_mult, get_sale_factor
@@ -289,14 +289,14 @@ BUSINESSES = {
         "base_cost": 300_000_000,
         "base_revenue": 1_080_000, # per hour
         "currency": "money",
-        "buff": "Sinh ra 1.08M VND/giờ + Tặng giáp sức khỏe tinh thần chống nản."
+        "buff": f"Sinh ra 1.08M {EMOJI_VND}/giờ + Tặng giáp sức khỏe tinh thần chống nản."
     },
     "gold_shop": {
-        "name": "Chuỗi Tiệm Vàng <:32100goldbarsfortnite:1514192020921651251>",
+        "name": f"Chuỗi Tiệm Vàng {EMOJI_GOLD}",
         "base_cost": 10, # 10 Gold (credits)
         "base_revenue": 0.5 / 24, # 0.5 Gold per day
         "currency": "gold",
-        "buff": "Sinh ra 0.5 Thỏi Vàng/ngày (~15M VND/ngày theo tỷ giá hiện tại)."
+        "buff": f"Sinh ra 0.5 {EMOJI_GOLD}/ngày (~15M {EMOJI_VND}/ngày theo tỷ giá hiện tại)."
     }
 }
 
@@ -322,31 +322,31 @@ SHOP_ITEMS = {
         "name": "Bằng cấp công nghệ 🎓",
         "cost": 5,
         "currency": "gold",
-        "description": "Mở khóa công việc Công nghệ trong lệnh $work (720,000-1,350,000 VND/ca, cooldown 1h). Bằng nhập môn của hệ thống nghề nghiệp."
+        "description": f"Mở khóa công việc Công nghệ trong lệnh $work (720,000-1,350,000 {EMOJI_VND}/ca, cooldown 1h). Bằng nhập môn của hệ thống nghề nghiệp."
     },
     "bang_kien_truc": {
         "name": "Bằng Kiến Trúc Sư 📐",
         "cost": 10,
         "currency": "gold",
-        "description": "Mở khóa các dự án thiết kế công trình trong lệnh $work (1,620,000-2,700,000 VND/ca, cooldown 2h). ⚠️ Yêu cầu: Bằng Công Nghệ + 15 XP nghề."
+        "description": f"Mở khóa các dự án thiết kế công trình trong lệnh $work (1,620,000-2,700,000 {EMOJI_VND}/ca, cooldown 2h). ⚠️ Yêu cầu: Bằng Công Nghệ + 15 XP nghề."
     },
     "bang_phi_hanh": {
         "name": "Chứng Chỉ Phi Hành Gia 🚀",
         "cost": 15,
         "currency": "gold",
-        "description": "Mở khóa nhiệm vụ thám hiểm vũ trụ trong lệnh $work (4,050,000-7,200,000 VND/ca, cooldown 3h). ⚠️ Yêu cầu: Bằng Kiến Trúc Sư + 40 XP nghề."
+        "description": f"Mở khóa nhiệm vụ thám hiểm vũ trụ trong lệnh $work (4,050,000-7,200,000 {EMOJI_VND}/ca, cooldown 3h). ⚠️ Yêu cầu: Bằng Kiến Trúc Sư + 40 XP nghề."
     },
     "bang_bac_si": {
         "name": "Bằng Bác Sĩ Chuyên Khoa 🩺",
         "cost": 35,
         "currency": "gold",
-        "description": "Mở khóa công việc chăm sóc sức khỏe VIP trong lệnh $work (10,800,000-18,000,000 VND/ca, cooldown 5h). ⚠️ Yêu cầu: Chứng Chỉ Phi Hành Gia + 80 XP nghề."
+        "description": f"Mở khóa công việc chăm sóc sức khỏe VIP trong lệnh $work (10,800,000-18,000,000 {EMOJI_VND}/ca, cooldown 5h). ⚠️ Yêu cầu: Chứng Chỉ Phi Hành Gia + 80 XP nghề."
     },
     "the_tho_mo": {
         "name": "Nghề Khai Thác Vàng ⛏️",
         "cost": 30,
         "currency": "gold",
-        "description": "Mở khóa lệnh i?mine đi đào các loại quặng quý hiếm (Than, Sắt, Bạc, Vàng, Kim Cương, Ngọc Tím, Tinh Thể Vũ Trụ) kiếm lượng lớn VND và thỏi Vàng!"
+        "description": f"Mở khóa lệnh i?mine đi đào các loại quặng quý hiếm (Than, Sắt, Bạc, Vàng, Kim Cương, Ngọc Tím, Tinh Thể Vũ Trụ) kiếm lượng lớn {EMOJI_VND} và {EMOJI_GOLD}!"
     },
     "the_tho_san": {
         "name": "Chứng Chỉ Thợ Săn Kho Báu 🗺️",
@@ -753,8 +753,8 @@ class ControlPanelView(discord.ui.View):
             desc = (
                 f"🎖️ **Danh hiệu:**\n"
                 f"{danh_hieu_text}\n\n"
-                f"💰 **Số tiền:** `{money:,} VND`\n"
-                f"<:32100goldbarsfortnite:1514192020921651251> **Số vàng:** `{gold:,} thỏi`\n"
+                f"💰 **Số tiền:** `{money:,}` {EMOJI_VND}\n"
+                f"{EMOJI_GOLD} **Số vàng:** `{gold:,}` {EMOJI_GOLD}\n"
                 f"🏢 **Doanh nghiệp:** `{biz_str}`\n"
                 f"💼 **Nghề nghiệp:** `{job_str}`\n\n"
                 f"▼ Sử dụng Menu thả xuống bên dưới để thao tác"
@@ -1235,15 +1235,15 @@ class OreMineExpeditionView(discord.ui.View):
 
         lines = []
         for name_key, data in harvest_summary.items():
-            g_info = f" • `+{data['gold']:.2f} Vàng`" if data['gold'] > 0 else ""
-            lines.append(f"• **{name_key}** x{data['count']}: `+{data['money']:,} VND`{g_info}")
+            g_info = f" • `+{data['gold']:.2f}` {EMOJI_GOLD}" if data['gold'] > 0 else ""
+            lines.append(f"• **{name_key}** x{data['count']}: `+{data['money']:,}` {EMOJI_VND}{g_info}")
         harvest_str = "\n".join(lines)
 
         gold_desc = ""
         if total_gold_dropped > 0:
             gold_desc = f"\n✨ **Tổng lượng vàng đào được:** `+{total_gold_dropped:.2f} Vàng`"
             if int_gold > 0:
-                gold_desc += f"\n🪙 **Đã tự động đúc thành:** `+{int_gold} Thỏi Vàng` (vào Két Sắt)"
+                gold_desc += f"\n🪙 **Đã tự động đúc thành:** `+{int_gold}` {EMOJI_GOLD} (vào Két Sắt)"
             gold_desc += f"\n💳 **Vàng lẻ tích lũy hiện tại:** `{final_frac:.2f} Vàng`"
 
         cooldown_hours = self.pickaxe_info["cooldown_hours"]
@@ -1254,7 +1254,7 @@ class OreMineExpeditionView(discord.ui.View):
             f"🛠️ **Trang bị:** **{self.pickaxe_info['name']}**\n\n"
             f"📦 **THÀNH QUẢ KHÁM PHÁ {self.vein_count} MẠCH QUẶNG:**\n"
             f"{harvest_str}\n\n"
-            f"💰 **Tổng doanh thu bán quặng:** `+{total_money:,} VND`"
+            f"💰 **Tổng doanh thu bán quặng:** `+{total_money:,}` {EMOJI_VND}"
             f"{gold_desc}\n\n"
             f"⏱️ **Hồi sức:** Bạn cần nghỉ ngơi **{cooldown_hours} giờ** trước khi có thể đào tiếp."
         )
@@ -1367,7 +1367,7 @@ class ShopView(discord.ui.View):
                 if item_id in SHOP_ITEMS:
                     details = SHOP_ITEMS[item_id]
                     if not details.get("is_admin_only"):
-                        cost_str = f"{details['cost']:,} VND" if details['currency'] == "money" else f"{details['cost']} thỏi vàng"
+                        cost_str = f"{details['cost']:,} {EMOJI_VND}" if details['currency'] == "money" else f"{details['cost']} {EMOJI_GOLD}"
                         embed.add_field(
                             name=f"{details['name']} (ID: `{item_id}`)",
                             value=f"**Giá:** `{cost_str}`\n**Mô tả:** {details['description']}",
@@ -1389,7 +1389,7 @@ class ShopView(discord.ui.View):
                 if item_id in SHOP_ITEMS:
                     details = SHOP_ITEMS[item_id]
                     if not details.get("is_admin_only"):
-                        cost_str = f"{details['cost']:,} VND" if details['currency'] == "money" else f"{details['cost']} thỏi vàng"
+                        cost_str = f"{details['cost']:,} {EMOJI_VND}" if details['currency'] == "money" else f"{details['cost']} {EMOJI_GOLD}"
                         embed.add_field(
                             name=f"{details['name']} (ID: `{item_id}`)",
                             value=f"**Giá:** `{cost_str}`\n**Mô tả:** {details['description']}",
@@ -1420,7 +1420,7 @@ class ShopView(discord.ui.View):
                 if item_id in SHOP_ITEMS:
                     details = SHOP_ITEMS[item_id]
                     if not details.get("is_admin_only"):
-                        cost_str = f"{details['cost']:,} VND" if details['currency'] == "money" else f"{details['cost']} thỏi vàng"
+                        cost_str = f"{details['cost']:,} {EMOJI_VND}" if details['currency'] == "money" else f"{details['cost']} {EMOJI_GOLD}"
                         embed.add_field(
                             name=f"{details['name']} (ID: `{item_id}`)",
                             value=f"**Giá:** `{cost_str}`\n**Mô tả:** {details['description']}",
@@ -1453,7 +1453,7 @@ class ShopView(discord.ui.View):
             )
             for item_id, details in SHOP_ITEMS.items():
                 if details.get("is_banner") and not details.get("is_admin_only"):
-                    cost_str = f"{details['cost']:,} VND" if details['currency'] == "money" else f"{details['cost']} thỏi vàng"
+                    cost_str = f"{details['cost']:,} {EMOJI_VND}" if details['currency'] == "money" else f"{details['cost']} {EMOJI_GOLD}"
                     embed.add_field(
                         name=f"{details['name']} (ID: `{item_id}`)",
                         value=f"**Giá:** `{cost_str}`\n**Mô tả:** {details['description']}",
@@ -1561,7 +1561,7 @@ class Simulator(commands.Cog):
                     value=(
                         f"• Số lượng: **{qty}**\n"
                         f"• Độ hiếm: `{item['rarity']}`\n"
-                        f"• Giá bán: `{item['value']:,} VND`\n"
+                        f"• Giá bán: `{item['value']:,}` {EMOJI_VND}\n"
                         f"• *Cổ vật/kho báu sưu tầm.*"
                     ),
                     inline=False
@@ -1655,7 +1655,7 @@ class Simulator(commands.Cog):
             if lvl > 0:
                 current_revenue = details['base_revenue'] * lvl
                 if details['currency'] == "money":
-                    rev_str = f"{current_revenue:,} VND/giờ"
+                    rev_str = f"{current_revenue:,} {EMOJI_VND}/giờ"
                 else:
                     rev_str = f"{current_revenue * 24:.2f} Vàng/ngày"
                 status = f"🟢 Đang hoạt động (Cấp {lvl}{' - Tối đa' if lvl >= 10 else ''})\n📈 Doanh thu hiện tại: `{rev_str}`"
@@ -1667,10 +1667,10 @@ class Simulator(commands.Cog):
                 next_rev_str = "`Đã đạt cấp tối đa`"
             else:
                 cost = int(details['base_cost'] * (1.5 ** lvl))
-                cost_str = f"{cost:,} VND" if details['currency'] == "money" else f"{cost} thỏi vàng"
+                cost_str = f"{cost:,} {EMOJI_VND}" if details['currency'] == "money" else f"{cost} {EMOJI_GOLD}"
                 next_lvl_revenue = details['base_revenue'] * (lvl + 1)
                 if details['currency'] == "money":
-                    next_rev_str = f"`{next_lvl_revenue:,} VND/giờ`"
+                    next_rev_str = f"`{next_lvl_revenue:,}` {EMOJI_VND}/giờ"
                 else:
                     next_rev_str = f"`{next_lvl_revenue * 24:.2f} Vàng/ngày`"
                 
@@ -1787,14 +1787,14 @@ class Simulator(commands.Cog):
             accident_type = random.choice(["fire", "fine"])
             if accident_type == "fire":
                 loss_amount = int(earned_money * 0.15)
-                accident_msg = f"⚠️ **SỰ CỐ VẬN HÀNH:** Thiết bị sản xuất bị chập điện gây cháy, tổn thất **-{loss_amount:,} VND** (15% doanh thu)!"
+                accident_msg = f"⚠️ **SỰ CỐ VẬN HÀNH:** Thiết bị sản xuất bị chập điện gây cháy, tổn thất **-{loss_amount:,}** {EMOJI_VND} (15% doanh thu)!"
                 if insurance_active:
                     accident_msg += "\n🛡️ **BẢO HIỂM CHI TRẢ:** Nhờ có **Bảo hiểm Doanh nghiệp** còn hiệu lực, bạn được đền bù toàn bộ tổn thất!"
                 else:
                     earned_money -= loss_amount
             else:
                 fine_amount = min(earned_money, 5_000_000)
-                accident_msg = f"⚠️ **SỰ CỐ VẬN HÀNH:** Cơ quan chức năng tiến hành thanh tra đột xuất doanh nghiệp, phạt hành chính **-{fine_amount:,} VND**!"
+                accident_msg = f"⚠️ **SỰ CỐ VẬN HÀNH:** Cơ quan chức năng tiến hành thanh tra đột xuất doanh nghiệp, phạt hành chính **-{fine_amount:,}** {EMOJI_VND}!"
                 if insurance_active:
                     accident_msg += "\n🛡️ **BẢO HIỂM CHI TRẢ:** Nhờ có **Bảo hiểm Doanh nghiệp** còn hiệu lực, bảo hiểm đã thanh toán toàn bộ tiền phạt!"
                 else:
@@ -1826,7 +1826,7 @@ class Simulator(commands.Cog):
             elapsed_sec=elapsed_sec
         )
 
-        gold_str = f"\n<:32100goldbarsfortnite:1514192020921651251> **Vàng nhận:** `+{int_gold} thỏi vàng`" if int_gold > 0 else ""
+        gold_str = f"\n{EMOJI_GOLD} **Vàng nhận:** `+{int_gold}` {EMOJI_GOLD}" if int_gold > 0 else ""
         accident_embed_str = f"\n\n{accident_msg}" if accident_triggered else ""
         
         display_minutes = min(elapsed_sec // 60, 720)
@@ -1834,7 +1834,7 @@ class Simulator(commands.Cog):
             title="🏢 BÁO CÁO DOANH THU DOANH NGHIỆP 🏢",
             description=(
                 f"Sau **{display_minutes} phút** làm việc chăm chỉ, các doanh nghiệp của bạn đã báo cáo thu hoạch:\n\n"
-                f"💰 **VND nhận:** `+{earned_money:,} VND`"
+                f"💰 **Tiền nhận:** `+{earned_money:,}` {EMOJI_VND}"
                 f"{gold_str}\n"
                 f"💳 **Vàng lẻ tích lũy thêm:** `+{earned_gold_frac:.4f} Vàng` (Số dư dư: `{new_frac} Vàng`)"
                 f"{marriage_info}"
@@ -1898,7 +1898,7 @@ class Simulator(commands.Cog):
             value = int(owned_shares * price)
 
             holding_lines = [
-                f"🎒 **Bạn đang sở hữu:** `{owned_shares:.2f}` cổ (`{value:,} VND`)",
+                f"🎒 **Bạn đang sở hữu:** `{owned_shares:.2f}` cổ (`{value:,}` {EMOJI_VND})",
                 f"🔒 **Giới hạn sở hữu tối đa:** `{max_h:,.2f}` cổ | **Max/lệnh:** `{max_order:,.2f}` cổ"
             ]
             if owned_shares > 0:
@@ -1922,9 +1922,9 @@ class Simulator(commands.Cog):
                     net_icon = "🟢" if net_pl >= 0 else "🔴"
 
                     holding_lines.append(
-                        f"📊 **Giá vốn TB (gồm 2% phí):** `{avg_cost:,.0f} VND`\n"
-                        f"> {pl_icon} **Lãi/Lỗ chưa bán:** `{unrealized_pl:+,.0f} VND` (`{unrealized_pct:+.2f}%`)\n"
-                        f"> {net_icon} **Lãi/Lỗ thực nhận (sau 5% phí & trượt giá):** `{net_pl:+,.0f} VND` (`{net_pl_pct:+.2f}%`)"
+                        f"📊 **Giá vốn TB (gồm 2% phí):** `{avg_cost:,.0f}` {EMOJI_VND}\n"
+                        f"> {pl_icon} **Lãi/Lỗ chưa bán:** `{unrealized_pl:+,.0f}` {EMOJI_VND} (`{unrealized_pct:+.2f}%`)\n"
+                        f"> {net_icon} **Lãi/Lỗ thực nhận (sau 5% phí & trượt giá):** `{net_pl:+,.0f}` {EMOJI_VND} (`{net_pl_pct:+.2f}%`)"
                     )
                 else:
                     holding_lines.append("📊 **Giá vốn TB:** `—` (dữ liệu cũ)")
@@ -1932,7 +1932,7 @@ class Simulator(commands.Cog):
             embed.add_field(
                 name=f"{sym} ({trend_str})",
                 value=(
-                    f"💵 **Giá hiện tại:** `{price:,} VND` / cổ\n"
+                    f"💵 **Giá hiện tại:** `{price:,}` {EMOJI_VND} / cổ\n"
                     f"📊 **Biến động:** `{change:+.2f}%`\n"
                     + "\n".join(holding_lines)
                 ),
@@ -2076,9 +2076,9 @@ class Simulator(commands.Cog):
                                         description=(
                                             f"Mã đầu tư `{symbol}` đã hoàn tất thủ tục **tái cấu trúc tài chính**!\n\n"
                                             f"📊 **Số lượng cổ phiếu sở hữu:** `{shs:.2f} {symbol}`\n"
-                                            f"💵 **Định giá đền bù bảo vệ tài sản (40%):** `{comp_p:,} VND` / cổ\n"
-                                            f"💰 **Tổng tiền đền bù nhận về ví:** `+{payout:,} VND`\n\n"
-                                            f"💡 Cổ phiếu đã được mở lại giao dịch ở mức giá tái cấu trúc chiết khấu `{restructure_report['restructured_price']:,} VND`."
+                                            f"💵 **Định giá đền bù bảo vệ tài sản (40%):** `{comp_p:,}` {EMOJI_VND} / cổ\n"
+                                            f"💰 **Tổng tiền đền bù nhận về ví:** `+{payout:,}` {EMOJI_VND}\n\n"
+                                            f"💡 Cổ phiếu đã được mở lại giao dịch ở mức giá tái cấu trúc chiết khấu `{restructure_report['restructured_price']:,}` {EMOJI_VND}."
                                         ),
                                         color=discord.Color.gold()
                                     )
@@ -2157,7 +2157,7 @@ class Simulator(commands.Cog):
                                 description=(
                                     f"Lệnh giới hạn (Limit Order) **#{order_id}** của bạn đã quá {LIMIT_ORDER_TTL // 3600} giờ không khớp và bị hủy tự động.\n\n"
                                     f"📈 **Mã:** `{symbol}`\n"
-                                    f"📊 **Loại lệnh:** {type_str} `{shares:.2f}` @ `{target_price:,} VND`\n"
+                                    f"📊 **Loại lệnh:** {type_str} `{shares:.2f}` @ `{target_price:,}` {EMOJI_VND}\n"
                                     f"💰 Đã hoàn trả: `{res['refund_desc']}`"
                                 ),
                                 color=discord.Color.blue()
@@ -2194,7 +2194,7 @@ class Simulator(commands.Cog):
                                             f"📊 **Số lượng lệnh:** `{shares:.2f}`\n"
                                             f"🎒 **Số lượng hiện có:** `{fill_res['curr_shares']:.2f}`\n"
                                             f"🚫 **Giới hạn tối đa:** `{fill_res['max_holding']:,.2f}`\n\n"
-                                            f"💰 Đã hoàn trả `+{fill_res['locked_funds']:,} VND` vào tài khoản."
+                                            f"💰 Đã hoàn trả `+{fill_res['locked_funds']:,}` {EMOJI_VND} vào tài khoản."
                                         ),
                                         color=discord.Color.orange()
                                     )
@@ -2203,16 +2203,16 @@ class Simulator(commands.Cog):
                                 log_wallet_change(logger, event="invest_limit_buy_fill", user_id=user_id, symbol=symbol, shares=shares, fill_price=fill_res['effective_price'], order_id=order_id)
                                 user = self.client.get_user(user_id) or await self.client.fetch_user(user_id)
                                 if user:
-                                    refund_str = f" và được hoàn trả `+{fill_res['refund']:,} VND` chênh lệch" if fill_res['refund'] > 0 else f" và khấu trừ thêm `{abs(fill_res['refund']):,} VND` chênh lệch" if fill_res['refund'] < 0 else ""
+                                    refund_str = f" và được hoàn trả `+{fill_res['refund']:,}` {EMOJI_VND} chênh lệch" if fill_res['refund'] > 0 else f" và khấu trừ thêm `{abs(fill_res['refund']):,}` {EMOJI_VND} chênh lệch" if fill_res['refund'] < 0 else ""
                                     embed = make_embed(
                                         title="🔔 LỆNH MUA TỰ ĐỘNG KHỚP 🔔",
                                         description=(
                                             f"Lệnh mua tự động (Limit Order) của bạn đã khớp thành công!\n\n"
                                             f"📈 **Mã:** `{symbol}`\n"
                                             f"📊 **Số lượng:** `{shares:.2f}`\n"
-                                            f"💵 **Giá thị trường:** `{curr_price:,} VND`\n"
-                                            f"⚡ **Trượt giá:** `+{fill_res['slippage_pct']*100:.3f}%` (Giá khớp: `{fill_res['effective_price']:,} VND`)\n"
-                                            f"🏷️ **Phí mua (2%):** `{fill_res['buy_fee']:,} VND`\n"
+                                            f"💵 **Giá thị trường:** `{curr_price:,}` {EMOJI_VND}\n"
+                                            f"⚡ **Trượt giá:** `+{fill_res['slippage_pct']*100:.3f}%` (Giá khớp: `{fill_res['effective_price']:,}` {EMOJI_VND})\n"
+                                            f"🏷️ **Phí mua (2%):** `{fill_res['buy_fee']:,}` {EMOJI_VND}\n"
                                             f"💰 Đã nhận `+{shares:.2f} {symbol}` vào tài khoản{refund_str}."
                                         ),
                                         color=discord.Color.green()
@@ -2232,10 +2232,10 @@ class Simulator(commands.Cog):
                                         f"Lệnh bán tự động (Limit Order) của bạn đã khớp thành công!\n\n"
                                         f"📈 **Mã:** `{symbol}`\n"
                                         f"📊 **Số lượng:** `{shares:.2f}`\n"
-                                        f"💵 **Giá thị trường:** `{curr_price:,} VND`\n"
-                                        f"⚡ **Trượt giá:** `-{fill_res['slippage_pct']*100:.3f}%` (Giá khớp: `{fill_res['effective_price']:,} VND`)\n"
-                                        f"🏷️ **Phí bán (5%):** `{fill_res['sell_fee']:,} VND`\n"
-                                        f"💰 Nhận về ví: `+{fill_res['payout']:,} VND`."
+                                        f"💵 **Giá thị trường:** `{curr_price:,}` {EMOJI_VND}\n"
+                                        f"⚡ **Trượt giá:** `-{fill_res['slippage_pct']*100:.3f}%` (Giá khớp: `{fill_res['effective_price']:,}` {EMOJI_VND})\n"
+                                        f"🏷️ **Phí bán (5%):** `{fill_res['sell_fee']:,}` {EMOJI_VND}\n"
+                                        f"💰 Nhận về ví: `+{fill_res['payout']:,}` {EMOJI_VND}."
                                     ),
                                     color=discord.Color.green()
                                 )
@@ -2449,14 +2449,14 @@ class Simulator(commands.Cog):
                 desc = (
                     f"🎖️ **Danh hiệu:**\n"
                     f"{danh_hieu_text}\n\n"
-                    f"💵 **Tài khoản:** `{money:,} VND`\n"
-                    f"<:32100goldbarsfortnite:1514192020921651251> **Két sắt:** `{gold} Vàng` *(Tỷ giá Vàng: {gold_price:,} VND)*\n"
+                    f"💵 **Tài khoản:** `{money:,}` {EMOJI_VND}\n"
+                    f"{EMOJI_GOLD} **Két sắt:** `{gold}` {EMOJI_GOLD} *(Tỷ giá Vàng: {gold_price:,} {EMOJI_VND})*\n"
                     f"🏢 **Doanh nghiệp:** `{biz_count} Cơ sở`\n"
                     f"🎒 **Túi đồ:** `{inv_count} Vật phẩm`\n"
                     f"🏺 **Cổ vật trưng bày:** {showcase_treasure_text}\n"
                 )
                 if loan_amount > 0:
-                    desc += f"🚨 **Khoản nợ hiện tại:** `-{loan_amount:,} VND`\n"
+                    desc += f"🚨 **Khoản nợ hiện tại:** `-{loan_amount:,}` {EMOJI_VND}\n"
                     
                 embed = make_embed(
                     title=f"💳 PROFILE CỦA {target.name.upper()}",
@@ -2626,14 +2626,14 @@ class Simulator(commands.Cog):
 
         if item['currency'] == "money":
             if money < cost:
-                await ctx.send(f"❌ Bạn không đủ tiền mặt! Cần `{cost:,} VND` nhưng bạn chỉ có `{money:,} VND`.")
+                await ctx.send(f"❌ Bạn không đủ tiền mặt! Cần `{cost:,}` {EMOJI_VND} nhưng bạn chỉ có `{money:,}` {EMOJI_VND}.")
                 return
             # Deduct VND
             self.economy.add_money(user_id, -cost)
             log_wallet_change(logger, event="buy_shop_item", user_id=user_id, money_delta=-cost, item_id=item_id, ctx=ctx)
         else:
             if gold < cost:
-                await ctx.send(f"❌ Bạn không đủ Vàng! Cần `{cost}` thỏi vàng nhưng bạn chỉ có `{gold}` thỏi vàng.")
+                await ctx.send(f"❌ Bạn không đủ Vàng! Cần `{cost}` {EMOJI_GOLD} nhưng bạn chỉ có `{gold}` {EMOJI_GOLD}.")
                 return
             # Deduct gold
             self.economy.add_credits(user_id, -cost)
@@ -2748,7 +2748,7 @@ class Simulator(commands.Cog):
                 title="✅ NHẬN THƯỞNG NHIỆM VỤ ✅",
                 description=(
                     f"{claimed['emoji']} **{claimed['desc'].format(target=claimed['target'])}**\n\n"
-                    f"💰 **Thưởng:** `+{claimed['reward_money']:,} VND`{gold_str}"
+                    f"💰 **Thưởng:** `+{claimed['reward_money']:,}` {EMOJI_VND}{gold_str}"
                 ),
                 color=discord.Color.green()
             )
@@ -2767,7 +2767,7 @@ class Simulator(commands.Cog):
             else:
                 status = f"{bar} `{q['progress']}/{q['target']}`"
             gold_str = f" + {q['reward_gold']} vàng" if q.get("reward_gold") else ""
-            lines.append(f"{q['emoji']} **{q['desc'].format(target=q['target'])}**\n└ {status}\n└ 💰 Thưởng: `{q['reward_money']:,} VND`{gold_str}\n")
+            lines.append(f"{q['emoji']} **{q['desc'].format(target=q['target'])}**\n└ {status}\n└ 💰 Thưởng: `{q['reward_money']:,}` {EMOJI_VND}{gold_str}\n")
 
         embed = make_embed(
             title="📋 NHIỆM VỤ HẰNG NGÀY",
@@ -2822,7 +2822,7 @@ class Simulator(commands.Cog):
                     ctx=ctx
                 )
                 currency_name = "VND"
-                balance_msg = f"💳 **Số dư VND hiện tại:** `{self.economy.get_entry(user_id)[1]:,} VND`"
+                balance_msg = f"💳 **Số dư hiện tại:** `{self.economy.get_entry(user_id)[1]:,}` {EMOJI_VND}"
             else: # gold
                 self.economy.add_credits(user_id, refund_value)
                 log_wallet_change(
@@ -2835,7 +2835,7 @@ class Simulator(commands.Cog):
                     ctx=ctx
                 )
                 currency_name = "thỏi vàng"
-                balance_msg = f"<:32100goldbarsfortnite:1514192020921651251> **Số dư Vàng hiện tại:** `{self.economy.get_entry(user_id)[2]:,} thỏi vàng`"
+                balance_msg = f"{EMOJI_GOLD} **Số dư Vàng hiện tại:** `{self.economy.get_entry(user_id)[2]:,}` {EMOJI_GOLD}"
                 
             embed = make_embed(
                 title="💰 BÁN BẰNG CẤP THÀNH CÔNG 💰",
@@ -2889,9 +2889,9 @@ class Simulator(commands.Cog):
                 title="💰 BÁN CỔ VẬT THÀNH CÔNG 💰",
                 description=(
                     f"Bạn đã bán **{quantity}x {treasure['name']}** cho bảo tàng thành phố!\n\n"
-                    f"💵 **Giá bán mỗi chiếc:** `{treasure['value']:,} VND`\n"
-                    f"💰 **Tổng tiền nhận:** `+{total_value:,} VND`\n"
-                    f"💳 **Số dư VND hiện tại:** `{self.economy.get_entry(user_id)[1]:,} VND`"
+                    f"💵 **Giá bán mỗi chiếc:** `{treasure['value']:,}` {EMOJI_VND}\n"
+                    f"💰 **Tổng tiền nhận:** `+{total_value:,}` {EMOJI_VND}\n"
+                    f"💳 **Số dư hiện tại:** `{self.economy.get_entry(user_id)[1]:,}` {EMOJI_VND}"
                 ),
                 color=discord.Color.green()
             )
@@ -2947,7 +2947,7 @@ class Simulator(commands.Cog):
             user_gold = profile[2]
             
             if user_gold < cost:
-                await ctx.send(f"❌ Bạn không đủ Thỏi Vàng! Nâng cấp lên **{next_name}** cần `{cost:,} Vàng` nhưng bạn chỉ có `{user_gold:,} Vàng`.")
+                await ctx.send(f"❌ Bạn không đủ Vàng! Nâng cấp lên **{next_name}** cần `{cost:,}` {EMOJI_GOLD} nhưng bạn chỉ có `{user_gold:,}` {EMOJI_GOLD}.")
                 return
                 
             # Deduct gold credits
@@ -3118,13 +3118,13 @@ class Simulator(commands.Cog):
         
         if biz['currency'] == "money":
             if money < cost:
-                await ctx.send(f"❌ Bạn không đủ VND! Chi phí nâng cấp cấp {current_lvl + 1} là `{cost:,} VND`.")
+                await ctx.send(f"❌ Bạn không đủ tiền! Chi phí nâng cấp cấp {current_lvl + 1} là `{cost:,}` {EMOJI_VND}.")
                 return
             self.economy.add_money(user_id, -cost)
             log_wallet_change(logger, event="buy_business", user_id=user_id, money_delta=-cost, biz_id=biz_id, ctx=ctx)
         else:
             if gold < cost:
-                await ctx.send(f"❌ Bạn không đủ Vàng! Chi phí nâng cấp cấp {current_lvl + 1} là `{cost}` thỏi vàng.")
+                await ctx.send(f"❌ Bạn không đủ Vàng! Chi phí nâng cấp cấp {current_lvl + 1} là `{cost}` {EMOJI_GOLD}.")
                 return
             self.economy.add_credits(user_id, -cost)
             log_wallet_change(logger, event="buy_business", user_id=user_id, credits_delta=-cost, biz_id=biz_id, ctx=ctx)
@@ -3198,7 +3198,7 @@ class Simulator(commands.Cog):
         target_money = target_profile[1]
         
         if target_money < 50_000:
-            await ctx.send(f"❌ **Mục tiêu quá nghèo:** {target.name} chỉ có `{target_money:,} VND` trong ví. Hãy để họ yên!")
+            await ctx.send(f"❌ **Mục tiêu quá nghèo:** {target.name} chỉ có `{target_money:,}` {EMOJI_VND} trong ví. Hãy để họ yên!")
             return
 
         # Check target immunity ring (ring_divine, ring_nhankat)
@@ -3242,7 +3242,7 @@ class Simulator(commands.Cog):
                 description=(
                     f"Bạn vừa đột nhập vào thuộc tính của **{target.mention}** nhưng **Hệ thống Camera & Chuông báo động 🚨** của họ đã reo inh ỏi!\n\n"
                     f"👮 Cảnh sát lập tức có mặt bắt giữ bạn tại hiện trường!\n"
-                    f"💸 **Bạn phải nộp phạt đền bù cho gia chủ:** `-{fine:,} VND`"
+                    f"💸 **Bạn phải nộp phạt đền bù cho gia chủ:** `-{fine:,}` {EMOJI_VND}"
                 ),
                 color=discord.Color.red()
             )
@@ -3291,7 +3291,7 @@ class Simulator(commands.Cog):
                 title="🥷 VỤ CƯỚP THÀNH CÔNG 🥷",
                 description=(
                     f"Bạn đã áp sát **{target.mention}** và giật phăng ví tiền mặt thành công!\n\n"
-                    f"💰 **Số tiền cướp được:** `+{steal_amount:,} VND`\n"
+                    f"💰 **Số tiền cướp được:** `+{steal_amount:,}` {EMOJI_VND}\n"
                     f"🛡️ *Mẹo: Hãy đổi VND sang Vàng gấp để tránh bị người khác cướp lại!*"
                 ),
                 color=discord.Color.green()
@@ -3328,7 +3328,7 @@ class Simulator(commands.Cog):
                 title="🚨 VỤ CƯỚP THẤT BẠI 🚨",
                 description=(
                     f"{fail_msg}\n\n"
-                    f"💸 **Bồi thường thiệt hại cho nạn nhân:** `-{fine:,} VND`"
+                    f"💸 **Bồi thường thiệt hại cho nạn nhân:** `-{fine:,}` {EMOJI_VND}"
                 ),
                 color=discord.Color.red()
             )
@@ -3358,7 +3358,7 @@ class Simulator(commands.Cog):
         inventory = self.economy.get_inventory(user_id)
         has_license = any(item == "bang_sieu_trom" and qty > 0 for item, qty in inventory)
         if not has_license:
-            await ctx.send("❌ Bạn cần sở hữu **Bằng Siêu Trộm Vàng 🥷** trong Cửa hàng (giá **1,500 Thỏi Vàng**) bằng lệnh `i?buy bang_sieu_trom` mới có thể thực hiện phi vụ này!")
+            await ctx.send(f"❌ Bạn cần sở hữu **Bằng Siêu Trộm Vàng 🥷** trong Cửa hàng (giá **1,500** {EMOJI_GOLD}) bằng lệnh `i?buy bang_sieu_trom` mới có thể thực hiện phi vụ này!")
             return
 
         # Check Cooldown (12 hours)
@@ -3379,7 +3379,7 @@ class Simulator(commands.Cog):
         robber_money = robber_profile[1]
         min_required_money = 5_000_000
         if robber_money < min_required_money:
-            await ctx.send(f"❌ **Bạn không đủ tiền thực hiện phi vụ:** Cần có ít nhất **{min_required_money:,} VND** trong ví để bồi thường nếu bị bắt quả tang!")
+            await ctx.send(f"❌ **Bạn không đủ tiền thực hiện phi vụ:** Cần có ít nhất **{min_required_money:,}** {EMOJI_VND} trong ví để bồi thường nếu bị bắt quả tang!")
             return
 
         # Check target gold
@@ -3387,7 +3387,7 @@ class Simulator(commands.Cog):
         target_gold = target_profile[2]
         
         if target_gold < 1:
-            await ctx.send(f"❌ **Mục tiêu không có vàng:** **{target.name}** không sở hữu thỏi vàng nào trong ví!")
+            await ctx.send(f"❌ **Mục tiêu không có vàng:** **{target.name}** không sở hữu {EMOJI_GOLD} nào trong ví!")
             return
 
         # Check target immunity ring (ring_divine, ring_nhankat)
@@ -3442,8 +3442,8 @@ class Simulator(commands.Cog):
                 title="🥷 PHI VỤ TRỘM VÀNG THÀNH CÔNG! 🥷",
                 description=(
                     f"**{ctx.author.mention}** đã đột nhập két sắt của **{target.mention}** và nẫng tay trên thành công!\n\n"
-                    f"✨ **Thỏi vàng cướp được:** `+{stolen_gold}` Thỏi Vàng <:32100goldbarsfortnite:1514192020921651251>\n"
-                    f"💵 **Giá trị ước tính:** `~{est_val:,} VND`\n\n"
+                    f"✨ **Vàng cướp được:** `+{stolen_gold}` {EMOJI_GOLD}\n"
+                    f"💵 **Giá trị ước tính:** `~{est_val:,}` {EMOJI_VND}\n\n"
                     f"🔒 *Khuyên nạn nhân hãy cẩn trọng hơn trước các Siêu Trộm Vàng!*"
                 ),
                 color=discord.Color.gold()
@@ -3468,7 +3468,7 @@ class Simulator(commands.Cog):
                 title="🚨 TRỘM VÀNG BỊ BẮT QUẢ TANG! 🚨",
                 description=(
                     f"**{ctx.author.mention}** cố gắng bẻ khóa két thỏi vàng của **{target.mention}** nhưng bị bắt quả tang!\n\n"
-                    f"👮 **Bị cảnh sát tóm gọn & phạt đền bù cho nạn nhân ({pct_display:.1f}% ví):** `-{actual_fine:,} VND`"
+                    f"👮 **Bị cảnh sát tóm gọn & phạt đền bù cho nạn nhân ({pct_display:.1f}% ví):** `-{actual_fine:,}` {EMOJI_VND}"
                 ),
                 color=discord.Color.red()
             )
@@ -3527,8 +3527,8 @@ class Simulator(commands.Cog):
                 curr_money = int(parts[2]) if len(parts) > 2 else 0
                 await ctx.send(
                     f"❌ Bạn không đủ tiền mặt!\n"
-                    f"• Mua `{shares:.2f}` {symbol} cần tổng cộng `{req_cost:,} VND` (gồm trượt giá & 2% phí mua).\n"
-                    f"• Số dư ví hiện tại: `{curr_money:,} VND`."
+                    f"• Mua `{shares:.2f}` {symbol} cần tổng cộng `{req_cost:,}` {EMOJI_VND} (gồm trượt giá & 2% phí mua).\n"
+                    f"• Số dư ví hiện tại: `{curr_money:,}` {EMOJI_VND}."
                 )
                 return
             elif err_str.startswith("max_holding_exceeded"):
@@ -3566,11 +3566,11 @@ class Simulator(commands.Cog):
             title="🟢 ĐẦU TƯ THÀNH CÔNG 🟢",
             description=(
                 f"Bạn đã khớp lệnh mua thành công **{receipt['shares']:.2f} {symbol}**!\n\n"
-                f"💵 **Giá thị trường:** `{receipt['market_price']:,} VND`\n"
-                f"📊 **Trượt giá:** `+{receipt['slippage_pct']*100:.3f}%` (Giá khớp: `{receipt['effective_price']:,} VND`)\n"
-                f"🏷️ **Phí mua (2%):** `{receipt['fee']:,} VND`\n"
-                f"💸 **Tổng chi phí:** `-{receipt['total_cost']:,} VND`\n\n"
-                f"📊 **Giá vốn TB mới (đã gồm phí 2%):** `{receipt['avg_cost']:,.0f} VND` / cổ\n"
+                f"💵 **Giá thị trường:** `{receipt['market_price']:,}` {EMOJI_VND}\n"
+                f"📊 **Trượt giá:** `+{receipt['slippage_pct']*100:.3f}%` (Giá khớp: `{receipt['effective_price']:,}` {EMOJI_VND})\n"
+                f"🏷️ **Phí mua (2%):** `{receipt['fee']:,}` {EMOJI_VND}\n"
+                f"💸 **Tổng chi phí:** `-{receipt['total_cost']:,}` {EMOJI_VND}\n\n"
+                f"📊 **Giá vốn TB mới (đã gồm phí 2%):** `{receipt['avg_cost']:,.0f}` {EMOJI_VND} / cổ\n"
                 f"🎒 **Số dư cổ phiếu hiện tại:** `{receipt['current_shares']:.2f} {symbol}`"
             ),
             color=discord.Color.green()
@@ -3638,11 +3638,11 @@ class Simulator(commands.Cog):
             title="🔴 BÁN ĐẦU TƯ THÀNH CÔNG 🔴",
             description=(
                 f"Bạn đã bán thành công **{receipt['shares']:.2f} {symbol}**!\n\n"
-                f"💵 **Giá thị trường:** `{receipt['market_price']:,} VND`\n"
-                f"📊 **Trượt giá:** `-{receipt['slippage_pct']*100:.3f}%` (Giá khớp: `{receipt['effective_price']:,} VND`)\n"
-                f"🏷️ **Phí bán (5%):** `{receipt['fee']:,} VND`\n"
-                f"💰 **Thực nhận về ví:** `+{receipt['total_payout']:,} VND`\n\n"
-                f"{pnl_icon} **Lãi/Lỗ thực hiện:** `{receipt['realized_pnl']:+,.0f} VND` (`{receipt['realized_pnl_pct']:+.2f}%`)\n"
+                f"💵 **Giá thị trường:** `{receipt['market_price']:,}` {EMOJI_VND}\n"
+                f"📊 **Trượt giá:** `-{receipt['slippage_pct']*100:.3f}%` (Giá khớp: `{receipt['effective_price']:,}` {EMOJI_VND})\n"
+                f"🏷️ **Phí bán (5%):** `{receipt['fee']:,}` {EMOJI_VND}\n"
+                f"💰 **Thực nhận về ví:** `+{receipt['total_payout']:,}` {EMOJI_VND}\n\n"
+                f"{pnl_icon} **Lãi/Lỗ thực hiện:** `{receipt['realized_pnl']:+,.0f}` {EMOJI_VND} (`{receipt['realized_pnl_pct']:+.2f}%`)\n"
                 f"🎒 **Số dư cổ phiếu còn lại:** `{receipt['remaining_shares']:.2f} {symbol}`"
             ),
             color=discord.Color.green()
@@ -3685,12 +3685,12 @@ class Simulator(commands.Cog):
             net_pl_pct = ((est_net_payout / cost_basis) - 1) * 100 if cost_basis > 0 else 0.0
             n_icon = "🟢" if net_pl >= 0 else "🔴"
             
-            avg_str = f"`{avg_cost:,.0f} VND`" if avg_cost > 0 else "`—`"
+            avg_str = f"`{avg_cost:,.0f}` {EMOJI_VND}" if avg_cost > 0 else "`—`"
             lines.append(
                 f"{u_icon} **{sym}** — `{shares:.2f}` cổ\n"
-                f"> Giá vốn (gồm 2% phí): {avg_str} • Giá hiện tại: `{price:,} VND`\n"
-                f"> Giá trị thị trường: `{market_val:,} VND` • Lãi/Lỗ chưa bán: `{unrealized_pl:+,.0f} VND` (`{unrealized_pct:+.2f}%`)\n"
-                f"> {n_icon} **Thực nhận ước tính (sau 5% phí & trượt giá):** `{net_pl:+,.0f} VND` (`{net_pl_pct:+.2f}%`)"
+                f"> Giá vốn (gồm 2% phí): {avg_str} • Giá hiện tại: `{price:,}` {EMOJI_VND}\n"
+                f"> Giá trị thị trường: `{market_val:,}` {EMOJI_VND} • Lãi/Lỗ chưa bán: `{unrealized_pl:+,.0f}` {EMOJI_VND} (`{unrealized_pct:+.2f}%`)\n"
+                f"> {n_icon} **Thực nhận ước tính (sau 5% phí & trượt giá):** `{net_pl:+,.0f}` {EMOJI_VND} (`{net_pl_pct:+.2f}%`)"
             )
             total_market_value += market_val
             total_cost_basis += cost_basis
@@ -3705,10 +3705,10 @@ class Simulator(commands.Cog):
             title=f"💼 DANH MỤC ĐẦU TƯ CỦA {ctx.author.name.upper()} 💼",
             description=(
                 "\n\n".join(lines)
-                + f"\n\n💰 **TỔNG GIÁ TRỊ THỊ TRƯỜNG:** `{total_market_value:,} VND`\n"
-                f"📊 **TỔNG GIÁ VỐN ĐẦU TƯ:** `{total_cost_basis:,} VND`\n"
-                f"📈 **TỔNG LÃI/LỖ CHƯA BÁN:** `{total_unrealized_pl:+,.0f} VND` (`{total_unrealized_pct:+.2f}%`)\n"
-                f"💵 **TỔNG LÃI/LỖ THỰC NHẬN ƯỚC TÍNH:** `{total_net_pl:+,.0f} VND` (`{total_net_pct:+.2f}%`)"
+                + f"\n\n💰 **TỔNG GIÁ TRỊ THỊ TRƯỜNG:** `{total_market_value:,}` {EMOJI_VND}\n"
+                f"📊 **TỔNG GIÁ VỐN ĐẦU TƯ:** `{total_cost_basis:,}` {EMOJI_VND}\n"
+                f"📈 **TỔNG LÃI/LỖ CHƯA BÁN:** `{total_unrealized_pl:+,.0f}` {EMOJI_VND} (`{total_unrealized_pct:+.2f}%`)\n"
+                f"💵 **TỔNG LÃI/LỖ THỰC NHẬN ƯỚC TÍNH:** `{total_net_pl:+,.0f}` {EMOJI_VND} (`{total_net_pct:+.2f}%`)"
             ),
             color=discord.Color.green() if total_net_pl >= 0 else discord.Color.red()
         )
@@ -3756,9 +3756,9 @@ class Simulator(commands.Cog):
                 lock_cost = int(parts[1]) if len(parts) > 1 else 0
                 curr_money = int(parts[2]) if len(parts) > 2 else 0
                 await ctx.send(
-                    f"❌ Bạn không đủ VND để đặt lệnh mua này!\n"
-                    f"• Cần tạm khóa: `{lock_cost:,} VND` (bao gồm 2% phí mua & trượt giá ước tính ở target price).\n"
-                    f"• Bạn chỉ có: `{curr_money:,} VND`."
+                    f"❌ Bạn không đủ tiền để đặt lệnh mua này!\n"
+                    f"• Cần tạm khóa: `{lock_cost:,}` {EMOJI_VND} (bao gồm 2% phí mua & trượt giá ước tính ở target price).\n"
+                    f"• Bạn chỉ có: `{curr_money:,}` {EMOJI_VND}."
                 )
                 return
             elif err_str.startswith("max_holding_exceeded"):
@@ -3804,8 +3804,8 @@ class Simulator(commands.Cog):
                 f"Đã đặt thành công lệnh mua tự động (Limit Buy) **#{order_id}**!\n\n"
                 f"📈 **Mã:** `{symbol}`\n"
                 f"📊 **Số lượng:** `{shares:.2f}`\n"
-                f"💵 **Giá mục tiêu:** `<= {target_price:,} VND` / cổ\n"
-                f"🔒 **Tiền mặt bị khóa:** `-{total_cost:,} VND` (Đã gồm 2% phí & {slippage_pct*100:.3f}% trượt giá. Sẽ hoàn lại chênh lệch khi khớp lệnh hoặc trả lại khi hủy lệnh)\n"
+                f"💵 **Giá mục tiêu:** `<= {target_price:,}` {EMOJI_VND} / cổ\n"
+                f"🔒 **Tiền mặt bị khóa:** `-{total_cost:,}` {EMOJI_VND} (Đã gồm 2% phí & {slippage_pct*100:.3f}% trượt giá. Sẽ hoàn lại chênh lệch khi khớp lệnh hoặc trả lại khi hủy lệnh)\n"
                 f"💡 *Lệnh sẽ tự động khớp khi giá thị trường giảm về dưới hoặc bằng giá mục tiêu.*"
             ),
             color=discord.Color.green()
@@ -3875,7 +3875,7 @@ class Simulator(commands.Cog):
                 f"Đã đặt thành công lệnh bán tự động (Limit Sell) **#{order_id}**!\n\n"
                 f"📈 **Mã:** `{symbol}`\n"
                 f"📊 **Số lượng:** `{shares:.2f}`\n"
-                f"💵 **Giá mục tiêu:** `>= {target_price:,} VND` / cổ\n"
+                f"💵 **Giá mục tiêu:** `>= {target_price:,}` {EMOJI_VND} / cổ\n"
                 f"🔒 **Cổ phiếu bị khóa:** `-{shares:.2f} {symbol}` (Sẽ hoàn trả lại nếu hủy lệnh)\n"
                 f"💡 *Lệnh sẽ tự động khớp khi giá thị trường tăng lên bằng hoặc cao hơn giá mục tiêu.*"
             ),
@@ -3904,13 +3904,13 @@ class Simulator(commands.Cog):
         
         for oid, symbol, otype, target, shares, created in orders:
             type_str = "🟢 MUA" if otype == "BUY" else "🔴 BÁN"
-            lock_asset = f"{get_limit_buy_cost(shares, target, symbol):,} VND" if otype == "BUY" else f"{shares:.2f} {symbol}"
+            lock_asset = f"{get_limit_buy_cost(shares, target, symbol):,} {EMOJI_VND}" if otype == "BUY" else f"{shares:.2f} {symbol}"
             remain = max(0, LIMIT_ORDER_TTL - (int(time.time()) - created))
             embed.add_field(
                 name=f"Lệnh #{oid} | {type_str} {symbol}",
                 value=(
                     f"• Số lượng: **{shares:.2f}**\n"
-                    f"• Giá mục tiêu: **{target:,} VND**\n"
+                    f"• Giá mục tiêu: **{target:,}** {EMOJI_VND}\n"
                     f"• Đang khóa: `{lock_asset}`\n"
                     f"• Hết hạn sau: `{remain // 3600}h {(remain % 3600) // 60}m`"
                 ),
@@ -4061,7 +4061,7 @@ class Simulator(commands.Cog):
             description=(
                 f"Bạn đã chọn trưng bày **{treasure['name']}** lên trang cá nhân!\n\n"
                 f"✨ **Độ hiếm:** `{treasure['rarity']}`\n"
-                f"💰 **Giá trị cổ vật:** `{treasure['value']:,} VND`\n\n"
+                f"💰 **Giá trị cổ vật:** `{treasure['value']:,}` {EMOJI_VND}\n\n"
                 f"👉 Cổ vật này sẽ được hiển thị khi người khác gõ lệnh `i?profile` của bạn."
             ),
             color=discord.Color.gold()
@@ -4083,7 +4083,7 @@ class Simulator(commands.Cog):
         )
         for item_id, details in SHOP_ITEMS.items():
             if details.get("is_banner") and details.get("is_admin_only"):
-                cost_str = f"{details['cost']:,} VND" if details['currency'] == "money" else f"{details['cost']} thỏi vàng"
+                cost_str = f"{details['cost']:,} {EMOJI_VND}" if details['currency'] == "money" else f"{details['cost']} {EMOJI_GOLD}"
                 embed.add_field(
                     name=f"🖼️ {details['name']} (ID: `{item_id}`)",
                     value=f"💵 **Giá tham khảo:** `{cost_str}`\n📝 **Mô tả:** {details['description']}\n📁 **Tên file:** `{details['filename']}`",
@@ -4175,16 +4175,16 @@ class Simulator(commands.Cog):
 
         total = money + int(gold * gold_price) + stock_value + locked_total
         rank = self.economy.get_rich_rank(user_id)
-        locked_line = f"🔒 **Đang khóa trong lệnh limit:** `~{locked_total:,} VND`\n" if locked_total else ""
+        locked_line = f"🔒 **Đang khóa trong lệnh limit:** `~{locked_total:,}` {EMOJI_VND}\n" if locked_total else ""
 
         embed = make_embed(
             title=f"💰 TỔNG TÀI SẢN CỦA {ctx.author.name.upper()} 💰",
             description=(
-                f"💵 **Tiền mặt:** `{money:,} VND`\n"
-                f"🪙 **Thỏi vàng:** `{gold}` (~`{int(gold * gold_price):,} VND`)\n"
-                f"📈 **Cổ phiếu:** `~{stock_value:,} VND`\n"
+                f"💵 **Tiền mặt:** `{money:,}` {EMOJI_VND}\n"
+                f"🪙 **Thỏi vàng:** `{gold}` {EMOJI_GOLD} (~`{int(gold * gold_price):,}` {EMOJI_VND})\n"
+                f"📈 **Cổ phiếu:** `~{stock_value:,}` {EMOJI_VND}\n"
                 f"{locked_line}"
-                f"💎 **TỔNG CỘNG:** `{total:,} VND`\n\n"
+                f"💎 **TỔNG CỘNG:** `{total:,}` {EMOJI_VND}\n\n"
                 f"🏆 **Hạng giàu thứ:** `#{rank}` trên server"
             ),
             color=discord.Color.gold()
@@ -4209,17 +4209,17 @@ class Simulator(commands.Cog):
         for i, (uid, money) in enumerate(t["top"], 1):
             member = ctx.guild.get_member(uid) if ctx.guild else None
             name = member.display_name if member else f"ID {uid}"
-            top_lines.append(f"`#{i}` **{name}** — `{money:,} VND`")
+            top_lines.append(f"`#{i}` **{name}** — `{money:,}` {EMOJI_VND}")
 
         avg = t["total_money"] // t["user_count"] if t["user_count"] else 0
         embed = make_embed(
             title="📊 THỐNG KÊ KINH TẾ SERVER 📊",
             description=(
-                f"💰 **Tổng tiền lưu thông:** `{t['total_money']:,} VND`\n"
+                f"💰 **Tổng tiền lưu thông:** `{t['total_money']:,}` {EMOJI_VND}\n"
                 f"👥 **Số ví đang hoạt động:** `{t['user_count']}`\n"
-                f"📈 **Trung bình mỗi ví:** `{avg:,} VND`\n"
-                f"🎰 **Quỹ Jackpot chung:** `{t['jackpot_pool']:,} VND`\n\n"
-                f"🪙 **Giá vàng hiện tại:** `{t['gold_price']:,} VND/thỏi`\n"
+                f"📈 **Trung bình mỗi ví:** `{avg:,}` {EMOJI_VND}\n"
+                f"🎰 **Quỹ Jackpot chung:** `{t['jackpot_pool']:,}` {EMOJI_VND}\n\n"
+                f"🪙 **Giá vàng hiện tại:** `{t['gold_price']:,}` {EMOJI_VND}/{EMOJI_GOLD}\n"
                 f"⛏️ **Vàng đào tuần này:** `{t['gold_mined_week']}` | 🛒 **Vàng tiêu thụ:** `{t['gold_spent_week']}`\n\n"
                 f"**🏆 TOP 10 GIÀU NHẤT:**\n" + "\n".join(top_lines)
             ),
@@ -4245,8 +4245,8 @@ class Simulator(commands.Cog):
             global_min = self.economy.get_setting("global_min_bet")
             global_max = self.economy.get_setting("global_max_bet")
             
-            min_str = f"{int(global_min):,} VND" if global_min else "Không giới hạn"
-            max_str = f"{int(global_max):,} VND" if global_max else "Không giới hạn"
+            min_str = f"{int(global_min):,} {EMOJI_VND}" if global_min else "Không giới hạn"
+            max_str = f"{int(global_max):,} {EMOJI_VND}" if global_max else "Không giới hạn"
             
             embed = make_embed(
                 title="⚙️ GIỚI HẠN CƯỢC CỜ BẠC HIỆN TẠI ⚙️",
@@ -4297,8 +4297,8 @@ class Simulator(commands.Cog):
         self.economy.set_setting("global_min_bet", str(min_val) if min_val is not None else "")
         self.economy.set_setting("global_max_bet", str(max_val) if max_val is not None else "")
 
-        min_str = f"{min_val:,} VND" if min_val is not None else "Không giới hạn"
-        max_str = f"{max_val:,} VND" if max_val is not None else "Không giới hạn"
+        min_str = f"{min_val:,} {EMOJI_VND}" if min_val is not None else "Không giới hạn"
+        max_str = f"{max_val:,} {EMOJI_VND}" if max_val is not None else "Không giới hạn"
 
         embed = make_embed(
             title="⚙️ CẬP NHẬT GIỚI HẠN CƯỢC THÀNH CÔNG ⚙️",
@@ -4397,7 +4397,7 @@ class Simulator(commands.Cog):
                 cancelled, refunded = self._refund_user_limit_orders(user_id)
                 self.economy.cur.execute("DELETE FROM user_portfolio WHERE user_id = ?", (user_id,))
                 self.economy.conn.commit()
-                refund_note = f" (hoàn `{refunded:,} VND` tiền khóa từ lệnh BUY)" if refunded else ""
+                refund_note = f" (hoàn `{refunded:,}` {EMOJI_VND} tiền khóa từ lệnh BUY)" if refunded else ""
                 await ctx.send(
                     f"✅ Đã xóa toàn bộ cổ phiếu của **{user_name}** (`{user_id}`) về **0** "
                     f"và hủy `{cancelled}` lệnh limit{refund_note}."
@@ -4416,7 +4416,7 @@ class Simulator(commands.Cog):
             cancelled, refunded = self._refund_user_limit_orders(user_id, symbol)
             self.economy.cur.execute("DELETE FROM user_portfolio WHERE user_id = ? AND symbol = ?", (user_id, symbol))
             self.economy.conn.commit()
-            refund_note = f" (hoàn `{refunded:,} VND` tiền khóa từ lệnh BUY)" if refunded else ""
+            refund_note = f" (hoàn `{refunded:,}` {EMOJI_VND} tiền khóa từ lệnh BUY)" if refunded else ""
             await ctx.send(
                 f"✅ Đã đặt số lượng cổ phiếu **{symbol}** của **{user_name}** (`{user_id}`) về **0**, "
                 f"hủy `{cancelled}` lệnh limit liên quan{refund_note}."
@@ -4456,7 +4456,7 @@ class Simulator(commands.Cog):
         cancelled, refunded = self._refund_user_limit_orders(user_id)
         self.economy.cur.execute("DELETE FROM user_portfolio WHERE user_id = ?", (user_id,))
         self.economy.conn.commit()
-        refund_note = f" (hoàn `{refunded:,} VND` tiền khóa từ lệnh BUY)" if refunded else ""
+        refund_note = f" (hoàn `{refunded:,}` {EMOJI_VND} tiền khóa từ lệnh BUY)" if refunded else ""
         await ctx.send(f"🧹 Đã xóa sạch toàn bộ cổ phiếu của **{user_name}** (`{user_id}`) về **0** và hủy `{cancelled}` lệnh limit{refund_note}!")
 
     def get_stock_chart_file(self, symbol: str) -> discord.File:

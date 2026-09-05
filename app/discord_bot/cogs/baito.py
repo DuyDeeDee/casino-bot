@@ -12,7 +12,7 @@ from discord.ext import commands
 from app.config import config
 from app.discord_bot.modules.betting import validate_money_bet
 from app.discord_bot.modules.economy import Economy
-from app.discord_bot.modules.helpers import make_embed, InsufficientFundsException
+from app.discord_bot.modules.helpers import EMOJI_VND, make_embed, InsufficientFundsException
 from app.discord_bot.modules.wallet_logging import log_wallet_change
 from app.discord_bot.modules.card import Card
 from app.discord_bot.modules.card_table import render_card_table_bytes
@@ -207,15 +207,15 @@ class BaitoGameView(discord.ui.View):
             
             seen_str = "😎 Tố Mù" if not state["has_seen_cards"] else "👁️ Đã xem"
             players_status.append(
-                f"- {p.display_name}: **{state['contribution']:,} VND** ({status_emoji} | {seen_str})"
+                f"- {p.display_name}: **{state['contribution']:,}** {EMOJI_VND} ({status_emoji} | {seen_str})"
             )
             
         players_list_str = "\n".join(players_status)
         
         desc = (
             f"👉 **Lượt của:** {curr_p_mention}\n"
-            f"💰 **Số tiền cần theo:** `{needed:,} VND` (Mức cược sàn: `{self.session.bet_amount:,} VND`)\n"
-            f"🏆 **Tổng Pot:** `{self.session.pot:,} VND`\n\n"
+            f"💰 **Số tiền cần theo:** `{needed:,}` {EMOJI_VND} (Mức cược sàn: `{self.session.bet_amount:,}` {EMOJI_VND})\n"
+            f"🏆 **Tổng Pot:** `{self.session.pot:,}` {EMOJI_VND}\n\n"
             f"👥 **Danh sách người chơi:**\n"
             f"{players_list_str}\n\n"
             f"📜 **Nhật ký ván bài:**\n"
@@ -298,9 +298,9 @@ class LobbyView(discord.ui.View):
     def get_embed(self) -> discord.Embed:
         desc = (
             f"**Chủ sảnh:** {self.host.mention}\n"
-            f"**Mức cược sàn:** `{self.bet_amount:,} VND`\n\n"
+            f"**Mức cược sàn:** `{self.bet_amount:,}` {EMOJI_VND}\n\n"
             f"👥 **Người chơi đã tham gia ({len(self.players)}/6):**\n"
-            + "\n".join(f"- {p.mention} ({self.economy.get_entry(p.id)[1]:,} VND)" for p in self.players)
+            + "\n".join(f"- {p.mention} ({self.economy.get_entry(p.id)[1]:,} {EMOJI_VND})" for p in self.players)
             + "\n\n👉 Bấm nút để tham gia vào sảnh Bài Tố."
         )
         embed = discord.Embed(
@@ -425,7 +425,7 @@ class GameSession:
             self.pot += self.bet_amount
             
         self.active_player_sequence = list(self.players)
-        self.action_history.append(f"Ván bài bắt đầu! Mỗi người đóng cược sàn {self.bet_amount:,} VND.")
+        self.action_history.append(f"Ván bài bắt đầu! Mỗi người đóng cược sàn {self.bet_amount:,} {EMOJI_VND}.")
         
         # Send private hands in DM
         for p in self.players:
@@ -463,7 +463,7 @@ class GameSession:
             )
             state["contribution"] = self.current_bet
             self.pot += needed
-            self.action_history.append(f"🟢 {user.display_name} đã Theo {needed:,} VND.")
+            self.action_history.append(f"🟢 {user.display_name} đã Theo {needed:,} {EMOJI_VND}.")
         else:
             self.action_history.append(f"🟢 {user.display_name} đã Nhường (Check).")
             
@@ -488,7 +488,7 @@ class GameSession:
         self.pot += total_cost
         
         blind_tag = " MÙ" if not state["has_seen_cards"] else ""
-        self.action_history.append(f"🔺 {user.display_name} đã TỐ{blind_tag} thêm {raise_amt:,} VND (Cược hiện tại: {self.current_bet:,} VND).")
+        self.action_history.append(f"🔺 {user.display_name} đã TỐ{blind_tag} thêm {raise_amt:,} {EMOJI_VND} (Cược hiện tại: {self.current_bet:,} {EMOJI_VND}).")
         
         await self.advance_turn()
 
@@ -520,7 +520,7 @@ class GameSession:
         if state["contribution"] > self.current_bet:
             self.current_bet = state["contribution"]
             
-        self.action_history.append(f"💎 {user.display_name} đã TẤT TAY toàn bộ {user_bal:,} VND!")
+        self.action_history.append(f"💎 {user.display_name} đã TẤT TAY toàn bộ {user_bal:,} {EMOJI_VND}!")
         await self.advance_turn()
 
     async def advance_turn(self):
@@ -582,7 +582,7 @@ class GameSession:
             winner_p = winner_override
             payout = self.pot
             rank_val, rank_name, _ = evaluate_hand(self.player_states[winner_p.id]["hand"])
-            desc = f"🏆 **{winner_p.mention}** thắng cuộc do tất cả đối thủ khác đã Úp bài!\n💰 **Tiền thưởng nhận:** `+{self.pot:,} VND`"
+            desc = f"🏆 **{winner_p.mention}** thắng cuộc do tất cả đối thủ khác đã Úp bài!\n💰 **Tiền thưởng nhận:** `+{self.pot:,}` {EMOJI_VND}"
             embed.description = desc
             
             # Settlement payout for winner
@@ -620,7 +620,7 @@ class GameSession:
             winner_p = winners[0] # primary winner for logging single stats
             
             winners_str = ", ".join(w.mention for w in winners)
-            desc = f"🏆 Người thắng cuộc: {winners_str}\n📊 Bài mạnh nhất: `{best[2]}`\n💰 Tiền thưởng: `+{payout:,} VND` mỗi người\n\n"
+            desc = f"🏆 Người thắng cuộc: {winners_str}\n📊 Bài mạnh nhất: `{best[2]}`\n💰 Tiền thưởng: `+{payout:,}` {EMOJI_VND} mỗi người\n\n"
             
             # Build hands log
             hands_log = []
@@ -786,7 +786,7 @@ class Baito(commands.Cog):
     @baito_group.command(name="create", brief="Tạo phòng Bài Tố mới.")
     async def baito_create(self, ctx: commands.Context, bet: int = config.bot.default_bet):
         if bet < 1000:
-            await ctx.send("❌ Cược sàn tối thiểu phải từ 1,000 VND trở lên!")
+            await ctx.send(f"❌ Cược sàn tối thiểu phải từ 1,000 {EMOJI_VND} trở lên!")
             return
             
         try:
@@ -835,7 +835,7 @@ class Baito(commands.Cog):
             f"- Đã chơi: `{plays}` ván\n"
             f"- Thắng: `{wins}` ván\n"
             f"- Winrate: `{winrate:.1f}%`\n"
-            f"- Lợi nhuận: **{profit:+,} VND**\n"
+            f"- Lợi nhuận: **{profit:+,}** {EMOJI_VND}\n"
             f"- Chuỗi thắng hiện tại: `{stats['streak']}` (Lớn nhất: `{stats['max_streak']}`)\n\n"
             f"💎 **Số lần thắng bài đặc biệt:**\n"
             f"- 9 Nút: `{stats['point_9_wins']}` lần\n"
@@ -845,7 +845,7 @@ class Baito(commands.Cog):
             f"🎭 **Thống kê Tố Mù (Blind Bets):**\n"
             f"- Đã Tố Mù: `{stats['blind_plays']}` lần\n"
             f"- Tố Mù Thắng (Blind Wins): `{stats['blind_wins']}` lần\n"
-            f"- Thắng Tố Mù lớn nhất: `{stats['max_blind_win_amount']:,} VND`\n\n"
+            f"- Thắng Tố Mù lớn nhất: `{stats['max_blind_win_amount']:,}` {EMOJI_VND}\n\n"
             f"🏆 **Thành tựu đã mở khóa ({len(ach_unlocked)}/10):**\n"
         )
         

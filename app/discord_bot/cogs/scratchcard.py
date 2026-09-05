@@ -10,7 +10,7 @@ from discord.ext import commands
 from app.config import config
 from app.discord_bot.modules.betting import validate_money_bet
 from app.discord_bot.modules.economy import Economy
-from app.discord_bot.modules.helpers import make_embed
+from app.discord_bot.modules.helpers import EMOJI_VND, make_embed
 from app.discord_bot.modules.wallet_logging import log_wallet_change
 
 logger = logging.getLogger(__name__)
@@ -271,7 +271,7 @@ class CancelCardButton(discord.ui.Button):
                 title=f"❌ ĐÃ HỦY THẺ — {view.card_cfg['name'].upper()}",
                 description=(
                     f"Bạn đã hủy cào thẻ. Hoàn lại "
-                    f"**{view.card_cfg['price']:,} VND** vào tài khoản."
+                    f"**{view.card_cfg['price']:,}** {EMOJI_VND} vào tài khoản."
                 ),
                 color=discord.Color.red(),
             )
@@ -348,7 +348,7 @@ class ScratchCardPlayView(discord.ui.View):
         grid_text = self._render_grid_text()
         desc = (
             f"### {self.card_cfg['name']}\n"
-            f"💵 **Giá mua:** `{self.card_cfg['price']:,} VND`\n\n"
+            f"💵 **Giá mua:** `{self.card_cfg['price']:,}` {EMOJI_VND}\n\n"
             f"```\n{grid_text}\n```\n"
             f"👉 Nhấn nút số `[1-9]` để cào từng ô.\n"
             f"👉 Cào được **3 ô giống nhau** ➔ **THẮNG** nhân giá trị thẻ!\n"
@@ -408,7 +408,7 @@ class ScratchCardPlayView(discord.ui.View):
                 card_type=self.card_cfg["id"]
             )
             result_lines.append(
-                f"💥💥💥 **NỔ HŨ JACKPOT CHUNG!** ➔ **+{shared_jackpot_amount:,} VND** 💥💥💥"
+                f"💥💥💥 **NỔ HŨ JACKPOT CHUNG!** ➔ **+{shared_jackpot_amount:,}** {EMOJI_VND} 💥💥💥"
             )
 
         if self.is_win and self.win_sym:
@@ -425,7 +425,7 @@ class ScratchCardPlayView(discord.ui.View):
                 symbol=self.win_sym,
             )
             result_lines.append(
-                f"🎉 **THẮNG x{mult}!** 3× {self.win_sym} ➔ **+{payout:,} VND**"
+                f"🎉 **THẮNG x{mult}!** 3× {self.win_sym} ➔ **+{payout:,}** {EMOJI_VND}"
             )
             if self.win_sym == self.card_cfg["symbols"][-1]:
                 is_card_jackpot = True
@@ -444,7 +444,7 @@ class ScratchCardPlayView(discord.ui.View):
             )
             result_lines.append(
                 f"🎁 **BONUS!** Tìm thấy ô ẩn `🎁` ➔ Tặng thẻ Free "
-                f"(hoàn `+{self.card_cfg['price']:,} VND`)"
+                f"(hoàn `+{self.card_cfg['price']:,}` {EMOJI_VND})"
             )
 
         # Update shared jackpot with a percentage of the net loss
@@ -461,7 +461,7 @@ class ScratchCardPlayView(discord.ui.View):
                     self.cog.economy.set_setting("scratchcard_jackpot", str(current_jackpot + added_to_jackpot))
 
         balance = self.cog.economy.get_entry(self.author.id)[1]
-        result_lines.append(f"\n💳 Số dư ví: **{balance:,} VND**")
+        result_lines.append(f"\n💳 Số dư ví: **{balance:,}** {EMOJI_VND}")
 
         if won_shared_jackpot:
             title = "💥💥💥 NỔ HŨ JACKPOT CHUNG! 💥💥💥"
@@ -490,8 +490,8 @@ class ScratchCardPlayView(discord.ui.View):
                 await self.message.channel.send(
                     f"💥💥💥 **BÙNG NỔ HŨ JACKPOT SCRATCH CARD!** 💥💥💥\n"
                     f"🏆 Chúc mừng {self.author.mention} vừa cào trúng **HŨ JACKPOT TÍCH LŨY CHUNG**! 🎉\n"
-                    f"💰 Số tiền nhận được: **+{payout:,} VND**! 🏆🔥🔥\n"
-                    f"🍀 Hũ mới đã được reset về **0 VND**."
+                    f"💰 Số tiền nhận được: **+{payout:,}** {EMOJI_VND}! 🏆🔥🔥\n"
+                    f"🍀 Hũ mới đã được reset về **0** {EMOJI_VND}."
                 )
         except Exception:
             pass
@@ -503,7 +503,7 @@ class ScratchCardPlayView(discord.ui.View):
                     f"💥💥💥 **JACKPOT TRÚNG LỚN!** 💥💥💥\n"
                     f"Chúc mừng {self.author.mention} vừa cào trúng **JACKPOT THẺ** "
                     f"của {self.card_cfg['name']}! 🎉\n"
-                    f"Nhận về **+{payout:,} VND**! 🏆🔥"
+                    f"Nhận về **+{payout:,}** {EMOJI_VND}! 🏆🔥"
                 )
         except Exception:
             pass
@@ -528,7 +528,7 @@ class ScratchCardPlayView(discord.ui.View):
             )
             embed = make_embed(
                 title="⏱️ THẺ CÀO HẾT HẠN - ĐÃ HOÀN TIỀN",
-                description=f"👤 **Người chơi:** {self.author.mention}\n\n*Hết thời gian cào thẻ. Đã hoàn lại `{self.card_cfg['price']:,} VND`.*",
+                description=f"👤 **Người chơi:** {self.author.mention}\n\n*Hết thời gian cào thẻ. Đã hoàn lại `{self.card_cfg['price']:,}` {EMOJI_VND}.*",
                 color=discord.Color.red(),
             )
             try:
@@ -575,7 +575,7 @@ class ScratchCardPostView(discord.ui.View):
         if profile[1] < self.card_cfg["price"]:
             self.is_buying = False
             await interaction.response.send_message(
-                f"❌ Không đủ tiền! Cần **{self.card_cfg['price']:,} VND**.",
+                f"❌ Không đủ tiền! Cần **{self.card_cfg['price']:,}** {EMOJI_VND}.",
                 ephemeral=True,
             )
             return
@@ -609,7 +609,7 @@ class ScratchCardPostView(discord.ui.View):
     async def view_wallet(self, interaction: discord.Interaction, button: discord.ui.Button):
         balance = self.cog.economy.get_entry(self.author.id)[1]
         await interaction.response.send_message(
-            f"💰 Số dư ví: **{balance:,} VND**.", ephemeral=True
+            f"💰 Số dư ví: **{balance:,}** {EMOJI_VND}.", ephemeral=True
         )
 
 class ScratchBulkPostView(discord.ui.View):
@@ -641,7 +641,7 @@ class ScratchBulkPostView(discord.ui.View):
 
         if current_money < total_price:
             await interaction.response.send_message(
-                f"❌ Không đủ tiền! Cần **{total_price:,} VND**.",
+                f"❌ Không đủ tiền! Cần **{total_price:,}** {EMOJI_VND}.",
                 ephemeral=True,
             )
             return
@@ -693,7 +693,7 @@ class ScratchBulkPostView(discord.ui.View):
     async def view_wallet(self, interaction: discord.Interaction, button: discord.ui.Button):
         balance = self.cog.economy.get_entry(self.author.id)[1]
         await interaction.response.send_message(
-            f"💰 Số dư ví: **{balance:,} VND**.", ephemeral=True
+            f"💰 Số dư ví: **{balance:,}** {EMOJI_VND}.", ephemeral=True
         )
 
     async def on_timeout(self):
@@ -775,7 +775,7 @@ class ScratchCard(commands.Cog, name="ScratchCard"):
         current_money = self.economy.get_entry(user_id)[1]
         if current_money < total_price:
             await ctx.send(
-                f"❌ Không đủ tiền! Cần **{total_price:,} VND** "
+                f"❌ Không đủ tiền! Cần **{total_price:,}** {EMOJI_VND} "
                 f"để mua {quantity}× `{card_cfg['name']}`."
             )
             return
@@ -822,7 +822,7 @@ class ScratchCard(commands.Cog, name="ScratchCard"):
         embed = make_embed(
             title="🎴 THÈ CÀO MAY MẮN — DANH MỤC 🎴",
             description=(
-                f"🎰 **HŨ JACKPOT TÍCH LŨY CHUNG:** `{jackpot_val:,} VND` 🎰\n"
+                f"🎰 **HŨ JACKPOT TÍCH LŨY CHUNG:** `{jackpot_val:,}` {EMOJI_VND} 🎰\n"
                 f"🔥 *Mỗi thẻ cào đều có **{jackpot_rate * 100:.3f}%** cơ hội trúng trọn hũ Jackpot trên!*\n\n"
                 "Cào ô tìm **3 biểu tượng giống nhau** để nhận thưởng nhân gấp bội!\n\n"
                 "👉 `i?scratch buy <tên>` — mua 1 thẻ\n"
@@ -840,7 +840,7 @@ class ScratchCard(commands.Cog, name="ScratchCard"):
             embed.add_field(
                 name=f"{cfg['name']} (ID: `{cid}`){event_tag}",
                 value=(
-                    f"💵 Giá: `{cfg['price']:,} VND` • "
+                    f"💵 Giá: `{cfg['price']:,}` {EMOJI_VND} • "
                     f"Tỷ lệ thắng: `{int(cfg['win_rate'] * 100)}%`\n"
                     f"✨ {payouts}"
                 ),
@@ -944,9 +944,9 @@ class ScratchCard(commands.Cog, name="ScratchCard"):
             description=(
                 f"👤 {author.mention}\n"
                 f"🛒 **{quantity}×** `{card_cfg['name']}`{discount_note}\n"
-                f"💸 Chi phí: `-{total_price:,} VND`\n"
-                f"💰 Thu về: `+{total_payout:,} VND`\n"
-                f"📈 Lợi nhuận: **`{sign}{net:,} VND`**\n"
+                f"💸 Chi phí: `-{total_price:,}` {EMOJI_VND}\n"
+                f"💰 Thu về: `+{total_payout:,}` {EMOJI_VND}\n"
+                f"📈 Lợi nhuận: **`{sign}{net:,}` {EMOJI_VND}**\n"
                 f"🎁 Thẻ Free: `{bonus_count}`\n\n"
                 + "\n".join(lines)
             ),
@@ -1014,15 +1014,15 @@ class ScratchCard(commands.Cog, name="ScratchCard"):
             seed_val = int(seed_str) if seed_str else 50_000_000
             
             available = get_all_available_cards(self.economy)
-            prices_str = "\n".join(f"• **{cfg['name']}:** `{cfg['price']:,} VND` (ID: `{cid}`)" for cid, cfg in available.items())
+            prices_str = "\n".join(f"• **{cfg['name']}:** `{cfg['price']:,}` {EMOJI_VND} (ID: `{cid}`)" for cid, cfg in available.items())
 
             embed = make_embed(
                 title="⚙️ CẤU HÌNH THẺ CÀO & HŨ JACKPOT (ADMIN ONLY)",
                 description=(
-                    f"🎰 **Giá trị Hũ Jackpot hiện tại:** `{jackpot_val:,} VND`\n"
+                    f"🎰 **Giá trị Hũ Jackpot hiện tại:** `{jackpot_val:,}` {EMOJI_VND}\n"
                     f"🎯 **Tỷ lệ nổ hũ chung:** `{rate_val * 100:.4f}%` (mỗi thẻ)\n"
                     f"✂️ **Tỷ lệ trích tiền thua vào hũ:** `{cut_val * 100:.1f}%`\n"
-                    f"🌱 **Mức hũ khởi tạo sau khi nổ (Seed):** `{seed_val:,} VND`\n\n"
+                    f"🌱 **Mức hũ khởi tạo sau khi nổ (Seed):** `{seed_val:,}` {EMOJI_VND}\n\n"
                     f"🏷️ **BẢNG GIÁ VÉ HIỆN TẠI:**\n{prices_str}\n\n"
                     f"💡 **Các lệnh điều chỉnh:**\n"
                     f"• `!setscratch jackpot <số_tiền>` — Đặt giá trị hũ hiện tại\n"
@@ -1043,7 +1043,7 @@ class ScratchCard(commands.Cog, name="ScratchCard"):
             try:
                 val = max(0, int(value.replace(",", "").replace(".", "").replace("đ", "").replace("VND", "")))
                 self.economy.set_setting("scratchcard_jackpot", str(val))
-                await ctx.send(f"✅ Đã đặt lại giá trị **Hũ Jackpot Thẻ Cào** thành: **{val:,} VND**.")
+                await ctx.send(f"✅ Đã đặt lại giá trị **Hũ Jackpot Thẻ Cào** thành: **{val:,}** {EMOJI_VND}.")
             except ValueError:
                 await ctx.send("❌ Số tiền hũ không hợp lệ!")
                 return
@@ -1091,7 +1091,7 @@ class ScratchCard(commands.Cog, name="ScratchCard"):
             try:
                 val = max(0, int(value.replace(",", "").replace(".", "")))
                 self.economy.set_setting("scratch_jackpot_seed", str(val))
-                await ctx.send(f"✅ Đã đặt mức hũ khởi tạo sau khi nổ thành: **{val:,} VND**.")
+                await ctx.send(f"✅ Đã đặt mức hũ khởi tạo sau khi nổ thành: **{val:,}** {EMOJI_VND}.")
             except ValueError:
                 await ctx.send("❌ Số tiền không hợp lệ!")
                 return
@@ -1112,7 +1112,7 @@ class ScratchCard(commands.Cog, name="ScratchCard"):
                 try:
                     p = max(1000, int(extra_val.replace(",", "").replace(".", "")))
                     self.economy.set_setting(f"scratch_price_{cid}", str(p))
-                    await ctx.send(f"✅ Đã đổi giá vé thẻ **{all_c[cid]['name']}** (`{cid}`) thành: **{p:,} VND**.")
+                    await ctx.send(f"✅ Đã đổi giá vé thẻ **{all_c[cid]['name']}** (`{cid}`) thành: **{p:,}** {EMOJI_VND}.")
                 except ValueError:
                     await ctx.send("❌ Giá vé không hợp lệ!")
                     return

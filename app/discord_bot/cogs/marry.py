@@ -11,7 +11,7 @@ import requests
 
 from app.config import config
 from app.discord_bot.modules.economy import Economy
-from app.discord_bot.modules.helpers import make_embed, ABS_PATH, parse_amount
+from app.discord_bot.modules.helpers import EMOJI_GOLD, EMOJI_VND, make_embed, ABS_PATH, parse_amount
 from app.discord_bot.modules.member_levels import check_give_limit, record_give
 from app.discord_bot.modules.profile_renderer import load_font
 from app.discord_bot.modules.wallet_logging import log_wallet_change
@@ -158,21 +158,21 @@ def refund_couple_assets_on_divorce(economy: Economy, user_one: int, user_two: i
         if estate_refund > 0:
             economy.add_credits(estate_bought_by, estate_refund)
             estate_name = COUPLE_ESTATES.get(estate_id, {}).get("name", estate_id)
-            refund_messages.append(f"🏠 **{estate_name}:** Hoàn trả 25% (`+{estate_refund:,} Thỏi Vàng`) cho <@{estate_bought_by}>")
+            refund_messages.append(f"🏠 **{estate_name}:** Hoàn trả 25% (`+{estate_refund:,}` {EMOJI_GOLD}) cho <@{estate_bought_by}>")
             
     if vehicle_id and vehicle_price > 0 and vehicle_bought_by > 0:
         vehicle_refund = int(vehicle_price * 0.25)
         if vehicle_refund > 0:
             economy.add_credits(vehicle_bought_by, vehicle_refund)
             vehicle_name = COUPLE_VEHICLES.get(vehicle_id, {}).get("name", vehicle_id)
-            refund_messages.append(f"🚗 **{vehicle_name}:** Hoàn trả 25% (`+{vehicle_refund:,} Thỏi Vàng`) cho <@{vehicle_bought_by}>")
+            refund_messages.append(f"🚗 **{vehicle_name}:** Hoàn trả 25% (`+{vehicle_refund:,}` {EMOJI_GOLD}) cho <@{vehicle_bought_by}>")
 
     if pet_id and pet_price > 0 and pet_bought_by > 0:
         pet_refund = int(pet_price * 0.25)
         if pet_refund > 0:
             economy.add_credits(pet_bought_by, pet_refund)
             pet_name = COUPLE_PETS.get(pet_id, {}).get("name", pet_id)
-            refund_messages.append(f"🐾 **{pet_name}:** Hoàn trả 25% (`+{pet_refund:,} Thỏi Vàng`) cho <@{pet_bought_by}>")
+            refund_messages.append(f"🐾 **{pet_name}:** Hoàn trả 25% (`+{pet_refund:,}` {EMOJI_GOLD}) cho <@{pet_bought_by}>")
 
     economy.clear_couple_assets(user_one, user_two)
     
@@ -833,7 +833,7 @@ class DivorceView(discord.ui.View):
                 
             desc = (
                 f"💔 Hai bạn đã chính thức đường ai nấy đi.\n"
-                f"🏦 **Hoàn trả quỹ chung:** <@{user_one}> nhận lại `+{p1:,} VND` — <@{user_two}> nhận lại `+{p2:,} VND` vào tài khoản ví."
+                f"🏦 **Hoàn trả quỹ chung:** <@{user_one}> nhận lại `+{p1:,}` {EMOJI_VND} — <@{user_two}> nhận lại `+{p2:,}` {EMOJI_VND} vào tài khoản ví."
                 f"{refund_str}"
             )
         else:
@@ -868,9 +868,9 @@ class CoupleShopView(discord.ui.View):
     def get_embed(self) -> discord.Embed:
         if self.current_tab == 0:
             desc = "### 🏠 DANH SÁCH BẤT ĐỘNG SẢN CẶP ĐÔI\n"
-            desc += f"Mua bằng lệnh: `{config.bot.prefix}couple buy nha <ID> [chỉ_số]` (trừ thỏi vàng cá nhân)\n\n"
+            desc += f"Mua bằng lệnh: `{config.bot.prefix}couple buy nha <ID> [chỉ_số]` (trừ {EMOJI_GOLD} cá nhân)\n\n"
             for k, v in COUPLE_ESTATES.items():
-                desc += f"• **`{k}`** — {v['name']}\n  └ Giá: **{v['price']:,} Thỏi Vàng** | Buff: `+{v['buff']} pts/ngày` vào giới hạn thân mật\n"
+                desc += f"• **`{k}`** — {v['name']}\n  └ Giá: **{v['price']:,}** {EMOJI_GOLD} | Buff: `+{v['buff']} pts/ngày` vào giới hạn thân mật\n"
             embed = make_embed(
                 title="🏬 CỬA HÀNG CẶP ĐÔI - BẤT ĐỘNG SẢN 🏠",
                 description=desc,
@@ -879,9 +879,9 @@ class CoupleShopView(discord.ui.View):
             embed.set_footer(text="Trang 1/3 • Bất Động Sản")
         elif self.current_tab == 1:
             desc = "### 🚗 DANH SÁCH PHƯƠNG TIỆN CẶP ĐÔI\n"
-            desc += f"Mua bằng lệnh: `{config.bot.prefix}couple buy xe <ID> [chỉ_số]` (trừ thỏi vàng cá nhân)\n\n"
+            desc += f"Mua bằng lệnh: `{config.bot.prefix}couple buy xe <ID> [chỉ_số]` (trừ {EMOJI_GOLD} cá nhân)\n\n"
             for k, v in COUPLE_VEHICLES.items():
-                desc += f"• **`{k}`** — {v['name']}\n  └ Giá: **{v['price']:,} Thỏi Vàng** | Buff: `+{v['buff']} pts/ngày` vào giới hạn thân mật\n"
+                desc += f"• **`{k}`** — {v['name']}\n  └ Giá: **{v['price']:,}** {EMOJI_GOLD} | Buff: `+{v['buff']} pts/ngày` vào giới hạn thân mật\n"
             embed = make_embed(
                 title="🏬 CỬA HÀNG CẶP ĐÔI - PHƯƠNG TIỆN 🚗",
                 description=desc,
@@ -890,9 +890,9 @@ class CoupleShopView(discord.ui.View):
             embed.set_footer(text="Trang 2/3 • Phương Tiện")
         else:
             desc = "### 🐾 DANH SÁCH THÚ CƯNG CẶP ĐÔI\n"
-            desc += f"Mua bằng lệnh: `{config.bot.prefix}couple buy pet <ID> [chỉ_số]` (trừ thỏi vàng cá nhân)\n\n"
+            desc += f"Mua bằng lệnh: `{config.bot.prefix}couple buy pet <ID> [chỉ_số]` (trừ {EMOJI_GOLD} cá nhân)\n\n"
             for k, v in COUPLE_PETS.items():
-                desc += f"• **`{k}`** — {v['name']}\n  └ Giá: **{v['price']:,} Thỏi Vàng** | Buff: `+{v['buff']} pts/ngày` vào giới hạn thân mật\n"
+                desc += f"• **`{k}`** — {v['name']}\n  └ Giá: **{v['price']:,}** {EMOJI_GOLD} | Buff: `+{v['buff']} pts/ngày` vào giới hạn thân mật\n"
             embed = make_embed(
                 title="🏬 CỬA HÀNG CẶP ĐÔI - THÚ CƯNG 🐾",
                 description=desc,
@@ -986,7 +986,7 @@ class CoupleWithdrawView(discord.ui.View):
 
         user_one, user_two, ring_type, love_points, joint_wallet, married_at, _, _ = marriage
         if joint_wallet < self.amount:
-            await interaction.channel.send(f"❌ Thất bại: Quỹ chung hiện tại không đủ để rút (Chỉ còn `{joint_wallet:,} VND`!)")
+            await interaction.channel.send(f"❌ Thất bại: Quỹ chung hiện tại không đủ để rút (Chỉ còn `{joint_wallet:,}` {EMOJI_VND}!)")
             return
 
         deposit_one, deposit_two = self.economy.get_couple_deposits(user_one, user_two)
@@ -1003,7 +1003,7 @@ class CoupleWithdrawView(discord.ui.View):
             )
             if not valid:
                 await interaction.channel.send(
-                    f"❌ **Rút tiền không thành công:** Hạn mức cấp độ không thỏa mãn để rút phần tiền của bạn đời ({cross_amount:,} VND)!\n> {err_msg}"
+                    f"❌ **Rút tiền không thành công:** Hạn mức cấp độ không thỏa mãn để rút phần tiền của bạn đời ({cross_amount:,} {EMOJI_VND})!\n> {err_msg}"
                 )
                 return
 
@@ -1036,17 +1036,17 @@ class CoupleWithdrawView(discord.ui.View):
         if actual_cross > 0:
             self_part = self.amount - actual_cross
             detail_str = (
-                f"> • *Tiền tự nạp rút lại:* `{self_part:,} VND`\n"
-                f"> • *Hỗ trợ từ bạn đời:* `{actual_cross:,} VND` *(đã tính vào hạn mức ngày)*\n\n"
+                f"> • *Tiền tự nạp rút lại:* `{self_part:,}` {EMOJI_VND}\n"
+                f"> • *Hỗ trợ từ bạn đời:* `{actual_cross:,}` {EMOJI_VND} *(đã tính vào hạn mức ngày)*\n\n"
             )
 
         embed = make_embed(
             title="🏦 RÚT TIỀN QUỸ CHUNG THÀNH CÔNG 🏦",
             description=(
                 f"**{self.spouse.name}** đã đồng ý cho **{self.proposer.name}** rút tiền từ quỹ phu thê:\n\n"
-                f"💰 **Nhận lại ví:** `+{self.amount:,} VND`\n"
+                f"💰 **Nhận lại ví:** `+{self.amount:,}` {EMOJI_VND}\n"
                 f"{detail_str}"
-                f"🏦 **Số dư quỹ chung còn lại:** `{new_joint:,} VND`"
+                f"🏦 **Số dư quỹ chung còn lại:** `{new_joint:,}` {EMOJI_VND}"
             ),
             color=discord.Color.green()
         )
@@ -1348,7 +1348,7 @@ class Marry(commands.Cog):
             if db_sort == "love_points":
                 val_str = f"`{love_points:,} 💞`"
             elif db_sort == "joint_wallet":
-                val_str = f"`{joint_wallet:,} VND` 🏦"
+                val_str = f"`{joint_wallet:,}` {EMOJI_VND} 🏦"
             else:
                 # married_at
                 days = max(1, (int(time.time()) - married_at) // 86400)
@@ -1604,7 +1604,7 @@ class Marry(commands.Cog):
             return
 
         if user_cash < money_val:
-            await ctx.send(f"❌ Bạn không đủ tiền! Bạn chỉ có `{user_cash:,} VND`.")
+            await ctx.send(f"❌ Bạn không đủ tiền! Bạn chỉ có `{user_cash:,}` {EMOJI_VND}.")
             return
 
         # Deduct cash and credit the joint wallet in one atomic transaction
@@ -1629,9 +1629,9 @@ class Marry(commands.Cog):
             title="🏦 GÓP TIỀN QUỸ CHUNG THÀNH CÔNG 🏦",
             description=(
                 f"**{ctx.author.name}** đã góp thành công vào quỹ gia đình:\n\n"
-                f"💸 **Tiền góp:** `-{money_val:,} VND`\n"
-                f"👤 **Phần đóng góp của bạn:** `{author_dep:,} VND`\n"
-                f"🏦 **Số dư quỹ chung mới:** `{new_joint:,} VND`"
+                f"💸 **Tiền góp:** `-{money_val:,}` {EMOJI_VND}\n"
+                f"👤 **Phần đóng góp của bạn:** `{author_dep:,}` {EMOJI_VND}\n"
+                f"🏦 **Số dư quỹ chung mới:** `{new_joint:,}` {EMOJI_VND}"
             ),
             color=discord.Color.green()
         )
@@ -1666,7 +1666,7 @@ class Marry(commands.Cog):
             return
 
         if joint_wallet < money_val:
-            await ctx.send(f"❌ Quỹ chung không đủ tiền! Quỹ chỉ có `{joint_wallet:,} VND`.")
+            await ctx.send(f"❌ Quỹ chung không đủ tiền! Quỹ chỉ có `{joint_wallet:,}` {EMOJI_VND}.")
             return
             
         # Get spouse object
@@ -1696,8 +1696,8 @@ class Marry(commands.Cog):
             )
             if not valid:
                 await ctx.send(
-                    f"❌ **Không thể yêu cầu rút tiền:** Số tiền rút (`{money_val:,} VND`) vượt quá phần đóng góp cá nhân của bạn (`{author_dep:,} VND`).\n"
-                    f"> Bạn đang yêu cầu rút thêm **`{cross_amount:,} VND`** từ phần của bạn đời.\n"
+                    f"❌ **Không thể yêu cầu rút tiền:** Số tiền rút (`{money_val:,}` {EMOJI_VND}) vượt quá phần đóng góp cá nhân của bạn (`{author_dep:,}` {EMOJI_VND}).\n"
+                    f"> Bạn đang yêu cầu rút thêm **`{cross_amount:,}` {EMOJI_VND}** từ phần của bạn đời.\n"
                     f"> {err_msg}"
                 )
                 return
@@ -1708,14 +1708,14 @@ class Marry(commands.Cog):
         if cross_amount > 0:
             self_part = money_val - cross_amount
             detail_txt = (
-                f"> • *Tiền tự nạp rút lại:* `{self_part:,} VND`\n"
-                f"> • *Rút từ bạn đời:* `{cross_amount:,} VND` *(sẽ tính vào hạn mức ngày)*\n\n"
+                f"> • *Tiền tự nạp rút lại:* `{self_part:,}` {EMOJI_VND}\n"
+                f"> • *Rút từ bạn đời:* `{cross_amount:,}` {EMOJI_VND} *(sẽ tính vào hạn mức ngày)*\n\n"
             )
 
         embed = make_embed(
             title="🏦 YÊU CẦU RÚT TIỀN QUỸ PHU THÊ 🏦",
             description=(
-                f"💍 **{ctx.author.mention}** muốn rút **`{money_val:,} VND`** từ quỹ chung.\n"
+                f"💍 **{ctx.author.mention}** muốn rút **`{money_val:,}` {EMOJI_VND}** từ quỹ chung.\n"
                 f"{detail_txt}"
                 f"🔔 Bạn đời **{spouse.mention}** vui lòng xác nhận đồng ý hoặc từ chối yêu cầu này!"
             ),
@@ -1754,9 +1754,9 @@ class Marry(commands.Cog):
         embed = make_embed(
             title="🏦 THÔNG TIN QUỸ CHUNG PHU THÊ 🏦",
             description=(
-                f"💎 **Tổng số dư quỹ chung:** `{joint_wallet:,} VND`\n\n"
-                f"👤 **{user_one_name}:** `{deposit_one:,} VND` đóng góp\n"
-                f"👤 **{user_two_name}:** `{deposit_two:,} VND` đóng góp\n\n"
+                f"💎 **Tổng số dư quỹ chung:** `{joint_wallet:,}` {EMOJI_VND}\n\n"
+                f"👤 **{user_one_name}:** `{deposit_one:,}` {EMOJI_VND} đóng góp\n"
+                f"👤 **{user_two_name}:** `{deposit_two:,}` {EMOJI_VND} đóng góp\n\n"
                 f"💡 *Ghi chú: Bạn có thể rút tự do phần tiền do chính mình đóng góp. Khi rút vượt mức (lấy tiền của bạn đời), giao dịch sẽ được kiểm tra theo hạn mức cấp độ chat hàng ngày.*"
             ),
             color=discord.Color.gold()
@@ -1800,7 +1800,7 @@ class Marry(commands.Cog):
                 f"💞 Hai bạn cùng hướng về **Nhẫn Song Điệp Vĩnh Hằng** lấp lánh và cầu nguyện cho tình cảm keo sơn vĩnh kết đồng tâm...\n\n"
                 f"✨ **Chúc phúc Ước nguyện thành công:**\n"
                 f"💖 **Điểm thân mật:** `+5 điểm`\n"
-                f"🏦 **Cộng vào Quỹ Chung:** `+200,000 VND`"
+                f"🏦 **Cộng vào Quỹ Chung:** `+200,000` {EMOJI_VND}"
             ),
             color=discord.Color.magenta()
         )
@@ -1869,7 +1869,7 @@ class Marry(commands.Cog):
         if status == "insufficient":
             profile = self.economy.get_entry(ctx.author.id)
             gold = profile[2]
-            await ctx.send(f"❌ Bạn không đủ thỏi vàng! `{item_info['name']}` có giá `{item_info['price']:,} Thỏi Vàng`, nhưng bạn chỉ có `{gold:,} Thỏi Vàng`.")
+            await ctx.send(f"❌ Bạn không đủ vàng! `{item_info['name']}` có giá `{item_info['price']:,}` {EMOJI_GOLD}, nhưng bạn chỉ có `{gold:,}` {EMOJI_GOLD}.")
             return
         if status == "owned":
             await ctx.send(f"❌ Cặp đôi của bạn hiện đã sở hữu {item_info['name']} rồi!")
@@ -1877,7 +1877,7 @@ class Marry(commands.Cog):
 
         refund_msg = ""
         if refund_amount > 0 and refund_target > 0:
-            refund_msg = f"\n📦 **Thanh lý tài sản cũ:** Hoàn lại 25% (`+{refund_amount:,} Thỏi Vàng`) cho <@{refund_target}>."
+            refund_msg = f"\n📦 **Thanh lý tài sản cũ:** Hoàn lại 25% (`+{refund_amount:,}` {EMOJI_GOLD}) cho <@{refund_target}>."
 
         log_wallet_change(
             logger,
@@ -1892,7 +1892,7 @@ class Marry(commands.Cog):
             title=title,
             description=(
                 f"**{ctx.author.name}** đã {action} **{item_info['name']}** {recipient}!\n\n"
-                f"🟡 **Chi phí:** `-{item_info['price']:,} Thỏi Vàng` (trừ ví vàng cá nhân)\n"
+                f"🟡 **Chi phí:** `-{item_info['price']:,}` {EMOJI_GOLD} (trừ ví vàng cá nhân)\n"
                 f"✨ **Buff thân mật:** `+{item_info['buff']} pts/ngày` vào giới hạn thân mật hàng ngày!{refund_msg}"
             ),
             color=discord.Color.gold() if kind == "estate" else (discord.Color.blue() if kind == "vehicle" else discord.Color.green())
@@ -2162,7 +2162,7 @@ class Marry(commands.Cog):
                 f"Bạn đang yêu cầu chấm dứt hôn nhân cùng <@{spouse_id}>.\n\n"
                 f"Hãy chọn một trong hai phương án giải quyết dưới đây:\n"
                 f"1️⃣ **Ly hôn Đồng Thuận (Mutual):** Gõ `{config.bot.prefix}divorcemutual {idx}` (Cả hai cùng ký đơn, không mất phí, quỹ chung chia đôi).\n"
-                f"2️⃣ **Ly hôn Đơn Phương (Unilateral):** Gõ `{config.bot.prefix}divorceforce {idx}` (Không cần bên kia đồng ý, án phí tòa án rất đắt: **{unilateral_cost:,} VND** (10% ví của bạn), 50% án phí sẽ đền bù cho bạn đời của bạn)."
+                f"2️⃣ **Ly hôn Đơn Phương (Unilateral):** Gõ `{config.bot.prefix}divorceforce {idx}` (Không cần bên kia đồng ý, án phí tòa án rất đắt: **{unilateral_cost:,}** {EMOJI_VND} (10% ví của bạn), 50% án phí sẽ đền bù cho bạn đời của bạn)."
             ),
             color=discord.Color.red()
         )
@@ -2214,7 +2214,7 @@ class Marry(commands.Cog):
                 unilateral_cost = unilateral_cost // 2
                 
             if cash < unilateral_cost:
-                await ctx.send(f"❌ Bạn không đủ tiền mặt trong ví để trả án phí ly hôn đơn phương! Cần `{unilateral_cost:,} VND` nhưng bạn chỉ có `{cash:,} VND`.")
+                await ctx.send(f"❌ Bạn không đủ tiền mặt trong ví để trả án phí ly hôn đơn phương! Cần `{unilateral_cost:,}` {EMOJI_VND} nhưng bạn chỉ có `{cash:,}` {EMOJI_VND}.")
                 return
                 
             # Calculate return amounts from joint wallet based on deposits
@@ -2261,9 +2261,9 @@ class Marry(commands.Cog):
             title="💔 LY HÔN ĐƠN PHƯƠNG THÀNH CÔNG 💔",
             description=(
                 f"**{ctx.author.mention}** đã đơn phương ly hôn cùng bạn đời.\n\n"
-                f"💸 **Án phí khấu trừ:** `-{unilateral_cost:,} VND` từ ví của bạn.\n"
-                f"🎁 **Bồi thường tổn thất phu thê:** chuyển `+{compensation:,} VND` cho <@{spouse_id}>.\n"
-                f"🏦 **Hoàn trả quỹ chung:** <@{user_one}> nhận lại `+{p1:,} VND` — <@{user_two}> nhận lại `+{p2:,} VND`.\n"
+                f"💸 **Án phí khấu trừ:** `-{unilateral_cost:,}` {EMOJI_VND} từ ví của bạn.\n"
+                f"🎁 **Bồi thường tổn thất phu thê:** chuyển `+{compensation:,}` {EMOJI_VND} cho <@{spouse_id}>.\n"
+                f"🏦 **Hoàn trả quỹ chung:** <@{user_one}> nhận lại `+{p1:,}` {EMOJI_VND} — <@{user_two}> nhận lại `+{p2:,}` {EMOJI_VND}.\n"
                 f"{refund_str}"
             ),
             color=discord.Color.red()
@@ -2340,7 +2340,7 @@ class Marry(commands.Cog):
                 f"👤 **Người 2:** <@{user_two}> (ID: `{user_two}`)\n"
                 f"💍 **Nhẫn:** {ring_name}\n"
                 f"📅 **Thời gian kết hôn:** {days:,} ngày\n"
-                f"🏦 **Quỹ chung bị xoá:** {joint_wallet:,} VND *(không hoàn trả)*"
+                f"🏦 **Quỹ chung bị xoá:** {joint_wallet:,} {EMOJI_VND} *(không hoàn trả)*"
                 f"{refund_str}\n\n"
                 f"⚠️ *Cặp đôi sẽ không nhận được thông báo tự động.*"
             ),

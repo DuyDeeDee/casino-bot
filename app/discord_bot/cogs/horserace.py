@@ -9,7 +9,7 @@ from discord.ext import commands
 from PIL import Image, ImageDraw, ImageFont
 
 from app.discord_bot.modules.betting import parse_bet_amount, validate_money_bet
-from app.discord_bot.modules.helpers import make_embed
+from app.discord_bot.modules.helpers import EMOJI_VND, make_embed
 from app.discord_bot.modules.wallet_logging import log_wallet_change
 from app.discord_bot.modules.profile_renderer import load_font
 
@@ -182,7 +182,7 @@ class HorseRaceBetModal(discord.ui.Modal):
 
         if amount < 1000:
             await interaction.response.send_message(
-                "❌ Số tiền cược tối thiểu là **1,000 VND**.", ephemeral=True
+                f"❌ Số tiền cược tối thiểu là **1,000** {EMOJI_VND}.", ephemeral=True
             )
             return
 
@@ -194,7 +194,7 @@ class HorseRaceBetModal(discord.ui.Modal):
 
         if amount > current_money:
             await interaction.response.send_message(
-                f"❌ Bạn không đủ tiền! Số dư hiện tại của bạn là **{current_money:,} VND**.",
+                f"❌ Bạn không đủ tiền! Số dư hiện tại của bạn là **{current_money:,}** {EMOJI_VND}.",
                 ephemeral=True,
             )
             return
@@ -216,7 +216,7 @@ class HorseRaceBetModal(discord.ui.Modal):
         )
 
         await interaction.response.send_message(
-            f"✅ Đã đặt cược **{amount:,} VND** cho ngựa **{self.horse['name']}** thành công!",
+            f"✅ Đã đặt cược **{amount:,}** {EMOJI_VND} cho ngựa **{self.horse['name']}** thành công!",
             ephemeral=True,
         )
         await self.lobby_view.update_message()
@@ -492,7 +492,7 @@ class HorseRace(commands.Cog, name="HorseRace"):
                     )
                     
                     user_mention = f"<@{user_id}>"
-                    payouts.append(f"{user_mention} (+{payout_amount:,} VND)")
+                    payouts.append(f"{user_mention} (+{payout_amount:,} {EMOJI_VND})")
 
             # Record in history
             if guild_id not in self.history:

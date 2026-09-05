@@ -24,6 +24,8 @@ from app.discord_bot.modules.betting import (
 from app.discord_bot.modules.economy import Economy
 from app.discord_bot.modules.helpers import (
     ABS_PATH,
+    EMOJI_GOLD,
+    EMOJI_VND,
     calc_gold,
     make_embed,
     parse_amount,
@@ -290,10 +292,10 @@ class Slots(commands.Cog):
             unit_price=gold_price,
         )
         embed = make_embed(
-            title="<:32100goldbarsfortnite:1514192020921651251> MUA THỎI VÀNG THÀNH CÔNG <:32100goldbarsfortnite:1514192020921651251>",
+            title=f"{EMOJI_GOLD} MUA THỎI VÀNG THÀNH CÔNG {EMOJI_GOLD}",
             description=(
-                f"Bạn đã mua thành công **{normalized_amount:,}** thỏi vàng với giá **{gold_price:,} VND** / thỏi.\n"
-                f"💸 **Tổng chi phí:** `-{cost:,} VND`"
+                f"Bạn đã mua thành công **{normalized_amount:,}** {EMOJI_GOLD} với giá **{gold_price:,}** {EMOJI_VND} / thỏi.\n"
+                f"💸 **Tổng chi phí:** `-{cost:,}` {EMOJI_VND}"
             ),
             color=discord.Color.green()
         )
@@ -325,10 +327,10 @@ class Slots(commands.Cog):
             unit_price=gold_price,
         )
         embed = make_embed(
-            title="<:32100goldbarsfortnite:1514192020921651251> BÁN THỎI VÀNG THÀNH CÔNG <:32100goldbarsfortnite:1514192020921651251>",
+            title=f"{EMOJI_GOLD} BÁN THỎI VÀNG THÀNH CÔNG {EMOJI_GOLD}",
             description=(
-                f"Bạn đã bán thành công **{normalized_amount:,}** thỏi vàng với giá **{gold_price:,} VND** / thỏi.\n"
-                f"💰 **Nhận được:** `+{money_delta:,} VND`"
+                f"Bạn đã bán thành công **{normalized_amount:,}** {EMOJI_GOLD} với giá **{gold_price:,}** {EMOJI_VND} / thỏi.\n"
+                f"💰 **Nhận được:** `+{money_delta:,}` {EMOJI_VND}"
             ),
             color=discord.Color.green()
         )
@@ -352,15 +354,15 @@ class Slots(commands.Cog):
         if diff > 0:
             trend = "📈 TĂNG"
             color = discord.Color.green()
-            desc = f"📈 Giá vàng vừa tăng **{percent:+.2f}%** (**+{diff:,} VND**) so với chu kỳ trước!"
+            desc = f"📈 Giá vàng vừa tăng **{percent:+.2f}%** (**+{diff:,}** {EMOJI_VND}) so với chu kỳ trước!"
         elif diff < 0:
             trend = "📉 GIẢM"
             color = discord.Color.red()
-            desc = f"📉 Giá vàng vừa giảm **{percent:+.2f}%** (**{diff:,} VND**) so với chu kỳ trước!"
+            desc = f"📉 Giá vàng vừa giảm **{percent:+.2f}%** (**{diff:,}** {EMOJI_VND}) so với chu kỳ trước!"
         else:
             trend = "↔️ KHÔNG ĐỔI"
             color = discord.Color.light_grey()
-            desc = f"↔️ Giá vàng ổn định ở mức cân bằng **{current:,} VND**."
+            desc = f"↔️ Giá vàng ổn định ở mức cân bằng **{current:,}** {EMOJI_VND}."
 
         current_time = int(time.time())
         last_update_str = self.economy.get_setting("gold_price_last_update")
@@ -383,10 +385,10 @@ class Slots(commands.Cog):
             next_update_str = "Cập nhật tiếp theo sau 7 ngày"
 
         embed = make_embed(
-            title=f"<:32100goldbarsfortnite:1514192020921651251> BẢNG GIÁ THỎI VÀNG THẾ GIỚI ({trend}) <:32100goldbarsfortnite:1514192020921651251>",
+            title=f"{EMOJI_GOLD} BẢNG GIÁ THỎI VÀNG THẾ GIỚI ({trend}) {EMOJI_GOLD}",
             description=(
                 f"{desc}\n\n"
-                f"💰 **Giá mua/bán hiện tại:** `{current:,} VND` / thỏi\n"
+                f"💰 **Giá mua/bán hiện tại:** `{current:,}` {EMOJI_VND} / {EMOJI_GOLD}\n"
                 f"🕒 *Tỷ giá biến động tự động mỗi tuần một lần.*\n"
                 f"📅 *{next_update_str}*"
             ),
@@ -414,15 +416,15 @@ class Slots(commands.Cog):
                 base_g, bonus_g, disc_p, tot_g = calc_gold(amt)
                 amt_k = f"{amt // 1000:,}k" if amt < 1_000_000 else f"{amt / 1_000_000:.1f}M".replace(".0", "")
                 disc_str = f" (+{disc_p}%)" if disc_p > 0 else ""
-                table_rows.append(f"• **`{amt_k:>6}` VND** ➔ **`{tot_g:,}`** Gold {disc_str}")
+                table_rows.append(f"• **`{amt_k:>6}`** {EMOJI_VND} ➔ **`{tot_g:,}`** {EMOJI_GOLD} {disc_str}")
 
             table_text = "\n".join(table_rows)
 
             embed = make_embed(
                 title="💳 BẢNG GIÁ NẠP THỎI VÀNG (TIỀN MẶT NGOÀI ĐỜI) 💳",
                 description=(
-                    f"✨ **Tỷ giá cơ bản:** `1,000 VND (1k)` = **`1 Thỏi Vàng`** <:32100goldbarsfortnite:1514192020921651251>\n"
-                    f"🎁 **Ưu đãi nạp lớn:** Cứ mỗi **`100,000 VND (100k)`** nạp vào ➔ **Tặng thêm +2% Gold** (tối đa 40%).\n\n"
+                    f"✨ **Tỷ giá cơ bản:** `1,000` {EMOJI_VND} `(1k)` = **`1`** {EMOJI_GOLD}\n"
+                    f"🎁 **Ưu đãi nạp lớn:** Cứ mỗi **`100,000` {EMOJI_VND} `(100k)`** nạp vào ➔ **Tặng thêm +2%** {EMOJI_GOLD} (tối đa 40%).\n\n"
                     f"### 📋 BẢNG GIÁ QUY ĐỔI MẪU:\n"
                     f"{table_text}\n\n"
                     f"💡 **Tính số Gold cho mốc nạp tùy chỉnh:**\n"
@@ -434,7 +436,7 @@ class Slots(commands.Cog):
             await ctx.send(embed=embed)
         else:
             base_g, bonus_g, disc_p, tot_g = calc_gold(vnd_amount)
-            vnd_formatted = f"{vnd_amount:,} VND"
+            vnd_formatted = f"{vnd_amount:,} {EMOJI_VND}"
 
             if self.economy.get_setting("bank_configured") != "1":
                 embed = make_embed(
@@ -462,10 +464,10 @@ class Slots(commands.Cog):
             desc = (
                 f"👤 **Người nạp:** {ctx.author.mention}\n"
                 f"💵 **Số tiền nạp:** `{vnd_formatted}`\n"
-                f"🪙 **Số Gold gốc (1k = 1 Gold):** `{base_g:,}` Thỏi Vàng\n"
-                f"🎁 **Ưu đãi chiết khấu (+{disc_p}%):** `+{bonus_g:,}` Thỏi Vàng\n"
+                f"🪙 **Số vàng gốc (1k = 1):** `{base_g:,}` {EMOJI_GOLD}\n"
+                f"🎁 **Ưu đãi chiết khấu (+{disc_p}%):** `+{bonus_g:,}` {EMOJI_GOLD}\n"
                 f"─────────────────────────────\n"
-                f"👑 **TỔNG GOLD SẼ NHẬN:** **`{tot_g:,}` Thỏi Vàng** <:32100goldbarsfortnite:1514192020921651251>\n\n"
+                f"👑 **TỔNG VÀNG SẼ NHẬN:** **`{tot_g:,}`** {EMOJI_GOLD}\n\n"
                 f"🏦 **Ngân hàng:** `{bank_id}`\n"
                 f"💳 **Số tài khoản:** `{bank_account}`\n"
                 f"📛 **Chủ tài khoản:** `{account_name}`\n"
@@ -578,7 +580,7 @@ class Slots(commands.Cog):
             color=discord.Color.gold()
         )
         embed.set_footer(
-            text=f"Thứ hạng của bạn: {user_rank_str} | Tổng nạp: {user_vnd:,} VND ({user_gold:,} Gold)"
+            text=f"Thứ hạng của bạn: {user_rank_str} | Tổng nạp: {user_vnd:,} {EMOJI_VND} ({user_gold:,} {EMOJI_GOLD})"
         )
         await ctx.send(embed=embed)
 
@@ -605,9 +607,9 @@ class Slots(commands.Cog):
             confirm_embed = make_embed(
                 title="⚠️ XÁC NHẬN CỘNG GOLD NẠP LỚN",
                 description=(
-                    f"Bạn sắp cộng **`{total_gold:,}` Thỏi Vàng** cho **{target.mention}**:\n"
-                    f"💵 Số tiền nạp: `{vnd_amount:,} VND`\n"
-                    f"🪙 Gold gốc: `{base_g:,}` | Ưu đãi +{disc_p}%: `+{bonus_g:,}`\n\n"
+                    f"Bạn sắp cộng **`{total_gold:,}`** {EMOJI_GOLD} cho **{target.mention}**:\n"
+                    f"💵 Số tiền nạp: `{vnd_amount:,}` {EMOJI_VND}\n"
+                    f"🪙 Vàng gốc: `{base_g:,}` | Ưu đãi +{disc_p}%: `+{bonus_g:,}`\n\n"
                     f"Kiểm tra kỹ biên lai chuyển khoản trước khi xác nhận!"
                 ),
                 color=discord.Color.orange()
@@ -628,9 +630,9 @@ class Slots(commands.Cog):
             title="🎉 NẠP THỎI VÀNG THÀNH CÔNG 🎉",
             description=(
                 f"ADMIN **{ctx.author.mention}** đã xác nhận nạp tiền cho **{target.mention}**!\n\n"
-                f"💵 **Số tiền nạp:** `{vnd_amount:,} VND`\n"
-                f"✨ **Số Gold nhận được (+{disc_p}%):** `+{total_gold:,}` Thỏi Vàng <:32100goldbarsfortnite:1514192020921651251>\n"
-                f"🏆 **Tổng nạp tích lũy (Top Nạp):** `{new_total_vnd:,} VND`"
+                f"💵 **Số tiền nạp:** `{vnd_amount:,}` {EMOJI_VND}\n"
+                f"✨ **Số vàng nhận được (+{disc_p}%):** `+{total_gold:,}` {EMOJI_GOLD}\n"
+                f"🏆 **Tổng nạp tích lũy (Top Nạp):** `{new_total_vnd:,}` {EMOJI_VND}"
             ),
             color=discord.Color.green()
         )
@@ -674,7 +676,7 @@ class Slots(commands.Cog):
 
         new_price = parse_amount(price_str)
         if not new_price or new_price < 1_000_000:
-            await ctx.send("❌ Giá vàng không hợp lệ! Mức tối thiểu là 1,000,000 VND. Ví dụ: `i?setgoldprice 10m` hoặc `i?setgoldprice 10000000`.")
+            await ctx.send(f"❌ Giá vàng không hợp lệ! Mức tối thiểu là 1,000,000 {EMOJI_VND}. Ví dụ: `i?setgoldprice 10m` hoặc `i?setgoldprice 10000000`.")
             return
 
         current_price = self.economy.get_gold_price()
@@ -683,11 +685,11 @@ class Slots(commands.Cog):
         self.economy.set_setting("gold_price_last_update", str(int(time.time())))
 
         embed = make_embed(
-            title="<:32100goldbarsfortnite:1514192020921651251> ĐÃ CẬP NHẬT GIÁ VÀNG THẾ GIỚI <:32100goldbarsfortnite:1514192020921651251>",
+            title=f"{EMOJI_GOLD} ĐÃ CẬP NHẬT GIÁ VÀNG THẾ GIỚI {EMOJI_GOLD}",
             description=(
                 f"ADMIN **{ctx.author.mention}** đã cập nhật giá vàng thế giới thành công!\n\n"
-                f"📈 **Giá cũ:** `{current_price:,} VND` / thỏi\n"
-                f"💰 **Giá mới:** `{new_price:,} VND` / thỏi"
+                f"📈 **Giá cũ:** `{current_price:,}` {EMOJI_VND} / {EMOJI_GOLD}\n"
+                f"💰 **Giá mới:** `{new_price:,}` {EMOJI_VND} / {EMOJI_GOLD}"
             ),
             color=discord.Color.gold()
         )

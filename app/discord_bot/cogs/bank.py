@@ -6,7 +6,7 @@ from discord.ext import commands
 
 from app.config import config
 from app.discord_bot.modules.economy import Economy
-from app.discord_bot.modules.helpers import make_embed
+from app.discord_bot.modules.helpers import EMOJI_VND, make_embed
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +91,7 @@ class Bank(commands.Cog):
                 minutes = (remain % 3600) // 60
                 status = f"⏳ Còn **{hours} giờ {minutes} phút** mới đáo hạn"
             lines.append(
-                f"📜 **Sổ #{dep_id}** — `{amount:,} VND` ({term_days} ngày, lãi {rate * 100:.0f}% = `+{interest:,} VND`)\n└ {status}"
+                f"📜 **Sổ #{dep_id}** — `{amount:,}` {EMOJI_VND} ({term_days} ngày, lãi {rate * 100:.0f}% = `+{interest:,}` {EMOJI_VND})\n└ {status}"
             )
 
         cap = int(self.economy.get_setting("bank_cap", "100000000"))
@@ -99,8 +99,8 @@ class Bank(commands.Cog):
             title="🏦 SỔ TIẾT KIỆM CỦA BẠN",
             description=(
                 "\n".join(lines)
-                + f"\n\n💵 **Tổng gốc đang gửi:** `{total_principal:,} VND`"
-                f"\n🏦 **Hạn mức gửi tối đa:** `{cap:,} VND`"
+                + f"\n\n💵 **Tổng gốc đang gửi:** `{total_principal:,}` {EMOJI_VND}"
+                f"\n🏦 **Hạn mức gửi tối đa:** `{cap:,}` {EMOJI_VND}"
             ),
             color=discord.Color.blue()
         )
@@ -134,13 +134,13 @@ class Bank(commands.Cog):
             current_total = self.economy.get_bank_total(user_id)
             if current_total + amount > cap:
                 await ctx.send(
-                    f"❌ Vượt hạn mức gửi tối đa! Bạn đang gửi `{current_total:,} VND`, hạn mức `{cap:,} VND`."
+                    f"❌ Vượt hạn mức gửi tối đa! Bạn đang gửi `{current_total:,}` {EMOJI_VND}, hạn mức `{cap:,}` {EMOJI_VND}."
                 )
                 return
 
             money = self.economy.get_entry(user_id)[1]
             if money < amount:
-                await ctx.send(f"❌ Ví của bạn chỉ có `{money:,} VND`, không đủ để gửi `{amount:,} VND`.")
+                await ctx.send(f"❌ Ví của bạn chỉ có `{money:,}` {EMOJI_VND}, không đủ để gửi `{amount:,}` {EMOJI_VND}.")
                 return
 
             self.economy.add_money(user_id, -amount)
@@ -152,10 +152,10 @@ class Bank(commands.Cog):
             title="🏦 GỬI TIỀN THÀNH CÔNG",
             description=(
                 f"📜 **Sổ tiết kiệm #{dep_id}** đã mở!\n\n"
-                f"💵 **Gốc:** `{amount:,} VND`\n"
+                f"💵 **Gốc:** `{amount:,}` {EMOJI_VND}\n"
                 f"⏳ **Kỳ hạn:** {term_name}\n"
-                f"💰 **Lãi khi đáo hạn:** `+{interest:,} VND`\n"
-                f"🎁 **Nhận về lúc đáo hạn:** `{amount + interest:,} VND`\n\n"
+                f"💰 **Lãi khi đáo hạn:** `+{interest:,}` {EMOJI_VND}\n"
+                f"🎁 **Nhận về lúc đáo hạn:** `{amount + interest:,}` {EMOJI_VND}\n\n"
                 f"🔒 Tiền đang bị khóa — rút sớm sẽ mất lãi + phí 5%."
             ),
             color=discord.Color.green()
@@ -181,13 +181,13 @@ class Bank(commands.Cog):
         if now >= mature_at:
             interest = int(amount * rate)
             payout = amount + interest
-            note = f"💰 **Lãi đáo hạn:** `+{interest:,} VND`"
+            note = f"💰 **Lãi đáo hạn:** `+{interest:,}` {EMOJI_VND}"
         else:
             fee = int(amount * EARLY_WITHDRAW_FEE)
             payout = amount - fee
             note = (
                 f"⚠️ **RÚT SỚM** (còn {(mature_at - now) // 3600} giờ nữa mới đáo hạn)\n"
-                f"💸 **Phí phạt 5%:** `-{fee:,} VND` (mất toàn bộ lãi)"
+                f"💸 **Phí phạt 5%:** `-{fee:,}` {EMOJI_VND} (mất toàn bộ lãi)"
             )
 
         with self.economy.transaction():
@@ -204,8 +204,8 @@ class Bank(commands.Cog):
             title="🏦 RÚT TIỀN THÀNH CÔNG",
             description=(
                 f"{note}\n\n"
-                f"💵 **Nhận về ví:** `{payout:,} VND`\n"
-                f"💳 **Số dư hiện tại:** `{self.economy.get_entry(user_id)[1]:,} VND`"
+                f"💵 **Nhận về ví:** `{payout:,}` {EMOJI_VND}\n"
+                f"💳 **Số dư hiện tại:** `{self.economy.get_entry(user_id)[1]:,}` {EMOJI_VND}"
             ),
             color=discord.Color.green()
         )
@@ -220,7 +220,7 @@ class Bank(commands.Cog):
         embed = make_embed(
             title="🏦 THỐNG KÊ NGÂN HÀNG",
             description=(
-                f"💰 **Tổng tiền đang khóa trong ngân hàng:** `{total:,} VND`\n"
+                f"💰 **Tổng tiền đang khóa trong ngân hàng:** `{total:,}` {EMOJI_VND}\n"
                 f"📜 **Số sổ tiết kiệm đang hoạt động:** `{count}`"
             ),
             color=discord.Color.blurple()

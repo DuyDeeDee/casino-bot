@@ -8,7 +8,7 @@ from discord.ext import commands
 
 from app.config import config
 from app.discord_bot.modules.economy import Economy
-from app.discord_bot.modules.helpers import make_embed
+from app.discord_bot.modules.helpers import EMOJI_GOLD, EMOJI_VND, make_embed
 from app.discord_bot.modules.member_levels import check_give_limit, record_give, remaining_daily
 from app.discord_bot.modules.mini_games import WorkRushView
 from app.discord_bot.modules.wallet_logging import log_wallet_change
@@ -206,8 +206,8 @@ class GamblingHelpers(commands.Cog, name="General"):
                 description=(
                     f"⚠️ **{ctx.author.mention} đã quá hạn trả nợ 1 tuần!**\n"
                     f"Giang hồ xã hội đen đã tìm đến bạn để xiết nợ cưỡng chế!\n\n"
-                    f"💸 **Số tiền cưỡng chế tịch thu:** `-{total_penalty:,} VND` (Gốc {loan_amount:,} VND + 70% lãi)\n"
-                    f"💳 **Số dư còn lại của bạn:** `{new_balance:,} VND`"
+                    f"💸 **Số tiền cưỡng chế tịch thu:** `-{total_penalty:,}` {EMOJI_VND} (Gốc {loan_amount:,} {EMOJI_VND} + 70% lãi)\n"
+                    f"💳 **Số dư còn lại của bạn:** `{new_balance:,}` {EMOJI_VND}"
                 ),
                 color=discord.Color.red(),
             )
@@ -323,7 +323,7 @@ class GamblingHelpers(commands.Cog, name="General"):
             embed = make_embed(
                 title=target_user.name,
                 description=(
-                    "**{:,} VND**".format(profile[1]) + "\n**{:,}** thỏi vàng".format(profile[2])
+                    f"**{profile[1]:,}** {EMOJI_VND}\n**{profile[2]:,}** {EMOJI_GOLD}"
                 ),
             )
             embed.set_thumbnail(url=target_user.display_avatar.url)
@@ -342,7 +342,7 @@ class GamblingHelpers(commands.Cog, name="General"):
             name = user.name if user else f"Người chơi {entry[0]}"
             embed.add_field(
                 name=f"{i+1}. {name}",
-                value="{:,} VND".format(entry[1]),
+                value=f"{entry[1]:,} {EMOJI_VND}",
                 inline=False,
             )
         await ctx.send(embed=embed)
@@ -408,7 +408,7 @@ class GamblingHelpers(commands.Cog, name="General"):
         if streak > 0 and streak % 7 == 0:
             bonus_gold = 1
             self.economy.add_credits(user_id, bonus_gold)
-            gold_text = f"\n🌟 **Quà cột mốc 7 ngày:** `+1 thỏi vàng` <:32100goldbarsfortnite:1514192020921651251>"
+            gold_text = f"\n🌟 **Quà cột mốc 7 ngày:** `+1` <:GOLD:1545815236035219637>"
             
         self.economy.set_daily(user_id, now, streak)
         
@@ -429,11 +429,11 @@ class GamblingHelpers(commands.Cog, name="General"):
             title="🎁 ĐIỂM DANH HÀNG NGÀY THÀNH CÔNG 🎁",
             description=(
                 f"Chúc mừng **{user.name}** đã điểm danh ngày thứ **{streak}** liên tiếp!\n\n"
-                f"💰 **Tiền thưởng nhận:** `+{total_money:,} VND`"
+                f"💰 **Tiền thưởng nhận:** `+{total_money:,}` {EMOJI_VND}"
                 f"{gold_text}"
                 f"{ring_text}\n"
-                f"💳 **Số dư VND hiện tại:** `{new_balance:,} VND`\n"
-                f"<:32100goldbarsfortnite:1514192020921651251> **Số dư Vàng hiện tại:** `{new_gold:,} thỏi vàng`"
+                f"💳 **Số dư hiện tại:** `{new_balance:,}` {EMOJI_VND}\n"
+                f"{EMOJI_GOLD} **Số dư Vàng hiện tại:** `{new_gold:,}` {EMOJI_GOLD}"
             ),
             color=discord.Color.green(),
         )
@@ -472,7 +472,7 @@ class GamblingHelpers(commands.Cog, name="General"):
                     if spouse_obj:
                         spouse_mention = spouse_obj.mention
                         
-                    embed.description += f"\n\n💞 **Đồng Cam Cộng Khổ:** Bạn đời của bạn ({spouse_mention}) đã nhận thêm **5%** tiền tiêu vặt (`+{share_bonus:,} VND`) vào ví!"
+                    embed.description += f"\n\n💞 **Đồng Cam Cộng Khổ:** Bạn đời của bạn ({spouse_mention}) đã nhận thêm **5%** tiền tiêu vặt (`+{share_bonus:,}` {EMOJI_VND}) vào ví!"
 
         rush_view = self.build_work_rush_view(ctx.author, embed, earned, ctx=ctx)
         if rush_view:
@@ -580,8 +580,8 @@ class GamblingHelpers(commands.Cog, name="General"):
                 description=(
                     f"**{user.name}** đã trúng sự kiện đặc biệt:\n"
                     f"👉 *\"{scenario}\"*\n\n"
-                    f"💰 **Phần thưởng:** `+{reward:,} VND`{marriage_info}\n"
-                    f"💳 **Số dư mới:** `{new_balance:,} VND`"
+                    f"💰 **Phần thưởng:** `+{reward:,}` {EMOJI_VND}{marriage_info}\n"
+                    f"💳 **Số dư mới:** `{new_balance:,}` {EMOJI_VND}"
                 ),
                 color=discord.Color.gold(), # Màu vàng
             )
@@ -626,9 +626,9 @@ class GamblingHelpers(commands.Cog, name="General"):
                         title="🔥 SỰ CỐ CÔNG NGHỆ! 🔥",
                         description=(
                             f"**{user.name}** gặp sự cố kỹ thuật:\n"
-                            f"👉 *\"Bạn làm chập cháy mạch, phải đền bù 400,000 VND.\"*\n\n"
-                            f"💸 **Thất thoát:** `-{actual_deduction:,} VND`\n"
-                            f"💳 **Số dư mới:** `{new_balance:,} VND`"
+                            f"👉 *\"Bạn làm chập cháy mạch, phải đền bù 400,000 {EMOJI_VND}.\"*\n\n"
+                            f"💸 **Thất thoát:** `-{actual_deduction:,}` {EMOJI_VND}\n"
+                            f"💳 **Số dư mới:** `{new_balance:,}` {EMOJI_VND}"
                         ),
                         color=discord.Color.red(),
                     )
@@ -657,8 +657,8 @@ class GamblingHelpers(commands.Cog, name="General"):
                         description=(
                             f"**{user.name}** đã hoàn thành dự án:\n"
                             f"👉 *\"{job_desc}\"*\n\n"
-                            f"💰 **Thu nhập:** `+{reward:,} VND`{marriage_info}\n"
-                            f"💳 **Số dư mới:** `{new_balance:,} VND`"
+                            f"💰 **Thu nhập:** `+{reward:,}` {EMOJI_VND}{marriage_info}\n"
+                            f"💳 **Số dư mới:** `{new_balance:,}` {EMOJI_VND}"
                         ),
                         color=discord.Color.blue(),
                     )
@@ -682,9 +682,9 @@ class GamblingHelpers(commands.Cog, name="General"):
                         title="🔥 SỰ CỐ THIẾT KẾ! 🔥",
                         description=(
                             f"**{user.name}** gặp lỗi kỹ thuật bản vẽ:\n"
-                            f"👉 *\"Bạn thiết kế sai kết cấu móng nhà, bị phạt đền bù 600,000 VND.\"*\n\n"
-                            f"💸 **Thất thoát:** `-{actual_deduction:,} VND`\n"
-                            f"💳 **Số dư mới:** `{new_balance:,} VND`"
+                            f"👉 *\"Bạn thiết kế sai kết cấu móng nhà, bị phạt đền bù 600,000 {EMOJI_VND}.\"*\n\n"
+                            f"💸 **Thất thoát:** `-{actual_deduction:,}` {EMOJI_VND}\n"
+                            f"💳 **Số dư mới:** `{new_balance:,}` {EMOJI_VND}"
                         ),
                         color=discord.Color.red(),
                     )
@@ -712,8 +712,8 @@ class GamblingHelpers(commands.Cog, name="General"):
                         description=(
                             f"**{user.name}** đã hoàn thành bản vẽ:\n"
                             f"👉 *\"{job_desc}\"*\n\n"
-                            f"💰 **Thu nhập:** `+{reward:,} VND`{marriage_info}\n"
-                            f"💳 **Số dư mới:** `{new_balance:,} VND`"
+                            f"💰 **Thu nhập:** `+{reward:,}` {EMOJI_VND}{marriage_info}\n"
+                            f"💳 **Số dư mới:** `{new_balance:,}` {EMOJI_VND}"
                         ),
                         color=discord.Color.teal(),
                     )
@@ -737,9 +737,9 @@ class GamblingHelpers(commands.Cog, name="General"):
                         title="🔥 SỰ CỐ KHÔNG GIAN! 🔥",
                         description=(
                             f"**{user.name}** gặp sự cố ngoài không gian:\n"
-                            f"👉 *\"Gặp sự cố rò rỉ oxy trên trạm ISS, phải bồi thường phí xử lý khẩn cấp 1,200,000 VND.\"*\n\n"
-                            f"💸 **Thất thoát:** `-{actual_deduction:,} VND`\n"
-                            f"💳 **Số dư mới:** `{new_balance:,} VND`"
+                            f"👉 *\"Gặp sự cố rò rỉ oxy trên trạm ISS, phải bồi thường phí xử lý khẩn cấp 1,200,000 {EMOJI_VND}.\"*\n\n"
+                            f"💸 **Thất thoát:** `-{actual_deduction:,}` {EMOJI_VND}\n"
+                            f"💳 **Số dư mới:** `{new_balance:,}` {EMOJI_VND}"
                         ),
                         color=discord.Color.red(),
                     )
@@ -767,8 +767,8 @@ class GamblingHelpers(commands.Cog, name="General"):
                         description=(
                             f"**{user.name}** đã hoàn thành sứ mệnh:\n"
                             f"👉 *\"{job_desc}\"*\n\n"
-                            f"💰 **Thu nhập:** `+{reward:,} VND`{marriage_info}\n"
-                            f"💳 **Số dư mới:** `{new_balance:,} VND`"
+                            f"💰 **Thu nhập:** `+{reward:,}` {EMOJI_VND}{marriage_info}\n"
+                            f"💳 **Số dư mới:** `{new_balance:,}` {EMOJI_VND}"
                         ),
                         color=discord.Color.dark_blue(),
                     )
@@ -792,9 +792,9 @@ class GamblingHelpers(commands.Cog, name="General"):
                         title="🔥 TAI NẠN Y KHOA! 🔥",
                         description=(
                             f"**{user.name}** gặp sự cố chuyên môn:\n"
-                            f"👉 *\"Kê nhầm đơn thuốc bổ đắt đỏ cho khách VIP, bị bệnh viện trừ lương đền bù 2,500,000 VND.\"*\n\n"
-                            f"💸 **Thất thoát:** `-{actual_deduction:,} VND`\n"
-                            f"💳 **Số dư mới:** `{new_balance:,} VND`"
+                            f"👉 *\"Kê nhầm đơn thuốc bổ đắt đỏ cho khách VIP, bị bệnh viện trừ lương đền bù 2,500,000 {EMOJI_VND}.\"*\n\n"
+                            f"💸 **Thất thoát:** `-{actual_deduction:,}` {EMOJI_VND}\n"
+                            f"💳 **Số dư mới:** `{new_balance:,}` {EMOJI_VND}"
                         ),
                         color=discord.Color.red(),
                     )
@@ -822,8 +822,8 @@ class GamblingHelpers(commands.Cog, name="General"):
                         description=(
                             f"**{user.name}** đã hoàn thành nhiệm vụ y khoa:\n"
                             f"👉 *\"{job_desc}\"*\n\n"
-                            f"💰 **Thu nhập:** `+{reward:,} VND`{marriage_info}\n"
-                            f"💳 **Số dư mới:** `{new_balance:,} VND`"
+                            f"💰 **Thu nhập:** `+{reward:,}` {EMOJI_VND}{marriage_info}\n"
+                            f"💳 **Số dư mới:** `{new_balance:,}` {EMOJI_VND}"
                         ),
                         color=discord.Color.dark_green(),
                     )
@@ -847,9 +847,9 @@ class GamblingHelpers(commands.Cog, name="General"):
                         title="🔥 BẪY CỔ ĐẠI KÍCH HOẠT! 🔥",
                         description=(
                             f"**{user.name}** bị sập bẫy trong hầm mộ:\n"
-                            f"👉 *\"Bị sập bẫy đá cổ trong hầm mộ, phải chi tiền viện phí điều trị vết thương 4,000,000 VND.\"*\n\n"
-                            f"💸 **Thất thoát:** `-{actual_deduction:,} VND`\n"
-                            f"💳 **Số dư mới:** `{new_balance:,} VND`"
+                            f"👉 *\"Bị sập bẫy đá cổ trong hầm mộ, phải chi tiền viện phí điều trị vết thương 4,000,000 {EMOJI_VND}.\"*\n\n"
+                            f"💸 **Thất thoát:** `-{actual_deduction:,}` {EMOJI_VND}\n"
+                            f"💳 **Số dư mới:** `{new_balance:,}` {EMOJI_VND}"
                         ),
                         color=discord.Color.red(),
                     )
@@ -910,7 +910,7 @@ class GamblingHelpers(commands.Cog, name="General"):
                             f"**{user.name}** đã thám hiểm hầm mộ cổ và tìm thấy:\n\n"
                             f"🏺 **Kho báu:** {treasure['name']} (ID: `{chosen_id}`)\n"
                             f"✨ **Độ hiếm:** `{treasure['rarity']}`\n"
-                            f"💰 **Giá trị ước tính:** `{treasure['value']:,} VND`"
+                            f"💰 **Giá trị ước tính:** `{treasure['value']:,}` {EMOJI_VND}"
                             f"{found_map_msg}\n\n"
                             f"💡 *Bạn có thể giữ lại để sưu tầm hoặc dùng lệnh `i?sellitem {chosen_id}` để bán cho viện bảo tàng.*"
                         ),
@@ -956,8 +956,8 @@ class GamblingHelpers(commands.Cog, name="General"):
                 title="💼 Đi làm chăm chỉ 💼",
                 description=(
                     f"**{user.name}** đã đi làm: *{job}*\n\n"
-                    f"💰 **Thu nhập:** `+{reward:,} VND`{marriage_info}\n"
-                    f"💳 **Số dư mới:** `{new_balance:,} VND`"
+                    f"💰 **Thu nhập:** `+{reward:,}` {EMOJI_VND}{marriage_info}\n"
+                    f"💳 **Số dư mới:** `{new_balance:,}` {EMOJI_VND}"
                 ),
                 color=discord.Color.green(), # Màu xanh lá
             )
@@ -995,8 +995,8 @@ class GamblingHelpers(commands.Cog, name="General"):
                 description=(
                     f"**{user.name}** gặp vận xui:\n"
                     f"👉 *{scenario}*\n\n"
-                    f"💸 **Thất thoát:** `-{actual_deduction:,} VND`\n"
-                    f"💳 **Số dư mới:** `{new_balance:,} VND`"
+                    f"💸 **Thất thoát:** `-{actual_deduction:,}` {EMOJI_VND}\n"
+                    f"💳 **Số dư mới:** `{new_balance:,}` {EMOJI_VND}"
                 ),
                 color=discord.Color.red(), # Màu đỏ
             )
@@ -1086,9 +1086,9 @@ class GamblingHelpers(commands.Cog, name="General"):
             title="🎒 Khởi nghiệp thành phố! 🎒",
             description=(
                 f"**{ctx.author.name}** vừa từ quê lên thành phố lập nghiệp.\n"
-                f"Bố mẹ ở quê đã gom góp và gửi cho bạn **1,000,000 VND** làm vốn khởi nghiệp! 💸🏡\n\n"
-                f"💰 **Nhận được:** `+1,000,000 VND`\n"
-                f"💳 **Số dư hiện tại:** `{new_balance:,} VND`"
+                f"Bố mẹ ở quê đã gom góp và gửi cho bạn **1,000,000** {EMOJI_VND} làm vốn khởi nghiệp! 💸🏡\n\n"
+                f"💰 **Nhận được:** `+1,000,000` {EMOJI_VND}\n"
+                f"💳 **Số dư hiện tại:** `{new_balance:,}` {EMOJI_VND}"
             ),
             color=discord.Color.purple(), # Màu tím/hồng
         )
@@ -1124,7 +1124,7 @@ class GamblingHelpers(commands.Cog, name="General"):
         # Thành công
         reward_lines = []
         if reward_money > 0:
-            reward_lines.append(f"💰 **+{reward_money:,} VND**")
+            reward_lines.append(f"💰 **+{reward_money:,}` {EMOJI_VND}**")
         if reward_credits > 0:
             reward_lines.append(f"🪙 **+{reward_credits:,.1f} Gold**")
 
@@ -1134,7 +1134,7 @@ class GamblingHelpers(commands.Cog, name="General"):
             description=(
                 f"Chúc mừng **{ctx.author.name}**! Bạn đã nhận được phần thưởng từ mã code **`{code.upper()}`**:\n\n"
                 + "\n".join(reward_lines)
-                + f"\n\n💳 **Số dư hiện tại:** `{new_balance[1]:,} VND` | `{new_balance[2]:,.1f} Gold`"
+                + f"\n\n💳 **Số dư hiện tại:** `{new_balance[1]:,}` {EMOJI_VND} | `{new_balance[2]:,.1f}` {EMOJI_GOLD}"
             ),
             color=discord.Color.green(),
         )
@@ -1179,7 +1179,7 @@ class GamblingHelpers(commands.Cog, name="General"):
                 title="✅ Tạo Gift Code thành công!",
                 description=(
                     f"**Code:** `{code.upper()}`\n"
-                    f"💰 **Thưởng tiền:** `{money:,} VND`\n"
+                    f"💰 **Thưởng tiền:** `{money:,}` {EMOJI_VND}\n"
                     f"🪙 **Thưởng vàng:** `{credits:,.1f} Gold`\n"
                     f"📊 **Số lượt dùng:** {uses_text}"
                 ),
@@ -1213,7 +1213,7 @@ class GamblingHelpers(commands.Cog, name="General"):
             uses_text = f"{used_count}/{max_uses}" if max_uses > 0 else f"{used_count}/∞"
             reward_parts = []
             if money > 0:
-                reward_parts.append(f"{money:,} VND")
+                reward_parts.append(f"{money:,} {EMOJI_VND}")
             if credits > 0:
                 reward_parts.append(f"{credits:,.1f} Gold")
             reward_text = " + ".join(reward_parts) if reward_parts else "Không có"
@@ -1243,11 +1243,11 @@ class GamblingHelpers(commands.Cog, name="General"):
         # Kiểm tra số tiền vay hợp lệ
         MAX_LOAN = 10_000_000
         if amount <= 0:
-            await ctx.send("❌ **Lỗi:** Số tiền vay phải lớn hơn 0 VND.")
+            await ctx.send(f"❌ **Lỗi:** Số tiền vay phải lớn hơn 0 {EMOJI_VND}.")
             return
             
         if amount > MAX_LOAN:
-            await ctx.send(f"❌ **Lỗi:** Hạn mức vay tối đa của xã hội đen là **{MAX_LOAN:,} VND**.")
+            await ctx.send(f"❌ **Lỗi:** Hạn mức vay tối đa của xã hội đen là **{MAX_LOAN:,}** {EMOJI_VND}.")
             return
 
         # Thực hiện vay trong 7 ngày
@@ -1274,11 +1274,11 @@ class GamblingHelpers(commands.Cog, name="General"):
             title="💸 HỢP ĐỒNG VAY XÃ HỘI ĐEN 💸",
             description=(
                 f"**{ctx.author.name}** đã ký giấy vay tiền xã hội đen thành công!\n\n"
-                f"💰 **Số tiền nhận:** `+{amount:,} VND`\n"
+                f"💰 **Số tiền nhận:** `+{amount:,}` {EMOJI_VND}\n"
                 f"📈 **Lãi suất:** `70%`\n"
-                f"💵 **Tổng tiền cần trả:** `{repay_amount:,} VND`\n"
+                f"💵 **Tổng tiền cần trả:** `{repay_amount:,}` {EMOJI_VND}\n"
                 f"⏱️ **Hạn chót trả nợ:** `{due_date_str}` (1 tuần)\n\n"
-                f"💳 **Số dư hiện tại:** `{new_balance:,} VND`"
+                f"💳 **Số dư hiện tại:** `{new_balance:,}` {EMOJI_VND}"
             ),
             color=discord.Color.dark_purple(),
         )
@@ -1303,7 +1303,7 @@ class GamblingHelpers(commands.Cog, name="General"):
         current_money = self.economy.get_entry(user_id)[1]
         
         if current_money < repay_amount:
-            await ctx.send(f"❌ **Thất bại:** Bạn không có đủ tiền để trả nợ. Cần **{repay_amount:,} VND** nhưng bạn chỉ có **{current_money:,} VND**.")
+            await ctx.send(f"❌ **Thất bại:** Bạn không có đủ tiền để trả nợ. Cần **{repay_amount:,}** {EMOJI_VND} nhưng bạn chỉ có **{current_money:,}** {EMOJI_VND}.")
             return
 
         # Thực hiện trả nợ: trừ tiền và xóa nợ
@@ -1326,8 +1326,8 @@ class GamblingHelpers(commands.Cog, name="General"):
             description=(
                 f"**{ctx.author.name}** đã thanh toán xong nợ nần với xã hội đen!\n"
                 f"Từ nay bạn đã là một người tự do.\n\n"
-                f"💸 **Số tiền đã trả:** `-{repay_amount:,} VND` (Gốc {loan_amount:,} VND + 70% lãi)\n"
-                f"💳 **Số dư tài khoản:** `{new_balance:,} VND`"
+                f"💸 **Số tiền đã trả:** `-{repay_amount:,}` {EMOJI_VND} (Gốc {loan_amount:,} {EMOJI_VND} + 70% lãi)\n"
+                f"💳 **Số dư tài khoản:** `{new_balance:,}` {EMOJI_VND}"
             ),
             color=discord.Color.green(),
         )
@@ -1353,12 +1353,12 @@ class GamblingHelpers(commands.Cog, name="General"):
             await ctx.send(f"❌ **Lỗi:** **{target.display_name}** đang ở trong tù, không thể nhận tiền!")
             return
         if amount <= 0:
-            await ctx.send("❌ **Lỗi:** Số tiền chuyển phải lớn hơn 0 VND.")
+            await ctx.send(f"❌ **Lỗi:** Số tiền chuyển phải lớn hơn 0 {EMOJI_VND}.")
             return
             
         sender_money = self.economy.get_entry(ctx.author.id)[1]
         if sender_money < amount:
-            await ctx.send(f"❌ **Lỗi:** Bạn không có đủ tiền. Số dư hiện tại của bạn là **{sender_money:,} VND**.")
+            await ctx.send(f"❌ **Lỗi:** Bạn không có đủ tiền. Số dư hiện tại của bạn là **{sender_money:,}** {EMOJI_VND}.")
             return
 
         # Giới hạn cho/nhận theo cấp độ thành viên (owner bot được bỏ qua)
@@ -1395,9 +1395,9 @@ class GamblingHelpers(commands.Cog, name="General"):
         embed = make_embed(
             title="💸 CHUYỂN TIỀN THÀNH CÔNG 💸",
             description=(
-                f"**{ctx.author.mention}** đã chuyển thành công **{amount:,} VND** cho **{target.mention}**!\n\n"
-                f"💳 **Số dư mới của bạn:** `{self.economy.get_entry(ctx.author.id)[1]:,} VND`\n"
-                f"📈 **Hạn mức hôm nay:** còn có thể cho `{sender_remaining:,} VND` — người nhận còn nhận được `{receiver_remaining:,} VND`"
+                f"**{ctx.author.mention}** đã chuyển thành công **{amount:,}** {EMOJI_VND} cho **{target.mention}**!\n\n"
+                f"💳 **Số dư mới của bạn:** `{self.economy.get_entry(ctx.author.id)[1]:,}` {EMOJI_VND}\n"
+                f"📈 **Hạn mức hôm nay:** còn có thể cho `{sender_remaining:,}` {EMOJI_VND} — người nhận còn nhận được `{receiver_remaining:,}` {EMOJI_VND}"
             ),
             color=discord.Color.green(),
         )
@@ -1423,12 +1423,12 @@ class GamblingHelpers(commands.Cog, name="General"):
             await ctx.send(f"❌ **Lỗi:** **{target.display_name}** đang ở trong tù, không thể nhận vàng!")
             return
         if amount <= 0:
-            await ctx.send("❌ **Lỗi:** Số thỏi vàng chuyển phải lớn hơn 0.")
+            await ctx.send(f"❌ **Lỗi:** Số vàng chuyển phải lớn hơn 0 {EMOJI_GOLD}.")
             return
             
         sender_gold = self.economy.get_entry(ctx.author.id)[2]
         if sender_gold < amount:
-            await ctx.send(f"❌ **Lỗi:** Bạn không có đủ thỏi vàng. Số dư hiện tại của bạn là **{sender_gold:,}** thỏi vàng.")
+            await ctx.send(f"❌ **Lỗi:** Bạn không có đủ vàng. Số dư hiện tại của bạn là **{sender_gold:,}** {EMOJI_GOLD}.")
             return
 
         # Giới hạn cho/nhận theo cấp độ thành viên (owner bot được bỏ qua)
@@ -1463,11 +1463,11 @@ class GamblingHelpers(commands.Cog, name="General"):
         sender_remaining = remaining_daily(self.economy, ctx.author.id, "gold")["sent_remaining"]
         receiver_remaining = remaining_daily(self.economy, target.id, "gold")["received_remaining"]
         embed = make_embed(
-            title="<:32100goldbarsfortnite:1514192020921651251> CHUYỂN VÀNG THÀNH CÔNG <:32100goldbarsfortnite:1514192020921651251>",
+            title="<:GOLD:1545815236035219637> CHUYỂN VÀNG THÀNH CÔNG <:GOLD:1545815236035219637>",
             description=(
-                f"**{ctx.author.mention}** đã chuyển thành công **{amount:,}** thỏi vàng cho **{target.mention}**!\n\n"
-                f"💳 **Số dư mới của bạn:** `{self.economy.get_entry(ctx.author.id)[2]:,}` thỏi vàng\n"
-                f"📈 **Hạn mức hôm nay:** còn có thể cho `{sender_remaining:,}` thỏi vàng — người nhận còn nhận được `{receiver_remaining:,}`"
+                f"**{ctx.author.mention}** đã chuyển thành công **{amount:,}** {EMOJI_GOLD} cho **{target.mention}**!\n\n"
+                f"💳 **Số dư mới của bạn:** `{self.economy.get_entry(ctx.author.id)[2]:,}` {EMOJI_GOLD}\n"
+                f"📈 **Hạn mức hôm nay:** còn có thể cho `{sender_remaining:,}` {EMOJI_GOLD} — người nhận còn nhận được `{receiver_remaining:,}` {EMOJI_GOLD}"
             ),
             color=discord.Color.gold(),
         )
@@ -1501,7 +1501,7 @@ class GamblingHelpers(commands.Cog, name="General"):
                 name = await get_user_name(self.client, uid)
                 desc_lines.append(
                     f"`{idx:02d}.` **{name}** (ID: `{uid}`)\n"
-                    f"   └ 💸 `{money:,} VND` | <:32100goldbarsfortnite:1514192020921651251> `{credits:,}` thỏi vàng"
+                    f"   └ 💸 `{money:,}` {EMOJI_VND} | {EMOJI_GOLD} `{credits:,}`"
                 )
 
             embed = make_embed(
@@ -1698,13 +1698,13 @@ class GamblingHelpers(commands.Cog, name="General"):
                 title="⚙️ CẤU HÌNH TÀI XỈU (ADMIN ONLY)",
                 description=(
                     f"• **Tỷ lệ siết kết quả (rig_rate):** `{rig_rate * 100}%` (Cơ hội bẻ cầu để bot trả thưởng ít nhất)\n"
-                    f"• **Ngưỡng chống sập (threshold):** `{threshold:,} VND` (Tự động bẻ cầu nếu bot bị lỗ vượt quá mức này ở 1 phiên)\n"
+                    f"• **Ngưỡng chống sập (threshold):** `{threshold:,}` {EMOJI_VND} (Tự động bẻ cầu nếu bot bị lỗ vượt quá mức này ở 1 phiên)\n"
                     f"• **Tỷ lệ nổ hũ tổng thể (jackpot_rate):** `{overall_jackpot_rate * 100:.6f}%` (Cơ hội nổ hũ ở mỗi phiên chơi)\n"
                     f"  *(Tỷ lệ kích hoạt khi xúc xắc ra bão 1 hoặc 6: {jackpot_rate * 100:.4f}%)\n"
-                    f"• **Cược tối thiểu tham gia nổ hũ (jackpot_min_bet):** `{jackpot_min_bet:,} VND` (Mức cược tối thiểu ở cửa thắng để được chia hũ)\n"
+                    f"• **Cược tối thiểu tham gia nổ hũ (jackpot_min_bet):** `{jackpot_min_bet:,}` {EMOJI_VND} (Mức cược tối thiểu ở cửa thắng để được chia hũ)\n"
                     f"• **Tỷ lệ thuế cược thắng (tax_rate):** `{tax_rate * 100}%` (Số tiền thắng được trích đưa vào hũ jackpot)\n"
-                    f"• **Giá trị hũ hiện tại (jackpot_value):** `{jackpot_val:,} VND` (Số tiền đang tích lũy trong hũ)\n"
-                    f"• **Cược tối đa mỗi cửa (max_bet):** `{max_bet:,} VND` (Giới hạn cược tối đa mỗi cửa trên một người chơi)\n\n"
+                    f"• **Giá trị hũ hiện tại (jackpot_value):** `{jackpot_val:,}` {EMOJI_VND} (Số tiền đang tích lũy trong hũ)\n"
+                    f"• **Cược tối đa mỗi cửa (max_bet):** `{max_bet:,}` {EMOJI_VND} (Giới hạn cược tối đa mỗi cửa trên một người chơi)\n\n"
                     f"💡 *Để thay đổi, hãy gõ:*\n"
                     f"• `{ctx.prefix}settxconfig rig_rate <0.0 - 1.0>`\n"
                     f"• `{ctx.prefix}settxconfig threshold <số_tiền_VND>`\n"
@@ -1737,9 +1737,9 @@ class GamblingHelpers(commands.Cog, name="General"):
             try:
                 val = int(value)
                 self.economy.set_setting("taixiu_anti_bankruptcy_threshold", str(val))
-                await ctx.send(f"✅ Đã thiết lập ngưỡng chống sập Tài Xỉu thành **{val:,} VND**.")
+                await ctx.send(f"✅ Đã thiết lập ngưỡng chống sập Tài Xỉu thành **{val:,}** {EMOJI_VND}.")
             except ValueError:
-                await ctx.send("❌ **Lỗi:** Ngưỡng chống sập phải là một số nguyên đại diện cho số tiền VND.")
+                await ctx.send(f"❌ **Lỗi:** Ngưỡng chống sập phải là một số nguyên đại diện cho số tiền {EMOJI_VND}.")
                 
         elif key in ("jackpot_rate", "jackpotrate", "jackpot", "nohu"):
             try:
@@ -1775,9 +1775,9 @@ class GamblingHelpers(commands.Cog, name="General"):
                 if val < 0:
                     raise ValueError()
                 self.economy.set_setting("taixiu_jackpot_min_bet", str(val))
-                await ctx.send(f"✅ Đã thiết lập mức cược tối thiểu để tham gia nổ hũ thành **{val:,} VND**.")
+                await ctx.send(f"✅ Đã thiết lập mức cược tối thiểu để tham gia nổ hũ thành **{val:,}** {EMOJI_VND}.")
             except ValueError:
-                await ctx.send("❌ **Lỗi:** Mức cược tối thiểu phải là một số nguyên dương đại diện cho số tiền VND.")
+                await ctx.send(f"❌ **Lỗi:** Mức cược tối thiểu phải là một số nguyên dương đại diện cho số tiền {EMOJI_VND}.")
                 
         elif key in ("jackpot_value", "jackpotval", "pool", "set_jackpot", "value", "hũ", "hu"):
             try:
@@ -1785,7 +1785,7 @@ class GamblingHelpers(commands.Cog, name="General"):
                 if val < 0:
                     raise ValueError()
                 self.economy.set_setting("taixiu_jackpot", str(val))
-                await ctx.send(f"✅ Đã thiết lập giá trị hũ Tài Xỉu thành **{val:,} VND**.")
+                await ctx.send(f"✅ Đã thiết lập giá trị hũ Tài Xỉu thành **{val:,}** {EMOJI_VND}.")
             except ValueError:
                 await ctx.send("❌ **Lỗi:** Giá trị hũ phải là một số nguyên dương hoặc bằng 0.")
                 
@@ -1795,9 +1795,9 @@ class GamblingHelpers(commands.Cog, name="General"):
                 if val <= 0:
                     raise ValueError()
                 self.economy.set_setting("taixiu_max_bet", str(val))
-                await ctx.send(f"✅ Đã thiết lập giới hạn cược tối đa mỗi cửa của Tài Xỉu thành **{val:,} VND**.")
+                await ctx.send(f"✅ Đã thiết lập giới hạn cược tối đa mỗi cửa của Tài Xỉu thành **{val:,}** {EMOJI_VND}.")
             except ValueError:
-                await ctx.send("❌ **Lỗi:** Giới hạn cược tối đa phải là một số nguyên dương đại diện cho số tiền VND.")
+                await ctx.send(f"❌ **Lỗi:** Giới hạn cược tối đa phải là một số nguyên dương đại diện cho số tiền {EMOJI_VND}.")
                 
         elif key in ("tax_rate", "taxrate", "tax", "phe", "phế"):
             try:
@@ -1843,7 +1843,7 @@ class GamblingHelpers(commands.Cog, name="General"):
                 title="⚙️ CẤU HÌNH BẦU CUA (ADMIN ONLY)",
                 description=(
                     f"• **Tỷ lệ thuế cược thắng (tax_rate):** `{tax_rate * 100}%` (Số tiền thắng ròng được trích đưa vào hũ jackpot)\n"
-                    f"• **Giá trị hũ hiện tại (jackpot_value):** `{jackpot_val:,} VND` (Số tiền đang tích lũy trong hũ)\n"
+                    f"• **Giá trị hũ hiện tại (jackpot_value):** `{jackpot_val:,}` {EMOJI_VND} (Số tiền đang tích lũy trong hũ)\n"
                     f"• **Tỷ lệ nổ hũ tổng thể (jackpot_rate):** `{overall_jackpot_rate * 100:.6f}%` (Cơ hội nổ hũ ở mỗi phiên chơi)\n"
                     f"  *(Tỷ lệ kích hoạt khi xúc xắc ra bão: {jackpot_rate * 100:.4f}%)\n\n"
                     f"💡 *Để thay đổi, hãy gõ:*\n"
@@ -1907,7 +1907,7 @@ class GamblingHelpers(commands.Cog, name="General"):
                 if val < 0:
                     raise ValueError()
                 self.economy.set_setting("baucua_jackpot", str(val))
-                await ctx.send(f"✅ Đã thiết lập giá trị hũ Bầu Cua thành **{val:,} VND**.")
+                await ctx.send(f"✅ Đã thiết lập giá trị hũ Bầu Cua thành **{val:,}** {EMOJI_VND}.")
             except ValueError:
                 await ctx.send("❌ **Lỗi:** Giá trị hũ phải là một số nguyên dương hoặc bằng 0.")
 
@@ -1983,7 +1983,7 @@ class GamblingHelpers(commands.Cog, name="General"):
             embed = make_embed(
                 title="🎁 PHÁT QUÀ TOÀN SERVER (TIỀN) 🎁",
                 description=(
-                    f"👑 Admin **{ctx.author.name}** đã tặng **{amount:,} VND** cho tất cả người chơi!\n\n"
+                    f"👑 Admin **{ctx.author.name}** đã tặng **{amount:,}** {EMOJI_VND} cho tất cả người chơi!\n\n"
                     f"👥 **Số tài khoản được nhận:** `{total_players}` người chơi\n"
                     f"💰 Hãy dùng lệnh `!vi` hoặc `!balance` để kiểm tra số dư mới."
                 ),
@@ -2007,7 +2007,7 @@ class GamblingHelpers(commands.Cog, name="General"):
             embed = make_embed(
                 title="🎁 PHÁT QUÀ TOÀN SERVER (VÀNG) 🎁",
                 description=(
-                    f"👑 Admin **{ctx.author.name}** đã tặng **{amount:,} thỏi vàng** cho tất cả người chơi!\n\n"
+                    f"👑 Admin **{ctx.author.name}** đã tặng **{amount:,}** {EMOJI_GOLD} cho tất cả người chơi!\n\n"
                     f"👥 **Số tài khoản được nhận:** `{total_players}` người chơi\n"
                     f"⭐ Hãy dùng lệnh `!vi` hoặc `!profile` để kiểm tra số dư mới."
                 ),
@@ -2192,8 +2192,8 @@ class GamblingHelpers(commands.Cog, name="General"):
                     title=event["title"],
                     description=(
                         f"{event['desc']}\n\n"
-                        f"🎉 **Vận may gõ cửa! Bạn nhận được:** `+{reward:,} VND`\n"
-                        f"💳 **Số dư mới:** `{self.economy.get_entry(ctx.author.id)[1]:,} VND`"
+                        f"🎉 **Vận may gõ cửa! Bạn nhận được:** `+{reward:,}` {EMOJI_VND}\n"
+                        f"💳 **Số dư mới:** `{self.economy.get_entry(ctx.author.id)[1]:,}` {EMOJI_VND}"
                     ),
                     color=discord.Color.gold(),
                 )
@@ -2229,8 +2229,8 @@ class GamblingHelpers(commands.Cog, name="General"):
                     description=(
                         f"Bạn gặp **{npc['name']}**.\n"
                         f"Người này đã rủ lòng thương và **{npc['success_msg']}**\n\n"
-                        f"💰 **Bạn nhận được:** `+{reward:,} VND`\n"
-                        f"💳 **Số dư mới:** `{self.economy.get_entry(ctx.author.id)[1]:,} VND`"
+                        f"💰 **Bạn nhận được:** `+{reward:,}` {EMOJI_VND}\n"
+                        f"💳 **Số dư mới:** `{self.economy.get_entry(ctx.author.id)[1]:,}` {EMOJI_VND}"
                     ),
                     color=discord.Color.green(),
                 )
@@ -2240,7 +2240,7 @@ class GamblingHelpers(commands.Cog, name="General"):
                     description=(
                         f"Bạn xin tiền **{npc['name']}**.\n"
                         f"Tuy nhiên, người đó đã **{npc['fail_msg']}**\n\n"
-                        f"😭 **Bạn nhận được:** `0 VND`"
+                        f"😭 **Bạn nhận được:** `0` {EMOJI_VND}"
                     ),
                     color=discord.Color.red(),
                 )
@@ -2273,14 +2273,14 @@ class GamblingHelpers(commands.Cog, name="General"):
         if amount is None:
             amount = 50000
         elif amount <= 0:
-            await ctx.send("❌ **Lỗi:** Số tiền xin phải lớn hơn 0 VND.")
+            await ctx.send(f"❌ **Lỗi:** Số tiền xin phải lớn hơn 0 {EMOJI_VND}.")
             ctx.command.reset_cooldown(ctx)
             return
 
         # Check target money
         target_money = self.economy.get_entry(target.id)[1]
         if target_money < amount:
-            await ctx.send(f"❌ **{target.display_name}** đang nghèo xơ xác (chỉ có **{target_money:,} VND**), không có đủ **{amount:,} VND** cho bạn đâu!")
+            await ctx.send(f"❌ **{target.display_name}** đang nghèo xơ xác (chỉ có **{target_money:,}** {EMOJI_VND}), không có đủ **{amount:,}** {EMOJI_VND} cho bạn đâu!")
             ctx.command.reset_cooldown(ctx)
             return
 
@@ -2289,7 +2289,7 @@ class GamblingHelpers(commands.Cog, name="General"):
         embed = make_embed(
             title="🥺 XIN TIỀN BAO DUNG 🥺",
             description=(
-                f"🙇‍♂️ **{ctx.author.mention}** đang cầm chiếc bát sứt mẻ quỳ gối xin **{target.mention}** **{amount:,} VND**!\n\n"
+                f"🙇‍♂️ **{ctx.author.mention}** đang cầm chiếc bát sứt mẻ quỳ gối xin **{target.mention}** **{amount:,}** {EMOJI_VND}!\n\n"
                 f"Hãy rủ lòng thương xót kẻ nghèo hèn này..."
             ),
             color=discord.Color.orange(),
@@ -2643,7 +2643,7 @@ class GamblingHelpers(commands.Cog, name="General"):
                     total_game_profit += profit
                     
                     profit_str = f"+{profit:,}" if profit > 0 else f"{profit:,}"
-                    game_lines.append(f"• **{game_name}:** {plays:,} ván (Thắng: {wins:,}) | Lời/Lỗ: `{profit_str} VND`")
+                    game_lines.append(f"• **{game_name}:** {plays:,} ván (Thắng: {wins:,}) | Lời/Lỗ: `{profit_str}` {EMOJI_VND}")
             except Exception:
                 pass
 
@@ -2667,7 +2667,7 @@ class GamblingHelpers(commands.Cog, name="General"):
                 total_stock_value += val
                 if sym == "DOGE":
                     doge_shares = shares
-                portfolio_items.append(f"• **{sym}:** `{shares:,.2f}` cổ (Đơn giá: `{p:,}đ` → Trị giá: `{val:,} VND`)")
+                portfolio_items.append(f"• **{sym}:** `{shares:,.2f}` cổ (Đơn giá: `{p:,}đ` → Trị giá: `{val:,}` {EMOJI_VND})")
         except Exception:
             pass
         stock_details_text = "\n".join(portfolio_items) if portfolio_items else "Không nắm giữ cổ phiếu nào."
@@ -2714,7 +2714,7 @@ class GamblingHelpers(commands.Cog, name="General"):
                 if c_row:
                     c_total = (c_row[0] or 0) + (c_row[1] or 0) + (c_row[2] or 0)
                     if c_total > 0:
-                        marry_info += f" (Tài sản chung: `{c_total:,} VND`)"
+                        marry_info += f" (Tài sản chung: `{c_total:,}` {EMOJI_VND})"
         except Exception:
             pass
 
@@ -2730,22 +2730,22 @@ class GamblingHelpers(commands.Cog, name="General"):
             verdict_badge = "📈 **NGUỒN TIỀN: ĐẦU TƯ CỔ PHIẾU / CRYPTO KHỔNG LỒ**"
             verdict_color = discord.Color.blue()
             verdict_desc = (
-                f"💡 **Phân tích:** Người này sở hữu lượng cổ phiếu rất lớn (`{total_stock_value:,} VND`), "
+                f"💡 **Phân tích:** Người này sở hữu lượng cổ phiếu rất lớn (`{total_stock_value:,}` {EMOJI_VND}), "
                 f"đặc biệt là **{doge_shares:,.2f} DOGE**!\n"
-                f"👉 Khoản tiền **{money:,} VND** (chênh lệch `{gap:,} VND`) gần như chắc chắn đến từ việc **giao dịch/bán cổ phiếu DOGE** chốt lời trong sàn đầu tư (`i?invest`)."
+                f"👉 Khoản tiền **{money:,}** {EMOJI_VND} (chênh lệch `{gap:,}` {EMOJI_VND}) gần như chắc chắn đến từ việc **giao dịch/bán cổ phiếu DOGE** chốt lời trong sàn đầu tư (`i?invest`)."
             )
         elif money > 50_000_000 and total_plays < 20 and total_topup_vnd == 0 and total_stock_value == 0:
             verdict_badge = "🚨 **NGHI VẤN BUG / HACK CỰC CAO**"
             verdict_color = discord.Color.red()
             verdict_desc = (
-                f"⚠️ **Cảnh báo bất thường:** Người chơi này sở hữu **{money:,} VND** nhưng chỉ chơi `{total_plays}` ván minigame, "
+                f"⚠️ **Cảnh báo bất thường:** Người chơi này sở hữu **{money:,}** {EMOJI_VND} nhưng chỉ chơi `{total_plays}` ván minigame, "
                 f"không có lịch sử nạp thẻ và không đầu tư cổ phiếu! Rất có thể đã dùng **Bug/Exploit** hoặc nhận tiền lậu từ người khác."
             )
         elif gap > 100_000_000 and total_topup_vnd == 0:
             verdict_badge = "⚠️ **CÓ DẤU HIỆU CHÊNH LỆCH LỚN**"
             verdict_color = discord.Color.gold()
             verdict_desc = (
-                f"• Số dư thực tế vượt quá tổng lợi nhuận minigame + nạp thẻ khoảng **{gap:,} VND**.\n"
+                f"• Số dư thực tế vượt quá tổng lợi nhuận minigame + nạp thẻ khoảng **{gap:,}` {EMOJI_VND}.\n"
                 f"• Nguồn tiền có thể đến từ: Được người khác tặng (`give`), trúng sự kiện/lì xì, hoặc bug chưa đối soát."
             )
         else:
@@ -2756,21 +2756,21 @@ class GamblingHelpers(commands.Cog, name="General"):
         # Build Embed
         embed = make_embed(
             title=f"🔍 HỒ SƠ ĐỐI SOÁT TÀI SẢN & PHÁT HIỆN BUG",
-            description=f"Đối tượng: **{user_name}** (`{user_id}`)\nTrạng thái: {'🔴 **BỊ CẤM (BANNED)**' if is_banned else '🟢 Bình thường'}\n💎 **Tổng tài sản ròng (Net Worth):** `{net_worth:,} VND`",
+            description=f"Đối tượng: **{user_name}** (`{user_id}`)\nTrạng thái: {'🔴 **BỊ CẤM (BANNED)**' if is_banned else '🟢 Bình thường'}\n💎 **Tổng tài sản ròng (Net Worth):** `{net_worth:,}` {EMOJI_VND}",
             color=verdict_color,
         )
         if avatar_url:
             embed.set_thumbnail(url=avatar_url)
 
-        topup_display = f"`{total_topup_vnd:,} VND`"
+        topup_display = f"`{total_topup_vnd:,}` {EMOJI_VND}"
         if total_topup_gold > 0:
-            topup_display += f" + `{total_topup_gold:,} thỏi vàng`"
+            topup_display += f" + `{total_topup_gold:,}` {EMOJI_GOLD}"
 
         embed.add_field(
             name="💰 1. Tài Sản & Ví Tiền",
             value=(
-                f"• **Tiền mặt (VND):** `{money:,}`\n"
-                f"• **Thỏi vàng (Credits):** `{credits:,}` (Quy đổi: `{gold_value:,} VND`)\n"
+                f"• **Tiền mặt:** `{money:,}` {EMOJI_VND}\n"
+                f"• **Vàng:** `{credits:,}` {EMOJI_GOLD} (Quy đổi: `{gold_value:,}` {EMOJI_VND})\n"
                 f"• **Nợ ngân hàng:** `{loan:,}`\n"
                 f"• **Tổng nạp bot:** {topup_display}"
             ),
@@ -2782,13 +2782,13 @@ class GamblingHelpers(commands.Cog, name="General"):
             name=f"🎮 2. Thống Kê Minigame ({total_plays:,} ván | Thắng {total_wins:,})",
             value=(
                 f"{games_text}\n"
-                f"👉 **Tổng lời/lỗ từ Game:** `{(f'+{total_game_profit:,}' if total_game_profit > 0 else f'{total_game_profit:,}')} VND`"
+                f"👉 **Tổng lời/lỗ từ Game:** `{(f'+{total_game_profit:,}' if total_game_profit > 0 else f'{total_game_profit:,}')}` {EMOJI_VND}"
             ),
             inline=False,
         )
 
         embed.add_field(
-            name=f"📈 3. Đầu Tư Cổ Phiếu / Crypto (Tổng trị giá: `{total_stock_value:,} VND`)",
+            name=f"📈 3. Đầu Tư Cổ Phiếu / Crypto (Tổng trị giá: `{total_stock_value:,}` {EMOJI_VND})",
             value=(
                 f"{stock_details_text}\n"
                 f"**Lệnh chờ (Limit Orders):**\n{limit_orders_str}"
@@ -2879,9 +2879,9 @@ class GamblingHelpers(commands.Cog, name="General"):
             time_str = f"<t:{created_at}:R>"
             delta_parts = []
             if m_delta != 0:
-                delta_parts.append(f"`{'+' if m_delta > 0 else ''}{m_delta:,} VND`")
+                delta_parts.append(f"`{'+' if m_delta > 0 else ''}{m_delta:,}` {EMOJI_VND}")
             if c_delta != 0:
-                delta_parts.append(f"`{'+' if c_delta > 0 else ''}{c_delta:,} thỏi vàng`")
+                delta_parts.append(f"`{'+' if c_delta > 0 else ''}{c_delta:,}` {EMOJI_GOLD}")
             delta_str = " | ".join(delta_parts) if delta_parts else "`0`"
 
             det_str = ""
@@ -3012,11 +3012,11 @@ class GamblingHelpers(commands.Cog, name="General"):
                 reasons.append(f"Tiền `{money:,}đ` nhưng chơi {total_plays} ván & 0 nạp")
             elif gap >= 500_000_000 and topup_vnd == 0:
                 risk_score = 2
-                reasons.append(f"Tiền ví lệch `{gap:,} VND` so với game & nạp")
+                reasons.append(f"Tiền ví lệch `{gap:,}` {EMOJI_VND} so với game & nạp")
             elif gap >= 50_000_000:
                 if risk_score < 2:
                     risk_score = 1
-                reasons.append(f"Chênh lệch `{gap:,} VND`")
+                reasons.append(f"Chênh lệch `{gap:,}` {EMOJI_VND}")
             elif money >= 10_000_000 and total_plays < 10 and topup_vnd == 0:
                 if risk_score < 2:
                     risk_score = 1
@@ -3086,8 +3086,8 @@ class GamblingHelpers(commands.Cog, name="General"):
                 embed.add_field(
                     name=f"{badge} #{i}. {uname} (`{uid}`)",
                     value=(
-                        f"• **Tiền mặt:** `{r['money']:,} VND` | **Vàng:** `{r['credits']:,}`\n"
-                        f"• **Net Worth:** `{r['net_worth']:,} VND`{stock_desc}\n"
+                        f"• **Tiền mặt:** `{r['money']:,}` {EMOJI_VND} | **Vàng:** `{r['credits']:,}` {EMOJI_GOLD}\n"
+                        f"• **Net Worth:** `{r['net_worth']:,}` {EMOJI_VND}{stock_desc}\n"
                         f"• **Game:** {r['total_plays']} ván (Lời: `{r['total_profit']:,}đ`) | **Nạp:** `{r['topup_vnd']:,}đ`"
                         f"{reason_str}"
                     ),
@@ -3187,10 +3187,10 @@ class GamblingHelpers(commands.Cog, name="General"):
                     profit = row[3] or 0
                     if profit > 0:
                         game_inflows += profit
-                        game_breakdowns.append(f"• **{gname}:** `+{profit:,} VND` (Thắng ròng)")
+                        game_breakdowns.append(f"• **{gname}:** `+{profit:,}` {EMOJI_VND} (Thắng ròng)")
                     elif profit < 0:
                         game_outflows += abs(profit)
-                        game_breakdowns.append(f"• **{gname}:** `-{abs(profit):,} VND` (Thua ròng)")
+                        game_breakdowns.append(f"• **{gname}:** `-{abs(profit):,}` {EMOJI_VND} (Thua ròng)")
             except Exception:
                 pass
 
@@ -3262,7 +3262,7 @@ class GamblingHelpers(commands.Cog, name="General"):
                     if binfo.get("currency") == "money":
                         h_rev = binfo["base_revenue"] * lvl
                         biz_hourly_vnd += h_rev
-                        biz_details.append(f"• **{binfo['name']}** (Cấp {lvl}): `{h_rev:,} VND/giờ`")
+                        biz_details.append(f"• **{binfo['name']}** (Cấp {lvl}): `{h_rev:,}` {EMOJI_VND}/giờ")
                     else:
                         d_rev = binfo["base_revenue"] * lvl * 24
                         biz_daily_gold += d_rev
@@ -3284,44 +3284,44 @@ class GamblingHelpers(commands.Cog, name="General"):
         # Build Inflow lines
         inflow_lines = []
         if topup_vnd > 0:
-            inflow_lines.append(f"💳 **Nạp tiền bot:** `+{topup_vnd:,} VND`")
+            inflow_lines.append(f"💳 **Nạp tiền bot:** `+{topup_vnd:,}` {EMOJI_VND}")
         if game_inflows > 0:
-            inflow_lines.append(f"🎮 **Thắng Minigame:** `+{game_inflows:,} VND`")
+            inflow_lines.append(f"🎮 **Thắng Minigame:** `+{game_inflows:,}` {EMOJI_VND}")
         if stock_sells > 0:
-            inflow_lines.append(f"📈 **Bán cổ phiếu:** `+{stock_sells:,} VND`")
+            inflow_lines.append(f"📈 **Bán cổ phiếu:** `+{stock_sells:,}` {EMOJI_VND}")
         if biz_collected_money > 0 or biz_collected_gold > 0:
-            gold_str = f" & `+{biz_collected_gold} vàng`" if biz_collected_gold > 0 else ""
-            inflow_lines.append(f"🏢 **Thu hoạch Doanh nghiệp (`biz`):** `+{biz_collected_money:,} VND`{gold_str}")
+            gold_str = f" & `+{biz_collected_gold}` {EMOJI_GOLD}" if biz_collected_gold > 0 else ""
+            inflow_lines.append(f"🏢 **Thu hoạch Doanh nghiệp (`biz`):** `+{biz_collected_money:,}` {EMOJI_VND}{gold_str}")
         if mine_earned_money > 0 or mine_earned_gold > 0:
-            gold_str = f" & `+{mine_earned_gold} vàng`" if mine_earned_gold > 0 else ""
-            inflow_lines.append(f"⛏️ **Khai thác mỏ (`mine`):** `+{mine_earned_money:,} VND`{gold_str}")
+            gold_str = f" & `+{mine_earned_gold}` {EMOJI_GOLD}" if mine_earned_gold > 0 else ""
+            inflow_lines.append(f"⛏️ **Khai thác mỏ (`mine`):** `+{mine_earned_money:,}` {EMOJI_VND}{gold_str}")
         if rob_stolen_money > 0:
-            inflow_lines.append(f"🥷 **Cướp thành công (`rob`):** `+{rob_stolen_money:,} VND`")
+            inflow_lines.append(f"🥷 **Cướp thành công (`rob`):** `+{rob_stolen_money:,}` {EMOJI_VND}")
         if item_sold_money > 0:
-            inflow_lines.append(f"🎒 **Bán vật phẩm / Cổ vật:** `+{item_sold_money:,} VND`")
+            inflow_lines.append(f"🎒 **Bán vật phẩm / Cổ vật:** `+{item_sold_money:,}` {EMOJI_VND}")
         if transfers_received > 0:
-            inflow_lines.append(f"💸 **Nhận từ người khác (`give/pay`):** `+{transfers_received:,} VND`")
+            inflow_lines.append(f"💸 **Nhận từ người khác (`give/pay`):** `+{transfers_received:,}` {EMOJI_VND}")
             if top_senders:
                 for sid, amt in sorted(top_senders.items(), key=lambda x: x[1], reverse=True)[:3]:
                     sname = await get_user_name(ctx.bot, sid)
-                    inflow_lines.append(f"  ↳ *Từ {sname} (`{sid}`):* `+{amt:,} VND`")
+                    inflow_lines.append(f"  ↳ *Từ {sname} (`{sid}`):* `+{amt:,}` {EMOJI_VND}")
         if claimed_start:
-            inflow_lines.append(f"🎁 **Quà khởi đầu:** `+100,000 VND`")
+            inflow_lines.append(f"🎁 **Quà khởi đầu:** `+100,000` {EMOJI_VND}")
 
         # Build Outflow lines
         outflow_lines = []
         if game_outflows > 0:
-            outflow_lines.append(f"🎲 **Thua Minigame:** `-{game_outflows:,} VND`")
+            outflow_lines.append(f"🎲 **Thua Minigame:** `-{game_outflows:,}` {EMOJI_VND}")
         if stock_buys > 0:
-            outflow_lines.append(f"📉 **Mua cổ phiếu:** `-{stock_buys:,} VND`")
+            outflow_lines.append(f"📉 **Mua cổ phiếu:** `-{stock_buys:,}` {EMOJI_VND}")
         if rob_lost_money > 0:
-            outflow_lines.append(f"🥷 **Bị cướp / Phạt cướp thất bại:** `-{rob_lost_money:,} VND`")
+            outflow_lines.append(f"🥷 **Bị cướp / Phạt cướp thất bại:** `-{rob_lost_money:,}` {EMOJI_VND}")
         if transfers_sent > 0:
-            outflow_lines.append(f"💸 **Chuyển cho người khác:** `-{transfers_sent:,} VND`")
+            outflow_lines.append(f"💸 **Chuyển cho người khác:** `-{transfers_sent:,}` {EMOJI_VND}")
             if top_recipients:
                 for rid, amt in sorted(top_recipients.items(), key=lambda x: x[1], reverse=True)[:3]:
                     rname = await get_user_name(ctx.bot, rid)
-                    outflow_lines.append(f"  ↳ *Cho {rname} (`{rid}`):* `-{amt:,} VND`")
+                    outflow_lines.append(f"  ↳ *Cho {rname} (`{rid}`):* `-{amt:,}` {EMOJI_VND}")
 
         total_inflow = topup_vnd + game_inflows + stock_sells + biz_collected_money + mine_earned_money + rob_stolen_money + item_sold_money + transfers_received + (100_000 if claimed_start else 0)
         total_outflow = game_outflows + stock_buys + rob_lost_money + transfers_sent
@@ -3330,7 +3330,7 @@ class GamblingHelpers(commands.Cog, name="General"):
 
         embed = make_embed(
             title=f"📊 PHÂN TÍCH NGUỒN TIỀN & DÒNG TIỀN VÀO/RA",
-            description=f"Đối tượng: **{user_name}** (`{user_id}`)\n💰 **Số dư ví thực tế hiện tại:** `{current_money:,} VND`",
+            description=f"Đối tượng: **{user_name}** (`{user_id}`)\n💰 **Số dư ví thực tế hiện tại:** `{current_money:,}` {EMOJI_VND}",
             color=discord.Color.blue(),
         )
         if avatar_url:
@@ -3340,13 +3340,13 @@ class GamblingHelpers(commands.Cog, name="General"):
         out_text = "\n".join(outflow_lines) if outflow_lines else "Chưa có nguồn tiền ra ghi nhận."
 
         embed.add_field(
-            name=f"📥 1. TỔNG DÒNG TIỀN VÀO (+{total_inflow:,} VND)",
+            name=f"📥 1. TỔNG DÒNG TIỀN VÀO (+{total_inflow:,} {EMOJI_VND})",
             value=in_text,
             inline=False,
         )
 
         embed.add_field(
-            name=f"📤 2. TỔNG DÒNG TIỀN RA (-{total_outflow:,} VND)",
+            name=f"📤 2. TỔNG DÒNG TIỀN RA (-{total_outflow:,} {EMOJI_VND})",
             value=out_text,
             inline=False,
         )
@@ -3360,7 +3360,7 @@ class GamblingHelpers(commands.Cog, name="General"):
 
         if biz_details:
             embed.add_field(
-                name=f"🏢 4. Doanh Nghiệp Đang Sở Hữu ({biz_hourly_vnd:,}đ/h | {biz_daily_gold:.2f} vàng/ngày)",
+                name=f"🏢 4. Doanh Nghiệp Đang Sở Hữu ({biz_hourly_vnd:,} {EMOJI_VND}/h | {biz_daily_gold:.2f} {EMOJI_GOLD}/ngày)",
                 value="\n".join(biz_details),
                 inline=False,
             )
@@ -3368,19 +3368,19 @@ class GamblingHelpers(commands.Cog, name="General"):
         if portfolio_rows:
             stock_str = ", ".join([f"{sym}: {shares:,.0f}" for sym, shares in portfolio_rows])
             embed.add_field(
-                name=f"📈 5. Cổ Phiếu Đang Giữ (Trị giá: `{stock_val:,} VND`)",
+                name=f"📈 5. Cổ Phiếu Đang Giữ (Trị giá: `{stock_val:,}` {EMOJI_VND})",
                 value=f"• {stock_str}",
                 inline=False,
             )
 
         if stock_val > 10_000_000_000 or current_money > 100_000_000_000:
             conclusion_text = (
-                f"🚨 **Kết luận nguồn gốc:** Người này sở hữu tài sản cực lớn (`{current_money:,} VND`). "
+                f"🚨 **Kết luận nguồn gốc:** Người này sở hữu tài sản cực lớn (`{current_money:,}` {EMOJI_VND}). "
                 f"Nguồn tiền chủ yếu xuất phát từ **thao tác thị trường cổ phiếu (DOGE / Sàn invest)**."
             )
         elif abs(unaccounted) > 100_000_000 and total_inflow == 0:
             conclusion_text = (
-                f"⚠️ **Kết luận nguồn gốc:** Số tiền `{current_money:,} VND` trong ví không đến từ Minigame hay Nạp thẻ. "
+                f"⚠️ **Kết luận nguồn gốc:** Số tiền `{current_money:,}` {EMOJI_VND} trong ví không đến từ Minigame hay Nạp thẻ. "
                 f"Có thể đã được chuyển tiền trong quá khứ hoặc dùng lỗi bug."
             )
         else:
@@ -3538,7 +3538,7 @@ class BegConfirmView(discord.ui.View):
         target_money = self.economy.get_entry(self.target.id)[1]
         if target_money < self.amount:
             await interaction.response.edit_message(
-                content=f"❌ **{self.target.mention}** định làm từ thiện nhưng phát hiện ví mình không đủ `{self.amount:,} VND`! Quê xệ luôn...",
+                content=f"❌ **{self.target.mention}** định làm từ thiện nhưng phát hiện ví mình không đủ `{self.amount:,}` {EMOJI_VND}! Quê xệ luôn...",
                 view=None
             )
             return
@@ -3574,9 +3574,9 @@ class BegConfirmView(discord.ui.View):
         embed = make_embed(
             title="🥺 XIN TIỀN THÀNH CÔNG 🥺",
             description=(
-                f"🎉 **{self.target.mention}** đã rủ lòng thương và cho **{self.beggar.mention}** **{self.amount:,} VND**!\n\n"
-                f"👤 **{self.beggar.mention}**: +`{self.amount:,} VND` (Số dư mới: `{self.economy.get_entry(self.beggar.id)[1]:,} VND`)\n"
-                f"👤 **{self.target.mention}**: -`{self.amount:,} VND` (Số dư mới: `{self.economy.get_entry(self.target.id)[1]:,} VND`)"
+                f"🎉 **{self.target.mention}** đã rủ lòng thương và cho **{self.beggar.mention}** **{self.amount:,}** {EMOJI_VND}!\n\n"
+                f"👤 **{self.beggar.mention}**: +`{self.amount:,}` {EMOJI_VND} (Số dư mới: `{self.economy.get_entry(self.beggar.id)[1]:,}` {EMOJI_VND})\n"
+                f"👤 **{self.target.mention}**: -`{self.amount:,}` {EMOJI_VND} (Số dư mới: `{self.economy.get_entry(self.target.id)[1]:,}` {EMOJI_VND})"
             ),
             color=discord.Color.green(),
         )
