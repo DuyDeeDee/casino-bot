@@ -422,39 +422,20 @@ class Jail(commands.Cog):
     @commands.command(
         name="anxatu",
         aliases=["unjail", "thabong"],
-        brief="Tha bổng / Ân xá cho tù nhân trước thời hạn.",
+        brief="Tha bổng / Ân xá cho tù nhân trước thời hạn (Chỉ Admin/Owner bot).",
         usage="anxatu <@user>",
     )
     @commands.guild_only()
-    @has_jail_permission()
     async def anxatu(self, ctx: commands.Context, target: discord.Member) -> None:
-        """Tha bổng / Ân xá cho tù nhân trước thời hạn."""
+        """Tha bổng / Ân xá cho tù nhân trước thời hạn (Chỉ Admin/Owner bot)."""
         guild_id = ctx.guild.id if ctx.guild else 0
 
-        is_caller_admin_or_owner = await self._is_admin_or_owner(ctx, ctx.author)
-
-        # Kiểm tra tự ân xá chính mình (Admin/Owner bot có thể tự ân xá)
-        if not is_caller_admin_or_owner and target.id == ctx.author.id:
-            await self._reply_or_send(ctx, "❌ **Lỗi phân quyền:** Bạn không thể tự ân xá cho chính mình.")
+        # Kiểm tra quyền: Chỉ Admin và Owner của bot mới có quyền sử dụng
+        is_bot_owner = await self._is_bot_owner(ctx.author)
+        is_bot_admin = await self._is_bot_admin(ctx.author)
+        if not (is_bot_owner or is_bot_admin):
+            await self._reply_or_send(ctx, "<:zh_deo:1545378962992009217> ")
             return
-
-        # Nếu không phải Admin hoặc Owner bot: Phải tuân theo thứ bậc role
-        if not is_caller_admin_or_owner:
-            # Kiểm tra cấp bậc Bot (Người này có cấp bậc cao hơn hoặc bằng Bot, hoặc là Server Owner)
-            if target.id == ctx.guild.owner_id or target.top_role >= ctx.guild.me.top_role:
-                await self._reply_or_send(
-                    ctx,
-                    f"<:zh_deo:1545378962992009217>",
-                )
-                return
-
-            # Kiểm tra cấp bậc người thực hiện lệnh (Người dùng có cấp bậc cao hơn hoặc bằng người thực hiện)
-            if ctx.author.id != ctx.guild.owner_id and target.top_role >= ctx.author.top_role:
-                await self._reply_or_send(
-                    ctx,
-                    f"<:zh_deo:1545378962992009217>",
-                )
-                return
 
         if not self.bot.economy.is_in_jail(target.id, guild_id):
             await self._reply_or_send(ctx, f"❌ {target.mention} hiện không ở trong tù!")

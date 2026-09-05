@@ -610,8 +610,8 @@ SERVER_ADMIN_SECTIONS = {
             {
                 "name": "anxatu <@user>",
                 "aliases": ["unjail", "thabong"],
-                "perm": "Quản lý tin nhắn (Manage Messages)",
-                "desc": "Tha bổng / Ân xá cho tù nhân trước thời hạn và tự động gỡ bỏ Role Tù Nhân.",
+                "perm": "Admin / Owner Bot",
+                "desc": "Tha bổng / Ân xá cho tù nhân trước thời hạn (Chỉ Admin và Owner bot mới dùng được).",
                 "example": "anxatu @User",
             },
         ],
