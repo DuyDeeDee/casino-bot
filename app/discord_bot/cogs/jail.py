@@ -3,8 +3,38 @@ import logging
 import typing
 import discord
 from discord.ext import commands
+from app.config import config
 
 logger = logging.getLogger(__name__)
+
+
+def has_jail_permission():
+    """Quyền dùng lệnh phạt tù / ân xá: Quản lý tin nhắn, Quản trị viên server, hoặc Admin/Owner bot."""
+    async def predicate(ctx: commands.Context) -> bool:
+        if not ctx.guild:
+            return False
+
+        owner_ids = set(getattr(config.bot, "owner_ids", []) or [])
+        admin_ids = set(getattr(config.bot, "admin_ids", []) or [])
+        if ctx.author.id in owner_ids or ctx.author.id in admin_ids:
+            return True
+
+        try:
+            if await ctx.bot.is_owner(ctx.author):
+                return True
+        except Exception:
+            pass
+
+        perms = ctx.channel.permissions_for(ctx.author)
+        if perms.administrator or perms.manage_messages:
+            return True
+
+        err = commands.MissingPermissions(["manage_messages"])
+        err.missing_perms = ["manage_messages"]
+        raise err
+
+    predicate.perms = {"manage_messages": True}
+    return commands.check(predicate)
 
 
 class Jail(commands.Cog):
@@ -23,6 +53,62 @@ class Jail(commands.Cog):
             return await ctx.reply(content, **kwargs)
         except (discord.HTTPException, discord.InvalidArgument):
             return await ctx.send(content, **kwargs)
+
+    async def _is_admin_or_owner(self, ctx: commands.Context, user: discord.Member | discord.User = None) -> bool:
+        """Kiểm tra xem user có phải là Bot Owner, Bot Admin hoặc Server Admin (Administrator/Owner server) hay không."""
+        target_user = user or ctx.author
+        if not target_user:
+            return False
+
+        # 1. Bot Owner
+        owner_ids = set(getattr(config.bot, "owner_ids", []) or [])
+        if target_user.id in owner_ids:
+            return True
+        if hasattr(self.bot, "owner_ids") and self.bot.owner_ids and target_user.id in self.bot.owner_ids:
+            return True
+        try:
+            if await self.bot.is_owner(target_user):
+                return True
+        except Exception:
+            pass
+
+        # 2. Bot Admin
+        admin_ids = set(getattr(config.bot, "admin_ids", []) or [])
+        if target_user.id in admin_ids:
+            return True
+
+        # 3. Server Admin & Server Owner
+        if ctx.guild:
+            if target_user.id == ctx.guild.owner_id:
+                return True
+            member = target_user if isinstance(target_user, discord.Member) else ctx.guild.get_member(target_user.id)
+            if member and getattr(member, "guild_permissions", None) and member.guild_permissions.administrator:
+                return True
+
+        return False
+
+    async def _is_bot_owner(self, user: discord.Member | discord.User) -> bool:
+        """Kiểm tra xem một user có phải là Bot Owner hay không."""
+        if not user:
+            return False
+        owner_ids = set(getattr(config.bot, "owner_ids", []) or [])
+        if user.id in owner_ids:
+            return True
+        if hasattr(self.bot, "owner_ids") and self.bot.owner_ids and user.id in self.bot.owner_ids:
+            return True
+        try:
+            if await self.bot.is_owner(user):
+                return True
+        except Exception:
+            pass
+        return False
+
+    async def _is_bot_admin(self, user: discord.Member | discord.User) -> bool:
+        """Kiểm tra xem một user có phải là Bot Admin hay không."""
+        if not user:
+            return False
+        admin_ids = set(getattr(config.bot, "admin_ids", []) or [])
+        return user.id in admin_ids
 
     async def global_jail_command_check(self, ctx: commands.Context) -> bool:
         """Global check: Chặn tù nhân sử dụng các lệnh bot khác ngoài lau dọn."""
@@ -138,7 +224,7 @@ class Jail(commands.Cog):
         usage="phattu <@user> [số_lần] [lý_do]",
     )
     @commands.guild_only()
-    @commands.has_permissions(manage_messages=True)
+    @has_jail_permission()
     async def phattu(
         self,
         ctx: commands.Context,
@@ -151,31 +237,46 @@ class Jail(commands.Cog):
         if count is None or count <= 0:
             count = 100
 
-        # Kiểm tra tự phạt chính mình
-        if target.id == ctx.author.id:
-            await self._reply_or_send(ctx, "❌ **Lỗi phân quyền:** Bạn không thể tự phạt chính mình.")
-            return
-
-        # Kiểm tra cấp bậc Bot (Người này có cấp bậc cao hơn hoặc bằng Bot, hoặc là Server Owner)
-        if target.id == ctx.guild.owner_id or target.top_role >= ctx.guild.me.top_role:
-            await self._reply_or_send(
-                ctx,
-                f"<:zh_deo:1545378962992009217>",
-            )
-            return
-
         # Không thể phạt bot khác
         if target.bot:
             await self._reply_or_send(ctx, "❌ Không thể tống giam bot!")
             return
 
-        # Kiểm tra cấp bậc người thực hiện lệnh (Người dùng có cấp bậc cao hơn hoặc bằng người thực hiện)
-        if ctx.author.id != ctx.guild.owner_id and target.top_role >= ctx.author.top_role:
+        is_caller_admin_or_owner = await self._is_admin_or_owner(ctx, ctx.author)
+        is_caller_bot_owner = await self._is_bot_owner(ctx.author)
+        is_target_bot_owner = await self._is_bot_owner(target)
+        is_target_bot_admin = await self._is_bot_admin(target)
+
+        # Bảo vệ Bot Owner & Bot Admin: Không ai được tống giam Bot Owner / Bot Admin (trừ khi chính Bot Owner thao tác)
+        if (is_target_bot_owner or is_target_bot_admin) and not is_caller_bot_owner:
             await self._reply_or_send(
                 ctx,
                 f"<:zh_deo:1545378962992009217>",
             )
             return
+
+        # Kiểm tra tự phạt chính mình (Admin/Owner bot có thể tự phạt để test tính năng)
+        if not is_caller_admin_or_owner and target.id == ctx.author.id:
+            await self._reply_or_send(ctx, "❌ **Lỗi phân quyền:** Bạn không thể tự phạt chính mình.")
+            return
+
+        # Nếu không phải Admin hoặc Owner bot: Phải tuân theo thứ bậc role
+        if not is_caller_admin_or_owner:
+            # Kiểm tra cấp bậc Bot (Người này có cấp bậc cao hơn hoặc bằng Bot, hoặc là Server Owner)
+            if target.id == ctx.guild.owner_id or target.top_role >= ctx.guild.me.top_role:
+                await self._reply_or_send(
+                    ctx,
+                    f"<:zh_deo:1545378962992009217>",
+                )
+                return
+
+            # Kiểm tra cấp bậc người thực hiện lệnh (Người dùng có cấp bậc cao hơn hoặc bằng người thực hiện)
+            if ctx.author.id != ctx.guild.owner_id and target.top_role >= ctx.author.top_role:
+                await self._reply_or_send(
+                    ctx,
+                    f"<:zh_deo:1545378962992009217>",
+                )
+                return
 
         # Lưu vào Database
         self.bot.economy.add_to_jail(
@@ -325,31 +426,35 @@ class Jail(commands.Cog):
         usage="anxatu <@user>",
     )
     @commands.guild_only()
-    @commands.has_permissions(manage_messages=True)
+    @has_jail_permission()
     async def anxatu(self, ctx: commands.Context, target: discord.Member) -> None:
         """Tha bổng / Ân xá cho tù nhân trước thời hạn."""
         guild_id = ctx.guild.id if ctx.guild else 0
 
-        # Kiểm tra tự ân xá chính mình
-        if target.id == ctx.author.id:
+        is_caller_admin_or_owner = await self._is_admin_or_owner(ctx, ctx.author)
+
+        # Kiểm tra tự ân xá chính mình (Admin/Owner bot có thể tự ân xá)
+        if not is_caller_admin_or_owner and target.id == ctx.author.id:
             await self._reply_or_send(ctx, "❌ **Lỗi phân quyền:** Bạn không thể tự ân xá cho chính mình.")
             return
 
-        # Kiểm tra cấp bậc Bot (Người này có cấp bậc cao hơn hoặc bằng Bot, hoặc là Server Owner)
-        if target.id == ctx.guild.owner_id or target.top_role >= ctx.guild.me.top_role:
-            await self._reply_or_send(
-                ctx,
-                f"<:zh_deo:1545378962992009217>",
-            )
-            return
+        # Nếu không phải Admin hoặc Owner bot: Phải tuân theo thứ bậc role
+        if not is_caller_admin_or_owner:
+            # Kiểm tra cấp bậc Bot (Người này có cấp bậc cao hơn hoặc bằng Bot, hoặc là Server Owner)
+            if target.id == ctx.guild.owner_id or target.top_role >= ctx.guild.me.top_role:
+                await self._reply_or_send(
+                    ctx,
+                    f"<:zh_deo:1545378962992009217>",
+                )
+                return
 
-        # Kiểm tra cấp bậc người thực hiện lệnh (Người dùng có cấp bậc cao hơn hoặc bằng người thực hiện)
-        if ctx.author.id != ctx.guild.owner_id and target.top_role >= ctx.author.top_role:
-            await self._reply_or_send(
-                ctx,
-                f"<:zh_deo:1545378962992009217>",
-            )
-            return
+            # Kiểm tra cấp bậc người thực hiện lệnh (Người dùng có cấp bậc cao hơn hoặc bằng người thực hiện)
+            if ctx.author.id != ctx.guild.owner_id and target.top_role >= ctx.author.top_role:
+                await self._reply_or_send(
+                    ctx,
+                    f"<:zh_deo:1545378962992009217>",
+                )
+                return
 
         if not self.bot.economy.is_in_jail(target.id, guild_id):
             await self._reply_or_send(ctx, f"❌ {target.mention} hiện không ở trong tù!")

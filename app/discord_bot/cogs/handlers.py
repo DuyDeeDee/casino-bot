@@ -173,7 +173,8 @@ class Handlers(commands.Cog, name="handlers"):
                 "manage_channels": "Quản lý kênh",
                 "ban_members": "Cấm thành viên",
             }
-            required = ", ".join(perm_labels.get(p, p) for p in error.missing_perms)
+            perms = getattr(error, "missing_permissions", None) or getattr(error, "missing_perms", None) or []
+            required = ", ".join(perm_labels.get(p, p) for p in perms)
             await ctx.send(
                 "❌ **Bạn không có đủ quyền** để dùng lệnh này!\n"
                 f"🔑 Yêu cầu: {required}",
