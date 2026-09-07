@@ -111,19 +111,29 @@ def parse_color(color_val: Optional[str]) -> Optional[discord.Color]:
         "pink": discord.Color.from_rgb(255, 105, 180),
         "cyan": discord.Color.from_rgb(0, 255, 255),
         "white": discord.Color.from_rgb(255, 255, 255),
-        "black": discord.Color.from_rgb(0, 0, 0),
+        "black": discord.Color(0x010101),
+        "den": discord.Color(0x010101),
+        "max": discord.Color(0xFFFFFF),
+        "max hex": discord.Color(0xFFFFFF),
     }
     if val in color_map:
         return color_map[val]
     clean_hex = val
-    if clean_hex.startswith("#"):
-        clean_hex = clean_hex[1:]
-    elif clean_hex.startswith("0x"):
-        clean_hex = clean_hex[2:]
+    while clean_hex.startswith("#") or clean_hex.startswith("0x"):
+        if clean_hex.startswith("#"):
+            clean_hex = clean_hex[1:]
+        elif clean_hex.startswith("0x"):
+            clean_hex = clean_hex[2:]
+
+    if len(clean_hex) == 3:
+        clean_hex = "".join([c * 2 for c in clean_hex])
 
     if len(clean_hex) in (6, 8):
         try:
-            return discord.Color(int(clean_hex[:6], 16))
+            int_val = int(clean_hex[:6], 16)
+            if int_val == 0:
+                return discord.Color(0x010101)
+            return discord.Color(int_val)
         except ValueError:
             pass
     return None
