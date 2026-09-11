@@ -19,6 +19,7 @@ from app.discord_bot.modules.hopy_data import (
 
 class GamePhase(str, Enum):
     LOBBY = "lobby"
+    STARTING = "starting"
     QUESTION = "question"
     REVEALING = "revealing"
     ROUND_END = "round_end"
@@ -38,7 +39,7 @@ class HopyPlayer:
 
 @dataclass
 class RoundEvaluation:
-    matched_groups: List[Dict]  # [{"canonical": str, "display_word": str, "players": [HopyPlayer], "points_each": int}]
+    matched_groups: List[Dict]  # Nhóm liên thông bởi đáp án trùng hoặc có ít nhất 1 từ chung
     solos: List[Dict]  # [{"player": HopyPlayer, "raw_answer": str}]
     no_answers: List[HopyPlayer]  # [HopyPlayer]
     is_dai_hop_y: bool = False
@@ -201,17 +202,25 @@ class HopyGame:
         """
         Tính điểm và so khớp câu trả lời vòng hiện tại:
         - Chuẩn hóa text và phân giải từ đồng nghĩa
-        - Gom nhóm các câu trả lời trùng khớp
+        - Hai đáp án khớp nếu giống canonical hoặc có ít nhất 1 từ chuẩn hóa chung
         - Tính điểm:
-          + Trùng với >= 1 người: +10đ cơ bản + 2đ/người trùng thêm
+          + Khớp với >= 1 người: +10đ cơ bản + 2đ/người khớp thêm
           + Đại Hợp Ý (100% phòng cùng trùng 1 từ): +20đ bonus mỗi người
           + Lẻ loi (không trùng): 0đ
           + Không trả lời: 0đ
         """
+        # Việc reveal có thể bị gọi lặp do interaction/race. Không được cộng điểm lần hai.
+        if self.phase == GamePhase.ROUND_END and self.last_evaluation is not None:
+            return self.last_evaluation
+        if self.phase not in (GamePhase.QUESTION, GamePhase.REVEALING):
+            raise RuntimeError("Chỉ được tính điểm khi vòng vừa kết thúc nhận câu trả lời")
+
         self.phase = GamePhase.ROUND_END
         synonyms = self.current_question.get("synonyms") if self.current_question else None
 
-        # Gom nhóm theo canonical key
+        # Chuẩn hóa đáp án trước khi so khớp. Chỉ token có chữ/số mới được coi là
+        # một "chữ" để emoji hoặc ký hiệu đơn lẻ không vô tình tạo điểm.
+        answer_entries: List[Tuple[HopyPlayer, str, str, set[str]]] = []
         canonical_map: Dict[str, List[Tuple[HopyPlayer, str]]] = defaultdict(list)
         no_answers: List[HopyPlayer] = []
 
@@ -225,6 +234,12 @@ class HopyGame:
             norm = normalize_answer(raw)
             key = resolve_canonical_key(norm, synonyms)
             canonical_map[key].append((player, raw))
+            tokens = {
+                token
+                for token in key.split()
+                if any(char.isalnum() for char in token)
+            }
+            answer_entries.append((player, raw, key, tokens))
 
         matched_groups: List[Dict] = []
         solos: List[Dict] = []
@@ -236,42 +251,100 @@ class HopyGame:
         if len(canonical_map) == 1 and len(no_answers) == 0 and total_active_count >= 2:
             is_dai_hop_y = True
 
-        for key, members in canonical_map.items():
-            group_size = len(members)
-            if group_size >= 2:
-                # Tính điểm nhóm: 10đ cơ bản + 2đ cho mỗi người trùng thêm từ người thứ 3 trở đi
-                # 2 người -> 10đ
-                # 3 người -> 10 + 2 = 12đ
-                # 4 người -> 10 + 4 = 14đ
-                points = 10 + (group_size - 2) * 2
-                if is_dai_hop_y:
-                    points += 20  # Thêm bonus Đại Hợp Ý khủng
+        # Lập đồ thị khớp ý. Tính điểm theo số đối thủ thực sự có đáp án khớp với
+        # từng người; cách này xử lý đúng cả chuỗi như "trà sữa" - "trà đá" -
+        # "đá xay" mà không cộng điểm hai lần cho người ở giữa.
+        neighbors: Dict[int, set[int]] = {
+            player.user_id: set() for player, _, _, _ in answer_entries
+        }
+        edge_terms: Dict[Tuple[int, int], set[str]] = {}
 
-                # Lấy từ đại diện hiển thị (lấy từ raw phổ biến nhất hoặc từ đầu tiên)
-                sample_word = members[0][1]
+        for idx, (left_player, _, left_key, left_tokens) in enumerate(answer_entries):
+            for right_player, _, right_key, right_tokens in answer_entries[idx + 1:]:
+                shared_tokens = left_tokens & right_tokens
+                is_exact = left_key == right_key
+                if not is_exact and not shared_tokens:
+                    continue
 
-                group_players = []
-                for p, raw in members:
-                    group_players.append(p)
-                    p.score += points
-                    p.match_count += 1
-                    p.round_scores[self.current_round] = points
+                left_id = left_player.user_id
+                right_id = right_player.user_id
+                neighbors[left_id].add(right_id)
+                neighbors[right_id].add(left_id)
+                edge_terms[(min(left_id, right_id), max(left_id, right_id))] = (
+                    {left_key} if is_exact else shared_tokens
+                )
 
-                matched_groups.append({
-                    "canonical": key,
-                    "display_word": sample_word,
-                    "players": group_players,
-                    "points_each": points
-                })
-            else:
-                p, raw = members[0]
-                p.round_scores[self.current_round] = 0
-                solos.append({
-                    "player": p,
-                    "raw_answer": raw
-                })
+        points_by_player: Dict[int, int] = {}
+        for player, raw, _, _ in answer_entries:
+            peer_count = len(neighbors[player.user_id])
+            if peer_count == 0:
+                player.round_scores[self.current_round] = 0
+                solos.append({"player": player, "raw_answer": raw})
+                continue
 
-        is_all_solos = (len(matched_groups) == 0)
+            points = 10 + (peer_count - 1) * 2
+            if is_dai_hop_y:
+                points += 20
+            player.score += points
+            player.match_count += 1
+            player.round_scores[self.current_round] = points
+            points_by_player[player.user_id] = points
+
+        # Gom các cặp khớp thành component chỉ để trình bày kết quả. Điểm vẫn dựa
+        # trên neighbors ở trên, nên một liên kết bắc cầu không tạo điểm giả.
+        entries_by_id = {
+            player.user_id: (player, raw, key)
+            for player, raw, key, _ in answer_entries
+        }
+        visited: set[int] = set()
+        for player, _, _, _ in answer_entries:
+            root_id = player.user_id
+            if root_id in visited or not neighbors[root_id]:
+                continue
+
+            stack = [root_id]
+            component_ids: List[int] = []
+            while stack:
+                current_id = stack.pop()
+                if current_id in visited:
+                    continue
+                visited.add(current_id)
+                component_ids.append(current_id)
+                stack.extend(neighbors[current_id] - visited)
+
+            component_set = set(component_ids)
+            shared_terms: set[str] = set()
+            for (left_id, right_id), terms in edge_terms.items():
+                if left_id in component_set and right_id in component_set:
+                    shared_terms.update(terms)
+
+            group_players = [entries_by_id[user_id][0] for user_id in component_ids]
+            raw_answers = {
+                user_id: entries_by_id[user_id][1] for user_id in component_ids
+            }
+            canonical_keys = {entries_by_id[user_id][2] for user_id in component_ids}
+            group_points = {
+                user_id: points_by_player[user_id] for user_id in component_ids
+            }
+            matched_groups.append({
+                "canonical": next(iter(canonical_keys)) if len(canonical_keys) == 1 else "",
+                "display_word": raw_answers[component_ids[0]],
+                "shared_words": sorted(shared_terms),
+                "players": group_players,
+                "raw_answers": raw_answers,
+                "player_points": group_points,
+                "points_each": (
+                    next(iter(group_points.values()))
+                    if len(set(group_points.values())) == 1
+                    else None
+                ),
+            })
+
+        is_all_solos = (
+            total_active_count > 0
+            and len(solos) == total_active_count
+            and len(no_answers) == 0
+        )
 
         # Sắp xếp nhóm trùng đông nhất lên đầu
         matched_groups.sort(key=lambda g: len(g["players"]), reverse=True)
