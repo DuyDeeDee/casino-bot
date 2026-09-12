@@ -603,8 +603,8 @@ SERVER_ADMIN_SECTIONS = {
             {
                 "name": "phattu <@user> [số_lần] [lý_do]",
                 "aliases": ["jail", "tonggiam"],
-                "perm": "Quản lý tin nhắn (Manage Messages)",
-                "desc": "Tống giam người chơi vi phạm. Người chơi phải gõ `lacdit` đủ số lần chỉ định mới được tha bổng (mặc định: 100 lần).",
+                "perm": "Admin / Owner Bot",
+                "desc": "Tống giam người chơi vi phạm (Chỉ Admin và Owner bot mới dùng được). Người chơi phải gõ `lacdit` đủ số lần chỉ định mới được tha bổng (mặc định: 100 lần).",
                 "example": "phattu @User 200 Spam link cấm",
             },
             {

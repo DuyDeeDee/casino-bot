@@ -1189,6 +1189,65 @@ class TestGiveawayResidualFixes(unittest.IsolatedAsyncioTestCase):
         self.mock_channel.send.assert_called_once()
         self.assertIn("Không có ai tham gia giveaway", self.mock_channel.send.call_args[0][0])
 
+    async def test_no_participants_uses_custom_state_and_channel_message(self):
+        msg_id = 556678
+        embed_config = {
+            "no_participants_title": "👻 Không Có Người Chơi",
+            "no_participants_desc": "Giải {prize} đã đóng. {status_note}",
+            "no_participants_message": "Không ai tham gia **{prize}** tại {guild_name}."
+        }
+        self.cog.save_giveaway(
+            msg_id=msg_id,
+            guild_id=111,
+            channel_id=1001,
+            prize="Gold Bar",
+            host_id=123,
+            winner_count=1,
+            ends_at=int(time.time()) - 10,
+            required_roles=[],
+            bonus_roles={},
+            embed_config=embed_config
+        )
+        self.mock_message.id = msg_id
+        self.mock_message.reactions = []
+
+        await self.cog.end_giveaway(msg_id)
+
+        ga = self.cog.get_giveaway(msg_id)
+        self.assertEqual(ga["ended"], 1)
+        self.assertEqual(json.loads(ga["extra_reqs"])["end_reason"], "no_participants")
+        edited_embed = self.mock_message.edit.call_args.kwargs["embed"]
+        self.assertEqual(edited_embed.title, "👻 Không Có Người Chơi")
+        self.assertIn("Giải Gold Bar đã đóng", edited_embed.description)
+        self.mock_channel.send.assert_called_once()
+        self.assertEqual(
+            self.mock_channel.send.call_args[0][0],
+            "Không ai tham gia **Gold Bar** tại Fixes Guild."
+        )
+
+    async def test_no_participants_channel_message_can_be_disabled(self):
+        msg_id = 556679
+        self.cog.save_giveaway(
+            msg_id=msg_id,
+            guild_id=111,
+            channel_id=1001,
+            prize="Silent Prize",
+            host_id=123,
+            winner_count=1,
+            ends_at=int(time.time()) - 10,
+            required_roles=[],
+            bonus_roles={},
+            embed_config={"no_participants_message": "none"}
+        )
+        self.mock_message.id = msg_id
+        self.mock_message.reactions = []
+
+        await self.cog.end_giveaway(msg_id)
+
+        self.assertEqual(self.cog.get_giveaway(msg_id)["ended"], 1)
+        self.mock_message.edit.assert_called_once()
+        self.mock_channel.send.assert_not_called()
+
     async def test_reroll_uses_eligible_candidates_snapshot(self):
         """Reroll draws only from eligible_candidates snapshot and validates guild membership."""
         msg_id = 667788
@@ -1591,7 +1650,10 @@ class TestGiveawayStateCustomization(unittest.IsolatedAsyncioTestCase):
             "cancelled_title": "Title Cancelled",
             "cancelled_desc": "Desc Cancelled: {status_note}",
             "rerolled_title": "Title Rerolled",
-            "rerolled_desc": "Desc Rerolled: {winners} after {reroll_history}"
+            "rerolled_desc": "Desc Rerolled: {winners} after {reroll_history}",
+            "no_participants_title": "Không Có Người Chơi",
+            "no_participants_desc": "Không có ứng viên cho {prize}. {status_note}",
+            "no_participants_message": "Không ai tham gia **{prize}** tại {guild_name}."
         }
 
         # Save to guild template
@@ -1608,6 +1670,9 @@ class TestGiveawayStateCustomization(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(loaded_tpl["cancelled_desc"], "Desc Cancelled: {status_note}")
         self.assertEqual(loaded_tpl["rerolled_title"], "Title Rerolled")
         self.assertEqual(loaded_tpl["rerolled_desc"], "Desc Rerolled: {winners} after {reroll_history}")
+        self.assertEqual(loaded_tpl["no_participants_title"], "Không Có Người Chơi")
+        self.assertEqual(loaded_tpl["no_participants_desc"], "Không có ứng viên cho {prize}. {status_note}")
+        self.assertEqual(loaded_tpl["no_participants_message"], "Không ai tham gia **{prize}** tại {guild_name}.")
 
 
 # ==============================================================================
@@ -1710,6 +1775,8 @@ class TestGiveawayEditorUXOverhaul(unittest.IsolatedAsyncioTestCase):
 
         tpl_view = GiveawayEditorView(self.cog, tpl_ga, admin_user, self.mock_guild)
         edit_select = next(c for c in tpl_view.children if c.__class__.__name__ == "GiveawayEditSectionSelect")
+        preview_select = next(c for c in tpl_view.children if c.__class__.__name__ == "GiveawayPreviewStateSelect")
+        self.assertIn("no_participants", {option.value for option in preview_select.options})
         template_option_values = {option.value for option in edit_select.options}
         self.assertEqual(template_option_values, {"basic", "images", "author", "footer"})
         self.assertNotIn("prize_time", template_option_values)

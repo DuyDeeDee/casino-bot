@@ -40,6 +40,9 @@ TICK_SECONDS = 30  # Real seconds per 15-minute game tick
 TICK_MINUTES = 15  # 6 ticks = 90 minutes
 DEFAULT_MIN_BET = 10_000
 DEFAULT_MAX_BET = 50_000_000
+MATCH_INTERVAL_SECONDS = 8 * 3600  # 8 hours between matches
+MATCH_SCHEDULE_LIMIT = 1           # 1 upcoming match scheduled at a time
+
 
 
 # --- DISCORD UI COMPONENTS ---
@@ -258,41 +261,69 @@ class SportsBet(commands.Cog):
         self.bot = client
         self.economy: Economy = getattr(client, "economy", None) or Economy()
         self.live_cache: dict[int, dict[str, Any]] = {}
-        self.match_loop.start()
+        try:
+            self.match_loop.start()
+        except RuntimeError:
+            pass
 
     def cog_unload(self):
-        self.match_loop.cancel()
+        try:
+            self.match_loop.cancel()
+        except Exception:
+            pass
+
 
     # ---------- Match Lifecycle & Helpers ----------
 
+    def get_match_interval(self) -> int:
+        """Returns the configured match interval in seconds (default: 8 hours)."""
+        val = self.economy.get_setting("sports_interval_hours", "8")
+        try:
+            hours = float(val)
+            return max(int(hours * 3600), 60)
+        except (ValueError, TypeError):
+            return MATCH_INTERVAL_SECONDS
+
     def _ensure_schedule(self) -> list[dict]:
-        """Ensures at least 4 upcoming matches are scheduled and populated with AI bets."""
-        upcoming = self.economy.get_upcoming_sports_matches(limit=10)
+        """Ensures 1 upcoming match is scheduled every 8 hours and populated with AI bets."""
+        upcoming = self.economy.get_upcoming_sports_matches(limit=5)
+        live_matches = self.economy.get_live_sports_matches()
+
+        # If there is already an upcoming match or a match is currently playing live, no new match needed
+        if len(upcoming) >= MATCH_SCHEDULE_LIMIT or live_matches:
+            return upcoming
+
+        interval = self.get_match_interval()
         now = int(time.time())
-        last_kickoff = max([m["kickoff"] for m in upcoming], default=now + 600)
+
+        # Determine kickoff based on the latest finished match
+        last_match = self.economy.get_latest_sports_match()
+        if last_match and last_match.get("status") == "finished" and last_match.get("kickoff"):
+            target_kickoff = int(last_match["kickoff"]) + interval
+            kickoff = target_kickoff if target_kickoff > now + 60 else now + interval
+        else:
+            kickoff = now + interval
 
         all_team_codes = list(TEAMS.keys())
-        while len(upcoming) < 4:
-            kickoff = max(last_kickoff + random.randint(1800, 3600), now + 600)
-            t1, t2 = random.sample(all_team_codes, 2)
-            t1_data, t2_data = TEAMS[t1], TEAMS[t2]
-            sim_seed = f"seed_{int(time.time())}_{random.randint(1000, 9999)}"
-            mid = self.economy.create_sports_match(
-                t1=t1,
-                t2=t2,
-                kickoff=kickoff,
-                t1_rating=t1_data["att"],
-                t2_rating=t2_data["att"],
-                sim_seed=sim_seed,
-            )
-            created = self.economy.get_sports_match(mid)
-            if created:
-                upcoming.append(created)
-                # Spawn 1-2 AI Bettors to populate initial liquidity
-                self._spawn_ai_bettors(created)
-            last_kickoff = kickoff
+        t1, t2 = random.sample(all_team_codes, 2)
+        t1_data, t2_data = TEAMS[t1], TEAMS[t2]
+        sim_seed = f"seed_{int(time.time())}_{random.randint(1000, 9999)}"
+        mid = self.economy.create_sports_match(
+            t1=t1,
+            t2=t2,
+            kickoff=kickoff,
+            t1_rating=t1_data["att"],
+            t2_rating=t2_data["att"],
+            sim_seed=sim_seed,
+        )
+        created = self.economy.get_sports_match(mid)
+        if created:
+            upcoming.append(created)
+            # Spawn 1-2 AI Bettors to populate initial liquidity
+            self._spawn_ai_bettors(created)
 
         return upcoming
+
 
     def _spawn_ai_bettors(self, match: dict):
         """Spawns AI Bettors to place initial smart bets into the match pool."""
@@ -621,6 +652,7 @@ class SportsBet(commands.Cog):
 
         ai_react_section = "\n".join(ai_reactions[:3]) if ai_reactions else ""
 
+        interval_h = self.get_match_interval() // 3600
         desc = (
             f"**{t1['emoji']} {t1['name']} {s1} - {s2} {t2['name']} {t2['emoji']}**\n\n"
             f"{ft_quote}\n\n"
@@ -628,6 +660,7 @@ class SportsBet(commands.Cog):
             f"📈 **Tài/Xỉu:** `{market_results['OU']}` | **BTTS:** `{market_results['BTTS']}`\n"
             f"💰 **Tổng Pool:** `{total_pool:,}` {EMOJI_VND} | **Tổng trả:** `{total_payout:,}` {EMOJI_VND}\n\n"
             f"**Danh sách trả thưởng:**\n" + "\n".join(payout_lines)
+            + f"\n\n⏰ **Trận đấu tiếp theo sẽ diễn ra sau {interval_h} tiếng nữa!** Dùng `i?sports` để xem kèo và đặt cược."
         )
 
         if ai_react_section:
@@ -648,6 +681,10 @@ class SportsBet(commands.Cog):
 
         if mid in self.live_cache:
             del self.live_cache[mid]
+
+        # Schedule the next match for the upcoming 8-hour cycle immediately
+        self._ensure_schedule()
+
 
     # ---------- User Commands ----------
 
@@ -699,7 +736,12 @@ class SportsBet(commands.Cog):
         if upcoming_lines:
             sections.append("📅 **TRẬN ĐẤU SẮP DIỄN RA:**\n" + "\n\n".join(upcoming_lines))
         else:
-            sections.append("📅 Hiện tại chưa có trận đấu mới.")
+            if live:
+                interval_h = self.get_match_interval() // 3600
+                sections.append(f"📅 **TRẬN TIẾP THEO:** Sẽ mở cược sau khi trận đấu trực tiếp kết thúc ({interval_h} tiếng / trận).")
+            else:
+                sections.append("📅 Hiện tại chưa có trận đấu mới.")
+
 
         desc = (
             "\n\n".join(sections)
@@ -1047,6 +1089,7 @@ class SportsBet(commands.Cog):
                 "Các lệnh quản trị viên:\n"
                 "• `i?sports admin stats` — Dashboard thống kê tổng quan\n"
                 "• `i?sports admin ai <on|off>` — Bật / tắt chế độ AI Bettors\n"
+                "• `i?sports admin interval [số_giờ]` — Đổi giãn cách giữa các trận đấu (Mặc định: 8 giờ)\n"
                 "• `i?sports admin cancel <match_id> [lý do]` — Hủy trận & tự động hoàn tiền 100%\n"
                 "• `i?sports admin channel <#kênh>` — Đặt kênh thông báo trận đấu\n"
                 "• `i?sports admin addmatch <t1> <t2> <phút>` — Lên lịch trận đấu tùy chỉnh\n"
@@ -1054,6 +1097,20 @@ class SportsBet(commands.Cog):
             color=discord.Color.dark_red(),
         )
         await ctx.send(embed=embed)
+
+    @sports_admin.command(name="interval")
+    @commands.has_permissions(administrator=True)
+    async def sports_admin_interval(self, ctx: commands.Context, hours: float = None):
+        """Đặt thời gian giãn cách giữa các trận đấu (giờ). Mặc định: 8 giờ."""
+        if hours is None:
+            cur = self.economy.get_setting("sports_interval_hours", "8")
+            await ctx.send(f"⏰ Giãn cách giữa các trận đấu hiện tại là **{cur} giờ** (1 trận mỗi {cur} tiếng).")
+            return
+        if hours < 0.1 or hours > 168:
+            await ctx.send("❌ Thời gian giãn cách phải từ 0.1 giờ đến 168 giờ (7 ngày)!")
+            return
+        self.economy.set_setting("sports_interval_hours", str(hours))
+        await ctx.send(f"✅ Đã đặt giãn cách giữa các trận đấu thành **{hours:g} giờ** (1 trận mỗi {hours:g} tiếng)!")
 
     @sports_admin.command(name="ai")
     @commands.has_permissions(administrator=True)
@@ -1068,6 +1125,7 @@ class SportsBet(commands.Cog):
         val = "1" if state == "on" else "0"
         self.economy.set_setting("sports_ai_enabled", val)
         await ctx.send(f"✅ Đã {'BẬT' if val == '1' else 'TẮT'} tính năng AI Bettors!")
+
 
     @sports_admin.command(name="stats")
     @commands.has_permissions(administrator=True)

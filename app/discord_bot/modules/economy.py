@@ -1498,6 +1498,25 @@ class Economy:
             for r in rows
         ]
 
+    def get_latest_sports_match(self) -> dict | None:
+        self.cur.execute(
+            """SELECT id, season_id, round_num, t1, t2, t1_rating, t2_rating, kickoff, status,
+                      score_t1, score_t2, minute, result, sim_seed, channel_id, message_id, created_at, settled_at
+            FROM sports_matches
+            ORDER BY id DESC LIMIT 1""",
+        )
+        row = self.cur.fetchone()
+        if not row:
+            return None
+        return {
+            "id": row[0], "season_id": row[1], "round_num": row[2], "t1": row[3], "t2": row[4],
+            "t1_rating": row[5], "t2_rating": row[6], "kickoff": row[7], "status": row[8],
+            "score_t1": row[9], "score_t2": row[10], "minute": row[11], "result": row[12],
+            "sim_seed": row[13], "channel_id": row[14], "message_id": row[15],
+            "created_at": row[16], "settled_at": row[17],
+        }
+
+
     def update_sports_match_live(
         self,
         match_id: int,

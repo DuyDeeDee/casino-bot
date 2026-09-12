@@ -257,6 +257,12 @@ STATE_CONFIG = {
         "title_key": "rerolled_title",
         "desc_key": "rerolled_desc",
     },
+    "no_participants": {
+        "label": "Không có người tham gia",
+        "title_key": "no_participants_title",
+        "desc_key": "no_participants_desc",
+        "message_key": "no_participants_message",
+    },
 }
 
 
@@ -1149,6 +1155,7 @@ class GiveawayStateContentModal(discord.ui.Modal):
         self.label = cfg_info["label"]
         self.title_key = cfg_info["title_key"]
         self.desc_key = cfg_info["desc_key"]
+        self.message_key = cfg_info.get("message_key")
 
         super().__init__(title=f"✏️ Sửa Trạng Thái: {self.label}")
 
@@ -1177,16 +1184,33 @@ class GiveawayStateContentModal(discord.ui.Modal):
 
         self.add_item(self.state_title)
         self.add_item(self.state_desc)
+        self.channel_message = None
+        if self.message_key:
+            self.channel_message = discord.ui.TextInput(
+                label="Tin Nhắn Gửi Thêm Vào Kênh",
+                style=discord.TextStyle.paragraph,
+                placeholder="VD: Không có ai tham gia **{prize}**. Để trống dùng mặc định; nhập none để tắt.",
+                default=cfg.get(self.message_key, "") or "",
+                max_length=1000,
+                required=False
+            )
+            self.add_item(self.channel_message)
 
     async def on_submit(self, interaction: discord.Interaction):
         new_title = self.state_title.value.strip() or None
         new_desc = self.state_desc.value.strip() or None
+        new_channel_message = self.channel_message.value.strip() or None if self.channel_message else None
 
         # 1. Validation: check placeholder bracket syntax & supported variables
         if new_desc:
             is_valid, err = validate_placeholders_strict(new_desc)
             if not is_valid:
                 await interaction.response.send_message(f"❌ Lỗi cú pháp placeholder: {err}", ephemeral=True)
+                return
+        if new_channel_message and new_channel_message.lower() != "none":
+            is_valid, err = validate_placeholders_strict(new_channel_message, PING_PLACEHOLDERS)
+            if not is_valid:
+                await interaction.response.send_message(f"❌ Lỗi tin nhắn gửi vào kênh: {err}", ephemeral=True)
                 return
 
         # 2. Validation: render trial embed to verify Discord length limitations
@@ -1199,6 +1223,8 @@ class GiveawayStateContentModal(discord.ui.Modal):
         trial_cfg = dict(cfg)
         trial_cfg[self.title_key] = new_title
         trial_cfg[self.desc_key] = new_desc
+        if self.message_key:
+            trial_cfg[self.message_key] = new_channel_message
 
         trial_ga = dict(self.editor_view.draft)
         trial_ga['embed_config'] = trial_cfg
@@ -1228,6 +1254,8 @@ class GiveawayStateContentModal(discord.ui.Modal):
         # Save to editor draft state
         cfg[self.title_key] = new_title
         cfg[self.desc_key] = new_desc
+        if self.message_key:
+            cfg[self.message_key] = new_channel_message
         self.editor_view.draft['embed_config'] = cfg
         self.editor_view.mark_dirty(f"state_{self.state}")
         await self.editor_view.refresh_preview(interaction)
@@ -1345,6 +1373,13 @@ class GiveawayPreviewStateSelect(discord.ui.Select):
                 emoji="🔄",
                 default=(current_mode == "rerolled"),
                 description="Xem trước giao diện khi quay lại kết quả tìm người thắng mới"
+            ),
+            discord.SelectOption(
+                label="Không có người tham gia",
+                value="no_participants",
+                emoji="👻",
+                default=(current_mode == "no_participants"),
+                description="Xem trước khi giveaway kết thúc mà không có ứng viên hợp lệ"
             ),
         ]
         super().__init__(
@@ -1488,6 +1523,8 @@ class GiveawayEditorView(discord.ui.View):
             sample_winners = [self.user.id]
         elif self.preview_mode == "cancelled":
             sample_note = "Giveaway này đã bị huỷ bởi Host."
+        elif self.preview_mode == "no_participants":
+            sample_note = "Không có ai tham gia giveaway này."
         elif self.preview_mode == "rerolled":
             sample_winners = [self.user.id]
             extra_reqs = sample_ga.get('extra_reqs') or {}
@@ -1531,12 +1568,16 @@ class GiveawayEditorView(discord.ui.View):
                 cfg = json.loads(cfg)
             except Exception:
                 cfg = {}
-        title_key = f"{self.preview_mode}_title"
-        desc_key = f"{self.preview_mode}_desc"
-        has_override = bool(cfg.get(title_key) or cfg.get(desc_key))
+        state_cfg = STATE_CONFIG.get(self.preview_mode, STATE_CONFIG["active"])
+        title_key = state_cfg["title_key"]
+        desc_key = state_cfg["desc_key"]
+        message_key = state_cfg.get("message_key")
+        has_override = bool(
+            cfg.get(title_key) or cfg.get(desc_key) or (message_key and cfg.get(message_key))
+        )
 
         self.btn_reset_to_common = discord.ui.Button(
-            label="🔄 Dùng lại nội dung chung",
+            label=("🔄 Khôi phục mặc định" if message_key else "🔄 Dùng lại nội dung chung"),
             style=discord.ButtonStyle.secondary,
             disabled=(not has_override),
             row=2
@@ -1621,12 +1662,17 @@ class GiveawayEditorView(discord.ui.View):
             "active": "🟢 Giveaway đang chạy",
             "ended": "🏁 Giveaway đã kết thúc",
             "cancelled": "🛑 Giveaway đã bị hủy",
-            "rerolled": "🔄 Giveaway đã reroll"
+            "rerolled": "🔄 Giveaway đã reroll",
+            "no_participants": "👻 Không có người tham gia"
         }.get(self.preview_mode, "🟢 Giveaway đang chạy")
 
-        title_key = f"{self.preview_mode}_title"
-        desc_key = f"{self.preview_mode}_desc"
-        has_override = bool(cfg.get(title_key) or cfg.get(desc_key))
+        state_cfg = STATE_CONFIG.get(self.preview_mode, STATE_CONFIG["active"])
+        title_key = state_cfg["title_key"]
+        desc_key = state_cfg["desc_key"]
+        message_key = state_cfg.get("message_key")
+        has_override = bool(
+            cfg.get(title_key) or cfg.get(desc_key) or (message_key and cfg.get(message_key))
+        )
         override_indicator = "✏️ *Trạng thái này đang có nội dung riêng.*" if has_override else "ℹ️ *Trạng thái này đang dùng nội dung chung.*"
 
         if self.is_template:
@@ -1648,7 +1694,8 @@ class GiveawayEditorView(discord.ui.View):
                 "state_active": "giao diện đang chạy",
                 "state_ended": "giao diện kết thúc",
                 "state_cancelled": "giao diện đã hủy",
-                "state_rerolled": "giao diện reroll"
+                "state_rerolled": "giao diện reroll",
+                "state_no_participants": "giao diện không có người tham gia"
             }
             sections_str = ", ".join(section_names.get(s, s) for s in sorted(self.dirty_sections))
             status_line = f"🟡 *Bản nháp có {len(self.dirty_sections)} phần chưa lưu ({sections_str})*"
@@ -1656,6 +1703,14 @@ class GiveawayEditorView(discord.ui.View):
             status_line = "🟢 *Dữ liệu đang đồng bộ với bản gốc*"
 
         preview_disclaimer = "\n*(Dữ liệu người thắng / lý do hủy ở chế độ Preview chỉ là mô phỏng thử nghiệm)*" if self.preview_mode != "active" else ""
+        channel_message_preview = ""
+        if self.preview_mode == "no_participants":
+            message_template = cfg.get("no_participants_message") or "Không có ai tham gia giveaway **{prize}**."
+            if str(message_template).strip().lower() == "none":
+                channel_message_preview = "\n🔕 Tin nhắn gửi thêm vào kênh: **Đã tắt**"
+            else:
+                rendered_message = self.cog.format_ping_content(message_template, self.draft, self.guild)
+                channel_message_preview = f"\n📣 Tin nhắn gửi thêm: {rendered_message}"
 
         return (
             f"{mode_header}\n"
@@ -1664,6 +1719,7 @@ class GiveawayEditorView(discord.ui.View):
             f"{scope_desc}\n"
             f"────────────────────────────────────────────"
             f"{preview_disclaimer}"
+            f"{channel_message_preview}"
         )
 
     async def refresh_preview(self, interaction: discord.Interaction):
@@ -1699,10 +1755,14 @@ class GiveawayEditorView(discord.ui.View):
                 cfg = json.loads(cfg)
             except Exception:
                 cfg = {}
-        title_key = f"{self.preview_mode}_title"
-        desc_key = f"{self.preview_mode}_desc"
+        state_cfg = STATE_CONFIG.get(self.preview_mode, STATE_CONFIG["active"])
+        title_key = state_cfg["title_key"]
+        desc_key = state_cfg["desc_key"]
+        message_key = state_cfg.get("message_key")
         cfg[title_key] = None
         cfg[desc_key] = None
+        if message_key:
+            cfg[message_key] = None
         self.draft['embed_config'] = cfg
         self.mark_dirty(f"state_{self.preview_mode}")
         await self.refresh_preview(interaction)
@@ -2438,6 +2498,8 @@ class Giveaway(commands.Cog, name="Giveaway"):
                 winners_mentions = "Chưa có"
             elif status == "cancelled":
                 winners_mentions = "Đã bị huỷ"
+            elif status == "no_participants":
+                winners_mentions = "Không có người tham gia"
             else:
                 winners_mentions = "Không có"
 
@@ -2445,12 +2507,15 @@ class Giveaway(commands.Cog, name="Giveaway"):
             "active": "Đang diễn ra",
             "ended": "Đã kết thúc",
             "cancelled": "Đã bị huỷ",
-            "rerolled": "Đã quay lại kết quả"
+            "rerolled": "Đã quay lại kết quả",
+            "no_participants": "Kết thúc — không có người tham gia"
         }
         status_display = status_names.get(status, "Đang diễn ra")
 
         if status == "cancelled" and not status_note:
             status_note = "Giveaway này đã bị huỷ bởi Host."
+        elif status == "no_participants" and not status_note:
+            status_note = "Không có ai tham gia giveaway này."
 
         extra_reqs_raw = giveaway.get('extra_reqs') or {}
         extra_reqs = json.loads(extra_reqs_raw) if isinstance(extra_reqs_raw, str) else (extra_reqs_raw or {})
@@ -2533,7 +2598,7 @@ class Giveaway(commands.Cog, name="Giveaway"):
 
         if status == "active":
             desc_lines.append(f"<:ss:1526230022787043348>*End:* <t:{ends_at}:R>")
-        elif status in ("ended", "rerolled"):
+        elif status in ("ended", "rerolled", "no_participants"):
             if winners:
                 winners_mentions = ", ".join(f"<@{w_id}>" for w_id in winners)
                 desc_lines.append(f"<a:key:1526234974150459593>*Result:* {winners_mentions}")
@@ -2585,7 +2650,8 @@ class Giveaway(commands.Cog, name="Giveaway"):
             "active": "<a:thanhgia:1526231085221023845> Giveaway Bắt Đầu <a:thanhgia:1526231085221023845>",
             "ended": "<a:thanhgia:1526231085221023845> **Giveaway Kết Thúc** <a:thanhgia:1526231085221023845>",
             "cancelled": "🎉 GIVEAWAY ĐÃ BỊ HUỶ 🎉",
-            "rerolled": "🎉 GIVEAWAY ĐÃ QUAY LẠI KẾT QUẢ 🎉"
+            "rerolled": "🎉 GIVEAWAY ĐÃ QUAY LẠI KẾT QUẢ 🎉",
+            "no_participants": "👻 GIVEAWAY KẾT THÚC — KHÔNG CÓ NGƯỜI THAM GIA"
         }
 
         # Resolution: {status}_title -> title -> default_titles[status]
@@ -2766,7 +2832,12 @@ class Giveaway(commands.Cog, name="Giveaway"):
             if ended_code == 0 or ended_code == 3:
                 status = "active"
             elif ended_code == 1:
-                status = "ended"
+                extra_reqs_raw = updated.get('extra_reqs') or {}
+                try:
+                    extra_reqs = json.loads(extra_reqs_raw) if isinstance(extra_reqs_raw, str) else extra_reqs_raw
+                except Exception:
+                    extra_reqs = {}
+                status = "no_participants" if extra_reqs.get("end_reason") == "no_participants" else "ended"
             elif ended_code == 2:
                 status = "cancelled"
             else:
@@ -4076,12 +4147,19 @@ class Giveaway(commands.Cog, name="Giveaway"):
                     valid_candidates[uid] = entries
 
                 if not valid_candidates:
+                    extra_reqs_raw = giveaway.get('extra_reqs') or {}
+                    try:
+                        extra_reqs = json.loads(extra_reqs_raw) if isinstance(extra_reqs_raw, str) else dict(extra_reqs_raw)
+                    except Exception:
+                        extra_reqs = {}
+                    extra_reqs["end_reason"] = "no_participants"
                     success, err = await self.update_and_sync_giveaway(
                         message_id,
                         guild_id=giveaway['guild_id'],
                         ended=1,
                         winners=[],
-                        status="ended",
+                        extra_reqs=extra_reqs,
+                        status="no_participants",
                         status_note="Không có ai tham gia giveaway này."
                     )
                     if not success:
@@ -4092,7 +4170,15 @@ class Giveaway(commands.Cog, name="Giveaway"):
                         except Exception:
                             pass
                         return
-                    await channel.send(f" Không có ai tham gia giveaway **{prize}**.")
+                    cfg_raw = giveaway.get('embed_config') or {}
+                    try:
+                        cfg = json.loads(cfg_raw) if isinstance(cfg_raw, str) else cfg_raw
+                    except Exception:
+                        cfg = {}
+                    message_template = cfg.get("no_participants_message") or "Không có ai tham gia giveaway **{prize}**."
+                    if str(message_template).strip().lower() != "none":
+                        announcement = self.format_ping_content(message_template, giveaway, guild)
+                        await channel.send(announcement, allowed_mentions=discord.AllowedMentions.none())
                     return
 
                 winners = pick_weighted_winners(valid_candidates, winner_count)

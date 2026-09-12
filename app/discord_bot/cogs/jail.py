@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 def has_jail_permission():
-    """Quyền dùng lệnh phạt tù / ân xá: Quản lý tin nhắn, Quản trị viên server, hoặc Admin/Owner bot."""
+    """Quyền dùng lệnh phạt tù: Chỉ Admin và Owner của bot mới được sử dụng."""
     async def predicate(ctx: commands.Context) -> bool:
         if not ctx.guild:
             return False
@@ -25,16 +25,10 @@ def has_jail_permission():
         except Exception:
             pass
 
-        perms = ctx.channel.permissions_for(ctx.author)
-        if perms.administrator or perms.manage_messages:
-            return True
+        return False
 
-        err = commands.MissingPermissions(["manage_messages"])
-        err.missing_perms = ["manage_messages"]
-        raise err
-
-    predicate.perms = {"manage_messages": True}
     return commands.check(predicate)
+
 
 
 class Jail(commands.Cog):
@@ -220,11 +214,10 @@ class Jail(commands.Cog):
     @commands.command(
         name="phattu",
         aliases=["jail", "tonggiam"],
-        brief="Tống giam người chơi với số lần lắc đít chỉ định.",
+        brief="Tống giam người chơi với số lần lắc đít chỉ định (Chỉ Admin/Owner bot).",
         usage="phattu <@user> [số_lần] [lý_do]",
     )
     @commands.guild_only()
-    @has_jail_permission()
     async def phattu(
         self,
         ctx: commands.Context,
@@ -233,17 +226,22 @@ class Jail(commands.Cog):
         *,
         reason: str = "Không có lý do",
     ) -> None:
-        """Tống giam người chơi với số lần lắc đít chỉ định."""
+        """Tống giam người chơi với số lần lắc đít chỉ định (Chỉ Admin/Owner bot)."""
         if count is None or count <= 0:
             count = 100
+
+        # Kiểm tra quyền: Chỉ Admin và Owner của bot mới có quyền sử dụng
+        is_caller_bot_owner = await self._is_bot_owner(ctx.author)
+        is_caller_bot_admin = await self._is_bot_admin(ctx.author)
+        if not (is_caller_bot_owner or is_caller_bot_admin):
+            await self._reply_or_send(ctx, "<:zh_deo:1545378962992009217>")
+            return
 
         # Không thể phạt bot khác
         if target.bot:
             await self._reply_or_send(ctx, "❌ Không thể tống giam bot!")
             return
 
-        is_caller_admin_or_owner = await self._is_admin_or_owner(ctx, ctx.author)
-        is_caller_bot_owner = await self._is_bot_owner(ctx.author)
         is_target_bot_owner = await self._is_bot_owner(target)
         is_target_bot_admin = await self._is_bot_admin(target)
 
@@ -254,29 +252,6 @@ class Jail(commands.Cog):
                 f"<:zh_deo:1545378962992009217>",
             )
             return
-
-        # Kiểm tra tự phạt chính mình (Admin/Owner bot có thể tự phạt để test tính năng)
-        if not is_caller_admin_or_owner and target.id == ctx.author.id:
-            await self._reply_or_send(ctx, "❌ **Lỗi phân quyền:** Bạn không thể tự phạt chính mình.")
-            return
-
-        # Nếu không phải Admin hoặc Owner bot: Phải tuân theo thứ bậc role
-        if not is_caller_admin_or_owner:
-            # Kiểm tra cấp bậc Bot (Người này có cấp bậc cao hơn hoặc bằng Bot, hoặc là Server Owner)
-            if target.id == ctx.guild.owner_id or target.top_role >= ctx.guild.me.top_role:
-                await self._reply_or_send(
-                    ctx,
-                    f"<:zh_deo:1545378962992009217>",
-                )
-                return
-
-            # Kiểm tra cấp bậc người thực hiện lệnh (Người dùng có cấp bậc cao hơn hoặc bằng người thực hiện)
-            if ctx.author.id != ctx.guild.owner_id and target.top_role >= ctx.author.top_role:
-                await self._reply_or_send(
-                    ctx,
-                    f"<:zh_deo:1545378962992009217>",
-                )
-                return
 
         # Lưu vào Database
         self.bot.economy.add_to_jail(
