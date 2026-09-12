@@ -8,6 +8,7 @@ import discord
 
 from app.discord_bot.cogs.giveaway import (
     Giveaway,
+    GiveawayEditorView,
     is_giveaway_emoji,
     pick_weighted_winners,
 )
@@ -936,13 +937,23 @@ class TestServerGiveawayTemplate(unittest.IsolatedAsyncioTestCase):
             ephemeral=True
         )
 
-        # 2. Authorized interaction saves template
+        # 2. Authorized interaction must confirm before overwriting template
         interaction_auth = MagicMock(spec=discord.Interaction)
         interaction_auth.user = admin_member
         interaction_auth.response = MagicMock()
         interaction_auth.response.edit_message = AsyncMock()
         interaction_auth.response.send_message = AsyncMock()
         await view.btn_save_default.callback(interaction_auth)
+        confirmation_view = interaction_auth.response.edit_message.call_args.kwargs["view"]
+        self.assertEqual(confirmation_view.__class__.__name__, "GiveawayTemplateConfirmView")
+        self.assertEqual(self.cog.get_template(12345), {})
+
+        interaction_confirm = MagicMock(spec=discord.Interaction)
+        interaction_confirm.user = admin_member
+        interaction_confirm.response = MagicMock()
+        interaction_confirm.response.edit_message = AsyncMock()
+        interaction_confirm.response.send_message = AsyncMock()
+        await view._save_default_confirmed(interaction_confirm)
         tpl = self.cog.get_template(12345)
         self.assertEqual(tpl.get("title"), "Studio Created Template")
 
@@ -1009,8 +1020,13 @@ class TestGiveawayResidualFixes(unittest.IsolatedAsyncioTestCase):
         original_ga = self.cog.get_giveaway(msg_id)
         self.assertEqual(original_ga["prize"], "Original Prize")
 
-        # Mock Discord edit to raise an error
-        self.mock_message.edit.side_effect = discord.HTTPException(MagicMock(status=500), "Discord Internal Server Error")
+        # A participant joins after the editor DB update but before Discord edit
+        # fails. Rollback must restore edited fields without deleting that join.
+        async def fail_edit_after_concurrent_join(**kwargs):
+            self.cog.update_participants(msg_id, {"98765": 1})
+            raise discord.HTTPException(MagicMock(status=500), "Discord Internal Server Error")
+
+        self.mock_message.edit.side_effect = fail_edit_after_concurrent_join
 
         success, err = await self.cog.update_and_sync_giveaway(
             msg_id,
@@ -1025,6 +1041,7 @@ class TestGiveawayResidualFixes(unittest.IsolatedAsyncioTestCase):
         rolled_back_ga = self.cog.get_giveaway(msg_id)
         self.assertEqual(rolled_back_ga["prize"], "Original Prize")
         self.assertEqual(rolled_back_ga["ended"], 0)
+        self.assertEqual(json.loads(rolled_back_ga["participants"]), {"98765": 1})
 
         # Restore mock_message.edit
         self.mock_message.edit.side_effect = None
@@ -1312,7 +1329,686 @@ class TestGiveawayResidualFixes(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(msg_id, self.cog.join_locks)
 
 
+# ==============================================================================
+# 13. TEST SUITE FOR STATE-SPECIFIC TITLE & DESCRIPTION CUSTOMIZATION
+# ==============================================================================
+
+class TestGiveawayStateCustomization(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        from unittest.mock import AsyncMock, MagicMock
+        import discord
+        from app.discord_bot.cogs.giveaway import (
+            Giveaway,
+            validate_placeholders,
+            GiveawayEditorView,
+            GiveawayStateContentModal
+        )
+
+        self.conn = sqlite3.connect(":memory:")
+        self.cur = self.conn.cursor()
+
+        self.mock_economy = MagicMock()
+        self.mock_economy.conn = self.conn
+        self.mock_economy.cur = self.cur
+
+        self.mock_bot = MagicMock()
+        self.mock_bot.economy = self.mock_economy
+        self.mock_bot.user = MagicMock(id=999999)
+        self.mock_bot.wait_until_ready = AsyncMock()
+
+        self.cog = Giveaway(self.mock_bot)
+
+        self.mock_guild = MagicMock(spec=discord.Guild)
+        self.mock_guild.id = 12345
+        self.mock_guild.name = "Custom Gaming Guild"
+        self.mock_bot.get_guild.return_value = self.mock_guild
+
+    async def asyncTearDown(self):
+        self.cog.cog_unload()
+        self.conn.close()
+
+    def _create_sample_ga(self, embed_config: dict, extra_reqs: dict = None) -> dict:
+        import time, json
+        return {
+            'id': 770011,
+            'guild_id': self.mock_guild.id,
+            'channel_id': 1001,
+            'message_id': 770011,
+            'prize': "VIP Nitro 1 Month",
+            'host_id': 1234,
+            'winner_count': 1,
+            'ends_at': int(time.time()) + 3600,
+            'ended': 0,
+            'required_roles': "[]",
+            'bonus_roles': "{}",
+            'participants': json.dumps({"111": 1, "222": 2, "333": 1}),
+            'winners': "[]",
+            'embed_config': json.dumps(embed_config),
+            'extra_reqs': json.dumps(extra_reqs or {}),
+            'role_bonus_prizes': "{}"
+        }
+
+    # 1. active_desc chỉ render khi trạng thái active
+    def test_active_desc_rendered_only_when_active(self):
+        cfg = {
+            "active_title": "🟢 SỰ KIỆN ĐANG CHẠY",
+            "active_desc": "Đang chạy giải {prize} từ host {host}! Kết thúc lúc: {ends_at}",
+            "ended_title": "🏁 SỰ KIỆN ĐÃ ĐÓNG",
+            "ended_desc": "Đã kết thúc giải {prize}! Người thắng: {winners}"
+        }
+        ga = self._create_sample_ga(cfg)
+
+        active_embed = self.cog.build_giveaway_embed(ga, status="active", participants_count=3)
+        self.assertEqual(active_embed.title, "🟢 SỰ KIỆN ĐANG CHẠY")
+        self.assertIn("Đang chạy giải VIP Nitro 1 Month", active_embed.description)
+        self.assertIn("<@1234>", active_embed.description)
+        self.assertNotIn("Đã kết thúc giải", active_embed.description)
+
+        ended_embed = self.cog.build_giveaway_embed(ga, status="ended", participants_count=3, winners=[8888])
+        self.assertEqual(ended_embed.title, "🏁 SỰ KIỆN ĐÃ ĐÓNG")
+        self.assertIn("Đã kết thúc giải VIP Nitro 1 Month", ended_embed.description)
+        self.assertIn("<@8888>", ended_embed.description)
+        self.assertNotIn("Đang chạy giải VIP Nitro 1 Month", ended_embed.description)
+
+    # 2. ended_desc render khi ended kèm danh sách {winners}
+    def test_ended_desc_rendered_with_winners(self):
+        cfg = {
+            "ended_title": "🏆 TRAO GIẢI GIVEAWAY",
+            "ended_desc": "🎉 Chúc mừng {winners} đã trúng {prize}!\nSố vé tham gia: {participants}"
+        }
+        ga = self._create_sample_ga(cfg)
+
+        embed = self.cog.build_giveaway_embed(ga, status="ended", participants_count=15, winners=[1001, 1002])
+        self.assertEqual(embed.title, "🏆 TRAO GIẢI GIVEAWAY")
+        self.assertIn("<@1001>, <@1002>", embed.description)
+        self.assertIn("VIP Nitro 1 Month", embed.description)
+        self.assertIn("Số vé tham gia: 15", embed.description)
+
+    # 3. cancelled_desc render kèm {status_note}
+    def test_cancelled_desc_rendered_with_status_note(self):
+        # Case A: template contains {status_note}
+        cfg_with_ph = {
+            "cancelled_title": "🛑 THÔNG BÁO HỦY",
+            "cancelled_desc": "Giveaway {prize} đã bị hủy!\nLý do: {status_note}\nNgười nhận: {winners}"
+        }
+        ga_a = self._create_sample_ga(cfg_with_ph)
+        embed_a = self.cog.build_giveaway_embed(ga_a, status="cancelled", status_note="Bảo trì khẩn cấp")
+        self.assertEqual(embed_a.title, "🛑 THÔNG BÁO HỦY")
+        self.assertIn("Lý do: Bảo trì khẩn cấp", embed_a.description)
+        self.assertIn("Người nhận: Đã bị huỷ", embed_a.description)
+
+        # Case B: default note used when status_note is None
+        embed_b = self.cog.build_giveaway_embed(ga_a, status="cancelled", status_note=None)
+        self.assertIn("Lý do: Giveaway này đã bị huỷ bởi Host.", embed_b.description)
+
+        # Case C: template does not contain {status_note}, automatically appended
+        cfg_no_ph = {
+            "cancelled_title": "🛑 THÔNG BÁO HỦY",
+            "cancelled_desc": "Giveaway {prize} đã bị dừng hoạt động."
+        }
+        ga_c = self._create_sample_ga(cfg_no_ph)
+        embed_c = self.cog.build_giveaway_embed(ga_c, status="cancelled", status_note="Host hủy thủ công")
+        self.assertIn("Giveaway VIP Nitro 1 Month đã bị dừng hoạt động.", embed_c.description)
+        self.assertIn("Host hủy thủ công", embed_c.description)
+
+    # 4. rerolled_desc render kèm người thắng mới và {reroll_history}
+    def test_rerolled_desc_rendered_with_new_and_past_winners(self):
+        cfg = {
+            "rerolled_title": "🔄 KẾT QUẢ QUAY LẠI",
+            "rerolled_desc": "Quay lại giải {prize}!\nNgười thắng mới: {winners}\nNgười thắng trước đây: {reroll_history}"
+        }
+        extra_reqs = {"reroll_history": [9001, 9002]}
+        ga = self._create_sample_ga(cfg, extra_reqs=extra_reqs)
+
+        embed = self.cog.build_giveaway_embed(ga, status="rerolled", winners=[9003])
+        self.assertEqual(embed.title, "🔄 KẾT QUẢ QUAY LẠI")
+        self.assertIn("Người thắng mới: <@9003>", embed.description)
+        self.assertIn("Người thắng trước đây: <@9001>, <@9002>", embed.description)
+
+    # 5. fallback về custom_desc chung khi {status}_desc rỗng
+    def test_fallback_to_custom_desc_when_state_desc_empty(self):
+        cfg = {
+            "title": "TIÊU ĐỀ CHUNG",
+            "custom_desc": "Mẫu chung cho giải {prize} từ host {host}! Kết quả: {winners}",
+            "ended_desc": ""  # Blank state desc
+        }
+        ga = self._create_sample_ga(cfg)
+
+        embed = self.cog.build_giveaway_embed(ga, status="ended", winners=[7777])
+        self.assertEqual(embed.title, "TIÊU ĐỀ CHUNG")
+        self.assertIn("Mẫu chung cho giải VIP Nitro 1 Month", embed.description)
+        self.assertIn("<@7777>", embed.description)
+
+    # 6. fallback về layout mặc định khi cả 2 đều rỗng
+    def test_fallback_to_default_layout_when_both_empty(self):
+        cfg = {}  # No state desc, no custom_desc
+        ga = self._create_sample_ga(cfg)
+
+        embed = self.cog.build_giveaway_embed(ga, status="ended", winners=[6666])
+        # Title falls back to default status title
+        self.assertIn("Giveaway Kết Thúc", embed.title)
+        # Description falls back to default structured layout
+        self.assertIn("**VIP Nitro 1 Month**", embed.description)
+        self.assertIn("<a:key:1526234974150459593>*Result:* <@6666>", embed.description)
+
+    # 7. Tương thích ngược hoàn toàn với template cũ (title & custom_desc)
+    def test_legacy_template_compatibility(self):
+        legacy_cfg = {
+            "title": "Legacy Server Giveaway",
+            "custom_desc": "Ghi chú luật chơi cũ"
+        }
+        ga = self._create_sample_ga(legacy_cfg)
+
+        for st in ["active", "ended", "cancelled", "rerolled"]:
+            emb = self.cog.build_giveaway_embed(ga, status=st, winners=[5555], status_note="Lý do huỷ")
+            self.assertEqual(emb.title, "Legacy Server Giveaway")
+            self.assertIn("📝 *Ghi chú:* Ghi chú luật chơi cũ", emb.description)
+            if st == "active":
+                self.assertIn("*End:*", emb.description)
+            elif st in ("ended", "rerolled"):
+                self.assertIn("<@5555>", emb.description)
+            elif st == "cancelled":
+                self.assertIn("Lý do huỷ", emb.description)
+
+    # 8. Xem preview không làm thay đổi / làm bẩn dữ liệu thật trong DB
+    def test_preview_does_not_mutate_actual_giveaway_db(self):
+        from app.discord_bot.cogs.giveaway import GiveawayEditorView
+        import copy
+        ga = self._create_sample_ga({"title": "Test Preview"}, extra_reqs={"reroll_history": []})
+        original_copy = copy.deepcopy(ga)
+
+        mock_user = unittest.mock.MagicMock()
+        mock_user.id = 1234
+        view = GiveawayEditorView(self.cog, ga, mock_user, self.mock_guild)
+
+        # Preview in ended mode
+        view.preview_mode = "ended"
+        ended_preview = view.build_preview_embed()
+        self.assertIsNotNone(ended_preview)
+
+        # Preview in cancelled mode
+        view.preview_mode = "cancelled"
+        cancelled_preview = view.build_preview_embed()
+        self.assertIsNotNone(cancelled_preview)
+
+        # Preview in rerolled mode (generates mock reroll history)
+        view.preview_mode = "rerolled"
+        rerolled_preview = view.build_preview_embed()
+        self.assertIsNotNone(rerolled_preview)
+
+        # Assert view.giveaway has not been mutated
+        self.assertEqual(view.giveaway['ended'], 0)
+        extra_reqs = json.loads(view.giveaway['extra_reqs']) if isinstance(view.giveaway['extra_reqs'], str) else view.giveaway['extra_reqs']
+        self.assertEqual(extra_reqs.get('reroll_history'), [])
+        self.assertEqual(view.giveaway['prize'], original_copy['prize'])
+
+    # 9. Kiểm tra validate cú pháp placeholder & giới hạn độ dài
+    def test_overlength_description_rejected(self):
+        from app.discord_bot.cogs.giveaway import validate_placeholders
+
+        # Valid placeholder bracket checks
+        ok, err = validate_placeholders("Quà: {prize} cho {winners}")
+        self.assertTrue(ok)
+        self.assertIsNone(err)
+
+        # Unmatched opening bracket at end
+        ok_unclosed, err_unclosed = validate_placeholders("Quà: {prize")
+        self.assertFalse(ok_unclosed)
+        self.assertIn("chưa được đóng", err_unclosed)
+
+        # Unmatched opening bracket followed by another opening bracket
+        ok_open, err_open = validate_placeholders("Quà: {prize cho {winners}")
+        self.assertFalse(ok_open)
+        self.assertIn("chưa đóng", err_open)
+
+        # Nested brackets
+        ok_nest, err_nest = validate_placeholders("Quà: {{prize}}")
+        self.assertFalse(ok_nest)
+        self.assertIn("lồng nhau", err_nest)
+
+        # Unmatched closing bracket
+        ok_close, err_close = validate_placeholders("Quà: prize} cho winners")
+        self.assertFalse(ok_close)
+        self.assertIn("thừa", err_close)
+
+        # Embed length limit check
+        huge_desc = "A" * 4100
+        cfg = {"ended_desc": huge_desc}
+        ga = self._create_sample_ga(cfg)
+        rendered_embed = self.cog.build_giveaway_embed(ga, status="ended")
+        # Description exceeds 4096 limit
+        self.assertGreater(len(rendered_embed.description), 4096)
+
+    # 10. Lưu template server giữ nguyên đầy đủ cả 4 trạng thái
+    def test_save_server_template_preserves_all_state_descriptions(self):
+        server_cfg = {
+            "title": "Global Title",
+            "custom_desc": "Global Desc",
+            "active_title": "Title Active",
+            "active_desc": "Desc Active: {prize}",
+            "ended_title": "Title Ended",
+            "ended_desc": "Desc Ended: {winners}",
+            "cancelled_title": "Title Cancelled",
+            "cancelled_desc": "Desc Cancelled: {status_note}",
+            "rerolled_title": "Title Rerolled",
+            "rerolled_desc": "Desc Rerolled: {winners} after {reroll_history}"
+        }
+
+        # Save to guild template
+        save_res = self.cog.save_template(self.mock_guild.id, "default", server_cfg, updated_by=999)
+        self.assertTrue(save_res)
+
+        # Retrieve and verify all 8 state keys
+        loaded_tpl = self.cog.get_template(self.mock_guild.id, "default")
+        self.assertEqual(loaded_tpl["active_title"], "Title Active")
+        self.assertEqual(loaded_tpl["active_desc"], "Desc Active: {prize}")
+        self.assertEqual(loaded_tpl["ended_title"], "Title Ended")
+        self.assertEqual(loaded_tpl["ended_desc"], "Desc Ended: {winners}")
+        self.assertEqual(loaded_tpl["cancelled_title"], "Title Cancelled")
+        self.assertEqual(loaded_tpl["cancelled_desc"], "Desc Cancelled: {status_note}")
+        self.assertEqual(loaded_tpl["rerolled_title"], "Title Rerolled")
+        self.assertEqual(loaded_tpl["rerolled_desc"], "Desc Rerolled: {winners} after {reroll_history}")
+
+
+# ==============================================================================
+# 14. TEST SUITE FOR GIVEAWAY STUDIO EDITOR UX/UI OVERHAUL
+# ==============================================================================
+
+class TestGiveawayEditorUXOverhaul(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        from unittest.mock import AsyncMock, MagicMock
+        import discord
+        from app.discord_bot.cogs.giveaway import (
+            Giveaway,
+            GiveawayEditorView,
+            GiveawayPrizeTimeModal,
+            parse_time_input,
+            parse_role_requirements_strict,
+            parse_bonus_roles_strict,
+            parse_role_bonus_prizes_strict,
+            validate_placeholders_strict
+        )
+
+        self.conn = sqlite3.connect(":memory:")
+        self.cur = self.conn.cursor()
+
+        self.mock_economy = MagicMock()
+        self.mock_economy.conn = self.conn
+        self.mock_economy.cur = self.cur
+
+        self.mock_bot = MagicMock()
+        self.mock_bot.economy = self.mock_economy
+        self.mock_bot.user = MagicMock(id=999999)
+        self.mock_bot.wait_until_ready = AsyncMock()
+
+        self.cog = Giveaway(self.mock_bot)
+
+        self.mock_guild = MagicMock(spec=discord.Guild)
+        self.mock_guild.id = 778899
+        self.mock_guild.name = "UX Gaming Guild"
+        self.mock_bot.get_guild.return_value = self.mock_guild
+
+    async def asyncTearDown(self):
+        self.cog.cog_unload()
+        self.conn.close()
+
+    def _create_sample_ga(self, ga_id=101010, embed_config=None) -> dict:
+        import time, json
+        return {
+            'id': ga_id,
+            'guild_id': self.mock_guild.id,
+            'channel_id': 1001,
+            'message_id': ga_id,
+            'prize': "Discord Nitro",
+            'host_id': 1234,
+            'winner_count': 1,
+            'ends_at': int(time.time()) + 7200,
+            'ended': 0,
+            'required_roles': "[]",
+            'bonus_roles': "{}",
+            'participants': "{}",
+            'winners': "[]",
+            'embed_config': json.dumps(embed_config or {}),
+            'extra_reqs': "{}",
+            'role_bonus_prizes': "{}",
+            'version': 0
+        }
+
+    # 1. Tách bản nháp (draft) khỏi dữ liệu gốc (original) & theo dõi dirty state
+    def test_draft_isolated_from_original_and_dirty_tracking(self):
+        from unittest.mock import MagicMock
+        ga = self._create_sample_ga()
+        user = MagicMock(id=1234)
+        view = GiveawayEditorView(self.cog, ga, user, self.mock_guild)
+
+        self.assertFalse(view.is_dirty)
+        self.assertEqual(len(view.dirty_sections), 0)
+
+        # Mutate draft
+        view.draft['prize'] = "Updated Nitro Boost"
+        view.mark_dirty("prize_time")
+
+        self.assertTrue(view.is_dirty)
+        self.assertIn("prize_time", view.dirty_sections)
+        self.assertEqual(view.original['prize'], "Discord Nitro")
+        self.assertEqual(view.draft['prize'], "Updated Nitro Boost")
+
+        # Discard changes
+        view.discard_changes()
+        self.assertFalse(view.is_dirty)
+        self.assertEqual(len(view.dirty_sections), 0)
+        self.assertEqual(view.draft['prize'], "Discord Nitro")
+
+    # 2. Phân quyền và chế độ hiển thị nút thao tác (Template vs Live Giveaway, Host vs Manager)
+    def test_mode_and_permission_aware_actions(self):
+        from unittest.mock import MagicMock
+
+        # A: Template Mode (id == 0)
+        tpl_ga = self._create_sample_ga(ga_id=0)
+        admin_user = MagicMock(id=999)
+        self.cog.can_manage_server_template = MagicMock(return_value=True)
+
+        tpl_view = GiveawayEditorView(self.cog, tpl_ga, admin_user, self.mock_guild)
+        edit_select = next(c for c in tpl_view.children if c.__class__.__name__ == "GiveawayEditSectionSelect")
+        template_option_values = {option.value for option in edit_select.options}
+        self.assertEqual(template_option_values, {"basic", "images", "author", "footer"})
+        self.assertNotIn("prize_time", template_option_values)
+        self.assertNotIn("requirements", template_option_values)
+        self.assertNotIn("prize_bonus", template_option_values)
+        row3_labels = [getattr(c, "label", "") for c in tpl_view.children if getattr(c, "row", None) == 3]
+        self.assertIn("💾 Lưu mẫu cho server", row3_labels)
+        self.assertIn("↩️ Hủy thay đổi", row3_labels)
+        self.assertNotIn("✅ Cập nhật giveaway này", row3_labels)
+        self.assertNotIn("Lưu & Áp Dụng Cả 2", row3_labels)
+
+        # B: Live Giveaway Mode (id > 0) với Host thường (không có quyền template)
+        self.cog.can_manage_server_template = MagicMock(return_value=False)
+        live_ga = self._create_sample_ga(ga_id=888)
+        host_user = MagicMock(id=1234)
+
+        live_view = GiveawayEditorView(self.cog, live_ga, host_user, self.mock_guild)
+        live_labels = [getattr(c, "label", "") for c in live_view.children if getattr(c, "row", None) == 3]
+        self.assertIn("✅ Cập nhật giveaway này", live_labels)
+        self.assertIn("↩️ Hủy thay đổi", live_labels)
+        self.assertNotIn("💾 Lưu thành mẫu server", live_labels)
+
+        # C: Live Giveaway Mode (id > 0) với Manager có quyền template
+        self.cog.can_manage_server_template = MagicMock(return_value=True)
+        mgr_view = GiveawayEditorView(self.cog, live_ga, admin_user, self.mock_guild)
+        mgr_labels = [getattr(c, "label", "") for c in mgr_view.children if getattr(c, "row", None) == 3]
+        self.assertIn("✅ Cập nhật giveaway này", mgr_labels)
+        self.assertIn("↩️ Hủy thay đổi", mgr_labels)
+        self.assertIn("💾 Lưu thành mẫu server", mgr_labels)
+
+    # 3. Nút Dùng lại nội dung chung (reset override)
+    async def test_state_override_reset_to_common(self):
+        from unittest.mock import MagicMock, AsyncMock
+        cfg = {
+            "title": "Tiêu đề chung",
+            "ended_title": "Tiêu đề riêng đã kết thúc",
+            "ended_desc": "Mô tả riêng kết thúc: {winners}"
+        }
+        ga = self._create_sample_ga(embed_config=cfg)
+        user = MagicMock(id=1234)
+        view = GiveawayEditorView(self.cog, ga, user, self.mock_guild)
+
+        # Switch to ended mode
+        view.preview_mode = "ended"
+        view._build_components()
+        self.assertFalse(view.btn_reset_to_common.disabled)
+
+        # Simulate clicking reset
+        mock_interaction = MagicMock(spec=discord.Interaction)
+        mock_interaction.response = MagicMock()
+        mock_interaction.response.is_done.return_value = False
+        mock_interaction.response.edit_message = AsyncMock()
+
+        await view._on_reset_to_common(mock_interaction)
+        draft_cfg = view.draft['embed_config']
+        self.assertIsNone(draft_cfg.get("ended_title"))
+        self.assertIsNone(draft_cfg.get("ended_desc"))
+        self.assertTrue(view.btn_reset_to_common.disabled)
+        self.assertIn("state_ended", view.dirty_sections)
+
+    # 4. Kiểm tra validation số người thắng (1-100)
+    async def test_winner_count_strict_validation(self):
+        from unittest.mock import MagicMock, AsyncMock
+        from app.discord_bot.cogs.giveaway import GiveawayPrizeTimeModal
+        ga = self._create_sample_ga()
+        user = MagicMock(id=1234)
+        view = GiveawayEditorView(self.cog, ga, user, self.mock_guild)
+
+        modal = GiveawayPrizeTimeModal(view)
+
+        # Case A: Non-integer input
+        modal.winner_count_input._value = "hai_nguoi"
+        modal.prize_input._value = "Valid Prize"
+        interaction_a = MagicMock(spec=discord.Interaction)
+        interaction_a.response = MagicMock()
+        interaction_a.response.send_message = AsyncMock()
+        await modal.on_submit(interaction_a)
+        interaction_a.response.send_message.assert_called_once()
+        self.assertIn("phải là số nguyên hợp lệ", interaction_a.response.send_message.call_args[0][0])
+        self.assertEqual(view.draft['winner_count'], 1)
+
+        # Case B: Out of range (0)
+        modal.winner_count_input._value = "0"
+        interaction_b = MagicMock(spec=discord.Interaction)
+        interaction_b.response = MagicMock()
+        interaction_b.response.send_message = AsyncMock()
+        await modal.on_submit(interaction_b)
+        self.assertIn("từ 1 đến 100", interaction_b.response.send_message.call_args[0][0])
+        self.assertEqual(view.draft['winner_count'], 1)
+
+        # Case C: Valid input (5)
+        modal.winner_count_input._value = "5"
+        interaction_c = MagicMock(spec=discord.Interaction)
+        interaction_c.response = MagicMock()
+        interaction_c.response.edit_message = AsyncMock()
+        interaction_c.response.is_done.return_value = False
+        await modal.on_submit(interaction_c)
+        self.assertEqual(view.draft['winner_count'], 5)
+        self.assertIn("prize_time", view.dirty_sections)
+
+    # 5. Helper parse_time_input
+    def test_parse_time_input_strict(self):
+        from app.discord_bot.cogs.giveaway import parse_time_input
+        import time
+
+        now = int(time.time())
+        current_ends = now + 3600
+
+        # Relative addition (+30m = +1800s)
+        new_time, err = parse_time_input("+30m", current_ends)
+        self.assertIsNone(err)
+        self.assertEqual(new_time, current_ends + 1800)
+
+        # Relative subtraction (-10m = -600s)
+        new_time_sub, err_sub = parse_time_input("-10m", current_ends)
+        self.assertIsNone(err_sub)
+        self.assertEqual(new_time_sub, current_ends - 600)
+
+        # Past time rejection
+        past_time, err_past = parse_time_input("-2h", current_ends)
+        self.assertIsNone(past_time)
+        self.assertIn("tương lai", err_past)
+
+        # Invalid format
+        inv_time, err_inv = parse_time_input("invalid_time", current_ends)
+        self.assertIsNone(inv_time)
+        self.assertIn("Không thể nhận diện", err_inv)
+
+    # 6. Kiểm tra biến placeholder nghiêm ngặt và gợi ý typo
+    def test_placeholder_strict_validation_with_close_matches(self):
+        from app.discord_bot.cogs.giveaway import validate_placeholders_strict
+
+        # Valid text
+        ok, err = validate_placeholders_strict("Chúc mừng {winners} đã trúng {prize} do {host} tặng!")
+        self.assertTrue(ok)
+        self.assertIsNone(err)
+
+        # Typo: {winner} -> suggest {winners}
+        ok_typo, err_typo = validate_placeholders_strict("Người trúng: {winner}")
+        self.assertFalse(ok_typo)
+        self.assertIn("{winners}", err_typo)
+
+        # Backward-compatible aliases supported by the renderer remain valid.
+        ok_part, err_part = validate_placeholders_strict("Số người: {participants_count}")
+        self.assertTrue(ok_part)
+        self.assertIsNone(err_part)
+        for legacy_alias in ("{server_name}", "{host_id}"):
+            ok_alias, err_alias = validate_placeholders_strict(legacy_alias)
+            self.assertTrue(ok_alias)
+            self.assertIsNone(err_alias)
+
+        alias_ga = self._create_sample_ga(embed_config={
+            "custom_desc": "Server {server_name} · Host {host_id} · Entries {participants_count}"
+        })
+        alias_embed = self.cog.build_giveaway_embed(alias_ga, participants_count=7)
+        self.assertIn("Server UX Gaming Guild · Host 1234 · Entries 7", alias_embed.description)
+        self.assertNotIn("{participants_count}", alias_embed.description)
+
+        # Completely unknown variable
+        ok_unk, err_unk = validate_placeholders_strict("Dữ liệu: {random_unknown_token}")
+        self.assertFalse(ok_unk)
+        self.assertIn("Danh sách biến hỗ trợ", err_unk)
+
+    def test_ping_placeholders_are_validated_and_rendered(self):
+        from app.discord_bot.cogs.giveaway import PING_PLACEHOLDERS, validate_placeholders_strict
+
+        ga = self._create_sample_ga()
+        raw = "🎉 {guild_name} · {prize} · Host {host}"
+        ok, err = validate_placeholders_strict(raw, PING_PLACEHOLDERS)
+        self.assertTrue(ok)
+        self.assertIsNone(err)
+
+        rendered = self.cog.format_ping_content(raw, ga, self.mock_guild)
+        self.assertEqual(rendered, "🎉 UX Gaming Guild · Discord Nitro · Host <@1234>")
+        self.assertNotIn("{guild_name}", rendered)
+
+        bad_ok, bad_err = validate_placeholders_strict("{winners}", PING_PLACEHOLDERS)
+        self.assertFalse(bad_ok)
+        self.assertIn("Không hỗ trợ biến", bad_err)
+
+    def test_color_and_url_validation_helpers(self):
+        from app.discord_bot.cogs.giveaway import is_valid_http_url, parse_color
+
+        self.assertIsNotNone(parse_color("#FFD700"))
+        self.assertIsNotNone(parse_color("purple"))
+        self.assertIsNone(parse_color("not-a-real-color"))
+        self.assertTrue(is_valid_http_url("https://cdn.example.com/banner.png"))
+        self.assertTrue(is_valid_http_url("http://example.com/image.jpg"))
+        self.assertFalse(is_valid_http_url("javascript:alert(1)"))
+        self.assertFalse(is_valid_http_url("cdn.example.com/no-scheme.png"))
+
+    async def test_role_select_managers_commit_to_editor_draft(self):
+        from app.discord_bot.cogs.giveaway import GiveawayPrizeBonusView, GiveawayRequirementsView
+
+        ga = self._create_sample_ga()
+        user = MagicMock(id=1234)
+        editor = GiveawayEditorView(self.cog, ga, user, self.mock_guild)
+
+        requirements_view = GiveawayRequirementsView(editor)
+        self.assertTrue(any(isinstance(item, discord.ui.RoleSelect) for item in requirements_view.children))
+        requirements_view.required_roles = [55555, 66666]
+        requirements_view.bonus_roles = {}
+        interaction_req = MagicMock(spec=discord.Interaction)
+        interaction_req.response = MagicMock()
+        interaction_req.response.is_done.return_value = False
+        interaction_req.response.edit_message = AsyncMock()
+        await requirements_view._on_save(interaction_req)
+        self.assertEqual(editor.draft["required_roles"], [55555, 66666])
+        self.assertEqual(editor.draft["bonus_roles"], {})
+
+        prize_view = GiveawayPrizeBonusView(editor)
+        self.assertTrue(any(isinstance(item, discord.ui.RoleSelect) for item in prize_view.children))
+        prize_view.role_prizes = {"55555": "+1 Skin"}
+        interaction_prize = MagicMock(spec=discord.Interaction)
+        interaction_prize.response = MagicMock()
+        interaction_prize.response.is_done.return_value = False
+        interaction_prize.response.edit_message = AsyncMock()
+        await prize_view._on_save(interaction_prize)
+        self.assertEqual(editor.draft["role_bonus_prizes"], {"55555": "+1 Skin"})
+
+    # 7. Phân giải Role nghiêm ngặt và gom lỗi theo dòng
+    def test_role_parsers_strict_error_collection(self):
+        from app.discord_bot.cogs.giveaway import (
+            parse_role_requirements_strict,
+            parse_bonus_roles_strict,
+            parse_role_bonus_prizes_strict
+        )
+
+        mock_role = MagicMock()
+        mock_role.id = 55555
+        mock_role.name = "VIP"
+        spaced_role = MagicMock()
+        spaced_role.id = 66666
+        spaced_role.name = "VIP Member"
+        self.mock_guild.roles = [mock_role, spaced_role]
+        self.mock_guild.get_role.side_effect = lambda role_id: {
+            55555: mock_role,
+            66666: spaced_role,
+        }.get(role_id)
+
+        # Valid role requirement
+        r_ids, r_errs = parse_role_requirements_strict(self.mock_guild, "@VIP, 55555")
+        self.assertEqual(r_ids, [55555])
+        self.assertEqual(r_errs, [])
+
+        # Role names containing spaces must round-trip through the modal parser.
+        spaced_ids, spaced_errs = parse_role_requirements_strict(self.mock_guild, "@VIP Member")
+        self.assertEqual(spaced_ids, [66666])
+        self.assertEqual(spaced_errs, [])
+
+        # Unknown numeric IDs and user mentions must not become role rules.
+        invalid_ids, invalid_id_errs = parse_role_requirements_strict(
+            self.mock_guild,
+            "999999, <@55555>"
+        )
+        self.assertEqual(invalid_ids, [])
+        self.assertEqual(len(invalid_id_errs), 2)
+
+        # Non-existent role requirement
+        bad_ids, bad_errs = parse_role_requirements_strict(self.mock_guild, "@NonExistentRole")
+        self.assertEqual(bad_ids, [])
+        self.assertEqual(len(bad_errs), 1)
+        self.assertIn("Không tìm thấy role '@NonExistentRole'", bad_errs[0])
+
+        # Bonus role tickets parsing
+        b_dict, b_errs = parse_bonus_roles_strict(self.mock_guild, "@VIP:2, @GhostRole:3")
+        self.assertEqual(b_dict, {"55555": 2})
+        self.assertEqual(len(b_errs), 1)
+        self.assertIn("GhostRole", b_errs[0])
+
+        # Role bonus prizes line-by-line parsing
+        p_text = "@VIP: +50k Momo\nMissingColonLine\n@UnknownRole: +100k"
+        p_dict, p_errs = parse_role_bonus_prizes_strict(self.mock_guild, p_text)
+        self.assertEqual(p_dict, {"55555": "+50k Momo"})
+        self.assertEqual(len(p_errs), 2)
+        self.assertIn("Dòng 2", p_errs[0])
+        self.assertIn("Dòng 3", p_errs[1])
+
+    # 8. Quản lý vòng đời và timeout (10 phút)
+    async def test_editor_timeout_lifecycle(self):
+        from unittest.mock import MagicMock, AsyncMock
+        ga = self._create_sample_ga()
+        user = MagicMock(id=1234)
+        view = GiveawayEditorView(self.cog, ga, user, self.mock_guild)
+
+        mock_msg = MagicMock()
+        mock_msg.edit = AsyncMock()
+        view.message = mock_msg
+
+        await view.on_timeout()
+
+        # All children must be disabled
+        for item in view.children:
+            self.assertTrue(item.disabled)
+
+        # Message edit called with timeout notification
+        mock_msg.edit.assert_called_once()
+        self.assertIn("hết hạn", mock_msg.edit.call_args.kwargs.get("content", ""))
+
+
 if __name__ == "__main__":
     unittest.main()
-
-

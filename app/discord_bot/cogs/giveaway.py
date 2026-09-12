@@ -1,4 +1,6 @@
 import asyncio
+import copy
+import difflib
 import inspect
 import json
 import logging
@@ -6,6 +8,7 @@ import re
 import secrets
 import time
 from typing import Optional, Union
+from urllib.parse import urlparse
 
 import discord
 from discord.ext import commands, tasks
@@ -31,14 +34,21 @@ def resolve_role_input(guild: Optional[discord.Guild], text: str) -> Optional[in
         return None
     text = text.strip()
     
-    # 1. Mention format <@&123456> or <@123456>
-    match = re.match(r"<@&?(\d+)>", text)
+    # 1. Only accept an actual role mention. A user mention (<@123>) must not
+    # accidentally become a role requirement.
+    match = re.fullmatch(r"<@&(\d+)>", text)
     if match:
-        return int(match.group(1))
+        role_id = int(match.group(1))
+        if guild is None:
+            return role_id
+        return role_id if guild.get_role(role_id) is not None else None
     
     # 2. Pure digits
     if text.isdigit():
-        return int(text)
+        role_id = int(text)
+        if guild is None:
+            return role_id
+        return role_id if guild.get_role(role_id) is not None else None
     
     # 3. Role Name lookup in guild
     if guild:
@@ -141,6 +151,17 @@ def parse_color(color_val: Optional[str]) -> Optional[discord.Color]:
     return None
 
 
+def is_valid_http_url(value: Optional[str]) -> bool:
+    """Returns True for an empty value or an absolute HTTP(S) URL."""
+    if not value:
+        return True
+    try:
+        parsed = urlparse(str(value).strip())
+        return parsed.scheme.lower() in {"http", "https"} and bool(parsed.netloc)
+    except (TypeError, ValueError):
+        return False
+
+
 _secure_rng = secrets.SystemRandom()
 
 
@@ -182,15 +203,216 @@ def pick_weighted_winners(candidates_dict: dict[int, int], k: int, exclude: Opti
     return winners
 
 
+AVAILABLE_PLACEHOLDERS = {
+    "prize",
+    "host",
+    "host_id",
+    "host_name",
+    "winners",
+    "winner_count",
+    "win",
+    "participants",
+    "participants_count",
+    "ends_at",
+    "end",
+    "end_time",
+    "status",
+    "status_note",
+    "reroll_history",
+    "result",
+    "role_req",
+    "roles",
+    "bonus_roles",
+    "prize_bonus",
+    "guild_name",
+    "server_name"
+}
+
+PING_PLACEHOLDERS = {
+    "guild_name",
+    "server_name",
+    "prize",
+    "host",
+    "host_name",
+}
+
+STATE_CONFIG = {
+    "active": {
+        "label": "Đang chạy",
+        "title_key": "active_title",
+        "desc_key": "active_desc",
+    },
+    "ended": {
+        "label": "Kết thúc",
+        "title_key": "ended_title",
+        "desc_key": "ended_desc",
+    },
+    "cancelled": {
+        "label": "Đã hủy",
+        "title_key": "cancelled_title",
+        "desc_key": "cancelled_desc",
+    },
+    "rerolled": {
+        "label": "Reroll",
+        "title_key": "rerolled_title",
+        "desc_key": "rerolled_desc",
+    },
+}
+
+
+def validate_placeholders_strict(
+    text: str,
+    allowed_placeholders: Optional[set[str]] = None
+) -> tuple[bool, Optional[str]]:
+    """Checks for unclosed or mismatched curly brackets and validates variable names."""
+    if not text:
+        return True, None
+    depth = 0
+    for ch in text:
+        if ch == '{':
+            if depth > 0:
+                return False, "Có dấu '{' lồng nhau hoặc chưa đóng dấu ngoặc trước đó."
+            depth += 1
+        elif ch == '}':
+            if depth == 0:
+                return False, "Có dấu '}' thừa mà không có dấu '{' mở trước đó."
+            depth -= 1
+    if depth != 0:
+        return False, "Có dấu '{' chưa được đóng bằng '}'."
+
+    allowed = allowed_placeholders or AVAILABLE_PLACEHOLDERS
+    tokens = re.findall(r"\{([^{}]+)\}", text)
+    for tok in tokens:
+        var_name = tok.strip()
+        if var_name not in allowed:
+            close = difflib.get_close_matches(var_name, list(allowed), n=1, cutoff=0.55)
+            if close:
+                return False, f"Không hỗ trợ biến '{{{var_name}}}'. Có thể bạn muốn dùng '{{{close[0]}}}'?"
+            valid_str = ", ".join(f"{{{p}}}" for p in sorted(allowed))
+            return False, f"Không hỗ trợ biến '{{{var_name}}}'. Danh sách biến hỗ trợ: {valid_str}"
+
+    return True, None
+
+validate_placeholders = validate_placeholders_strict
+
+
+def parse_time_input(value: str, current_ends_at: int) -> tuple[Optional[int], Optional[str]]:
+    """
+    Parses user input for time adjustment (+30m, -10m) or duration (30m, 2h, 1d).
+    Returns (new_timestamp, error_message).
+    """
+    val = value.strip().lower()
+    if not val:
+        return None, "Vui lòng nhập khoảng thời gian (VD: +30m, -10m, 2h)."
+
+    now = int(time.time())
+    if val.startswith("+"):
+        sec = parse_time(val[1:])
+        if not sec:
+            return None, f"Không thể nhận diện khoảng thời gian '{val}'."
+        target_base = max(now, current_ends_at)
+        new_time = target_base + sec
+    elif val.startswith("-"):
+        sec = parse_time(val[1:])
+        if not sec:
+            return None, f"Không thể nhận diện khoảng thời gian '{val}'."
+        new_time = current_ends_at - sec
+    else:
+        sec = parse_time(val)
+        if not sec:
+            return None, f"Không thể nhận diện khoảng thời gian '{val}'."
+        new_time = now + sec
+
+    if new_time <= now:
+        return None, "Thời gian kết thúc mới phải ở tương lai (lớn hơn thời điểm hiện tại)."
+
+    return new_time, None
+
+
+def parse_role_requirements_strict(guild: Optional[discord.Guild], raw_text: str) -> tuple[list[int], list[str]]:
+    """Parses required role inputs and collects line-by-line errors."""
+    if not raw_text.strip():
+        return [], []
+    # Do not split on whitespace: role names such as "@Giveaway Manager"
+    # must remain a single token. Use comma, semicolon, or newline separators.
+    tokens = [t.strip() for t in re.split(r"[,;\n]+", raw_text.strip()) if t.strip()]
+    role_ids = []
+    errors = []
+    for tok in tokens:
+        rid = resolve_role_input(guild, tok)
+        if rid is None:
+            errors.append(f"Không tìm thấy role '{tok}'.")
+        elif rid not in role_ids:
+            role_ids.append(rid)
+    return role_ids, errors
+
+
+def parse_bonus_roles_strict(guild: Optional[discord.Guild], raw_text: str) -> tuple[dict[str, int], list[str]]:
+    """Parses bonus role inputs (@Role:Tickets) and collects errors."""
+    if not raw_text.strip():
+        return {}, []
+    tokens = [t.strip() for t in re.split(r"[,;\n]+", raw_text.strip()) if t.strip()]
+    bonus_dict = {}
+    errors = []
+    for tok in tokens:
+        if ":" in tok:
+            parts = tok.split(":", 1)
+            role_part = parts[0].strip()
+            ticket_part = parts[1].strip().lstrip("+")
+            rid = resolve_role_input(guild, role_part)
+            if rid is None:
+                errors.append(f"Không tìm thấy role '{role_part}'.")
+                continue
+            if not ticket_part.isdigit() or int(ticket_part) <= 0:
+                errors.append(f"Số vé cộng thêm cho '{role_part}' phải là số nguyên dương.")
+                continue
+            bonus_dict[str(rid)] = int(ticket_part)
+        else:
+            rid = resolve_role_input(guild, tok)
+            if rid is None:
+                errors.append(f"Không tìm thấy role '{tok}'.")
+            else:
+                bonus_dict[str(rid)] = 1
+    return bonus_dict, errors
+
+
+def parse_role_bonus_prizes_strict(guild: Optional[discord.Guild], raw_text: str) -> tuple[dict[str, str], list[str]]:
+    """Parses role bonus prizes line by line and collects errors."""
+    if not raw_text.strip():
+        return {}, []
+    parsed_dict = {}
+    errors = []
+    lines = raw_text.strip().split("\n")
+    for idx, line in enumerate(lines, 1):
+        line = line.strip()
+        if not line:
+            continue
+        if ":" not in line:
+            errors.append(f"Dòng {idx}: Thiếu dấu hai chấm ':' ngăn cách role và quà ('{line}').")
+            continue
+        parts = line.split(":", 1)
+        role_part = parts[0].strip()
+        prize_part = parts[1].strip()
+        if not prize_part:
+            errors.append(f"Dòng {idx}: Chưa nhập nội dung quà cho role '{role_part}'.")
+            continue
+        rid = resolve_role_input(guild, role_part)
+        if rid is None:
+            errors.append(f"Dòng {idx}: Không tìm thấy role '{role_part}'.")
+            continue
+        parsed_dict[str(rid)] = prize_part
+    return parsed_dict, errors
+
+
 # ==============================================================================
 # UI MODALS FOR INTERACTIVE GIVEAWAY EDITOR (MIMU STYLE)
 # ==============================================================================
 
-class GiveawayBasicInfoModal(discord.ui.Modal, title="🎨 Thông Tin Cơ Bản"):
+class GiveawayBasicInfoModal(discord.ui.Modal, title="🎨 Chỉnh Sửa Nội Dung Chung"):
     def __init__(self, editor_view: "GiveawayEditorView"):
         super().__init__()
         self.editor_view = editor_view
-        cfg = self.editor_view.giveaway.get('embed_config') or {}
+        cfg = self.editor_view.draft.get('embed_config') or {}
         if isinstance(cfg, str):
             try:
                 cfg = json.loads(cfg)
@@ -198,31 +420,31 @@ class GiveawayBasicInfoModal(discord.ui.Modal, title="🎨 Thông Tin Cơ Bản"
                 cfg = {}
 
         self.custom_title = discord.ui.TextInput(
-            label="Tiêu đề Embed",
-            placeholder="VD: 🎉 EVENT ĐẶC BIỆT 🎉",
-            default=cfg.get("title", ""),
+            label="Tiêu đề chung",
+            placeholder="VD: 🎉 EVENT ĐẶC BIỆT 🎉 (Dùng khi trạng thái chưa có tiêu đề riêng)",
+            default=cfg.get("title", "") or "",
             max_length=256,
             required=False
         )
         self.color_input = discord.ui.TextInput(
             label="Màu viền Embed (Hex hoặc Tên màu)",
             placeholder="VD: #FFD700, gold, purple, red, cyan",
-            default=cfg.get("color", ""),
+            default=cfg.get("color", "") or "",
             max_length=25,
             required=False
         )
         self.ping_content = discord.ui.TextInput(
             label="Nội dung Ping / Header trên Embed",
             placeholder="VD: @everyone hoặc # 🎁 GIVEAWAY {guild_name}",
-            default=cfg.get("ping_content", ""),
+            default=cfg.get("ping_content", "") or "",
             max_length=200,
             required=False
         )
         self.custom_desc = discord.ui.TextInput(
-            label="Bố Cục Mô Tả / Ghi Chú (Placeholders)",
+            label="Mô tả chung (Placeholders)",
             style=discord.TextStyle.paragraph,
-            placeholder="Dùng biến: {prize}, {host}, {winner_count}, {ends_at}, {prize_bonus}... Hoặc ghi chú.",
-            default=cfg.get("custom_desc", ""),
+            placeholder="Dùng khi trạng thái chưa có nội dung riêng.\nHỗ trợ: {prize}, {host}, {winners}...",
+            default=cfg.get("custom_desc", "") or "",
             max_length=1500,
             required=False
         )
@@ -233,7 +455,29 @@ class GiveawayBasicInfoModal(discord.ui.Modal, title="🎨 Thông Tin Cơ Bản"
         self.add_item(self.custom_desc)
 
     async def on_submit(self, interaction: discord.Interaction):
-        cfg = self.editor_view.giveaway.get('embed_config') or {}
+        desc_val = self.custom_desc.value.strip() or None
+        if desc_val:
+            ok, err = validate_placeholders_strict(desc_val)
+            if not ok:
+                await interaction.response.send_message(f"❌ Lỗi cú pháp placeholder: {err}", ephemeral=True)
+                return
+
+        ping_val = self.ping_content.value.strip() or None
+        if ping_val:
+            ok, err = validate_placeholders_strict(ping_val, PING_PLACEHOLDERS)
+            if not ok:
+                await interaction.response.send_message(f"❌ Lỗi nội dung Ping/Header: {err}", ephemeral=True)
+                return
+
+        color_val = self.color_input.value.strip() or None
+        if color_val and parse_color(color_val) is None:
+            await interaction.response.send_message(
+                "❌ Màu không hợp lệ. Hãy nhập mã Hex như `#FFD700` hoặc tên màu như `gold`, `purple`, `red`.",
+                ephemeral=True
+            )
+            return
+
+        cfg = self.editor_view.draft.get('embed_config') or {}
         if isinstance(cfg, str):
             try:
                 cfg = json.loads(cfg)
@@ -241,19 +485,20 @@ class GiveawayBasicInfoModal(discord.ui.Modal, title="🎨 Thông Tin Cơ Bản"
                 cfg = {}
 
         cfg["title"] = self.custom_title.value.strip() or None
-        cfg["color"] = self.color_input.value.strip() or None
-        cfg["ping_content"] = self.ping_content.value.strip() or None
-        cfg["custom_desc"] = self.custom_desc.value.strip() or None
+        cfg["color"] = color_val
+        cfg["ping_content"] = ping_val
+        cfg["custom_desc"] = desc_val
 
-        self.editor_view.giveaway['embed_config'] = cfg
+        self.editor_view.draft['embed_config'] = cfg
+        self.editor_view.mark_dirty("basic")
         await self.editor_view.refresh_preview(interaction)
 
 
-class GiveawayAuthorModal(discord.ui.Modal, title="👤 Chỉnh Sửa Author"):
+class GiveawayAuthorModal(discord.ui.Modal, title="👤 Chỉnh Sửa Người Tổ Chức (Author)"):
     def __init__(self, editor_view: "GiveawayEditorView"):
         super().__init__()
         self.editor_view = editor_view
-        cfg = self.editor_view.giveaway.get('embed_config') or {}
+        cfg = self.editor_view.draft.get('embed_config') or {}
         if isinstance(cfg, str):
             try:
                 cfg = json.loads(cfg)
@@ -263,21 +508,21 @@ class GiveawayAuthorModal(discord.ui.Modal, title="👤 Chỉnh Sửa Author"):
         self.author_name = discord.ui.TextInput(
             label="Tên Author",
             placeholder="VD: 👑 Host: {host_name} (để trống để ẩn)",
-            default=cfg.get("author_name", ""),
+            default=cfg.get("author_name", "") or "",
             max_length=100,
             required=False
         )
         self.author_icon = discord.ui.TextInput(
             label="Author Icon URL",
             placeholder="Link ảnh hoặc {host_avatar}",
-            default=cfg.get("author_icon", ""),
+            default=cfg.get("author_icon", "") or "",
             max_length=400,
             required=False
         )
         self.author_url = discord.ui.TextInput(
             label="Author URL (Link khi bấm)",
             placeholder="https://...",
-            default=cfg.get("author_url", ""),
+            default=cfg.get("author_url", "") or "",
             max_length=400,
             required=False
         )
@@ -287,7 +532,19 @@ class GiveawayAuthorModal(discord.ui.Modal, title="👤 Chỉnh Sửa Author"):
         self.add_item(self.author_url)
 
     async def on_submit(self, interaction: discord.Interaction):
-        cfg = self.editor_view.giveaway.get('embed_config') or {}
+        author_icon = self.author_icon.value.strip() or None
+        author_url = self.author_url.value.strip() or None
+        if author_icon and author_icon != "{host_avatar}" and not is_valid_http_url(author_icon):
+            await interaction.response.send_message(
+                "❌ Author Icon phải là URL `http(s)://...` hoặc `{host_avatar}`.",
+                ephemeral=True
+            )
+            return
+        if author_url and not is_valid_http_url(author_url):
+            await interaction.response.send_message("❌ Author URL phải là URL `http(s)://...` hợp lệ.", ephemeral=True)
+            return
+
+        cfg = self.editor_view.draft.get('embed_config') or {}
         if isinstance(cfg, str):
             try:
                 cfg = json.loads(cfg)
@@ -295,18 +552,19 @@ class GiveawayAuthorModal(discord.ui.Modal, title="👤 Chỉnh Sửa Author"):
                 cfg = {}
 
         cfg["author_name"] = self.author_name.value.strip() or None
-        cfg["author_icon"] = self.author_icon.value.strip() or None
-        cfg["author_url"] = self.author_url.value.strip() or None
+        cfg["author_icon"] = author_icon
+        cfg["author_url"] = author_url
 
-        self.editor_view.giveaway['embed_config'] = cfg
+        self.editor_view.draft['embed_config'] = cfg
+        self.editor_view.mark_dirty("author")
         await self.editor_view.refresh_preview(interaction)
 
 
-class GiveawayFooterModal(discord.ui.Modal, title="📄 Chỉnh Sửa Footer"):
+class GiveawayFooterModal(discord.ui.Modal, title="📄 Chỉnh Sửa Chân Trang (Footer)"):
     def __init__(self, editor_view: "GiveawayEditorView"):
         super().__init__()
         self.editor_view = editor_view
-        cfg = self.editor_view.giveaway.get('embed_config') or {}
+        cfg = self.editor_view.draft.get('embed_config') or {}
         if isinstance(cfg, str):
             try:
                 cfg = json.loads(cfg)
@@ -316,14 +574,14 @@ class GiveawayFooterModal(discord.ui.Modal, title="📄 Chỉnh Sửa Footer"):
         self.footer_text = discord.ui.TextInput(
             label="Chân trang (Footer Text)",
             placeholder="VD: Sylus Meow • Giveaway System",
-            default=cfg.get("footer_text", ""),
+            default=cfg.get("footer_text", "") or "",
             max_length=150,
             required=False
         )
         self.footer_icon = discord.ui.TextInput(
             label="Footer Icon URL",
             placeholder="Link icon nhỏ góc footer",
-            default=cfg.get("footer_icon", ""),
+            default=cfg.get("footer_icon", "") or "",
             max_length=400,
             required=False
         )
@@ -332,7 +590,12 @@ class GiveawayFooterModal(discord.ui.Modal, title="📄 Chỉnh Sửa Footer"):
         self.add_item(self.footer_icon)
 
     async def on_submit(self, interaction: discord.Interaction):
-        cfg = self.editor_view.giveaway.get('embed_config') or {}
+        footer_icon = self.footer_icon.value.strip() or None
+        if footer_icon and not is_valid_http_url(footer_icon):
+            await interaction.response.send_message("❌ Footer Icon phải là URL `http(s)://...` hợp lệ.", ephemeral=True)
+            return
+
+        cfg = self.editor_view.draft.get('embed_config') or {}
         if isinstance(cfg, str):
             try:
                 cfg = json.loads(cfg)
@@ -340,9 +603,10 @@ class GiveawayFooterModal(discord.ui.Modal, title="📄 Chỉnh Sửa Footer"):
                 cfg = {}
 
         cfg["footer_text"] = self.footer_text.value.strip() or None
-        cfg["footer_icon"] = self.footer_icon.value.strip() or None
+        cfg["footer_icon"] = footer_icon
 
-        self.editor_view.giveaway['embed_config'] = cfg
+        self.editor_view.draft['embed_config'] = cfg
+        self.editor_view.mark_dirty("footer")
         await self.editor_view.refresh_preview(interaction)
 
 
@@ -350,7 +614,7 @@ class GiveawayImagesModal(discord.ui.Modal, title="🖼️ Chỉnh Sửa Banner 
     def __init__(self, editor_view: "GiveawayEditorView"):
         super().__init__()
         self.editor_view = editor_view
-        cfg = self.editor_view.giveaway.get('embed_config') or {}
+        cfg = self.editor_view.draft.get('embed_config') or {}
         if isinstance(cfg, str):
             try:
                 cfg = json.loads(cfg)
@@ -360,14 +624,14 @@ class GiveawayImagesModal(discord.ui.Modal, title="🖼️ Chỉnh Sửa Banner 
         self.banner_url = discord.ui.TextInput(
             label="Banner Image URL (Ảnh lớn thân embed)",
             placeholder="Link ảnh https://... (để trống để xóa)",
-            default=cfg.get("banner", ""),
+            default=cfg.get("banner", "") or "",
             max_length=500,
             required=False
         )
         self.thumbnail_url = discord.ui.TextInput(
             label="Thumbnail URL (Ảnh nhỏ góc phải)",
             placeholder="host (mặc định), server, none, hoặc link ảnh",
-            default=cfg.get("thumbnail", "host"),
+            default=cfg.get("thumbnail", "host") or "host",
             max_length=500,
             required=False
         )
@@ -376,25 +640,39 @@ class GiveawayImagesModal(discord.ui.Modal, title="🖼️ Chỉnh Sửa Banner 
         self.add_item(self.thumbnail_url)
 
     async def on_submit(self, interaction: discord.Interaction):
-        cfg = self.editor_view.giveaway.get('embed_config') or {}
+        banner = self.banner_url.value.strip() or None
+        thumbnail_raw = self.thumbnail_url.value.strip() or "host"
+        thumbnail = thumbnail_raw.lower() if thumbnail_raw.lower() in {"host", "server", "none"} else thumbnail_raw
+        if banner and not is_valid_http_url(banner):
+            await interaction.response.send_message("❌ Banner phải là URL `http(s)://...` hợp lệ.", ephemeral=True)
+            return
+        if thumbnail not in {"host", "server", "none"} and not is_valid_http_url(thumbnail):
+            await interaction.response.send_message(
+                "❌ Thumbnail phải là `host`, `server`, `none` hoặc URL `http(s)://...` hợp lệ.",
+                ephemeral=True
+            )
+            return
+
+        cfg = self.editor_view.draft.get('embed_config') or {}
         if isinstance(cfg, str):
             try:
                 cfg = json.loads(cfg)
             except Exception:
                 cfg = {}
 
-        cfg["banner"] = self.banner_url.value.strip() or None
-        cfg["thumbnail"] = self.thumbnail_url.value.strip() or "host"
+        cfg["banner"] = banner
+        cfg["thumbnail"] = thumbnail
 
-        self.editor_view.giveaway['embed_config'] = cfg
+        self.editor_view.draft['embed_config'] = cfg
+        self.editor_view.mark_dirty("images")
         await self.editor_view.refresh_preview(interaction)
 
 
-class GiveawayPrizeTimeModal(discord.ui.Modal, title="⚙️ Giải Thưởng & Thời Gian"):
+class GiveawayPrizeTimeModal(discord.ui.Modal, title="🎁 Giải Thưởng & Thời Gian"):
     def __init__(self, editor_view: "GiveawayEditorView"):
         super().__init__()
         self.editor_view = editor_view
-        ga = self.editor_view.giveaway
+        ga = self.editor_view.draft
 
         self.prize_input = discord.ui.TextInput(
             label="Tên Phần Thưởng",
@@ -404,7 +682,7 @@ class GiveawayPrizeTimeModal(discord.ui.Modal, title="⚙️ Giải Thưởng & 
             required=True
         )
         self.winner_count_input = discord.ui.TextInput(
-            label="Số Người Thắng",
+            label="Số Người Thắng (1 - 100)",
             placeholder="VD: 1, 2, 3...",
             default=str(ga.get("winner_count", 1)),
             max_length=5,
@@ -424,32 +702,34 @@ class GiveawayPrizeTimeModal(discord.ui.Modal, title="⚙️ Giải Thưởng & 
 
     async def on_submit(self, interaction: discord.Interaction):
         prize_val = self.prize_input.value.strip()
+        if not prize_val:
+            await interaction.response.send_message("❌ Tên phần thưởng không được để trống.", ephemeral=True)
+            return
+
         try:
             win_count = int(self.winner_count_input.value.strip())
-            if win_count <= 0:
-                win_count = 1
         except ValueError:
-            win_count = 1
+            await interaction.response.send_message("❌ Số người thắng phải là số nguyên hợp lệ.", ephemeral=True)
+            return
 
-        self.editor_view.giveaway['prize'] = prize_val
-        self.editor_view.giveaway['winner_count'] = win_count
+        if not (1 <= win_count <= 100):
+            await interaction.response.send_message("❌ Số người thắng phải nằm trong khoảng từ 1 đến 100.", ephemeral=True)
+            return
 
-        time_adj = self.time_adjust_input.value.strip().lower()
+        time_adj = self.time_adjust_input.value.strip()
+        new_ends = None
         if time_adj:
-            now = int(time.time())
-            if time_adj.startswith("+"):
-                sec = parse_time(time_adj[1:])
-                if sec:
-                    self.editor_view.giveaway['ends_at'] = max(now + 10, self.editor_view.giveaway['ends_at'] + sec)
-            elif time_adj.startswith("-"):
-                sec = parse_time(time_adj[1:])
-                if sec:
-                    self.editor_view.giveaway['ends_at'] = max(now + 10, self.editor_view.giveaway['ends_at'] - sec)
-            else:
-                sec = parse_time(time_adj)
-                if sec:
-                    self.editor_view.giveaway['ends_at'] = now + sec
+            new_ends, err_time = parse_time_input(time_adj, self.editor_view.draft.get('ends_at', int(time.time())))
+            if err_time:
+                await interaction.response.send_message(f"❌ Lỗi điều chỉnh thời gian: {err_time}", ephemeral=True)
+                return
 
+        self.editor_view.draft['prize'] = prize_val
+        self.editor_view.draft['winner_count'] = win_count
+        if new_ends is not None:
+            self.editor_view.draft['ends_at'] = new_ends
+
+        self.editor_view.mark_dirty("prize_time")
         await self.editor_view.refresh_preview(interaction)
 
 
@@ -457,7 +737,7 @@ class GiveawayRequirementsModal(discord.ui.Modal, title="🔒 Cài Đặt Điề
     def __init__(self, editor_view: "GiveawayEditorView"):
         super().__init__()
         self.editor_view = editor_view
-        ga = self.editor_view.giveaway
+        ga = self.editor_view.draft
         guild = self.editor_view.guild
 
         req_roles = ga.get("required_roles") or []
@@ -498,7 +778,7 @@ class GiveawayRequirementsModal(discord.ui.Modal, title="🔒 Cài Đặt Điề
 
         self.required_roles_input = discord.ui.TextInput(
             label="Role Bắt Buộc (@Role hoặc Role ID)",
-            placeholder="VD: @Member, @VIP hoặc 123456789 (cách nhau dấu phẩy hoặc khoảng trắng)",
+            placeholder="VD: @Member, @VIP Member hoặc 123456789 (cách nhau bằng dấu phẩy)",
             default=req_str,
             max_length=300,
             required=False
@@ -515,30 +795,13 @@ class GiveawayRequirementsModal(discord.ui.Modal, title="🔒 Cài Đặt Điề
         self.add_item(self.bonus_roles_input)
 
     async def on_submit(self, interaction: discord.Interaction):
-        req_raw = self.required_roles_input.value.strip()
-        req_list = []
-        if req_raw:
-            tokens = [t.strip() for t in re.split(r"[,;\n]+|\s+", req_raw) if t.strip()]
-            for tok in tokens:
-                rid = resolve_role_input(interaction.guild, tok)
-                if rid and rid not in req_list:
-                    req_list.append(rid)
-
-        bonus_raw = self.bonus_roles_input.value.strip()
-        bonus_dict = {}
-        if bonus_raw:
-            tokens = [t.strip() for t in re.split(r"[,;\n]+", bonus_raw) if t.strip()]
-            for tok in tokens:
-                if ":" in tok:
-                    parts = tok.split(":", 1)
-                    rid = resolve_role_input(interaction.guild, parts[0].strip())
-                    multiplier_str = parts[1].strip().lstrip("+")
-                    if rid and multiplier_str.isdigit():
-                        bonus_dict[rid] = int(multiplier_str)
-                else:
-                    rid = resolve_role_input(interaction.guild, tok)
-                    if rid:
-                        bonus_dict[rid] = 1
+        req_list, req_errs = parse_role_requirements_strict(interaction.guild, self.required_roles_input.value)
+        bonus_dict, bonus_errs = parse_bonus_roles_strict(interaction.guild, self.bonus_roles_input.value)
+        all_errs = req_errs + bonus_errs
+        if all_errs:
+            err_msg = "❌ Không thể lưu điều kiện Role:\n" + "\n".join(f"• {e}" for e in all_errs)
+            await interaction.response.send_message(err_msg, ephemeral=True)
+            return
 
         if req_list and bonus_dict:
             await interaction.response.send_message(
@@ -547,9 +810,9 @@ class GiveawayRequirementsModal(discord.ui.Modal, title="🔒 Cài Đặt Điề
             )
             return
 
-        self.editor_view.giveaway['required_roles'] = req_list
-        self.editor_view.giveaway['bonus_roles'] = bonus_dict
-
+        self.editor_view.draft['required_roles'] = req_list
+        self.editor_view.draft['bonus_roles'] = bonus_dict
+        self.editor_view.mark_dirty("requirements")
         await self.editor_view.refresh_preview(interaction)
 
 
@@ -557,7 +820,7 @@ class GiveawayPrizeBonusModal(discord.ui.Modal, title="🎁 Đặc Quyền Bonus
     def __init__(self, editor_view: "GiveawayEditorView"):
         super().__init__()
         self.editor_view = editor_view
-        ga = self.editor_view.giveaway
+        ga = self.editor_view.draft
         guild = self.editor_view.guild
 
         role_prizes = ga.get("role_bonus_prizes") or {}
@@ -588,94 +851,566 @@ class GiveawayPrizeBonusModal(discord.ui.Modal, title="🎁 Đặc Quyền Bonus
         self.add_item(self.bonus_prizes_input)
 
     async def on_submit(self, interaction: discord.Interaction):
-        raw = self.bonus_prizes_input.value.strip()
-        parsed_dict = {}
-        if raw:
-            for line in raw.split("\n"):
-                line = line.strip()
-                if not line or ":" not in line:
-                    continue
-                parts = line.split(":", 1)
-                role_query = parts[0].strip()
-                bonus_desc = parts[1].strip()
-                rid = resolve_role_input(interaction.guild, role_query)
-                if rid and bonus_desc:
-                    parsed_dict[str(rid)] = bonus_desc
+        parsed_dict, errs = parse_role_bonus_prizes_strict(interaction.guild, self.bonus_prizes_input.value)
+        if errs:
+            err_msg = "❌ Không thể lưu quà bonus theo role:\n" + "\n".join(f"• {e}" for e in errs)
+            await interaction.response.send_message(err_msg, ephemeral=True)
+            return
 
-        self.editor_view.giveaway['role_bonus_prizes'] = parsed_dict
+        self.editor_view.draft['role_bonus_prizes'] = parsed_dict
+        self.editor_view.mark_dirty("prize_bonus")
         await self.editor_view.refresh_preview(interaction)
 
 
-class GiveawayStateConfigModal(discord.ui.Modal, title="⚙️ Tiêu Đề & Mô Tả Theo Trạng Thái"):
-    def __init__(self, editor_view: "GiveawayEditorView"):
-        super().__init__()
-        self.editor_view = editor_view
-        cfg = self.editor_view.giveaway.get('embed_config') or {}
-        if isinstance(cfg, str):
-            try:
-                cfg = json.loads(cfg)
-            except Exception:
-                cfg = {}
-
-        self.active_title = discord.ui.TextInput(
-            label="Tiêu Đề Đang Chạy (Active Title)",
-            placeholder="Để trống để dùng tiêu đề chung...",
-            default=cfg.get("active_title", "") or "",
-            max_length=256,
-            required=False
+class GiveawayBonusTicketsModal(discord.ui.Modal):
+    def __init__(self, manager_view: "GiveawayRequirementsView", role: discord.Role):
+        self.manager_view = manager_view
+        self.role = role
+        super().__init__(title=f"🎟️ Vé bonus: {role.name[:30]}")
+        current = manager_view.bonus_roles.get(str(role.id), 1)
+        self.ticket_count = discord.ui.TextInput(
+            label="Số vé cộng thêm (0 để xóa)",
+            placeholder="Từ 1 đến 50",
+            default=str(current),
+            min_length=1,
+            max_length=2,
+            required=True
         )
-        self.ended_title = discord.ui.TextInput(
-            label="Tiêu Đề Kết Thúc (Ended Title)",
-            placeholder="VD: 🎉 Giveaway Kết Thúc 🎉",
-            default=cfg.get("ended_title", "") or "",
-            max_length=256,
-            required=False
-        )
-        self.ended_desc = discord.ui.TextInput(
-            label="Mô Tả Kết Thúc (Ended Desc)",
-            style=discord.TextStyle.paragraph,
-            placeholder="Dùng biến: {prize}, {winners}, {result}, {status_note}... Để trống dùng layout chuẩn.",
-            default=cfg.get("ended_desc", "") or "",
-            max_length=1500,
-            required=False
-        )
-        self.cancelled_title = discord.ui.TextInput(
-            label="Tiêu Đề Hủy (Cancelled Title)",
-            placeholder="VD: 🛑 Giveaway Đã Bị Hủy 🛑",
-            default=cfg.get("cancelled_title", "") or "",
-            max_length=256,
-            required=False
-        )
-        self.rerolled_title = discord.ui.TextInput(
-            label="Tiêu Đề Reroll (Rerolled Title)",
-            placeholder="VD: 🔄 Giveaway Đã Reroll Kết Quả 🔄",
-            default=cfg.get("rerolled_title", "") or "",
-            max_length=256,
-            required=False
-        )
-
-        self.add_item(self.active_title)
-        self.add_item(self.ended_title)
-        self.add_item(self.ended_desc)
-        self.add_item(self.cancelled_title)
-        self.add_item(self.rerolled_title)
+        self.add_item(self.ticket_count)
 
     async def on_submit(self, interaction: discord.Interaction):
-        cfg = self.editor_view.giveaway.get('embed_config') or {}
+        try:
+            count = int(self.ticket_count.value.strip())
+        except ValueError:
+            await interaction.response.send_message("❌ Số vé phải là số nguyên từ 0 đến 50.", ephemeral=True)
+            return
+        if not 0 <= count <= 50:
+            await interaction.response.send_message("❌ Số vé phải nằm trong khoảng từ 0 đến 50.", ephemeral=True)
+            return
+        role_id = str(self.role.id)
+        if count == 0:
+            self.manager_view.bonus_roles.pop(role_id, None)
+        else:
+            self.manager_view.bonus_roles[role_id] = count
+        self.manager_view.required_roles = []
+        await self.manager_view.refresh(interaction)
+
+
+class GiveawayRoleModeSelect(discord.ui.Select):
+    def __init__(self, mode: str):
+        options = [
+            discord.SelectOption(
+                label="Role bắt buộc",
+                value="required",
+                emoji="🔒",
+                description="Người dùng cần có ít nhất một role đã chọn",
+                default=(mode == "required")
+            ),
+            discord.SelectOption(
+                label="Role cộng vé bonus",
+                value="bonus",
+                emoji="🎟️",
+                description="Mỗi role được cộng thêm số vé riêng",
+                default=(mode == "bonus")
+            ),
+        ]
+        super().__init__(placeholder="Chọn loại điều kiện role", options=options, row=0)
+
+    async def callback(self, interaction: discord.Interaction):
+        self.view.mode = self.values[0]
+        if self.view.mode == "required":
+            self.view.bonus_roles = {}
+        else:
+            self.view.required_roles = []
+        await self.view.refresh(interaction)
+
+
+class GiveawayManagedRoleSelect(discord.ui.RoleSelect):
+    def __init__(self, mode: str):
+        is_required = mode == "required"
+        super().__init__(
+            placeholder=(
+                "Chọn toàn bộ role được phép tham gia"
+                if is_required else
+                "Chọn một role để đặt số vé bonus"
+            ),
+            min_values=1,
+            max_values=25 if is_required else 1,
+            row=1
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        if self.view.mode == "required":
+            self.view.required_roles = [role.id for role in self.values]
+            self.view.bonus_roles = {}
+            await self.view.refresh(interaction)
+            return
+        role = self.values[0]
+        await interaction.response.send_modal(GiveawayBonusTicketsModal(self.view, role))
+
+
+class GiveawayRequirementsView(discord.ui.View):
+    """RoleSelect-based editor for mutually exclusive role requirements/bonuses."""
+    def __init__(self, editor_view: "GiveawayEditorView"):
+        super().__init__(timeout=600)
+        self.editor_view = editor_view
+        self.user = editor_view.user
+        required = editor_view.draft.get("required_roles") or []
+        bonus = editor_view.draft.get("bonus_roles") or {}
+        if isinstance(required, str):
+            try:
+                required = json.loads(required)
+            except Exception:
+                required = []
+        if isinstance(bonus, str):
+            try:
+                bonus = json.loads(bonus)
+            except Exception:
+                bonus = {}
+        self.required_roles = []
+        for role_id in required:
+            try:
+                self.required_roles.append(int(role_id))
+            except (TypeError, ValueError):
+                continue
+        self.bonus_roles = {}
+        for role_id, count in bonus.items():
+            try:
+                parsed_count = int(count)
+            except (TypeError, ValueError):
+                continue
+            if 1 <= parsed_count <= 50:
+                self.bonus_roles[str(role_id)] = parsed_count
+        self.mode = "bonus" if self.bonus_roles else "required"
+        self._build_components()
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.user.id:
+            await interaction.response.send_message("❌ Đây không phải bảng điều khiển của bạn.", ephemeral=True)
+            return False
+        return True
+
+    def _build_components(self):
+        self.clear_items()
+        self.add_item(GiveawayRoleModeSelect(self.mode))
+        self.add_item(GiveawayManagedRoleSelect(self.mode))
+
+        save_button = discord.ui.Button(label="✅ Áp dụng điều kiện", style=discord.ButtonStyle.primary, row=2)
+        save_button.callback = self._on_save
+        clear_button = discord.ui.Button(label="🧹 Xóa điều kiện", style=discord.ButtonStyle.secondary, row=2)
+        clear_button.callback = self._on_clear
+        back_button = discord.ui.Button(label="↩️ Quay lại", style=discord.ButtonStyle.secondary, row=2)
+        back_button.callback = self._on_back
+        self.add_item(save_button)
+        self.add_item(clear_button)
+        self.add_item(back_button)
+
+    def build_content(self) -> str:
+        if self.mode == "required":
+            summary = ", ".join(f"<@&{role_id}>" for role_id in self.required_roles) or "Chưa chọn role nào"
+            instruction = "Chọn một hoặc nhiều role; lần chọn mới sẽ thay thế danh sách hiện tại."
+            title = "🔒 **ROLE BẮT BUỘC THAM GIA**"
+        else:
+            summary = ", ".join(
+                f"<@&{role_id}>: **+{count} vé**"
+                for role_id, count in self.bonus_roles.items()
+            ) or "Chưa có role bonus"
+            instruction = "Chọn từng role để đặt số vé. Nhập `0` trong modal để xóa role đó."
+            title = "🎟️ **ROLE CỘNG VÉ BONUS**"
+        return (
+            f"{title}\n{instruction}\n\n"
+            f"**Cấu hình bản nháp:** {summary}\n\n"
+            "Hai chế độ loại trừ nhau. Chuyển chế độ sẽ xóa cấu hình của chế độ còn lại trong bản nháp này."
+        )
+
+    async def refresh(self, interaction: discord.Interaction):
+        self._build_components()
+        await interaction.response.edit_message(content=self.build_content(), embed=None, view=self)
+
+    async def _on_save(self, interaction: discord.Interaction):
+        self.editor_view.draft["required_roles"] = list(self.required_roles)
+        self.editor_view.draft["bonus_roles"] = dict(self.bonus_roles)
+        self.editor_view.mark_dirty("requirements")
+        await self.editor_view.refresh_preview(interaction)
+
+    async def _on_clear(self, interaction: discord.Interaction):
+        self.required_roles = []
+        self.bonus_roles = {}
+        await self.refresh(interaction)
+
+    async def _on_back(self, interaction: discord.Interaction):
+        await self.editor_view.refresh_preview(interaction)
+
+
+class GiveawayRolePrizeModal(discord.ui.Modal):
+    def __init__(self, manager_view: "GiveawayPrizeBonusView", role: discord.Role):
+        self.manager_view = manager_view
+        self.role = role
+        super().__init__(title=f"🎁 Quà cho role: {role.name[:27]}")
+        self.prize_text = discord.ui.TextInput(
+            label="Nội dung quà (để trống để xóa)",
+            style=discord.TextStyle.paragraph,
+            placeholder="VD: +50k Momo hoặc +1 Skin hiếm",
+            default=manager_view.role_prizes.get(str(role.id), ""),
+            max_length=300,
+            required=False
+        )
+        self.add_item(self.prize_text)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        role_id = str(self.role.id)
+        prize = self.prize_text.value.strip()
+        if prize:
+            self.manager_view.role_prizes[role_id] = prize
+        else:
+            self.manager_view.role_prizes.pop(role_id, None)
+        await self.manager_view.refresh(interaction)
+
+
+class GiveawayPrizeRoleSelect(discord.ui.RoleSelect):
+    def __init__(self):
+        super().__init__(
+            placeholder="Chọn một role để thêm, sửa hoặc xóa quà",
+            min_values=1,
+            max_values=1,
+            row=0
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(GiveawayRolePrizeModal(self.view, self.values[0]))
+
+
+class GiveawayPrizeBonusView(discord.ui.View):
+    def __init__(self, editor_view: "GiveawayEditorView"):
+        super().__init__(timeout=600)
+        self.editor_view = editor_view
+        self.user = editor_view.user
+        prizes = editor_view.draft.get("role_bonus_prizes") or {}
+        if isinstance(prizes, str):
+            try:
+                prizes = json.loads(prizes)
+            except Exception:
+                prizes = {}
+        self.role_prizes = {str(role_id): str(prize) for role_id, prize in prizes.items()}
+        self._build_components()
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.user.id:
+            await interaction.response.send_message("❌ Đây không phải bảng điều khiển của bạn.", ephemeral=True)
+            return False
+        return True
+
+    def _build_components(self):
+        self.clear_items()
+        self.add_item(GiveawayPrizeRoleSelect())
+        save_button = discord.ui.Button(label="✅ Áp dụng quà theo role", style=discord.ButtonStyle.primary, row=1)
+        save_button.callback = self._on_save
+        clear_button = discord.ui.Button(label="🧹 Xóa tất cả", style=discord.ButtonStyle.secondary, row=1)
+        clear_button.callback = self._on_clear
+        back_button = discord.ui.Button(label="↩️ Quay lại", style=discord.ButtonStyle.secondary, row=1)
+        back_button.callback = self._on_back
+        self.add_item(save_button)
+        self.add_item(clear_button)
+        self.add_item(back_button)
+
+    def build_content(self) -> str:
+        summary = "\n".join(
+            f"• <@&{role_id}>: {prize}"
+            for role_id, prize in self.role_prizes.items()
+        ) or "Chưa cấu hình quà thêm cho role nào."
+        return (
+            "🎁 **QUÀ THÊM THEO ROLE**\n"
+            "Chọn một role để thêm hoặc sửa quà. Để trống nội dung trong modal để xóa role đó.\n\n"
+            f"{summary}"
+        )
+
+    async def refresh(self, interaction: discord.Interaction):
+        self._build_components()
+        await interaction.response.edit_message(content=self.build_content(), embed=None, view=self)
+
+    async def _on_save(self, interaction: discord.Interaction):
+        self.editor_view.draft["role_bonus_prizes"] = dict(self.role_prizes)
+        self.editor_view.mark_dirty("prize_bonus")
+        await self.editor_view.refresh_preview(interaction)
+
+    async def _on_clear(self, interaction: discord.Interaction):
+        self.role_prizes = {}
+        await self.refresh(interaction)
+
+    async def _on_back(self, interaction: discord.Interaction):
+        await self.editor_view.refresh_preview(interaction)
+
+
+class GiveawayStateContentModal(discord.ui.Modal):
+    def __init__(self, editor_view: "GiveawayEditorView", state: str = "active"):
+        self.editor_view = editor_view
+        self.state = state if state in STATE_CONFIG else "active"
+        cfg_info = STATE_CONFIG.get(self.state, STATE_CONFIG["active"])
+        self.label = cfg_info["label"]
+        self.title_key = cfg_info["title_key"]
+        self.desc_key = cfg_info["desc_key"]
+
+        super().__init__(title=f"✏️ Sửa Trạng Thái: {self.label}")
+
+        cfg = self.editor_view.draft.get('embed_config') or {}
         if isinstance(cfg, str):
             try:
                 cfg = json.loads(cfg)
             except Exception:
                 cfg = {}
 
-        cfg["active_title"] = self.active_title.value.strip() or None
-        cfg["ended_title"] = self.ended_title.value.strip() or None
-        cfg["ended_desc"] = self.ended_desc.value.strip() or None
-        cfg["cancelled_title"] = self.cancelled_title.value.strip() or None
-        cfg["rerolled_title"] = self.rerolled_title.value.strip() or None
+        self.state_title = discord.ui.TextInput(
+            label=f"Tiêu Đề Riêng [{self.label}]",
+            placeholder="Để trống để dùng tiêu đề chung...",
+            default=cfg.get(self.title_key, "") or "",
+            max_length=256,
+            required=False
+        )
+        self.state_desc = discord.ui.TextInput(
+            label=f"Mô Tả Riêng [{self.label}] (Placeholders)",
+            style=discord.TextStyle.paragraph,
+            placeholder="Hỗ trợ: {prize}, {host}, {winners}, {ends_at}, {result}... Để trống dùng mô tả chung.",
+            default=cfg.get(self.desc_key, "") or "",
+            max_length=3500,
+            required=False
+        )
 
-        self.editor_view.giveaway['embed_config'] = cfg
+        self.add_item(self.state_title)
+        self.add_item(self.state_desc)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        new_title = self.state_title.value.strip() or None
+        new_desc = self.state_desc.value.strip() or None
+
+        # 1. Validation: check placeholder bracket syntax & supported variables
+        if new_desc:
+            is_valid, err = validate_placeholders_strict(new_desc)
+            if not is_valid:
+                await interaction.response.send_message(f"❌ Lỗi cú pháp placeholder: {err}", ephemeral=True)
+                return
+
+        # 2. Validation: render trial embed to verify Discord length limitations
+        cfg = self.editor_view.draft.get('embed_config') or {}
+        if isinstance(cfg, str):
+            try:
+                cfg = json.loads(cfg)
+            except Exception:
+                cfg = {}
+        trial_cfg = dict(cfg)
+        trial_cfg[self.title_key] = new_title
+        trial_cfg[self.desc_key] = new_desc
+
+        trial_ga = dict(self.editor_view.draft)
+        trial_ga['embed_config'] = trial_cfg
+
+        trial_embed = self.editor_view.cog.build_giveaway_embed(
+            trial_ga,
+            status=self.state,
+            participants_count=10,
+            winners=[interaction.user.id],
+            status_note="Ghi chú mẫu kiểm tra độ dài."
+        )
+
+        if len(trial_embed.description or "") > 4096:
+            await interaction.response.send_message(
+                f"❌ Nội dung mô tả sau khi áp dụng ({len(trial_embed.description)} ký tự) vượt quá giới hạn 4096 ký tự của Discord!",
+                ephemeral=True
+            )
+            return
+
+        if len(trial_embed) > 6000:
+            await interaction.response.send_message(
+                f"❌ Tổng độ dài Embed sau khi áp dụng ({len(trial_embed)} ký tự) vượt quá giới hạn 6000 ký tự của Discord!",
+                ephemeral=True
+            )
+            return
+
+        # Save to editor draft state
+        cfg[self.title_key] = new_title
+        cfg[self.desc_key] = new_desc
+        self.editor_view.draft['embed_config'] = cfg
+        self.editor_view.mark_dirty(f"state_{self.state}")
         await self.editor_view.refresh_preview(interaction)
+
+
+GiveawayStateConfigModal = GiveawayStateContentModal
+
+
+class GiveawayEditSectionSelect(discord.ui.Select):
+    def __init__(self, is_template: bool = False):
+        options = [
+            discord.SelectOption(
+                label="Nội dung chung",
+                value="basic",
+                emoji="🎨",
+                description="Tiêu đề chung, màu viền, ping header, mô tả chung"
+            ),
+            discord.SelectOption(
+                label="Giải thưởng & thời gian",
+                value="prize_time",
+                emoji="🎁",
+                description="Tên giải thưởng, số người thắng, điều chỉnh thời gian"
+            ),
+            discord.SelectOption(
+                label="Banner & Thumbnail",
+                value="images",
+                emoji="🖼️",
+                description="Link ảnh banner lớn và icon thumbnail nhỏ"
+            ),
+            discord.SelectOption(
+                label="Người tổ chức (Author)",
+                value="author",
+                emoji="👤",
+                description="Tên tác giả và avatar hiển thị trên đầu embed"
+            ),
+            discord.SelectOption(
+                label="Chân trang (Footer)",
+                value="footer",
+                emoji="📄",
+                description="Văn bản và icon ở chân trang embed"
+            ),
+            discord.SelectOption(
+                label="Điều kiện & Role bắt buộc",
+                value="requirements",
+                emoji="🔒",
+                description="Role bắt buộc tham gia và role cộng vé bonus"
+            ),
+            discord.SelectOption(
+                label="Quà thêm theo role",
+                value="prize_bonus",
+                emoji="🎁",
+                description="Phần thưởng phụ kèm theo cho từng role cụ thể"
+            ),
+        ]
+        if is_template:
+            # Server templates currently persist embed_config only. Do not offer
+            # prize/time/role controls whose values would be silently discarded.
+            template_sections = {"basic", "images", "author", "footer"}
+            options = [option for option in options if option.value in template_sections]
+        super().__init__(
+            placeholder="👉 Bạn muốn chỉnh sửa phần nào? (Chọn menu bên dưới)",
+            min_values=1,
+            max_values=1,
+            options=options,
+            row=0
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        choice = self.values[0]
+        if choice == "basic":
+            await interaction.response.send_modal(GiveawayBasicInfoModal(self.view))
+        elif choice == "prize_time":
+            await interaction.response.send_modal(GiveawayPrizeTimeModal(self.view))
+        elif choice == "images":
+            await interaction.response.send_modal(GiveawayImagesModal(self.view))
+        elif choice == "author":
+            await interaction.response.send_modal(GiveawayAuthorModal(self.view))
+        elif choice == "footer":
+            await interaction.response.send_modal(GiveawayFooterModal(self.view))
+        elif choice == "requirements":
+            manager = GiveawayRequirementsView(self.view)
+            await interaction.response.edit_message(content=manager.build_content(), embed=None, view=manager)
+        elif choice == "prize_bonus":
+            manager = GiveawayPrizeBonusView(self.view)
+            await interaction.response.edit_message(content=manager.build_content(), embed=None, view=manager)
+
+
+class GiveawayPreviewStateSelect(discord.ui.Select):
+    def __init__(self, current_mode: str = "active"):
+        options = [
+            discord.SelectOption(
+                label="Giveaway đang chạy",
+                value="active",
+                emoji="🟢",
+                default=(current_mode == "active"),
+                description="Xem trước giao diện khi sự kiện đang mở nhận vé"
+            ),
+            discord.SelectOption(
+                label="Giveaway đã kết thúc",
+                value="ended",
+                emoji="🏁",
+                default=(current_mode == "ended"),
+                description="Xem trước giao diện khi đã bốc thăm và có người thắng"
+            ),
+            discord.SelectOption(
+                label="Giveaway đã bị hủy",
+                value="cancelled",
+                emoji="🛑",
+                default=(current_mode == "cancelled"),
+                description="Xem trước giao diện khi sự kiện bị hủy bỏ"
+            ),
+            discord.SelectOption(
+                label="Giveaway đã reroll",
+                value="rerolled",
+                emoji="🔄",
+                default=(current_mode == "rerolled"),
+                description="Xem trước giao diện khi quay lại kết quả tìm người thắng mới"
+            ),
+        ]
+        super().__init__(
+            placeholder="👁️ Xem trước giao diện theo trạng thái...",
+            min_values=1,
+            max_values=1,
+            options=options,
+            row=1
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        self.view.preview_mode = self.values[0]
+        await self.view.refresh_preview(interaction)
+
+
+class GiveawayTemplateConfirmView(discord.ui.View):
+    def __init__(self, editor_view: "GiveawayEditorView"):
+        super().__init__(timeout=60)
+        self.editor_view = editor_view
+        confirm = discord.ui.Button(
+            label="⚠️ Xác nhận ghi đè mẫu server",
+            style=discord.ButtonStyle.danger,
+            row=0
+        )
+        confirm.callback = self._on_confirm
+        cancel = discord.ui.Button(label="↩️ Quay lại", style=discord.ButtonStyle.secondary, row=0)
+        cancel.callback = self._on_cancel
+        self.add_item(confirm)
+        self.add_item(cancel)
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.editor_view.user.id:
+            await interaction.response.send_message("❌ Đây không phải bảng điều khiển của bạn.", ephemeral=True)
+            return False
+        return True
+
+    def build_content(self) -> str:
+        if self.editor_view.is_template:
+            source = "bản nháp đang chỉnh"
+        else:
+            source = "giao diện của giveaway hiện tại"
+        return (
+            "⚠️ **XÁC NHẬN GHI ĐÈ MẪU GIAO DIỆN SERVER**\n"
+            f"Bạn sắp dùng **{source}** làm mẫu mặc định mới.\n\n"
+            "• Tất cả giveaway tạo sau khi lưu sẽ dùng mẫu này.\n"
+            "• Giveaway đang chạy và giveaway đã kết thúc không tự thay đổi.\n"
+            "• Mẫu server hiện tại sẽ bị thay thế."
+        )
+
+    async def _on_confirm(self, interaction: discord.Interaction):
+        await self.editor_view._save_default_confirmed(interaction)
+
+    async def _on_cancel(self, interaction: discord.Interaction):
+        await self.editor_view.refresh_preview(interaction)
+
+    async def on_timeout(self):
+        if not self.editor_view.message:
+            return
+        try:
+            await self.editor_view.message.edit(
+                content=self.editor_view.build_editor_content(),
+                embed=self.editor_view.build_preview_embed(),
+                view=self.editor_view
+            )
+        except discord.HTTPException:
+            pass
 
 
 # ==============================================================================
@@ -684,14 +1419,48 @@ class GiveawayStateConfigModal(discord.ui.Modal, title="⚙️ Tiêu Đề & Mô
 
 class GiveawayEditorView(discord.ui.View):
     def __init__(self, cog, giveaway: dict, user: discord.Member, guild: discord.Guild):
-        super().__init__(timeout=300)
+        super().__init__(timeout=600)
         self.cog = cog
-        self.giveaway = giveaway
+        self.original = copy.deepcopy(giveaway)
+        self.draft = copy.deepcopy(giveaway)
+        self.dirty_sections = set()
         self.user = user
         self.guild = guild
         self.preview_mode = "active"
         self.loaded_version = giveaway.get('version', 0)
         self.initial_ended = giveaway.get('ended', 0)
+        self.is_template = (giveaway.get('id', 0) == 0)
+        self.can_save_template = cog.can_manage_server_template(user, guild)
+        self.message = None
+
+        self.btn_apply_sync = discord.ui.Button(
+            label="✅ Cập nhật giveaway này",
+            style=discord.ButtonStyle.primary,
+            disabled=(not self.is_dirty),
+            row=3
+        )
+        self.btn_apply_sync.callback = self._on_apply_sync
+
+        self._build_components()
+
+    @property
+    def giveaway(self) -> dict:
+        return self.draft
+
+    @giveaway.setter
+    def giveaway(self, value: dict):
+        self.draft = value
+
+    def mark_dirty(self, section: str):
+        self.dirty_sections.add(section)
+
+    @property
+    def is_dirty(self) -> bool:
+        return bool(self.dirty_sections)
+
+    def discard_changes(self):
+        self.draft = copy.deepcopy(self.original)
+        self.dirty_sections.clear()
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.user.id:
@@ -704,88 +1473,390 @@ class GiveawayEditorView(discord.ui.View):
 
     def build_preview_embed(self) -> discord.Embed:
         try:
-            participants = self.giveaway.get('participants') or {}
+            participants = self.draft.get('participants') or {}
             if isinstance(participants, str):
                 participants = json.loads(participants)
             p_count = len(participants) if isinstance(participants, dict) else (len(participants) if isinstance(participants, list) else 0)
         except Exception:
             p_count = 0
 
-        sample_winners = [self.user.id] if self.preview_mode in ("ended", "rerolled") else None
-        sample_note = "Giveaway này đã bị huỷ bởi Host." if self.preview_mode == "cancelled" else None
+        sample_ga = dict(self.draft)
+        sample_winners = None
+        sample_note = None
+
+        if self.preview_mode == "ended":
+            sample_winners = [self.user.id]
+        elif self.preview_mode == "cancelled":
+            sample_note = "Giveaway này đã bị huỷ bởi Host."
+        elif self.preview_mode == "rerolled":
+            sample_winners = [self.user.id]
+            extra_reqs = sample_ga.get('extra_reqs') or {}
+            if isinstance(extra_reqs, str):
+                try:
+                    extra_reqs = json.loads(extra_reqs)
+                except Exception:
+                    extra_reqs = {}
+            extra_reqs = dict(extra_reqs)
+            if not extra_reqs.get('reroll_history'):
+                extra_reqs['reroll_history'] = [999999999999999999]
+            sample_ga['extra_reqs'] = extra_reqs
 
         return self.cog.build_giveaway_embed(
-            self.giveaway,
+            sample_ga,
             status=self.preview_mode,
             participants_count=p_count,
             winners=sample_winners,
             status_note=sample_note
         )
 
-    def _update_preview_button_styles(self):
-        self.btn_preview_active.style = discord.ButtonStyle.primary if self.preview_mode == "active" else discord.ButtonStyle.secondary
-        self.btn_preview_ended.style = discord.ButtonStyle.primary if self.preview_mode == "ended" else discord.ButtonStyle.secondary
-        self.btn_preview_cancelled.style = discord.ButtonStyle.primary if self.preview_mode == "cancelled" else discord.ButtonStyle.secondary
-        self.btn_preview_rerolled.style = discord.ButtonStyle.primary if self.preview_mode == "rerolled" else discord.ButtonStyle.secondary
+    def _build_components(self):
+        self.clear_items()
+        self.add_item(GiveawayEditSectionSelect(is_template=self.is_template))
+        self.add_item(GiveawayPreviewStateSelect(self.preview_mode))
+        self._add_row2_items()
+        self.configure_actions()
 
-    async def refresh_preview(self, interaction: discord.Interaction):
-        embed = self.build_preview_embed()
-        cfg = self.giveaway.get('embed_config') or {}
+    def _add_row2_items(self):
+        state_label = STATE_CONFIG.get(self.preview_mode, {}).get("label", "Đang chạy")
+        self.btn_edit_current_state = discord.ui.Button(
+            label=f"✏️ Sửa [{state_label}]",
+            style=discord.ButtonStyle.primary,
+            row=2
+        )
+        self.btn_edit_current_state.callback = self._on_edit_current_state
+
+        cfg = self.draft.get('embed_config') or {}
         if isinstance(cfg, str):
             try:
                 cfg = json.loads(cfg)
             except Exception:
                 cfg = {}
-        ping_header = cfg.get("ping_content") or f"# <a:w1:1526231439425667093> Giveaway {self.guild.name} <a:w2:1526231455422877798>"
-        is_template = (self.giveaway.get('id') == 0)
-        mode_title = "THIẾT KẾ MẪU EMBED GIVEAWAY TOÀN SERVER" if is_template else f"BẢNG ĐIỀU KHIỂN CHỈNH SỬA GIVEAWAY (ID: `{self.giveaway.get('id')}`)"
-        preview_state_label = {
-            "active": "🟢 ĐANG CHẠY",
-            "ended": "🏁 ĐÃ KẾT THÚC",
-            "cancelled": "🛑 ĐÃ HỦY",
-            "rerolled": "🔄 REROLL"
-        }.get(self.preview_mode, "🟢 ĐANG CHẠY")
+        title_key = f"{self.preview_mode}_title"
+        desc_key = f"{self.preview_mode}_desc"
+        has_override = bool(cfg.get(title_key) or cfg.get(desc_key))
 
+        self.btn_reset_to_common = discord.ui.Button(
+            label="🔄 Dùng lại nội dung chung",
+            style=discord.ButtonStyle.secondary,
+            disabled=(not has_override),
+            row=2
+        )
+        self.btn_reset_to_common.callback = self._on_reset_to_common
+
+        self.btn_placeholder_help = discord.ui.Button(
+            label="❔ Hướng dẫn biến",
+            style=discord.ButtonStyle.secondary,
+            row=2
+        )
+        self.btn_placeholder_help.callback = self._on_placeholder_help
+
+        self.add_item(self.btn_edit_current_state)
+        self.add_item(self.btn_reset_to_common)
+        self.add_item(self.btn_placeholder_help)
+
+    def configure_actions(self):
+        for c in [item for item in list(self.children) if getattr(item, "row", None) == 3]:
+            self.remove_item(c)
+
+        if not self.is_template:
+            self.btn_apply_sync = discord.ui.Button(
+                label="✅ Cập nhật giveaway này",
+                style=discord.ButtonStyle.primary,
+                disabled=(not self.is_dirty),
+                row=3
+            )
+            self.btn_apply_sync.callback = self._on_apply_sync
+            self.add_item(self.btn_apply_sync)
+
+            self.btn_discard = discord.ui.Button(
+                label="↩️ Hủy thay đổi",
+                style=discord.ButtonStyle.secondary,
+                disabled=(not self.is_dirty),
+                row=3
+            )
+            self.btn_discard.callback = self._on_discard
+            self.add_item(self.btn_discard)
+
+            if self.can_save_template:
+                self.btn_save_default = discord.ui.Button(
+                    label="💾 Lưu thành mẫu server",
+                    style=discord.ButtonStyle.secondary,
+                    row=3
+                )
+                self.btn_save_default.callback = self._on_save_default
+                self.add_item(self.btn_save_default)
+        else:
+            self.btn_save_default = discord.ui.Button(
+                label="💾 Lưu mẫu cho server",
+                style=discord.ButtonStyle.success,
+                disabled=(not self.is_dirty),
+                row=3
+            )
+            self.btn_save_default.callback = self._on_save_default
+            self.add_item(self.btn_save_default)
+
+            self.btn_discard = discord.ui.Button(
+                label="↩️ Hủy thay đổi",
+                style=discord.ButtonStyle.secondary,
+                disabled=(not self.is_dirty),
+                row=3
+            )
+            self.btn_discard.callback = self._on_discard
+            self.add_item(self.btn_discard)
+
+    def build_editor_content(self) -> str:
+        """Builds the editor header used for both the initial view and refreshes."""
+        cfg = self.draft.get('embed_config') or {}
+        if isinstance(cfg, str):
+            try:
+                cfg = json.loads(cfg)
+            except Exception:
+                cfg = {}
+
+        prize = self.draft.get('prize', 'Chưa đặt')
+        winner_count = self.draft.get('winner_count', 1)
+        ends_at = self.draft.get('ends_at', int(time.time()))
+
+        preview_state_label = {
+            "active": "🟢 Giveaway đang chạy",
+            "ended": "🏁 Giveaway đã kết thúc",
+            "cancelled": "🛑 Giveaway đã bị hủy",
+            "rerolled": "🔄 Giveaway đã reroll"
+        }.get(self.preview_mode, "🟢 Giveaway đang chạy")
+
+        title_key = f"{self.preview_mode}_title"
+        desc_key = f"{self.preview_mode}_desc"
+        has_override = bool(cfg.get(title_key) or cfg.get(desc_key))
+        override_indicator = "✏️ *Trạng thái này đang có nội dung riêng.*" if has_override else "ℹ️ *Trạng thái này đang dùng nội dung chung.*"
+
+        if self.is_template:
+            mode_header = "🎨 **THIẾT KẾ MẪU GIAO DIỆN GIVEAWAY TOÀN SERVER**"
+            scope_desc = "*(Chỉ lưu giao diện embed và áp dụng cho Giveaway mới tạo sau khi lưu)*"
+        else:
+            mode_header = f"🛠️ **BẢNG ĐIỀU KHIỂN GIVEAWAY** (ID: `{self.draft.get('id')}`)"
+            scope_desc = f"🎁 **{prize}** · 👥 **{winner_count} người thắng** · ⏰ **Kết thúc <t:{ends_at}:R>**"
+
+        if self.is_dirty:
+            section_names = {
+                "basic": "nội dung chung",
+                "prize_time": "giải thưởng & thời gian",
+                "images": "hình ảnh",
+                "author": "author",
+                "footer": "footer",
+                "requirements": "điều kiện role",
+                "prize_bonus": "quà bonus",
+                "state_active": "giao diện đang chạy",
+                "state_ended": "giao diện kết thúc",
+                "state_cancelled": "giao diện đã hủy",
+                "state_rerolled": "giao diện reroll"
+            }
+            sections_str = ", ".join(section_names.get(s, s) for s in sorted(self.dirty_sections))
+            status_line = f"🟡 *Bản nháp có {len(self.dirty_sections)} phần chưa lưu ({sections_str})*"
+        else:
+            status_line = "🟢 *Dữ liệu đang đồng bộ với bản gốc*"
+
+        preview_disclaimer = "\n*(Dữ liệu người thắng / lý do hủy ở chế độ Preview chỉ là mô phỏng thử nghiệm)*" if self.preview_mode != "active" else ""
+
+        return (
+            f"{mode_header}\n"
+            f"👁️ Xem trước: **{preview_state_label}** | {override_indicator}\n"
+            f"{status_line}\n"
+            f"{scope_desc}\n"
+            f"────────────────────────────────────────────"
+            f"{preview_disclaimer}"
+        )
+
+    async def refresh_preview(self, interaction: discord.Interaction):
+        self._build_components()
+        embed = self.build_preview_embed()
+        content = self.build_editor_content()
+
+        if interaction.response.is_done():
+            self.message = await interaction.edit_original_response(content=content, embed=embed, view=self)
+        else:
+            await interaction.response.edit_message(content=content, embed=embed, view=self)
+            self.message = interaction.message
+
+    async def on_timeout(self):
+        for item in self.children:
+            item.disabled = True
+        if self.message:
+            try:
+                await self.message.edit(
+                    content="⌛ **Bảng điều khiển đã hết hạn.** Các thay đổi chưa lưu không được áp dụng.",
+                    view=self
+                )
+            except discord.HTTPException:
+                pass
+
+    async def _on_edit_current_state(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(GiveawayStateContentModal(self, self.preview_mode))
+
+    async def _on_reset_to_common(self, interaction: discord.Interaction):
+        cfg = self.draft.get('embed_config') or {}
+        if isinstance(cfg, str):
+            try:
+                cfg = json.loads(cfg)
+            except Exception:
+                cfg = {}
+        title_key = f"{self.preview_mode}_title"
+        desc_key = f"{self.preview_mode}_desc"
+        cfg[title_key] = None
+        cfg[desc_key] = None
+        self.draft['embed_config'] = cfg
+        self.mark_dirty(f"state_{self.preview_mode}")
+        await self.refresh_preview(interaction)
+
+    async def _on_placeholder_help(self, interaction: discord.Interaction):
+        help_embed = discord.Embed(
+            title="❔ Hướng Dẫn Biến (Placeholders) Cho Embed Giveaway",
+            color=discord.Color.blue(),
+            description=(
+                "Bạn có thể sử dụng các biến dưới đây trong **Mô tả chung** hoặc **Mô tả riêng của từng trạng thái**.\n"
+                "Khi hiển thị, hệ thống sẽ tự động thay thế bằng dữ liệu thực tế tương ứng."
+            )
+        )
+        help_embed.add_field(
+            name="🎁 Thông Tin Cơ Bản",
+            value=(
+                "• `{prize}`: Tên phần thưởng của Giveaway\n"
+                "• `{host}`: Mention người tổ chức (`<@Host>`)\n"
+                "• `{host_name}`: Tên hiển thị người tổ chức (text thuần)\n"
+                "• `{guild_name}`: Tên server Discord hiện tại"
+            ),
+            inline=False
+        )
+        help_embed.add_field(
+            name="👥 Kết Quả & Người Thắng",
+            value=(
+                "• `{winner_count}` hoặc `{win}`: Số lượng người thắng\n"
+                "• `{winners}` hoặc `{result}`: Mention người thắng (nếu đang chạy: 'Chưa có', nếu hủy: 'Đã bị huỷ')\n"
+                "• `{participants}`: Tổng số người / vé tham gia hợp lệ\n"
+                "• `{reroll_history}`: Lịch sử mention những người từng thắng trước khi reroll"
+            ),
+            inline=False
+        )
+        help_embed.add_field(
+            name="⏰ Thời Gian & Trạng Thái",
+            value=(
+                "• `{ends_at}` hoặc `{end}`: Thời gian kết thúc dạng đếm ngược (`<t:timestamp:R>`)\n"
+                "• `{end_time}`: Thời gian kết thúc dạng ngày giờ đầy đủ (`<t:timestamp:f>`)\n"
+                "• `{status}`: Trạng thái hiển thị (Đang diễn ra, Đã kết thúc...)\n"
+                "• `{status_note}`: Lý do hủy sự kiện hoặc ghi chú kết thúc"
+            ),
+            inline=False
+        )
+        help_embed.add_field(
+            name="🔒 Role & Điều Kiện",
+            value=(
+                "• `{role_req}` hoặc `{roles}`: Danh sách role bắt buộc\n"
+                "• `{bonus_roles}`: Danh sách role được cộng thêm vé\n"
+                "• `{prize_bonus}`: Danh sách phần thưởng tặng kèm theo role"
+            ),
+            inline=False
+        )
+        await interaction.response.send_message(embed=help_embed, ephemeral=True)
+
+    async def _on_discard(self, interaction: discord.Interaction):
+        self.discard_changes()
+        await self.refresh_preview(interaction)
+
+    async def _on_apply_sync(self, interaction: discord.Interaction):
+        msg_id = self.draft.get('id', 0)
+        if msg_id == 0:
+            await interaction.response.send_message(
+                "❌ Bạn đang ở chế độ chỉnh sửa Mẫu Server (không có Giveaway cụ thể nào).",
+                ephemeral=True
+            )
+            return
+
+        prize = self.draft['prize']
+        winner_count = self.draft['winner_count']
+        ends_at = self.draft['ends_at']
+        required_roles = self.draft.get('required_roles', [])
+        bonus_roles = self.draft.get('bonus_roles', {})
+        embed_config = self.draft.get('embed_config', {})
+        role_bonus_prizes = self.draft.get('role_bonus_prizes', {})
+
+        if isinstance(embed_config, str):
+            try:
+                embed_config = json.loads(embed_config)
+            except Exception:
+                embed_config = {}
+
+        # Re-fetch latest giveaway state from DB
+        fresh = self.cog.get_giveaway(msg_id, guild_id=self.guild.id)
+        if not fresh:
+            await interaction.response.send_message("❌ Không tìm thấy Giveaway này trong server.", ephemeral=True)
+            return
+        if fresh['guild_id'] != self.guild.id:
+            await interaction.response.send_message("❌ Giveaway thuộc server khác, không thể chỉnh sửa.", ephemeral=True)
+            return
+        if fresh['ended'] != 0:
+            await interaction.response.send_message("❌ Giveaway này đã kết thúc hoặc đã bị hủy trước đó, không thể chỉnh sửa.", ephemeral=True)
+            return
+        if not self.cog.can_manage_giveaway(interaction.user, fresh):
+            await interaction.response.send_message("❌ Bạn không có quyền quản lý để áp dụng thay đổi cho Giveaway này.", ephemeral=True)
+            return
+        if fresh.get('version', 0) != self.loaded_version:
+            await interaction.response.send_message("❌ Một editor khác đã cập nhật phiên bản mới hơn. Vui lòng mở lại bảng điều khiển để lấy dữ liệu mới nhất.", ephemeral=True)
+            return
+        if ends_at <= int(time.time()):
+            await interaction.response.send_message("❌ Thời gian kết thúc phải ở tương lai.", ephemeral=True)
+            return
+
+        if required_roles and bonus_roles:
+            await interaction.response.send_message("❌ Bạn không thể cấu hình giới hạn role và cộng lượt cùng lúc trong một giveaway!", ephemeral=True)
+            return
+
+        success, err = await self.cog.update_and_sync_giveaway(
+            message_id=msg_id,
+            guild_id=self.guild.id,
+            expected_status=0,
+            expected_version=self.loaded_version,
+            prize=prize,
+            winner_count=winner_count,
+            ends_at=ends_at,
+            required_roles=required_roles,
+            bonus_roles=bonus_roles,
+            embed_config=embed_config,
+            role_bonus_prizes=role_bonus_prizes
+        )
+        if not success:
+            await interaction.response.send_message(f"❌ {err or 'Lỗi khi cập nhật và đồng bộ tin nhắn Giveaway.'}", ephemeral=True)
+            return
+
+        # Synchronize original to draft and clear dirty state
+        self.original = copy.deepcopy(self.draft)
+        self.dirty_sections.clear()
+
+        # Disable all buttons
+        for item in self.children:
+            item.disabled = True
+
+        embed = self.build_preview_embed()
         await interaction.response.edit_message(
-            content=f"🛠️ **[LIVE PREVIEW - {preview_state_label} - {mode_title}]**\n{ping_header}",
+            content=f"✅ **Đã áp dụng và cập nhật thành công tin nhắn Giveaway trên kênh <#{self.draft['channel_id']}>!** *(Không thay đổi Mẫu Mặc Định của Server)*",
             embed=embed,
             view=self
         )
+        self.stop()
 
-    @discord.ui.button(label="Basic Info", style=discord.ButtonStyle.secondary, emoji="🎨", row=0)
-    async def btn_basic_info(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_modal(GiveawayBasicInfoModal(self))
+    async def _on_save_default(self, interaction: discord.Interaction):
+        if not self.cog.can_manage_server_template(interaction.user, self.guild):
+            await interaction.response.send_message(
+                "❌ Bạn không có quyền quản lý Mẫu Giveaway của Server. (Yêu cầu quyền Administrator, Quản lý Server hoặc Role `Giveaway Manager`)",
+                ephemeral=True
+            )
+            return
+        confirm_view = GiveawayTemplateConfirmView(self)
+        await interaction.response.edit_message(
+            content=confirm_view.build_content(),
+            embed=self.build_preview_embed(),
+            view=confirm_view
+        )
 
-    @discord.ui.button(label="Author", style=discord.ButtonStyle.secondary, emoji="👤", row=0)
-    async def btn_author(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_modal(GiveawayAuthorModal(self))
-
-    @discord.ui.button(label="Footer", style=discord.ButtonStyle.secondary, emoji="📄", row=0)
-    async def btn_footer(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_modal(GiveawayFooterModal(self))
-
-    @discord.ui.button(label="Images", style=discord.ButtonStyle.secondary, emoji="🖼️", row=0)
-    async def btn_images(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_modal(GiveawayImagesModal(self))
-
-    @discord.ui.button(label="Prize & Time", style=discord.ButtonStyle.secondary, emoji="⚙️", row=1)
-    async def btn_prize_time(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_modal(GiveawayPrizeTimeModal(self))
-
-    @discord.ui.button(label="Requirements", style=discord.ButtonStyle.secondary, emoji="🔒", row=1)
-    async def btn_requirements(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_modal(GiveawayRequirementsModal(self))
-
-    @discord.ui.button(label="Prize Bonus", style=discord.ButtonStyle.secondary, emoji="🎁", row=1)
-    async def btn_prize_bonus(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_modal(GiveawayPrizeBonusModal(self))
-
-    @discord.ui.button(label="Trạng Thái", style=discord.ButtonStyle.secondary, emoji="📑", row=1)
-    async def btn_state_config(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_modal(GiveawayStateConfigModal(self))
-
-    @discord.ui.button(label="Lưu Mẫu Server", style=discord.ButtonStyle.secondary, emoji="💾", row=2)
-    async def btn_save_default(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def _save_default_confirmed(self, interaction: discord.Interaction):
         if not self.cog.can_manage_server_template(interaction.user, self.guild):
             await interaction.response.send_message(
                 "❌ Bạn không có quyền quản lý Mẫu Giveaway của Server. (Yêu cầu quyền Administrator, Quản lý Server hoặc Role `Giveaway Manager`)",
@@ -793,7 +1864,7 @@ class GiveawayEditorView(discord.ui.View):
             )
             return
 
-        cfg = self.giveaway.get('embed_config') or {}
+        cfg = self.draft.get('embed_config') or {}
         if isinstance(cfg, str):
             try:
                 cfg = json.loads(cfg)
@@ -805,209 +1876,29 @@ class GiveawayEditorView(discord.ui.View):
             await interaction.response.send_message("❌ Lỗi khi lưu Mẫu Giveaway vào cơ sở dữ liệu.", ephemeral=True)
             return
 
-        embed = self.build_preview_embed()
-        ping_header = cfg.get("ping_content") or f"# <a:w1:1526231439425667093> Giveaway {self.guild.name} <a:w2:1526231455422877798>"
-        if self.giveaway.get('id', 0) == 0:
+        if self.is_template:
+            self.original = copy.deepcopy(self.draft)
+            self.dirty_sections.clear()
+            for item in self.children:
+                item.disabled = True
+            embed = self.build_preview_embed()
             await interaction.response.edit_message(
-                content=f"💾 **[ĐÃ LƯU MẪU GIVEAWAY CHO TOÀN SERVER!]**\n{ping_header}\n\n*(Mẫu thiết kế này sẽ tự động áp dụng cho **tất cả Giveaway mới** được tạo trong server!)*",
-                embed=embed
+                content=f"💾 **[ĐÃ LƯU MẪU GIVEAWAY CHO TOÀN SERVER!]**\n\n*(Mẫu thiết kế này sẽ tự động áp dụng cho **tất cả Giveaway mới** được tạo trong server!)*",
+                embed=embed,
+                view=self
             )
+            self.stop()
         else:
-            await interaction.response.send_message(
-                "💾 **Đã lưu cấu hình làm Mẫu Mặc Định cho toàn Server!**\n*(Lưu ý: Giveaway đang chạy này chưa bị thay đổi. Nhấn nút 'Áp Dụng Cho GA Này' nếu muốn cập nhật tin nhắn hiện tại).* ",
-                ephemeral=True
+            self._build_components()
+            await interaction.response.edit_message(
+                content=(
+                    "💾 **Đã lưu giao diện làm mẫu mặc định cho toàn server.**\n"
+                    "Giveaway đang chạy này chưa bị thay đổi.\n\n"
+                    f"{self.build_editor_content()}"
+                ),
+                embed=self.build_preview_embed(),
+                view=self
             )
-
-    @discord.ui.button(label="Áp Dụng Cho GA Này", style=discord.ButtonStyle.primary, emoji="✅", row=2)
-    async def btn_apply_sync(self, interaction: discord.Interaction, button: discord.ui.Button):
-        msg_id = self.giveaway.get('id', 0)
-        if msg_id == 0:
-            await interaction.response.send_message(
-                "❌ Bạn đang ở chế độ chỉnh sửa Mẫu Server (không có Giveaway cụ thể nào). Hãy nhấn nút **'Lưu Mẫu Server'** để lưu lại mẫu thiết kế!",
-                ephemeral=True
-            )
-            return
-
-        prize = self.giveaway['prize']
-        winner_count = self.giveaway['winner_count']
-        ends_at = self.giveaway['ends_at']
-        required_roles = self.giveaway.get('required_roles', [])
-        bonus_roles = self.giveaway.get('bonus_roles', {})
-        embed_config = self.giveaway.get('embed_config', {})
-        role_bonus_prizes = self.giveaway.get('role_bonus_prizes', {})
-
-        if isinstance(embed_config, str):
-            try:
-                embed_config = json.loads(embed_config)
-            except Exception:
-                embed_config = {}
-
-        # Re-fetch latest giveaway state from DB
-        fresh = self.cog.get_giveaway(msg_id, guild_id=self.guild.id)
-        if not fresh:
-            await interaction.response.send_message("❌ Không tìm thấy Giveaway này trong server.", ephemeral=True)
-            return
-        if fresh['guild_id'] != self.guild.id:
-            await interaction.response.send_message("❌ Giveaway thuộc server khác, không thể chỉnh sửa.", ephemeral=True)
-            return
-        if fresh['ended'] != 0:
-            await interaction.response.send_message("❌ Giveaway này đã kết thúc hoặc đã bị hủy trước đó, không thể chỉnh sửa.", ephemeral=True)
-            return
-        if not self.cog.can_manage_giveaway(interaction.user, fresh):
-            await interaction.response.send_message("❌ Bạn không có quyền quản lý để áp dụng thay đổi cho Giveaway này.", ephemeral=True)
-            return
-        if fresh.get('version', 0) != self.loaded_version:
-            await interaction.response.send_message("❌ Một editor khác đã cập nhật phiên bản mới hơn. Vui lòng mở lại bảng điều khiển để lấy dữ liệu mới nhất.", ephemeral=True)
-            return
-        if ends_at <= int(time.time()):
-            await interaction.response.send_message("❌ Thời gian kết thúc phải ở tương lai.", ephemeral=True)
-            return
-
-        if required_roles and bonus_roles:
-            await interaction.response.send_message("❌ Bạn không thể cấu hình giới hạn role và cộng lượt cùng lúc trong một giveaway!", ephemeral=True)
-            return
-
-        # Single pipeline update & sync (giveaway only, does not alter server template)
-        success, err = await self.cog.update_and_sync_giveaway(
-            message_id=msg_id,
-            guild_id=self.guild.id,
-            expected_status=0,
-            expected_version=self.loaded_version,
-            prize=prize,
-            winner_count=winner_count,
-            ends_at=ends_at,
-            required_roles=required_roles,
-            bonus_roles=bonus_roles,
-            embed_config=embed_config,
-            role_bonus_prizes=role_bonus_prizes
-        )
-        if not success:
-            await interaction.response.send_message(f"❌ {err or 'Lỗi khi cập nhật và đồng bộ tin nhắn Giveaway.'}", ephemeral=True)
-            return
-
-        # Disable buttons
-        for item in self.children:
-            item.disabled = True
-
-        embed = self.build_preview_embed()
-        await interaction.response.edit_message(
-            content=f"✅ **Đã áp dụng và cập nhật thành công tin nhắn Giveaway trên kênh <#{self.giveaway['channel_id']}>!** *(Không thay đổi Mẫu Mặc Định của Server)*",
-            embed=embed,
-            view=self
-        )
-
-    @discord.ui.button(label="Lưu & Áp Dụng Cả 2", style=discord.ButtonStyle.success, emoji="🌟", row=2)
-    async def btn_save_and_apply(self, interaction: discord.Interaction, button: discord.ui.Button):
-        msg_id = self.giveaway.get('id', 0)
-        if msg_id == 0:
-            await self.btn_save_default.callback(interaction)
-            return
-
-        # Check server template management permission first
-        if not self.cog.can_manage_server_template(interaction.user, self.guild):
-            await interaction.response.send_message(
-                "❌ Bạn không có quyền lưu Mẫu Giveaway của Server. (Yêu cầu quyền Administrator, Quản lý Server hoặc Role `Giveaway Manager`).\n👉 Bạn vẫn có thể nhấn nút **'Áp Dụng Cho GA Này'** để cập nhật riêng cho Giveaway hiện tại.",
-                ephemeral=True
-            )
-            return
-
-        prize = self.giveaway['prize']
-        winner_count = self.giveaway['winner_count']
-        ends_at = self.giveaway['ends_at']
-        required_roles = self.giveaway.get('required_roles', [])
-        bonus_roles = self.giveaway.get('bonus_roles', {})
-        embed_config = self.giveaway.get('embed_config', {})
-        role_bonus_prizes = self.giveaway.get('role_bonus_prizes', {})
-
-        if isinstance(embed_config, str):
-            try:
-                embed_config = json.loads(embed_config)
-            except Exception:
-                embed_config = {}
-
-        # Re-fetch latest giveaway state from DB
-        fresh = self.cog.get_giveaway(msg_id, guild_id=self.guild.id)
-        if not fresh:
-            await interaction.response.send_message("❌ Không tìm thấy Giveaway này trong server.", ephemeral=True)
-            return
-        if fresh['guild_id'] != self.guild.id:
-            await interaction.response.send_message("❌ Giveaway thuộc server khác, không thể chỉnh sửa.", ephemeral=True)
-            return
-        if fresh['ended'] != 0:
-            await interaction.response.send_message("❌ Giveaway này đã kết thúc hoặc đã bị hủy trước đó, không thể chỉnh sửa.", ephemeral=True)
-            return
-        if not self.cog.can_manage_giveaway(interaction.user, fresh):
-            await interaction.response.send_message("❌ Bạn không có quyền quản lý để áp dụng thay đổi cho Giveaway này.", ephemeral=True)
-            return
-        if fresh.get('version', 0) != self.loaded_version:
-            await interaction.response.send_message("❌ Một editor khác đã cập nhật phiên bản mới hơn. Vui lòng mở lại bảng điều khiển để lấy dữ liệu mới nhất.", ephemeral=True)
-            return
-        if ends_at <= int(time.time()):
-            await interaction.response.send_message("❌ Thời gian kết thúc phải ở tương lai.", ephemeral=True)
-            return
-
-        if required_roles and bonus_roles:
-            await interaction.response.send_message("❌ Bạn không thể cấu hình giới hạn role và cộng lượt cùng lúc trong một giveaway!", ephemeral=True)
-            return
-
-        # 1. Update & Sync Giveaway first
-        success, err = await self.cog.update_and_sync_giveaway(
-            message_id=msg_id,
-            guild_id=self.guild.id,
-            expected_status=0,
-            expected_version=self.loaded_version,
-            prize=prize,
-            winner_count=winner_count,
-            ends_at=ends_at,
-            required_roles=required_roles,
-            bonus_roles=bonus_roles,
-            embed_config=embed_config,
-            role_bonus_prizes=role_bonus_prizes
-        )
-        if not success:
-            await interaction.response.send_message(f"❌ {err or 'Lỗi khi cập nhật và đồng bộ tin nhắn Giveaway.'}", ephemeral=True)
-            return
-
-        # 2. If giveaway sync succeeded, save Server Template
-        save_ok = self.cog.save_template(self.guild.id, "default", embed_config, updated_by=interaction.user.id)
-        if not save_ok:
-            await interaction.response.send_message("⚠️ Đã cập nhật Giveaway nhưng không thể lưu làm Mẫu Server.", ephemeral=True)
-            return
-
-        # Disable buttons
-        for item in self.children:
-            item.disabled = True
-
-        embed = self.build_preview_embed()
-        await interaction.response.edit_message(
-            content=f"🌟 **Đã lưu làm Mẫu Mặc Định của Server VÀ cập nhật thành công tin nhắn Giveaway trên kênh <#{self.giveaway['channel_id']}>!**",
-            embed=embed,
-            view=self
-        )
-
-    @discord.ui.button(label="🟢 Đang chạy", style=discord.ButtonStyle.primary, row=3)
-    async def btn_preview_active(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.preview_mode = "active"
-        self._update_preview_button_styles()
-        await self.refresh_preview(interaction)
-
-    @discord.ui.button(label="🏁 Kết thúc", style=discord.ButtonStyle.secondary, row=3)
-    async def btn_preview_ended(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.preview_mode = "ended"
-        self._update_preview_button_styles()
-        await self.refresh_preview(interaction)
-
-    @discord.ui.button(label="🛑 Đã hủy", style=discord.ButtonStyle.secondary, row=3)
-    async def btn_preview_cancelled(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.preview_mode = "cancelled"
-        self._update_preview_button_styles()
-        await self.refresh_preview(interaction)
-
-    @discord.ui.button(label="🔄 Reroll", style=discord.ButtonStyle.secondary, row=3)
-    async def btn_preview_rerolled(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.preview_mode = "rerolled"
-        self._update_preview_button_styles()
-        await self.refresh_preview(interaction)
 
 
 class OpenEditorTriggerView(discord.ui.View):
@@ -1040,23 +1931,16 @@ class OpenEditorTriggerView(discord.ui.View):
 
         editor_view = GiveawayEditorView(self.cog, self.giveaway, interaction.user, self.guild)
         preview_embed = editor_view.build_preview_embed()
-        cfg = self.giveaway.get('embed_config') or {}
-        if isinstance(cfg, str):
-            try:
-                cfg = json.loads(cfg)
-            except Exception:
-                cfg = {}
-        ping_header = cfg.get("ping_content") or f"# <a:w1:1526231439425667093> Giveaway {self.guild.name} <a:w2:1526231455422877798>"
-
-        is_template = (self.giveaway.get('id', 0) == 0)
-        mode_title = "THIẾT KẾ MẪU EMBED GIVEAWAY TOÀN SERVER" if is_template else f"BẢNG ĐIỀU KHIỂN CHỈNH SỬA GIVEAWAY (ID: `{self.giveaway.get('id')}`)"
-
         await interaction.response.send_message(
-            content=f"🛠️ **[LIVE PREVIEW - {mode_title}]**\n{ping_header}",
+            content=editor_view.build_editor_content(),
             embed=preview_embed,
             view=editor_view,
             ephemeral=True
         )
+        try:
+            editor_view.message = await interaction.original_response()
+        except Exception:
+            pass
 
 
 # ==============================================================================
@@ -1491,6 +2375,26 @@ class Giveaway(commands.Cog, name="Giveaway"):
         if host and host.display_avatar:
             embed.set_thumbnail(url=host.display_avatar.url)
 
+    def format_ping_content(self, content: str, giveaway: dict, guild: discord.Guild) -> str:
+        """Formats the small, explicitly supported placeholder set for message content."""
+        if not content:
+            return content
+        host_id = giveaway.get('host_id', 0)
+        host_user = self.bot.get_user(host_id)
+        host_name = str(host_user.name) if host_user and getattr(host_user, "name", None) else str(host_id)
+        guild_name = str(getattr(guild, "name", ""))
+        replacements = {
+            "{guild_name}": guild_name,
+            "{server_name}": guild_name,
+            "{prize}": str(giveaway.get('prize', '')),
+            "{host}": f"<@{host_id}>",
+            "{host_name}": host_name,
+        }
+        formatted = content
+        for placeholder, value in replacements.items():
+            formatted = formatted.replace(placeholder, value)
+        return formatted
+
     def format_embed_description(
         self,
         template_str: str,
@@ -1530,7 +2434,12 @@ class Giveaway(commands.Cog, name="Giveaway"):
         if winners:
             winners_mentions = ", ".join(f"<@{w_id}>" for w_id in winners)
         else:
-            winners_mentions = "Chưa có" if status == "active" else "Không có"
+            if status == "active":
+                winners_mentions = "Chưa có"
+            elif status == "cancelled":
+                winners_mentions = "Đã bị huỷ"
+            else:
+                winners_mentions = "Không có"
 
         status_names = {
             "active": "Đang diễn ra",
@@ -1539,6 +2448,9 @@ class Giveaway(commands.Cog, name="Giveaway"):
             "rerolled": "Đã quay lại kết quả"
         }
         status_display = status_names.get(status, "Đang diễn ra")
+
+        if status == "cancelled" and not status_note:
+            status_note = "Giveaway này đã bị huỷ bởi Host."
 
         extra_reqs_raw = giveaway.get('extra_reqs') or {}
         extra_reqs = json.loads(extra_reqs_raw) if isinstance(extra_reqs_raw, str) else (extra_reqs_raw or {})
@@ -1577,6 +2489,72 @@ class Giveaway(commands.Cog, name="Giveaway"):
             res = f"{res}\n\n{prefix} {status_note}"
 
         return res
+
+    def build_default_description(
+        self,
+        giveaway: dict,
+        status: str = "active",
+        participants_count: int = 0,
+        winners: Optional[list] = None,
+        status_note: Optional[str] = None,
+        custom_note: Optional[str] = None
+    ) -> str:
+        prize = giveaway.get('prize', '')
+        host_id = giveaway.get('host_id', 0)
+        winner_count = giveaway.get('winner_count', 1)
+        ends_at = giveaway.get('ends_at', int(time.time()))
+
+        req_roles_raw = giveaway.get('required_roles')
+        required_roles = json.loads(req_roles_raw) if isinstance(req_roles_raw, str) else (req_roles_raw or [])
+
+        bonus_roles_raw = giveaway.get('bonus_roles') or {}
+        bonus_roles = json.loads(bonus_roles_raw) if isinstance(bonus_roles_raw, str) else (bonus_roles_raw or {})
+
+        role_prizes_raw = giveaway.get('role_bonus_prizes') or {}
+        role_prizes = json.loads(role_prizes_raw) if isinstance(role_prizes_raw, str) else (role_prizes_raw or {})
+
+        desc_lines = [
+            f"**{prize}**",
+            f"<a:timden:1526230943478845450> *host:* <@{host_id}>",
+            f"<:ss:1526230022787043348>*Win:* {winner_count}"
+        ]
+
+        if required_roles:
+            req_lines = ", ".join(f"<@&{r_id}>" for r_id in required_roles)
+            desc_lines.append(f"<a:kcden:1526231212887380108> *Giới hạn:* {req_lines}")
+
+        if bonus_roles:
+            ticket_lines = [f"<@&{r_id}> (+{extra} vé)" for r_id, extra in bonus_roles.items()]
+            desc_lines.append(f"<:ss:1526230022787043348>*Cộng vé:* " + ", ".join(ticket_lines))
+
+        if role_prizes:
+            prize_bonus_lines = [f"<@&{r_id}>: **{b_text}**" for r_id, b_text in role_prizes.items()]
+            desc_lines.append(f"🎁 *Bonus role:* " + ", ".join(prize_bonus_lines))
+
+        if status == "active":
+            desc_lines.append(f"<:ss:1526230022787043348>*End:* <t:{ends_at}:R>")
+        elif status in ("ended", "rerolled"):
+            if winners:
+                winners_mentions = ", ".join(f"<@{w_id}>" for w_id in winners)
+                desc_lines.append(f"<a:key:1526234974150459593>*Result:* {winners_mentions}")
+            if status == "rerolled":
+                extra_reqs_raw = giveaway.get('extra_reqs') or {}
+                extra_reqs = json.loads(extra_reqs_raw) if isinstance(extra_reqs_raw, str) else (extra_reqs_raw or {})
+                reroll_hist = extra_reqs.get('reroll_history', [])
+                if reroll_hist:
+                    hist_mentions = ", ".join(f"<@{w_id}>" for w_id in reroll_hist)
+                    desc_lines.append(f"📜 *Lịch sử trúng:* {hist_mentions}")
+            if status_note:
+                desc_lines.append(f"\n⚠️ {status_note}")
+            elif not winners:
+                desc_lines.append(f"\n*Không có người tham gia hợp lệ.*")
+        elif status == "cancelled":
+            desc_lines.append(f"\n🛑 *Trạng thái:* {status_note or 'Giveaway này đã bị huỷ bởi Host.'}")
+
+        if custom_note:
+            desc_lines.append(f"\n📝 *Ghi chú:* {custom_note}")
+
+        return "\n".join(desc_lines)
 
     def build_giveaway_embed(
         self,
@@ -1632,74 +2610,51 @@ class Giveaway(commands.Cog, name="Giveaway"):
                 author_kwargs["url"] = author_url
             embed.set_author(**author_kwargs)
 
-        # Description resolution:
-        # 1. State-specific desc ({status}_desc)
-        # 2. General custom_desc
+        # Description resolution order:
+        # {status}_desc -> custom_desc -> build_default_description
         state_desc = embed_cfg.get(f"{status}_desc")
         general_desc = embed_cfg.get('custom_desc')
-        template_to_use = state_desc if state_desc is not None else general_desc
 
-        has_placeholders = template_to_use and any(
-            ph in template_to_use for ph in [
-                "{prize}", "{host}", "{winner_count}", "{win}", "{ends_at}", "{end}",
-                "{role_req}", "{roles}", "{bonus_roles}", "{prize_bonus}", "{winners}",
-                "{result}", "{status}", "{status_note}", "{participants}", "{reroll_history}"
-            ]
-        )
-
-        if state_desc is not None or has_placeholders:
+        if state_desc and state_desc.strip():
             embed.description = self.format_embed_description(
-                template_to_use or "",
+                state_desc.strip(),
                 giveaway,
                 participants_count=participants_count,
                 status=status,
                 winners=winners,
                 status_note=status_note
             )
+        elif general_desc and general_desc.strip():
+            has_placeholders = any(
+                f"{{{placeholder}}}" in general_desc
+                for placeholder in AVAILABLE_PLACEHOLDERS
+            )
+            if has_placeholders:
+                embed.description = self.format_embed_description(
+                    general_desc.strip(),
+                    giveaway,
+                    participants_count=participants_count,
+                    status=status,
+                    winners=winners,
+                    status_note=status_note
+                )
+            else:
+                embed.description = self.build_default_description(
+                    giveaway,
+                    status=status,
+                    participants_count=participants_count,
+                    winners=winners,
+                    status_note=status_note,
+                    custom_note=general_desc.strip()
+                )
         else:
-            # Default structured layout
-            desc_lines = [
-                f"**{prize}**",
-                f"<a:timden:1526230943478845450> *host:* <@{host_id}>",
-                f"<:ss:1526230022787043348>*Win:* {winner_count}"
-            ]
-
-            if required_roles:
-                req_lines = ", ".join(f"<@&{r_id}>" for r_id in required_roles)
-                desc_lines.append(f"<a:kcden:1526231212887380108> *Giới hạn:* {req_lines}")
-
-            if bonus_roles:
-                ticket_lines = [f"<@&{r_id}> (+{extra} vé)" for r_id, extra in bonus_roles.items()]
-                desc_lines.append(f"<:ss:1526230022787043348>*Cộng vé:* " + ", ".join(ticket_lines))
-
-            if role_prizes:
-                prize_bonus_lines = [f"<@&{r_id}>: **{b_text}**" for r_id, b_text in role_prizes.items()]
-                desc_lines.append(f"🎁 *Bonus role:* " + ", ".join(prize_bonus_lines))
-
-            if status == "active":
-                desc_lines.append(f"<:ss:1526230022787043348>*End:* <t:{ends_at}:R>")
-            elif status in ("ended", "rerolled"):
-                if winners:
-                    winners_mentions = ", ".join(f"<@{w_id}>" for w_id in winners)
-                    desc_lines.append(f"<a:key:1526234974150459593>*Result:* {winners_mentions}")
-                if status == "rerolled":
-                    extra_reqs_raw = giveaway.get('extra_reqs') or {}
-                    extra_reqs = json.loads(extra_reqs_raw) if isinstance(extra_reqs_raw, str) else (extra_reqs_raw or {})
-                    reroll_hist = extra_reqs.get('reroll_history', [])
-                    if reroll_hist:
-                        hist_mentions = ", ".join(f"<@{w_id}>" for w_id in reroll_hist)
-                        desc_lines.append(f"📜 *Lịch sử trúng:* {hist_mentions}")
-                if status_note:
-                    desc_lines.append(f"\n⚠️ {status_note}")
-                elif not winners:
-                    desc_lines.append(f"\n*Không có người tham gia hợp lệ.*")
-            elif status == "cancelled":
-                desc_lines.append(f"\n🛑 *Trạng thái:* {status_note or 'Giveaway này đã bị huỷ bởi Host.'}")
-
-            if general_desc:
-                desc_lines.append(f"\n📝 *Ghi chú:* {general_desc}")
-
-            embed.description = "\n".join(desc_lines)
+            embed.description = self.build_default_description(
+                giveaway,
+                status=status,
+                participants_count=participants_count,
+                winners=winners,
+                status_note=status_note
+            )
 
         # Footer
         footer_text = embed_cfg.get('footer_text') or "Sylus Meow • Giveaway System"
@@ -1787,6 +2742,8 @@ class Giveaway(commands.Cog, name="Giveaway"):
 
         # Keep snapshot of current state for rollback if Discord sync fails
         previous_state = giveaway.copy()
+        rollback_fields = set(changes)
+        updated_version = int(previous_state.get('version', 0) or 0) + 1
 
         # Perform DB update
         db_success = self.update_giveaway_full(message_id, expected_version=expected_version, **changes)
@@ -1795,6 +2752,12 @@ class Giveaway(commands.Cog, name="Giveaway"):
 
         updated = self.get_giveaway(message_id, guild_id=guild_id)
         if not updated:
+            self._rollback_giveaway_db(
+                message_id,
+                previous_state,
+                changed_fields=rollback_fields,
+                expected_current_version=updated_version
+            )
             return False, "Không thể tải lại dữ liệu giveaway sau khi cập nhật."
 
         # Determine status string
@@ -1838,19 +2801,19 @@ class Giveaway(commands.Cog, name="Giveaway"):
 
         guild = self.bot.get_guild(updated['guild_id'])
         if not guild:
-            self._rollback_giveaway_db(message_id, previous_state)
+            self._rollback_giveaway_db(message_id, previous_state, rollback_fields, updated_version)
             return False, "Bot không tìm thấy server của giveaway này."
 
         channel = guild.get_channel(updated['channel_id'])
         if not channel:
-            self._rollback_giveaway_db(message_id, previous_state)
+            self._rollback_giveaway_db(message_id, previous_state, rollback_fields, updated_version)
             return False, "Bot không tìm thấy kênh của giveaway này."
 
         try:
             message = await channel.fetch_message(message_id)
         except Exception as e:
             logger.warning(f"Could not fetch message {message_id} to sync: {e}")
-            self._rollback_giveaway_db(message_id, previous_state)
+            self._rollback_giveaway_db(message_id, previous_state, rollback_fields, updated_version)
             return False, f"Không thể lấy tin nhắn Discord: {e}"
 
         try:
@@ -1858,46 +2821,66 @@ class Giveaway(commands.Cog, name="Giveaway"):
                 cfg_raw = updated.get('embed_config') or {}
                 cfg = json.loads(cfg_raw) if isinstance(cfg_raw, str) else (cfg_raw or {})
                 ping_content = cfg.get('ping_content') or f"# <a:w1:1526231439425667093> Giveaway {guild.name} <a:w2:1526231455422877798>"
+                ping_content = self.format_ping_content(ping_content, updated, guild)
                 await message.edit(content=ping_content, embed=embed, allowed_mentions=discord.AllowedMentions.none())
             else:
                 await message.edit(embed=embed, view=None, allowed_mentions=discord.AllowedMentions.none())
         except Exception as e:
             logger.error(f"Failed to edit message {message_id} on Discord: {e}")
-            self._rollback_giveaway_db(message_id, previous_state)
+            self._rollback_giveaway_db(message_id, previous_state, rollback_fields, updated_version)
             return False, f"Lỗi cập nhật tin nhắn Discord: {e}"
 
         return True, None
 
-    def _rollback_giveaway_db(self, msg_id: int, snapshot: dict):
-        """Rolls back the database state of a giveaway to a previous snapshot."""
+    def _rollback_giveaway_db(
+        self,
+        msg_id: int,
+        snapshot: dict,
+        changed_fields: Optional[set[str]] = None,
+        expected_current_version: Optional[int] = None
+    ) -> bool:
+        """Rolls back only fields changed by the failed sync, guarded by OCC version."""
         try:
-            self.economy.cur.execute(
-                """UPDATE giveaways SET
-                       prize = ?, winner_count = ?, ends_at = ?, ended = ?,
-                       required_roles = ?, bonus_roles = ?, embed_config = ?,
-                       extra_reqs = ?, role_bonus_prizes = ?, winners = ?,
-                       participants = ?, updated_at = ?, version = ?
-                   WHERE id = ?""",
-                (
-                    snapshot.get('prize'),
-                    snapshot.get('winner_count'),
-                    snapshot.get('ends_at'),
-                    snapshot.get('ended'),
-                    json.dumps(snapshot.get('required_roles')) if isinstance(snapshot.get('required_roles'), (list, dict)) else snapshot.get('required_roles'),
-                    json.dumps(snapshot.get('bonus_roles')) if isinstance(snapshot.get('bonus_roles'), dict) else snapshot.get('bonus_roles'),
-                    json.dumps(snapshot.get('embed_config')) if isinstance(snapshot.get('embed_config'), dict) else snapshot.get('embed_config'),
-                    json.dumps(snapshot.get('extra_reqs')) if isinstance(snapshot.get('extra_reqs'), dict) else snapshot.get('extra_reqs'),
-                    json.dumps(snapshot.get('role_bonus_prizes')) if isinstance(snapshot.get('role_bonus_prizes'), dict) else snapshot.get('role_bonus_prizes'),
-                    json.dumps(snapshot.get('winners')) if isinstance(snapshot.get('winners'), list) else snapshot.get('winners'),
-                    json.dumps(snapshot.get('participants')) if isinstance(snapshot.get('participants'), dict) else snapshot.get('participants'),
-                    snapshot.get('updated_at', 0),
-                    snapshot.get('version', 0),
+            rollbackable = {
+                'prize', 'winner_count', 'ends_at', 'ended', 'required_roles',
+                'bonus_roles', 'embed_config', 'extra_reqs', 'role_bonus_prizes',
+                'winners', 'participants'
+            }
+            json_fields = {
+                'required_roles', 'bonus_roles', 'embed_config', 'extra_reqs',
+                'role_bonus_prizes', 'winners', 'participants'
+            }
+            fields_to_restore = rollbackable if changed_fields is None else (rollbackable & set(changed_fields))
+            assignments = []
+            params = []
+            for field in sorted(fields_to_restore):
+                value = snapshot.get(field)
+                if field in json_fields and isinstance(value, (list, dict)):
+                    value = json.dumps(value)
+                assignments.append(f"{field} = ?")
+                params.append(value)
+
+            assignments.extend(["updated_at = ?", "version = ?"])
+            params.extend([snapshot.get('updated_at', 0), snapshot.get('version', 0)])
+            params.append(msg_id)
+
+            query = f"UPDATE giveaways SET {', '.join(assignments)} WHERE id = ?"
+            if expected_current_version is not None:
+                query += " AND version = ?"
+                params.append(expected_current_version)
+
+            self.economy.cur.execute(query, tuple(params))
+            if self.economy.cur.rowcount <= 0:
+                logger.warning(
+                    "Skipped rollback for giveaway %s because its version changed concurrently.",
                     msg_id
                 )
-            )
+                return False
             self.economy.conn.commit()
+            return True
         except Exception as e:
             logger.error(f"Failed to rollback giveaway {msg_id}: {e}", exc_info=True)
+            return False
 
     async def sync_giveaway_message(self, message_id: int):
         """Immediately syncs changes to the live giveaway message on Discord."""
@@ -2333,7 +3316,7 @@ class Giveaway(commands.Cog, name="Giveaway"):
         author_perms = ctx.author.guild_permissions if hasattr(ctx.author, "guild_permissions") else None
         can_mention_everyone = author_perms.mention_everyone or author_perms.administrator if author_perms else False
 
-        ping_raw = embed_config.get("ping_content", "")
+        ping_raw = self.format_ping_content(embed_config.get("ping_content", ""), giveaway_temp, ctx.guild)
         if ping_raw:
             if "@everyone" in ping_raw or "@here" in ping_raw:
                 if can_mention_everyone:
@@ -2358,7 +3341,7 @@ class Giveaway(commands.Cog, name="Giveaway"):
             users=False
         )
 
-        ping_header = embed_config.get("ping_content") or f"# <a:w1:1526231439425667093> Giveaway {ctx.guild.name} <a:w2:1526231455422877798>"
+        ping_header = ping_raw or f"# <a:w1:1526231439425667093> Giveaway {ctx.guild.name} <a:w2:1526231455422877798>"
 
         try:
             msg = await channel.send(content=ping_header, embed=embed, allowed_mentions=allowed_mentions)
