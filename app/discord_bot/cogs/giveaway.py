@@ -169,8 +169,12 @@ def is_giveaway_emoji(emoji: Union[discord.PartialEmoji, discord.Emoji, str]) ->
     """Checks if an emoji matches supported giveaway entry reactions."""
     if isinstance(emoji, str):
         return emoji == "🎉"
-    if getattr(emoji, "is_custom_emoji", lambda: False)():
-        return emoji.id in (1544913759297085440, 1526238405061640272)
+    # Raw reaction payloads use PartialEmoji, while Reaction.emoji from a
+    # fetched message commonly uses Emoji. discord.Emoji does not implement
+    # is_custom_emoji(), so compare IDs directly for both object types.
+    emoji_id = getattr(emoji, "id", None)
+    if emoji_id is not None:
+        return emoji_id in (1544913759297085440, 1526238405061640272)
     return getattr(emoji, "name", "") == "🎉"
 
 

@@ -211,6 +211,14 @@ class TestGiveawayFixes(unittest.TestCase):
         mock_coin.id = 1544913759297085440
         self.assertTrue(is_giveaway_emoji(mock_coin))
 
+        # message.reactions returns discord.Emoji, which has an ID but does not
+        # implement PartialEmoji.is_custom_emoji(). This is the end-draw path.
+        fetched_message_coin = MagicMock(spec=discord.Emoji)
+        fetched_message_coin.id = 1544913759297085440
+        fetched_message_coin.name = "zh_coinzh"
+        self.assertFalse(hasattr(fetched_message_coin, "is_custom_emoji"))
+        self.assertTrue(is_giveaway_emoji(fetched_message_coin))
+
         # Unrelated emoji
         mock_other = MagicMock()
         mock_other.is_custom_emoji.return_value = True
@@ -1159,6 +1167,47 @@ class TestGiveawayResidualFixes(unittest.IsolatedAsyncioTestCase):
         ga = self.cog.get_giveaway(msg_id)
         self.assertEqual(ga["ended"], 0)
         self.mock_channel.send.assert_not_called()
+
+    async def test_end_draw_recognizes_custom_emoji_from_fetched_message(self):
+        """Reaction.emoji is discord.Emoji, not PartialEmoji, on the end-draw path."""
+        msg_id = 445567
+        entrant_id = 321
+        self.cog.save_giveaway(
+            msg_id=msg_id,
+            guild_id=111,
+            channel_id=1001,
+            prize="Custom Emoji Prize",
+            host_id=123,
+            winner_count=1,
+            ends_at=int(time.time()) - 10,
+            required_roles=[],
+            bonus_roles={}
+        )
+
+        fetched_message_coin = MagicMock(spec=discord.Emoji)
+        fetched_message_coin.id = 1544913759297085440
+        fetched_message_coin.name = "zh_coinzh"
+        entrant_user = MagicMock(spec=discord.User, id=entrant_id, bot=False)
+
+        def reaction_users(limit=None):
+            async def _gen():
+                yield entrant_user
+            return _gen()
+
+        reaction = MagicMock()
+        reaction.emoji = fetched_message_coin
+        reaction.users = reaction_users
+        self.mock_message.reactions = [reaction]
+
+        entrant_member = MagicMock(spec=discord.Member, id=entrant_id, bot=False)
+        self.mock_guild.get_member.side_effect = lambda user_id: entrant_member if user_id == entrant_id else None
+
+        await self.cog.end_giveaway(msg_id)
+
+        ended = self.cog.get_giveaway(msg_id)
+        self.assertEqual(ended["ended"], 1)
+        self.assertEqual(json.loads(ended["winners"]), [entrant_id])
+        self.assertNotEqual(json.loads(ended["extra_reqs"]).get("end_reason"), "no_participants")
 
     async def test_reaction_zero_participants_does_not_use_stale_db(self):
         """When reaction fetch succeeds with 0 reactions, end_giveaway does not fall back to stale DB participants."""
