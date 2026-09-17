@@ -14,6 +14,9 @@ import discord
 from discord.ext import commands, tasks
 
 from app.discord_bot.modules.economy import Economy
+from app.discord_bot.modules.giveaway_bonus import (
+    BonusCatalog, BonusPages, CatalogEditor, can_manage_catalog, as_dict, matching_benefits, MANAGEMENT_HINT,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1122,12 +1125,51 @@ class GiveawayPrizeBonusView(discord.ui.View):
         self.add_item(save_button)
         self.add_item(clear_button)
         self.add_item(back_button)
+        load_button = discord.ui.Button(label="Nạp menu bonus server", row=2)
+        load_button.callback = self._on_load_catalog
+        self.add_item(load_button)
+
+    async def _on_load_catalog(self, interaction: discord.Interaction):
+        incoming = self.editor_view.cog.bonus_catalog.active(self.editor_view.guild)
+        # Explicit import replaces overlapping roles, retaining giveaway-only roles.
+        merged = {**self.role_prizes, **incoming}
+        changed = sum(self.role_prizes.get(rid) != text for rid, text in incoming.items())
+        confirm = discord.ui.View(timeout=60)
+        async def check_owner(event):
+            return await self.interaction_check(event)
+        confirm.interaction_check = check_owner
+        async def accept(event):
+            self.role_prizes = merged
+            confirm.stop()
+            await self.refresh(event)
+        async def cancel(event):
+            confirm.stop()
+            await self.refresh(event)
+        yes = discord.ui.Button(label='Xác nhận nạp vào bản nháp', style=discord.ButtonStyle.primary)
+        yes.callback = accept
+        no = discord.ui.Button(label='Quay lại')
+        no.callback = cancel
+        confirm.add_item(yes)
+        confirm.add_item(no)
+        async def timeout():
+            if self.editor_view.message:
+                try:
+                    await self.editor_view.message.edit(content=self.build_content(), embed=None, view=self)
+                except discord.HTTPException:
+                    pass
+        confirm.on_timeout = timeout
+        await interaction.response.edit_message(content=(
+            f'Nạp {len(incoming)} mục từ menu server; {changed} mục được thêm/thay đổi.\n'
+            'Role trùng sẽ dùng quyền lợi từ menu server; role chỉ có ở giveaway được giữ lại.\n'
+            'Sau khi nạp, xem lại danh sách rồi áp dụng vào giveaway.'), embed=None, view=confirm)
 
     def build_content(self) -> str:
         summary = "\n".join(
             f"• <@&{role_id}>: {prize}"
             for role_id, prize in self.role_prizes.items()
         ) or "Chưa cấu hình quà thêm cho role nào."
+        if len(summary) > 1500:
+            summary = summary[:1500] + '\n… Danh sách được rút gọn; chọn role để xem/sửa đầy đủ.'
         return (
             "🎁 **QUÀ THÊM THEO ROLE**\n"
             "Chọn một role để thêm hoặc sửa quà. Để trống nội dung trong modal để xóa role đó.\n\n"
@@ -2021,6 +2063,7 @@ class Giveaway(commands.Cog, name="Giveaway"):
         self.pending_embed_updates = {}
         self.update_tasks = {}
         self.init_db()
+        self.bonus_catalog = BonusCatalog(self.economy.conn)
         try:
             loop = asyncio.get_running_loop()
             if loop and loop.is_running():
@@ -3311,6 +3354,9 @@ class Giveaway(commands.Cog, name="Giveaway"):
 
         # Parse args_str
         prize, required_roles, bonus_roles, role_bonus_prizes, target_channel, embed_config = self.parse_giveaway_args(args_str)
+        # Freeze the current server catalog into this giveaway; explicit role
+        # overrides take precedence, future catalog changes cannot rewrite it.
+        role_bonus_prizes = {**self.bonus_catalog.active(ctx.guild), **role_bonus_prizes}
 
         # Check attached images
         if not embed_config.get("banner") and ctx.message.attachments:
@@ -3384,6 +3430,9 @@ class Giveaway(commands.Cog, name="Giveaway"):
             'embed_config': embed_config
         }
         embed = self.build_active_embed(giveaway_temp, 0)
+        if len(embed.description or '') > 4096 or len(embed) > 6000:
+            await ctx.send('Nội dung giveaway sau khi nạp bonus quá dài. Hãy rút gọn mô tả hoặc quyền lợi trong menu server.')
+            return
 
         # Validate and sanitize ping mentions
         allowed_roles = []
@@ -3456,7 +3505,7 @@ class Giveaway(commands.Cog, name="Giveaway"):
     async def send_giveaway_help(self, ctx: commands.Context):
         prefix = ctx.prefix
         embed = discord.Embed(
-            title="<a:thanhgia:1526231085221023845> HƯỚNG DẪN HỆ THỐNG GIVEAWAY CHUYÊN NGHIỆP <a:thanhgia:1526231085221023845>",
+            title="🎉 Hướng dẫn Giveaway",
             color=discord.Color.purple()
         )
         embed.description = (
@@ -3481,8 +3530,13 @@ class Giveaway(commands.Cog, name="Giveaway"):
             f"• `--channel #kênh` : Phát giveaway sang kênh chỉ định\n\n"
             f"### 🔍 3. Kiểm Tra Role Bonus Người Thắng (Dành Cho Host)\n"
             f"`{prefix}ga check <id_tin_nhắn> [@NgườiThắng]` *(hoặc reply tin nhắn GA và gõ `{prefix}ga check [@User]`)*\n"
-            f"👉 Bot sẽ gửi một **dòng/tin nhắn riêng biệt** tổng kết quà gốc + các bonus role người đó có, **không làm thay đổi Embed gốc của Giveaway**.\n\n"
+            f"Xem bonus của giveaway; người thắng có bản ghi quyền lợi tại lúc quay. Không sửa embed gốc.\n\n"
             f"### 🎁 4. Quản Lý Role Bonus Phần Thưởng\n"
+            f"**Mọi thành viên:** `{prefix}ga bonus` xem menu; `{prefix}ga bonus check [@Member]` check role/quyền lợi hiện tại.\n"
+            f"**Quản lý:** `{prefix}ga bonus setup` → chọn role → nhập quyền lợi → **Lưu**.\n"
+            f"Cần Administrator, Quản lý Server hoặc Quản lý tin nhắn. Menu dùng chung server, chỉ tự áp dụng cho giveaway mới.\n"
+            f"GA cũ: `{prefix}ga edit <id>` → Prize Bonus → **Nạp menu bonus server** → áp dụng.\n"
+            f"Bonus là quà/điều kiện, không tự phát quà và không cộng vé (`--bonus` mới cộng vé).\n"
             f"• Thêm bonus: `{prefix}ga setbonus <id_tin_nhắn> @Role <quà_thêm>`\n"
             f"• Xóa bonus: `{prefix}ga delbonus <id_tin_nhắn> @Role`\n"
             f"• Xem danh sách: `{prefix}ga listbonus <id_tin_nhắn>`\n\n"
@@ -3603,6 +3657,53 @@ class Giveaway(commands.Cog, name="Giveaway"):
             view=trigger_view,
             delete_after=60
         )
+
+    @giveaway_group.group(name="bonus", invoke_without_command=True, brief="Menu quyền lợi theo role của server")
+    @commands.guild_only()
+    async def giveaway_bonus(self, ctx: commands.Context):
+        await self.giveaway_bonus_menu.callback(self, ctx)
+
+    @giveaway_bonus.command(name="setup", brief="Quản lý menu quyền lợi server")
+    @commands.guild_only()
+    async def giveaway_bonus_setup(self, ctx: commands.Context):
+        if not can_manage_catalog(ctx.author, ctx.guild):
+            await ctx.send(MANAGEMENT_HINT)
+            return
+        view = CatalogEditor(self.bonus_catalog, ctx.guild, ctx.author)
+        view.message = await ctx.send(embed=view.embed(), view=view, allowed_mentions=discord.AllowedMentions.none())
+
+    @giveaway_bonus.command(name="menu", brief="Xem role và quyền lợi đang áp dụng")
+    @commands.guild_only()
+    async def giveaway_bonus_menu(self, ctx: commands.Context):
+        benefits = self.bonus_catalog.active(ctx.guild)
+        view = BonusPages(ctx.author.id, 'Menu bonus hiện tại của server', [
+            f'<@&{rid}>\n{text}' for rid, text in benefits.items()
+        ])
+        view.message = await ctx.send(embed=view.embed(), view=view, allowed_mentions=discord.AllowedMentions.none())
+
+    @giveaway_bonus.command(name="check", brief="Kiểm tra quyền lợi của thành viên theo menu server")
+    @commands.guild_only()
+    async def giveaway_bonus_check(self, ctx: commands.Context, target: Optional[str] = None):
+        uid = parse_user_mention(target) if target else ctx.author.id
+        if uid is None:
+            await ctx.send(f'Cú pháp: {ctx.prefix}ga bonus check [@Member hoặc ID]')
+            return
+        try:
+            member = await ctx.guild.fetch_member(uid)
+        except discord.NotFound:
+            await ctx.send('Thành viên không còn trong server này.')
+            return
+        except discord.HTTPException:
+            await ctx.send('Chưa thể tải role của thành viên. Hãy thử lại sau.')
+            return
+        benefits = self.bonus_catalog.active(ctx.guild)
+        matched = matching_benefits(member, benefits)
+        view = BonusPages(ctx.author.id, f'Quyền lợi của {member.display_name} — {len(matched)}/{len(benefits)} mục', [
+            f"{'✅' if rid in matched else '❌'} <@&{rid}>\n{text}"
+            for rid, text in benefits.items()
+        ])
+        view.message = await ctx.send(content='Theo menu server và role hiện tại; quyền lợi chỉ áp dụng khi đáp ứng điều kiện.',
+            embed=view.embed(), view=view, allowed_mentions=discord.AllowedMentions.none())
 
     @giveaway_group.command(name="setbonus", brief="Thiết lập phần thưởng thêm cho Role trong Giveaway")
     async def giveaway_setbonus(self, ctx: commands.Context, message_id_or_role: str, role_or_text: str, *, bonus_text: Optional[str] = None):
@@ -3797,49 +3898,34 @@ class Giveaway(commands.Cog, name="Giveaway"):
                 await ctx.send("ℹ️ Giveaway này chưa có người thắng. Bạn có thể tag trực tiếp người chơi để kiểm tra: `i?ga check <id> @User`.", delete_after=12)
                 return
 
-        # Build clean, minimal embed
+        snapshots = as_dict(giveaway.get('extra_reqs')).get('winner_benefits', {})
+        current_winners = json.loads(giveaway.get('winners') or '[]')
         lines = []
         for uid in target_ids:
-            member = guild.get_member(uid)
-            if not member:
+            if str(uid) in snapshots:
+                bonuses = snapshots[str(uid)]
+                source = 'Quyền lợi lưu tại thời điểm trúng giải'
+            else:
                 try:
                     member = await guild.fetch_member(uid)
-                except Exception:
-                    member = None
-
-            matched_bonuses = []
-            if member:
-                for rid_str, bonus_desc in role_prizes.items():
-                    try:
-                        rid = int(rid_str)
-                        if member.get_role(rid) is not None:
-                            matched_bonuses.append((rid, bonus_desc))
-                    except ValueError:
-                        pass
-
-            if matched_bonuses:
-                bonus_str = ", ".join(f"<@&{r_id}> (**{b_desc}**)" for r_id, b_desc in matched_bonuses)
-                all_rewards = [prize] + [b[1] for b in matched_bonuses]
-                total_str = " + ".join(f"**{r}**" for r_id, r in enumerate(all_rewards))
-                lines.append(
-                    f"**Người chơi:** <@{uid}>\n"
-                    f"• **Bonus Role:** {bonus_str}\n"
-                    f"• **Tổng nhận:** {total_str}"
-                )
-            else:
-                lines.append(
-                    f"**Người chơi:** <@{uid}>\n"
-                    f"• **Bonus Role:** Không có\n"
-                    f"• **Tổng nhận:** **{prize}**"
-                )
-
-        embed = discord.Embed(
-            title=f"Kết Quả Kiểm Tra Bonus (ID: `{message_id}`)",
-            description="\n\n───────────────────\n\n".join(lines),
-            color=discord.Color.dark_embed()
-        )
-        embed.set_footer(text=f"Giải gốc: {prize}")
-        await ctx.send(embed=embed)
+                except discord.NotFound:
+                    lines.append(f'<@{uid}>: không còn trong server; không có bản ghi quyền lợi lúc quay.')
+                    continue
+                except discord.HTTPException:
+                    lines.append(f'<@{uid}>: chưa thể tải role, hãy thử lại sau.')
+                    continue
+                bonuses = matching_benefits(member, role_prizes)
+                source = 'Theo role hiện tại và quyền lợi đã lưu trong giveaway'
+            outcome = 'Người thắng hiện tại' if uid in current_winners else 'Không phải người thắng hiện tại'
+            lines.append(f'<@{uid}> — {outcome}\n{source}\nGiải chính: {prize}')
+            if not bonuses:
+                lines.append(f'<@{uid}>: không có quyền lợi role phù hợp.')
+            for rid, text in bonuses.items():
+                lines.append(f'<@{uid}> • <@&{rid}>: {text}')
+        # Legacy per-giveaway descriptions may be longer than catalog entries.
+        lines = [chunk[i:i+650] for chunk in lines for i in range(0, len(chunk), 650)]
+        view = BonusPages(ctx.author.id, f'Bonus theo giveaway {message_id}', lines)
+        view.message = await ctx.send(embed=view.embed(), view=view, allowed_mentions=discord.AllowedMentions.none())
 
     @giveaway_group.command(name="ketthuc", aliases=["end"], brief="Kết thúc sớm một giveaway đang chạy")
     async def giveaway_end(self, ctx: commands.Context, message_id: int):
@@ -3989,6 +4075,7 @@ class Giveaway(commands.Cog, name="Giveaway"):
 
                 # Filter candidate pool: exclude past winners and verify current guild membership only
                 valid_candidates = {}
+                candidate_members = {}
                 for uid, entries in candidate_pool.items():
                     if uid in all_excluded:
                         continue
@@ -4003,6 +4090,7 @@ class Giveaway(commands.Cog, name="Giveaway"):
                         continue
 
                     valid_candidates[uid] = min(max(1, entries), 100)
+                    candidate_members[uid] = member
 
                 new_winners = pick_weighted_winners(valid_candidates, count, exclude=all_excluded)
                 if not new_winners:
@@ -4014,6 +4102,9 @@ class Giveaway(commands.Cog, name="Giveaway"):
                     if w not in reroll_history:
                         reroll_history.append(w)
                 extra_reqs['reroll_history'] = reroll_history
+                snapshots = extra_reqs.setdefault('winner_benefits', {})
+                for uid in new_winners:
+                    snapshots[str(uid)] = matching_benefits(candidate_members[uid], as_dict(giveaway.get('role_bonus_prizes')))
 
                 success, err = await self.update_and_sync_giveaway(
                     message_id,
@@ -4119,6 +4210,7 @@ class Giveaway(commands.Cog, name="Giveaway"):
                 env_bonus = self.get_env_bonus_roles()
 
                 valid_candidates = {}
+                candidate_members = {}
                 for uid in all_candidate_uids:
                     member = guild.get_member(uid)
                     if not member:
@@ -4149,6 +4241,7 @@ class Giveaway(commands.Cog, name="Giveaway"):
 
                     entries = min(max(1, entries), 100)
                     valid_candidates[uid] = entries
+                    candidate_members[uid] = member
 
                 if not valid_candidates:
                     extra_reqs_raw = giveaway.get('extra_reqs') or {}
@@ -4212,6 +4305,10 @@ class Giveaway(commands.Cog, name="Giveaway"):
                 extra_reqs["original_winners"] = winners
                 extra_reqs["reroll_history"] = []
                 extra_reqs["eligible_candidates"] = valid_candidates
+                extra_reqs['winner_benefits'] = {
+                    str(uid): matching_benefits(candidate_members[uid], as_dict(giveaway.get('role_bonus_prizes')))
+                    for uid in winners
+                }
 
                 self.update_participants(message_id, valid_candidates)
                 success, err = await self.update_and_sync_giveaway(
