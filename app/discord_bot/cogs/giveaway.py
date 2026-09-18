@@ -4121,7 +4121,7 @@ class Giveaway(commands.Cog, name="Giveaway"):
                 prize = giveaway['prize']
                 host_id = giveaway['host_id']
                 new_winners_mentions = ", ".join(f"<@{w_id}>" for w_id in new_winners)
-                await channel.send(f"🎉 **Reroll:** Chúc mừng {new_winners_mentions} đã thắng giải **{prize}**! Liên hệ <@{host_id}> để nhận thưởng.")
+                await channel.send(f"<a:zh_laplanhtrang:1537834940303937586> ***Chúc mừng Kim Chủ {new_winners_mentions} đã thắng lớn {prize}! Vận may hôm nay đã mỉm cười với ngài*** <a:zh_lay:1537526778191679559>")
         finally:
             if message_id in self.end_locks and not lock.locked():
                 self.end_locks.pop(message_id, None)
@@ -4329,7 +4329,7 @@ class Giveaway(commands.Cog, name="Giveaway"):
                     return
 
                 winners_mentions = ", ".join(f"<@{w_id}>" for w_id in winners)
-                await channel.send(f" <a:wing:1526230985987981393>*Chúc mừng {winners_mentions} đã thắng giải **{prize}**<a:key:1526234974150459593> Liên hệ <@{host_id}> để nhận thưởng.*")
+                await channel.send(f"<a:zh_laplanhtrang:1537834940303937586> ***Chúc mừng Kim Chủ {winners_mentions} đã thắng lớn {prize}! Vận may hôm nay đã mỉm cười với ngài*** <a:zh_lay:1537526778191679559>")
         finally:
             if message_id in self.end_locks and not lock.locked():
                 self.end_locks.pop(message_id, None)
