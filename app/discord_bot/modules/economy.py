@@ -18,7 +18,7 @@ from app.config import config
 Entry = Tuple[int, int, int]
 DATABASE_PATH = Path(config.storage.database_path)
 LEGACY_DATABASE_PATH = Path(__file__).resolve().parents[3] / "economy.db"
-SCHEMA_VERSION = 53
+SCHEMA_VERSION = 55
 
 
 logger = logging.getLogger(__name__)
@@ -1007,6 +1007,50 @@ def _migration_53_add_marry_contributions(cur: sqlite3.Cursor) -> None:
         pass
 
 
+def _migration_54_add_masoi_faction_ranks(cur: sqlite3.Cursor) -> None:
+    # Historical aggregate points cannot be attributed to factions. Preserve them.
+    cur.execute(
+        """CREATE TABLE IF NOT EXISTS user_masoi_faction_stats (
+            user_id INTEGER NOT NULL,
+            faction TEXT NOT NULL CHECK(faction IN ('WOLF', 'SOLO', 'VILLAGER')),
+            points INTEGER NOT NULL DEFAULT 0,
+            plays INTEGER NOT NULL DEFAULT 0,
+            wins INTEGER NOT NULL DEFAULT 0,
+            losses INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (user_id, faction)
+        )"""
+    )
+    cur.execute(
+        """CREATE INDEX IF NOT EXISTS idx_masoi_faction_leaderboard
+           ON user_masoi_faction_stats(faction, points DESC, wins DESC, user_id)"""
+    )
+    cur.execute(
+        """CREATE TABLE IF NOT EXISTS masoi_rank_matches (
+            match_id TEXT NOT NULL PRIMARY KEY,
+            settled_at INTEGER NOT NULL
+        )"""
+    )
+
+
+def _migration_55_add_masoi_sessions(cur: sqlite3.Cursor) -> None:
+    cur.execute(
+        """CREATE TABLE IF NOT EXISTS masoi_sessions (
+            match_id TEXT NOT NULL PRIMARY KEY,
+            guild_id INTEGER NOT NULL,
+            channel_id INTEGER NOT NULL,
+            state_json TEXT NOT NULL,
+            updated_at INTEGER NOT NULL
+        )"""
+    )
+    cur.execute(
+        """CREATE TABLE IF NOT EXISTS masoi_match_history (
+            match_id TEXT NOT NULL PRIMARY KEY,
+            state_json TEXT NOT NULL,
+            finished_at INTEGER NOT NULL
+        )"""
+    )
+
+
 MIGRATIONS: dict[int, Callable[[sqlite3.Cursor], None]] = {
     1: _migration_1_create_economy,
     2: _migration_2_add_indexes,
@@ -1061,6 +1105,8 @@ MIGRATIONS: dict[int, Callable[[sqlite3.Cursor], None]] = {
     51: _migration_51_update_gold_price_to_10m,
     52: _migration_52_add_sports_engine_v2,
     53: _migration_53_add_marry_contributions,
+    54: _migration_54_add_masoi_faction_ranks,
+    55: _migration_55_add_masoi_sessions,
 }
 
 
@@ -1247,6 +1293,10 @@ class Economy:
             "user_world_boss_damage",
             "masoi_vip",
             "user_masoi_stats",
+            "user_masoi_faction_stats",
+            "masoi_rank_matches",
+            "masoi_sessions",
+            "masoi_match_history",
             "wallet_transactions",
         ]
         for tbl in tables_to_clear:
@@ -4865,38 +4915,123 @@ class Economy:
             "losses": row[3], "wolf_wins": row[4], "villager_wins": row[5], "tanner_wins": row[6]
         }
 
-    def add_masoi_points(self, user_id: int, points_delta: int, is_win: bool, faction: str = "VILLAGER") -> None:
-        """Updates Ma Sói rank points and game stats for a player."""
-        stats = self.get_masoi_stats(user_id)
-        new_points = max(0, stats["points"] + points_delta)
-        new_plays = stats["plays"] + 1
-        new_wins = stats["wins"] + (1 if is_win else 0)
-        new_losses = stats["losses"] + (0 if is_win else 1)
-        
-        wolf_wins = stats["wolf_wins"] + (1 if is_win and faction == "WEREWOLF" else 0)
-        villager_wins = stats["villager_wins"] + (1 if is_win and faction == "VILLAGER" else 0)
-        tanner_wins = stats["tanner_wins"] + (1 if is_win and faction == "INDEPENDENT" else 0)
+    @staticmethod
+    def _masoi_rank_faction(faction: str) -> str:
+        aliases = {
+            "WEREWOLF": "WOLF", "INDEPENDENT": "SOLO", "SERIAL_KILLER": "SOLO",
+            "PIPER": "SOLO", "WHITE_WOLF": "SOLO", "LOVERS": "SOLO",
+        }
+        faction = aliases.get(faction, faction)
+        if faction not in ("WOLF", "SOLO", "VILLAGER"):
+            raise ValueError("Invalid Ma Sói rank faction")
+        return faction
 
+    def save_masoi_session(self, state: dict) -> None:
+        payload = json.dumps(state, ensure_ascii=False, allow_nan=False)
+        with self.transaction():
+            self.cur.execute(
+                """INSERT INTO masoi_sessions(match_id, guild_id, channel_id, state_json, updated_at)
+                   VALUES(?, ?, ?, ?, ?) ON CONFLICT(match_id) DO UPDATE SET
+                   state_json=excluded.state_json, updated_at=excluded.updated_at""",
+                (state["match_id"], state["guild_id"], state["channel_id"], payload, int(time.time())),
+            )
+
+    def get_masoi_sessions(self) -> list[dict]:
+        self.cur.execute("SELECT match_id, guild_id, channel_id, state_json FROM masoi_sessions ORDER BY updated_at, match_id")
+        return [{"match_id": row[0], "guild_id": row[1], "channel_id": row[2], "state_json": row[3]} for row in self.cur.fetchall()]
+
+    def delete_masoi_session(self, match_id: str) -> None:
+        with self.transaction():
+            self.cur.execute("DELETE FROM masoi_sessions WHERE match_id=?", (match_id,))
+
+    def finish_masoi_session(self, state: dict) -> None:
+        payload = json.dumps(state, ensure_ascii=False, allow_nan=False)
+        with self.transaction():
+            self.cur.execute(
+                "INSERT INTO masoi_match_history(match_id, state_json, finished_at) VALUES (?, ?, ?) ON CONFLICT(match_id) DO NOTHING",
+                (state["match_id"], payload, int(time.time())),
+            )
+            self.cur.execute("DELETE FROM masoi_sessions WHERE match_id=?", (state["match_id"],))
+
+    def get_masoi_rank_stats(self, user_id: int, faction: str) -> dict:
+        faction = self._masoi_rank_faction(faction)
         self.cur.execute(
-            """INSERT INTO user_masoi_stats (user_id, points, plays, wins, losses, wolf_wins, villager_wins, tanner_wins)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-               ON CONFLICT(user_id) DO UPDATE SET
-                 points = EXCLUDED.points,
-                 plays = EXCLUDED.plays,
-                 wins = EXCLUDED.wins,
-                 losses = EXCLUDED.losses,
-                 wolf_wins = EXCLUDED.wolf_wins,
-                 villager_wins = EXCLUDED.villager_wins,
-                 tanner_wins = EXCLUDED.tanner_wins""",
-            (user_id, new_points, new_plays, new_wins, new_losses, wolf_wins, villager_wins, tanner_wins)
+            "SELECT points, plays, wins, losses FROM user_masoi_faction_stats WHERE user_id=? AND faction=?",
+            (user_id, faction),
         )
-        self.conn.commit()
+        row = self.cur.fetchone() or (0, 0, 0, 0)
+        return dict(user_id=user_id, faction=faction, points=row[0], plays=row[1], wins=row[2], losses=row[3])
 
-    def get_masoi_leaderboard(self, limit: int = 10) -> list[tuple[int, int, int, int]]:
-        """Returns list of (user_id, points, plays, wins) ordered by points DESC."""
+    def _write_masoi_result(self, user_id: int, points_delta: int, is_win: bool, faction: str):
+        """Called inside a transaction; SQL increments prevent stale read/modify/write."""
+        wins, losses = int(is_win), int(not is_win)
         self.cur.execute(
-            "SELECT user_id, points, plays, wins FROM user_masoi_stats ORDER BY points DESC, wins DESC LIMIT ?",
-            (limit,)
+            """INSERT INTO user_masoi_faction_stats (user_id, faction, points, plays, wins, losses)
+               VALUES (?, ?, ?, 1, ?, ?)
+               ON CONFLICT(user_id, faction) DO UPDATE SET
+                 points = user_masoi_faction_stats.points + excluded.points,
+                 plays = user_masoi_faction_stats.plays + 1,
+                 wins = user_masoi_faction_stats.wins + excluded.wins,
+                 losses = user_masoi_faction_stats.losses + excluded.losses""",
+            (user_id, faction, points_delta, wins, losses),
+        )
+        # Retain lifetime aggregate stats and custom badges for existing consumers.
+        self.cur.execute(
+            """INSERT INTO user_masoi_stats (user_id, points, plays, wins, losses, wolf_wins, villager_wins)
+               VALUES (?, ?, 1, ?, ?, ?, ?)
+               ON CONFLICT(user_id) DO UPDATE SET
+                 points = user_masoi_stats.points + excluded.points,
+                 plays = user_masoi_stats.plays + 1,
+                 wins = user_masoi_stats.wins + excluded.wins,
+                 losses = user_masoi_stats.losses + excluded.losses,
+                 wolf_wins = user_masoi_stats.wolf_wins + excluded.wolf_wins,
+                 villager_wins = user_masoi_stats.villager_wins + excluded.villager_wins""",
+            (user_id, points_delta, wins, losses, int(is_win and faction == "WOLF"), int(is_win and faction == "VILLAGER")),
+        )
+
+    def _validate_masoi_result(self, user_id: int, points_delta: int, is_win: bool, faction: str) -> str:
+        if type(user_id) is not int or user_id <= 0 or type(points_delta) is not int or type(is_win) is not bool:
+            raise ValueError("Invalid Ma Sói result")
+        if (is_win and points_delta <= 0) or (not is_win and points_delta >= 0):
+            raise ValueError("A win must add points and a loss must subtract points")
+        return self._masoi_rank_faction(faction)
+
+    def add_masoi_points(self, user_id: int, points_delta: int, is_win: bool, faction: str = "VILLAGER") -> None:
+        """Compatibility API for a single signed result; live games use batch settlement."""
+        rank_faction = self._validate_masoi_result(user_id, points_delta, is_win, faction)
+        with self.transaction():
+            self._write_masoi_result(user_id, points_delta, is_win, rank_faction)
+
+    def settle_masoi_match(self, match_id: str, results: list[tuple[int, int, bool, str]]) -> bool:
+        """All players commit atomically, at most once per match ID."""
+        if not isinstance(match_id, str) or not match_id.strip() or not results:
+            raise ValueError("Match ID and results are required")
+        normalized = []
+        seen = set()
+        for user_id, delta, won, faction in results:
+            faction = self._validate_masoi_result(user_id, delta, won, faction)
+            if user_id in seen:
+                raise ValueError("Duplicate player in Ma Sói settlement")
+            seen.add(user_id)
+            normalized.append((user_id, delta, won, faction))
+        with self.transaction():
+            self.cur.execute(
+                "INSERT INTO masoi_rank_matches(match_id, settled_at) VALUES (?, ?) ON CONFLICT(match_id) DO NOTHING",
+                (match_id, int(time.time())),
+            )
+            if self.cur.rowcount == 0:
+                return False
+            for result in normalized:
+                self._write_masoi_result(*result)
+        return True
+
+    def get_masoi_leaderboard(self, limit: int = 10, faction: str = "VILLAGER") -> list[tuple[int, int, int, int]]:
+        """A separate leaderboard for each personal-objective faction."""
+        faction = self._masoi_rank_faction(faction)
+        self.cur.execute(
+            """SELECT user_id, points, plays, wins FROM user_masoi_faction_stats
+               WHERE faction=? AND plays > 0 ORDER BY points DESC, wins DESC, user_id ASC LIMIT ?""",
+            (faction, max(1, min(100, int(limit)))),
         )
         return self.cur.fetchall()
 

@@ -7,6 +7,7 @@ Xử lý toàn bộ UI (Buttons, Embeds, Dropdowns, Ephemeral) và Luồng Ván 
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
 import logging
 import random
@@ -19,16 +20,31 @@ from discord.ext import commands
 
 from app.discord_bot.modules.helpers import EMOJI_VND, make_embed
 from app.discord_bot.modules.masoi_engine import (
+    ActionIntent,
+    ActionKind,
     Faction,
     GamePhase,
     MasoiGame,
     MasoiPlayer,
     MasoiSettings,
     NightEvent,
+    RankFaction,
     ReplayLog,
     Role,
     get_rank_tier,
 )
+
+from app.discord_bot.modules.masoi_ui import (
+    NightActionView, NightGuardView, NightWolfView, NightSeerView, NightHarlotView,
+    NightInvestigatorView, NightWolfSeerView, NightSerialKillerView, NightWhiteWolfView,
+    NightPhantomWolfView, NightGirlView, NightPiperView, MayorSuccessionView,
+    NightCupidView, NightWitchView, NightWitchPoisonView, NightHunterView,
+    DayDiscussionView, DayVoteView, RankboardView, GameEndView, ReplayView,
+    format_replay_story_line,
+)
+
+from app.discord_bot.modules.masoi_flow import MasoiFlowMixin
+from app.discord_bot.modules.masoi_recovery import MasoiRecoveryMixin
 
 logger = logging.getLogger(__name__)
 
@@ -116,6 +132,10 @@ class LobbyView(discord.ui.View):
         self.stop()
         await interaction.response.defer()
         task = asyncio.create_task(self.cog.start_game(self.game, interaction.message))
+        if hasattr(self.cog, "_game_tasks"):
+            self.cog._game_tasks[self.game.rank_match_id] = task
+            task.add_done_callback(lambda done: self.cog._game_tasks.pop(self.game.rank_match_id, None)
+                                   if self.cog._game_tasks.get(self.game.rank_match_id) is done else None)
         # Đảm bảo exception từ task không bị nuốt im lặng
         task.add_done_callback(
             lambda t: logger.error("Lỗi nghiêm trọng khi khởi động ván Ma Sói: %s", t.exception(), exc_info=t.exception())
@@ -186,10 +206,11 @@ class LobbyView(discord.ui.View):
             "• **Cách mở:** Dùng lệnh `!masoievent` hoặc bật trong Cài Đặt (Host).\n"
             "• **Cơ chế:** Mỗi đêm ngẫu nhiên kích hoạt **1 Thẻ Sự Kiện bí ẩn** tác động lên toàn thể người chơi.\n"
             "• **Ví dụ các sự kiện:**\n"
-            "  └ 🌫️ **Sương Mù Dày Đặc:** Tiên Tri & Thám Tử bị mù, không thể soi trong đêm.\n"
-            "  └ 🌕 **Đêm Trăng Tròn:** Sói cuồng bạo được cắn 2 người cùng lúc.\n"
-            "  └ 🌑 **Nhật Thực:** Phong tỏa mọi chức năng đêm của Bảo Vệ & Phù Thủy.\n"
-            "  └ 🍷 **Dạ Hội Bình Yên:** Đêm an lành, không ai bị thương hay bị cắn.\n\n"
+            "  └ 🌫️ **Sương Mù Dày Đặc:** Tiên Tri có 50% khả năng nhận kết quả không xác định.\n"
+            "  └ 🌕 **Trăng Máu:** Bầy Sói được cắn 2 người trong đêm.\n"
+            "  └ ☀️ **Nhật Thực:** Bỏ qua lượt bỏ phiếu treo cổ ban ngày.\n"
+            "  └ 🧪 **Phong Ấn Dược Liệu:** Phù Thủy không được dùng bình thuốc.\n"
+            "  └ ✨ **Thánh Quang:** Hóa giải đòn cắn của bầy Sói, không chặn các nguyên nhân chết khác.\n\n"
             "🌕 **3. CHẾ ĐỘ TIÊU CHUẨN (STANDARD MODE)**\n"
             "• **Cách mở:** Dùng lệnh `!masoi` mặc định.\n"
             "• **Cơ chế:** Ván đấu Ma Sói cổ điển. Sói ẩn nấp đi săn ban đêm, Dân Làng thảo luận và bỏ phiếu treo cổ ban ngày.\n\n"
@@ -228,6 +249,12 @@ class SettingsView(discord.ui.View):
         self.lobby_message = lobby_message
         self.update_button_labels()
 
+    async def interaction_check(self, interaction: discord.Interaction):
+        if interaction.user.id != self.game.host_id or self.game.phase != GamePhase.LOBBY:
+            await interaction.response.send_message("❌ Chỉ Host được đổi cài đặt khi phòng còn chờ.", ephemeral=True)
+            return False
+        return True
+
     def update_button_labels(self):
         s = self.game.settings
         self.btn_reveal.label = f"Hiện vai trò: {'Hiện ngay ✅' if s.reveal_roles_on_death else 'Ẩn tới cuối'}"
@@ -255,6 +282,8 @@ class SettingsView(discord.ui.View):
 
     @discord.ui.button(style=discord.ButtonStyle.secondary, row=0)
     async def btn_reveal(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not await self.interaction_check(interaction):
+            return
         if not await self.check_vip_host(interaction, "Hiện vai trò người chết"):
             return
         self.game.settings.cycle_reveal_roles()
@@ -264,6 +293,8 @@ class SettingsView(discord.ui.View):
 
     @discord.ui.button(style=discord.ButtonStyle.secondary, row=0)
     async def btn_tanner(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not await self.interaction_check(interaction):
+            return
         self.game.settings.cycle_tanner()
         self.cog.save_game_settings(self.game)
         self.update_button_labels()
@@ -271,6 +302,8 @@ class SettingsView(discord.ui.View):
 
     @discord.ui.button(style=discord.ButtonStyle.secondary, row=1)
     async def btn_vote(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not await self.interaction_check(interaction):
+            return
         self.game.settings.cycle_vote_display()
         self.cog.save_game_settings(self.game)
         self.update_button_labels()
@@ -278,6 +311,8 @@ class SettingsView(discord.ui.View):
 
     @discord.ui.button(style=discord.ButtonStyle.secondary, row=1)
     async def btn_chat(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not await self.interaction_check(interaction):
+            return
         self.game.settings.cycle_dead_chat()
         self.cog.save_game_settings(self.game)
         self.update_button_labels()
@@ -285,6 +320,8 @@ class SettingsView(discord.ui.View):
 
     @discord.ui.button(style=discord.ButtonStyle.secondary, row=2)
     async def btn_disc_time(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not await self.interaction_check(interaction):
+            return
         if not await self.check_vip_host(interaction, "Thời gian thảo luận"):
             return
         self.game.settings.cycle_discussion_time()
@@ -294,6 +331,8 @@ class SettingsView(discord.ui.View):
 
     @discord.ui.button(style=discord.ButtonStyle.secondary, row=2)
     async def btn_night_time(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not await self.interaction_check(interaction):
+            return
         if not await self.check_vip_host(interaction, "Thời gian đêm"):
             return
         self.game.settings.cycle_night_time()
@@ -303,6 +342,8 @@ class SettingsView(discord.ui.View):
 
     @discord.ui.button(style=discord.ButtonStyle.secondary, row=3)
     async def btn_rank(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not await self.interaction_check(interaction):
+            return
         self.game.settings.cycle_rank()
         self.cog.save_game_settings(self.game)
         self.update_button_labels()
@@ -310,6 +351,8 @@ class SettingsView(discord.ui.View):
 
     @discord.ui.button(style=discord.ButtonStyle.secondary, row=3)
     async def btn_events(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not await self.interaction_check(interaction):
+            return
         self.game.settings.cycle_events()
         self.cog.save_game_settings(self.game)
         self.update_button_labels()
@@ -319,6 +362,8 @@ class SettingsView(discord.ui.View):
 
     @discord.ui.button(style=discord.ButtonStyle.secondary, row=3)
     async def btn_boss(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not await self.interaction_check(interaction):
+            return
         self.game.settings.cycle_boss_mode()
         self.cog.save_game_settings(self.game)
         self.update_button_labels()
@@ -328,12 +373,16 @@ class SettingsView(discord.ui.View):
 
     @discord.ui.button(style=discord.ButtonStyle.primary, emoji="🎭", row=3)
     async def btn_custom_roles(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not await self.interaction_check(interaction):
+            return
         view = CustomRolesConfigView(self.game, self.cog, self, self.lobby_message)
         embed = view.get_embed()
         await interaction.response.edit_message(embed=embed, view=view)
 
     @discord.ui.button(label="Lưu & Quay Lại Lobby", style=discord.ButtonStyle.success, emoji="💾", row=4)
     async def btn_save(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not await self.interaction_check(interaction):
+            return
         self.cog.save_game_settings(self.game)
         await interaction.response.edit_message(content="✅ Đã lưu cài đặt!", embed=None, view=None)
         await self.cog.update_lobby_embed(self.game, self.lobby_message)
@@ -433,6 +482,12 @@ class CustomRolesConfigView(discord.ui.View):
         btn_back.callback = self.back_callback
         self.add_item(btn_back)
 
+    async def interaction_check(self, interaction: discord.Interaction):
+        if interaction.user.id != self.game.host_id or self.game.phase != GamePhase.LOBBY:
+            await interaction.response.send_message("❌ Chỉ Host được đổi cài đặt khi phòng còn chờ.", ephemeral=True)
+            return False
+        return True
+
     def get_embed(self) -> discord.Embed:
         s = self.game.settings
         mode_str = "Tự Động (AUTO)" if s.role_setup_mode == "AUTO" else "Tùy Chỉnh (CUSTOM)"
@@ -470,6 +525,8 @@ class CustomRolesConfigView(discord.ui.View):
         return True
 
     async def wolves_callback(self, interaction: discord.Interaction):
+        if not await self.interaction_check(interaction):
+            return
         if not await self.check_vip_host(interaction):
             return
         val = int(self.select_wolves.values[0])
@@ -480,6 +537,8 @@ class CustomRolesConfigView(discord.ui.View):
         await interaction.response.edit_message(embed=self.get_embed(), view=self)
 
     async def roles_callback(self, interaction: discord.Interaction):
+        if not await self.interaction_check(interaction):
+            return
         if not await self.check_vip_host(interaction):
             return
         selected = self.select_roles.values
@@ -490,6 +549,8 @@ class CustomRolesConfigView(discord.ui.View):
         await interaction.response.edit_message(embed=self.get_embed(), view=self)
 
     async def toggle_mode_callback(self, interaction: discord.Interaction):
+        if not await self.interaction_check(interaction):
+            return
         if not await self.check_vip_host(interaction):
             return
         s = self.game.settings
@@ -499,938 +560,14 @@ class CustomRolesConfigView(discord.ui.View):
         await interaction.response.edit_message(embed=self.get_embed(), view=self)
 
     async def back_callback(self, interaction: discord.Interaction):
+        if not await self.interaction_check(interaction):
+            return
         self.parent_view.update_button_labels()
         await interaction.response.edit_message(embed=self.cog.build_settings_embed(self.game), view=self.parent_view)
 
 
 # ==============================================================================
 #  Night Ephemeral Views
-# ==============================================================================
-
-class NightGuardView(discord.ui.View):
-    """View Ephemeral chọn mục tiêu bảo vệ cho Bảo Vệ."""
-    def __init__(self, game: MasoiGame, guard_id: int):
-        super().__init__(timeout=game.settings.night_time)
-        self.game = game
-        self.guard_id = guard_id
-        self.selected_target_id: Optional[int] = None
-
-        guard_p = game.players.get(guard_id)
-        last_protected = guard_p.protected_last_night if guard_p else None
-
-        options = []
-        for p in game.get_alive_players():
-            if p.user_id == last_protected:
-                continue
-            options.append(discord.SelectOption(label=p.display_name, value=str(p.user_id), emoji="🛡️"))
-
-        if options:
-            self.select = discord.ui.Select(placeholder="🛡️ Chọn 1 người để bảo vệ...", options=options[:25], row=0)
-            self.select.callback = self.select_callback
-            self.add_item(self.select)
-
-            self.confirm_btn = discord.ui.Button(label="Xác nhận lựa chọn", style=discord.ButtonStyle.primary, row=1)
-            self.confirm_btn.callback = self.confirm_callback
-            self.add_item(self.confirm_btn)
-
-    async def select_callback(self, interaction: discord.Interaction):
-        self.selected_target_id = int(self.select.values[0])
-        await interaction.response.defer()
-
-    async def confirm_callback(self, interaction: discord.Interaction):
-        if not self.selected_target_id and hasattr(self, "select") and self.select.values:
-            self.selected_target_id = int(self.select.values[0])
-
-        if not self.selected_target_id:
-            await interaction.response.send_message("❌ Vui lòng chọn 1 người từ danh sách trước!", ephemeral=True)
-            return
-
-        target_id = self.selected_target_id
-        self.game.night_guard_target = target_id
-        target_p = self.game.players.get(target_id)
-        name = target_p.display_name if target_p else "Người đã chọn"
-        self.stop()
-
-        embed = interaction.message.embeds[0] if interaction.message.embeds else None
-        if embed:
-            divider = "──────────────────────────────────────"
-            embed.add_field(name="\u200b", value=f"{divider}\n✅ **Đã ghi nhận:** bảo vệ **{name}**", inline=False)
-
-        await interaction.response.edit_message(embed=embed, view=None)
-
-
-class NightWolfView(discord.ui.View):
-    """View Ephemeral cho từng Sói bỏ phiếu cắn."""
-    def __init__(self, game: MasoiGame, wolf_id: int):
-        super().__init__(timeout=game.settings.night_time)
-        self.game = game
-        self.wolf_id = wolf_id
-        self.selected_target_id: Optional[int] = None
-
-        options = []
-        for p in game.get_alive_players():
-            if not p.is_wolf:
-                options.append(discord.SelectOption(label=p.display_name, value=str(p.user_id), emoji="🎯"))
-
-        if options:
-            self.select = discord.ui.Select(placeholder="🎯 Chọn 1 người...", options=options[:25], row=0)
-            self.select.callback = self.select_callback
-            self.add_item(self.select)
-
-            self.confirm_btn = discord.ui.Button(label="Xác nhận lựa chọn", style=discord.ButtonStyle.primary, row=1)
-            self.confirm_btn.callback = self.confirm_callback
-            self.add_item(self.confirm_btn)
-
-    async def select_callback(self, interaction: discord.Interaction):
-        self.selected_target_id = int(self.select.values[0])
-        await interaction.response.defer()
-
-    async def confirm_callback(self, interaction: discord.Interaction):
-        if not self.selected_target_id and hasattr(self, "select") and self.select.values:
-            self.selected_target_id = int(self.select.values[0])
-
-        if not self.selected_target_id:
-            await interaction.response.send_message("❌ Vui lòng chọn 1 người từ danh sách trước!", ephemeral=True)
-            return
-
-        target_id = self.selected_target_id
-        self.game.night_wolf_votes[self.wolf_id] = target_id
-        target_p = self.game.players.get(target_id)
-        name = target_p.display_name if target_p else "Mục tiêu"
-        self.stop()
-
-        embed = interaction.message.embeds[0] if interaction.message.embeds else None
-        if embed:
-            divider = "──────────────────────────────────────"
-            embed.add_field(name="\u200b", value=f"{divider}\n✅ **Đã ghi nhận:** cắn **{name}**", inline=False)
-
-        await interaction.response.edit_message(embed=embed, view=None)
-
-        if hasattr(self.game, "cog") and self.game.cog:
-            await self.game.cog.update_witch_dm(self.game)
-
-
-class NightSeerView(discord.ui.View):
-    """View Ephemeral chọn người để soi phe cho Tiên Tri."""
-    def __init__(self, game: MasoiGame, seer_id: int):
-        super().__init__(timeout=game.settings.night_time)
-        self.game = game
-        self.seer_id = seer_id
-        self.selected_target_id: Optional[int] = None
-
-        options = []
-        for p in game.get_alive_players():
-            if p.user_id != seer_id:
-                options.append(discord.SelectOption(label=p.display_name, value=str(p.user_id), emoji="🔮"))
-
-        if options:
-            self.select = discord.ui.Select(placeholder="🔮 Chọn 1 người để soi phe...", options=options[:25], row=0)
-            self.select.callback = self.select_callback
-            self.add_item(self.select)
-
-            self.confirm_btn = discord.ui.Button(label="Xác nhận lựa chọn", style=discord.ButtonStyle.primary, row=1)
-            self.confirm_btn.callback = self.confirm_callback
-            self.add_item(self.confirm_btn)
-
-    async def select_callback(self, interaction: discord.Interaction):
-        self.selected_target_id = int(self.select.values[0])
-        await interaction.response.defer()
-
-    async def confirm_callback(self, interaction: discord.Interaction):
-        if not self.selected_target_id and hasattr(self, "select") and self.select.values:
-            self.selected_target_id = int(self.select.values[0])
-
-        if not self.selected_target_id:
-            await interaction.response.send_message("❌ Vui lòng chọn 1 người từ danh sách trước!", ephemeral=True)
-            return
-
-        target_id = self.selected_target_id
-        self.game.night_seer_target = target_id
-        target_p = self.game.players.get(target_id)
-        
-        if target_p:
-            seer_p = self.game.players.get(self.seer_id)
-            if seer_p and seer_p.is_roleblocked:
-                res_str = "❌ **Kỹ năng của bạn đã bị phong tỏa đêm nay!** (Do bị Vũ Nữ ghé thăm)"
-            elif target_p.is_wolf or target_p.role == Role.LYCAN:
-                res_str = f"🐺 **{target_p.display_name}** là **SÓI**!"
-                if seer_p:
-                    seer_p.seer_found_wolf = True
-            else:
-                # Kiểm tra Sói Ảo Ảnh đang giả dạng người này
-                phantom_deception = (
-                    self.game.night_phantom_wolf_target == target_id
-                    and any(
-                        p.role == Role.PHANTOM_WOLF and p.is_alive and not p.is_roleblocked
-                        for p in self.game.players.values()
-                    )
-                )
-                if phantom_deception:
-                    res_str = f"🐺 **{target_p.display_name}** là **SÓI**!"
-                    # Không trao điểm seer_found_wolf vì kết quả bị đánh lừa
-                else:
-                    res_str = f"👤 **{target_p.display_name}** là **DÂN LÀNG** (không phải Sói)."
-            self.game.night_seer_result = res_str
-            name = target_p.display_name
-        else:
-            res_str = "Không tìm thấy thông tin."
-            name = "Mục tiêu"
-
-        self.game.seer_dm_message = interaction.message
-        self.stop()
-
-        embed = interaction.message.embeds[0] if interaction.message.embeds else None
-        if embed:
-            divider = "──────────────────────────────────────"
-            embed.add_field(name="\u200b", value=f"{divider}\n✅ **Đã ghi nhận:** soi **{name}**\n🔮 **Kết quả:** {res_str}", inline=False)
-
-        await interaction.response.edit_message(embed=embed, view=None)
-
-
-class NightHarlotView(discord.ui.View):
-    """View Ephemeral chọn 1 người để phong tỏa kỹ năng cho Vũ Nữ."""
-    def __init__(self, game: MasoiGame, harlot_id: int):
-        super().__init__(timeout=game.settings.night_time)
-        self.game = game
-        self.harlot_id = harlot_id
-        self.selected_target_id: Optional[int] = None
-
-        options = []
-        for p in game.get_alive_players():
-            if p.user_id != harlot_id:
-                options.append(discord.SelectOption(label=p.display_name, value=str(p.user_id), emoji="💃"))
-
-        if options:
-            self.select = discord.ui.Select(placeholder="💃 Chọn 1 người để 'thăm'...", options=options[:25], row=0)
-            self.select.callback = self.select_callback
-            self.add_item(self.select)
-
-            self.confirm_btn = discord.ui.Button(label="Xác nhận lựa chọn", style=discord.ButtonStyle.primary, row=1)
-            self.confirm_btn.callback = self.confirm_callback
-            self.add_item(self.confirm_btn)
-
-    async def select_callback(self, interaction: discord.Interaction):
-        self.selected_target_id = int(self.select.values[0])
-        await interaction.response.defer()
-
-    async def confirm_callback(self, interaction: discord.Interaction):
-        if not self.selected_target_id and hasattr(self, "select") and self.select.values:
-            self.selected_target_id = int(self.select.values[0])
-
-        if not self.selected_target_id:
-            await interaction.response.send_message("❌ Vui lòng chọn 1 người từ danh sách trước!", ephemeral=True)
-            return
-
-        target_id = self.selected_target_id
-        self.game.night_harlot_target = target_id
-        target_p = self.game.players.get(target_id)
-        name = target_p.display_name if target_p else "Mục tiêu"
-        self.stop()
-
-        embed = interaction.message.embeds[0] if interaction.message.embeds else None
-        if embed:
-            divider = "──────────────────────────────────────"
-            embed.add_field(name="\u200b", value=f"{divider}\n✅ **Đã ghi nhận:** 'thăm' **{name}** (chặn kỹ năng đêm)", inline=False)
-
-        await interaction.response.edit_message(embed=embed, view=None)
-
-
-class NightInvestigatorView(discord.ui.View):
-    """View Ephemeral chọn 2 người chơi để kiểm tra có Sói không cho Thám Tử."""
-    def __init__(self, game: MasoiGame, inv_id: int):
-        super().__init__(timeout=game.settings.night_time)
-        self.game = game
-        self.inv_id = inv_id
-
-        options = []
-        for p in game.get_alive_players():
-            if p.user_id != inv_id:
-                options.append(discord.SelectOption(label=p.display_name, value=str(p.user_id), emoji="👁️"))
-
-        if options:
-            req_count = min(2, len(options))
-            self.select = discord.ui.Select(
-                placeholder=f"👁️ Chọn {req_count} người chơi để kiểm tra...",
-                min_values=req_count,
-                max_values=req_count,
-                options=options[:25],
-                row=0
-            )
-            self.select.callback = self.select_callback
-            self.add_item(self.select)
-
-            self.confirm_btn = discord.ui.Button(label="Xác nhận kiểm tra", style=discord.ButtonStyle.primary, row=1)
-            self.confirm_btn.callback = self.confirm_callback
-            self.add_item(self.confirm_btn)
-
-    async def select_callback(self, interaction: discord.Interaction):
-        await interaction.response.defer()
-
-    async def confirm_callback(self, interaction: discord.Interaction):
-        alive_others = [p for p in self.game.get_alive_players() if p.user_id != self.inv_id]
-        req_count = min(2, len(alive_others))
-        if not hasattr(self, "select") or not self.select.values or len(self.select.values) < req_count:
-            await interaction.response.send_message(f"❌ Vui lòng chọn đủ {req_count} người từ danh sách trước!", ephemeral=True)
-            return
-
-        inv_p = self.game.players.get(self.inv_id)
-        if inv_p and inv_p.is_roleblocked:
-            res_str = "❌ **Kỹ năng của bạn đã bị phong tỏa đêm nay!** (Do bị Vũ Nữ ghé thăm)"
-            name_str = "Các mục tiêu"
-        else:
-            selected_ids = [int(v) for v in self.select.values]
-            selected_players = [self.game.players.get(uid) for uid in selected_ids if uid in self.game.players]
-            names = [p.display_name for p in selected_players if p]
-            name_str = " & ".join(f"**{n}**" for n in names)
-
-            has_wolf = any(p and (p.is_wolf or p.role == Role.LYCAN) for p in selected_players)
-            if has_wolf:
-                res_str = f"⚠️ Trong {name_str} — **CÓ ÍT NHẤT 1 SÓI**!"
-            else:
-                res_str = f"✅ Trong {name_str} — **KHÔNG CÓ SÓI NÀO**!"
-
-        self.game.night_investigator_result = res_str
-        self.stop()
-
-        embed = interaction.message.embeds[0] if interaction.message.embeds else None
-        if embed:
-            divider = "──────────────────────────────────────"
-            embed.add_field(name="\u200b", value=f"{divider}\n✅ **Kiểm tra ({name_str}):**\n{res_str}", inline=False)
-
-        await interaction.response.edit_message(embed=embed, view=None)
-
-
-class NightWolfSeerView(discord.ui.View):
-    """View Ephemeral chọn người để soi vai trò chính xác cho Sói Tiên Tri."""
-    def __init__(self, game: MasoiGame, wolf_seer_id: int):
-        super().__init__(timeout=game.settings.night_time)
-        self.game = game
-        self.wolf_seer_id = wolf_seer_id
-        self.selected_target_id: Optional[int] = None
-
-        options = []
-        for p in game.get_alive_players():
-            if p.user_id != wolf_seer_id:
-                options.append(discord.SelectOption(label=p.display_name, value=str(p.user_id), emoji="🔮"))
-
-        if options:
-            self.select = discord.ui.Select(placeholder="🐺🔮 Chọn 1 người để soi vai trò...", options=options[:25], row=0)
-            self.select.callback = self.select_callback
-            self.add_item(self.select)
-
-            self.confirm_btn = discord.ui.Button(label="Xác nhận lựa chọn", style=discord.ButtonStyle.primary, row=1)
-            self.confirm_btn.callback = self.confirm_callback
-            self.add_item(self.confirm_btn)
-
-    async def select_callback(self, interaction: discord.Interaction):
-        self.selected_target_id = int(self.select.values[0])
-        await interaction.response.defer()
-
-    async def confirm_callback(self, interaction: discord.Interaction):
-        if not self.selected_target_id and hasattr(self, "select") and self.select.values:
-            self.selected_target_id = int(self.select.values[0])
-
-        if not self.selected_target_id:
-            await interaction.response.send_message("❌ Vui lòng chọn 1 người từ danh sách trước!", ephemeral=True)
-            return
-
-        target_id = self.selected_target_id
-        self.game.night_wolf_seer_target = target_id
-        target_p = self.game.players.get(target_id)
-        ws_p = self.game.players.get(self.wolf_seer_id)
-
-        if ws_p and ws_p.is_roleblocked:
-            res_str = "❌ **Kỹ năng của bạn đã bị phong tỏa đêm nay!** (Do bị Vũ Nữ ghé thăm)"
-            name = target_p.display_name if target_p else "Mục tiêu"
-        elif target_p:
-            res_str = f"🔮 **{target_p.display_name}** có vai trò: {target_p.role.emoji} **{target_p.role.value}**"
-            self.game.night_wolf_seer_result = res_str
-            name = target_p.display_name
-        else:
-            res_str = "Không tìm thấy thông tin."
-            name = "Mục tiêu"
-
-        self.stop()
-
-        embed = interaction.message.embeds[0] if interaction.message.embeds else None
-        if embed:
-            divider = "──────────────────────────────────────"
-            embed.add_field(name="\u200b", value=f"{divider}\n✅ **Đã ghi nhận:** soi **{name}**\n🔮 **Kết quả:** {res_str}", inline=False)
-
-        await interaction.response.edit_message(embed=embed, view=None)
-
-
-class NightSerialKillerView(discord.ui.View):
-    """View Ephemeral chọn mục tiêu hạ gục cho Sát Thủ Hàng Loạt."""
-    def __init__(self, game: MasoiGame, sk_id: int):
-        super().__init__(timeout=game.settings.night_time)
-        self.game = game
-        self.sk_id = sk_id
-        self.selected_target_id: Optional[int] = None
-
-        options = []
-        for p in game.get_alive_players():
-            if p.user_id != sk_id:
-                options.append(discord.SelectOption(label=p.display_name, value=str(p.user_id), emoji="🔪"))
-
-        if options:
-            self.select = discord.ui.Select(placeholder="🔪 Chọn 1 nạn nhân...", options=options[:25], row=0)
-            self.select.callback = self.select_callback
-            self.add_item(self.select)
-
-            self.confirm_btn = discord.ui.Button(label="Xác nhận hạ gục", style=discord.ButtonStyle.danger, row=1)
-            self.confirm_btn.callback = self.confirm_callback
-            self.add_item(self.confirm_btn)
-
-    async def select_callback(self, interaction: discord.Interaction):
-        self.selected_target_id = int(self.select.values[0])
-        await interaction.response.defer()
-
-    async def confirm_callback(self, interaction: discord.Interaction):
-        if not self.selected_target_id and hasattr(self, "select") and self.select.values:
-            self.selected_target_id = int(self.select.values[0])
-
-        if not self.selected_target_id:
-            await interaction.response.send_message("❌ Vui lòng chọn 1 người từ danh sách trước!", ephemeral=True)
-            return
-
-        target_id = self.selected_target_id
-        self.game.night_serial_killer_target = target_id
-        target_p = self.game.players.get(target_id)
-        name = target_p.display_name if target_p else "Mục tiêu"
-        self.stop()
-
-        embed = interaction.message.embeds[0] if interaction.message.embeds else None
-        if embed:
-            divider = "──────────────────────────────────────"
-            embed.add_field(name="\u200b", value=f"{divider}\n🔪 **Đã ghi nhận:** nhắm hạ gục **{name}**", inline=False)
-
-        await interaction.response.edit_message(embed=embed, view=None)
-
-
-class NightWhiteWolfView(discord.ui.View):
-    """View Ephemeral cho Sói Trắng bí mật cắn thêm 1 Sói (mỗi 2 đêm chẵn)."""
-    def __init__(self, game: MasoiGame, ww_id: int):
-        super().__init__(timeout=game.settings.night_time)
-        self.game = game
-        self.ww_id = ww_id
-        self.selected_target_id: Optional[int] = None
-
-        options = [
-            discord.SelectOption(label=p.display_name, value=str(p.user_id), emoji="🐺")
-            for p in game.get_alive_wolves()
-            if p.user_id != ww_id
-        ]
-
-        if options:
-            self.select = discord.ui.Select(
-                placeholder="🐺⭐ Chọn 1 Sói trong bầy để bí mật cắn...",
-                options=options[:25],
-                row=0
-            )
-            self.select.callback = self.select_callback
-            self.add_item(self.select)
-
-            self.confirm_btn = discord.ui.Button(label="Xác nhận cắn", style=discord.ButtonStyle.danger, row=1)
-            self.confirm_btn.callback = self.confirm_callback
-            self.add_item(self.confirm_btn)
-
-        btn_skip = discord.ui.Button(label="👌 Bỏ qua lần này", style=discord.ButtonStyle.secondary, row=1)
-        btn_skip.callback = self.skip_callback
-        self.add_item(btn_skip)
-
-    async def select_callback(self, interaction: discord.Interaction):
-        self.selected_target_id = int(self.select.values[0])
-        await interaction.response.defer()
-
-    async def confirm_callback(self, interaction: discord.Interaction):
-        if not self.selected_target_id and hasattr(self, "select") and self.select.values:
-            self.selected_target_id = int(self.select.values[0])
-
-        if not self.selected_target_id:
-            await interaction.response.send_message("❌ Vui lòng chọn 1 Sói từ danh sách trước!", ephemeral=True)
-            return
-
-        self.game.night_white_wolf_target = self.selected_target_id
-        target_p = self.game.players.get(self.selected_target_id)
-        name = target_p.display_name if target_p else "Mục tiêu"
-        self.stop()
-
-        embed = interaction.message.embeds[0] if interaction.message.embeds else None
-        if embed:
-            embed.add_field(name="\u200b", value=f"──────────────────────────────────────\n⭐ **Đã ghi nhận:** bí mật ra tay với Sói **{name}**", inline=False)
-        await interaction.response.edit_message(embed=embed, view=None)
-
-    async def skip_callback(self, interaction: discord.Interaction):
-        self.game.night_white_wolf_target = None
-        self.stop()
-        embed = interaction.message.embeds[0] if interaction.message.embeds else None
-        if embed:
-            embed.add_field(name="\u200b", value="──────────────────────────────────────\n👌 Bạn không dùng khả năng đặc biệt đêm nay.", inline=False)
-        await interaction.response.edit_message(embed=embed, view=None)
-
-
-class NightPhantomWolfView(discord.ui.View):
-    """View Ephemeral cho Sói Ảo Ảnh chọn 1 người dân để giả dạng."""
-    def __init__(self, game: MasoiGame, phantom_id: int):
-        super().__init__(timeout=game.settings.night_time)
-        self.game = game
-        self.phantom_id = phantom_id
-        self.selected_target_id: Optional[int] = None
-
-        options = [
-            discord.SelectOption(label=p.display_name, value=str(p.user_id), emoji="👻")
-            for p in game.get_alive_players()
-            if not p.is_wolf and p.user_id != phantom_id
-        ]
-
-        if options:
-            self.select = discord.ui.Select(
-                placeholder="👻 Chọn 1 người dân để giả dạng...",
-                options=options[:25],
-                row=0
-            )
-            self.select.callback = self.select_callback
-            self.add_item(self.select)
-
-            self.confirm_btn = discord.ui.Button(label="Xác nhận giả dạng", style=discord.ButtonStyle.danger, row=1)
-            self.confirm_btn.callback = self.confirm_callback
-            self.add_item(self.confirm_btn)
-
-    async def select_callback(self, interaction: discord.Interaction):
-        self.selected_target_id = int(self.select.values[0])
-        await interaction.response.defer()
-
-    async def confirm_callback(self, interaction: discord.Interaction):
-        if not self.selected_target_id and hasattr(self, "select") and self.select.values:
-            self.selected_target_id = int(self.select.values[0])
-
-        if not self.selected_target_id:
-            await interaction.response.send_message("❌ Vui lòng chọn 1 người từ danh sách trước!", ephemeral=True)
-            return
-
-        phantom_p = self.game.players.get(self.phantom_id)
-        if phantom_p and phantom_p.is_roleblocked:
-            result_msg = "❌ **Kỹ năng bị phong tỏa đêm nay!** (Do bị Vũ Nữ ghé thăm)"
-        else:
-            self.game.night_phantom_wolf_target = self.selected_target_id
-            target_p = self.game.players.get(self.selected_target_id)
-            name = target_p.display_name if target_p else "Mục tiêu"
-            result_msg = f"👻 **Đã ghi nhận:** giả dạng **{name}** — Tiên Tri soi người này sẽ thấy 'SÓI'!"
-        self.stop()
-
-        embed = interaction.message.embeds[0] if interaction.message.embeds else None
-        if embed:
-            embed.add_field(name="\u200b", value=f"──────────────────────────────────────\n{result_msg}", inline=False)
-        await interaction.response.edit_message(embed=embed, view=None)
-
-
-class NightGirlView(discord.ui.View):
-    """View Ephemeral cho Cô Bé nhìn trộm xem bầy Sói đang cắn ai."""
-    def __init__(self, game: MasoiGame, girl_id: int):
-        super().__init__(timeout=game.settings.night_time)
-        self.game = game
-        self.girl_id = girl_id
-
-        btn_peek = discord.ui.Button(
-            label="👀 Nhìn trộm (50% bị phát hiện = chết)",
-            style=discord.ButtonStyle.danger,
-            row=0
-        )
-        btn_peek.callback = self.peek_callback
-        self.add_item(btn_peek)
-
-        btn_no_peek = discord.ui.Button(
-            label="🙈 Không nhìn (An toàn)",
-            style=discord.ButtonStyle.secondary,
-            row=0
-        )
-        btn_no_peek.callback = self.no_peek_callback
-        self.add_item(btn_no_peek)
-
-    async def peek_callback(self, interaction: discord.Interaction):
-        caught = random.random() < 0.5
-        if caught:
-            self.game.girl_caught = True
-            result_msg = "😱 **Bạn bị phát hiện!** Bầy Sói đã thấy bạn... Bạn sẽ chết đêm nay!"
-        else:
-            self.game.girl_peeking_user_id = self.girl_id
-            self.game.girl_dm_message = interaction.message
-            wolf_target_id = self.game.resolve_wolf_target()
-            wolf_target_p = self.game.players.get(wolf_target_id) if wolf_target_id else None
-            if wolf_target_p:
-                result_msg = f"👀 **Nhìn trộm thành công!** Bầy Sói đang nhắm vào **{wolf_target_p.display_name}** đêm nay!"
-            else:
-                result_msg = "👀 **Nhìn trộm...** Bạn đang núp quan sát. Kết quả nạn nhân sẽ được cập nhật khi hết Đêm!"
-        self.stop()
-        embed = interaction.message.embeds[0] if interaction.message.embeds else None
-        if embed:
-            embed.add_field(name="\u200b", value=f"──────────────────────────────────────\n{result_msg}", inline=False)
-        await interaction.response.edit_message(embed=embed, view=None)
-
-    async def no_peek_callback(self, interaction: discord.Interaction):
-        self.stop()
-        embed = interaction.message.embeds[0] if interaction.message.embeds else None
-        if embed:
-            embed.add_field(name="\u200b", value="──────────────────────────────────────\n🙈 Bạn quyết định không nhìn trộm đêm nay. An toàn!", inline=False)
-        await interaction.response.edit_message(embed=embed, view=None)
-
-
-class NightPiperView(discord.ui.View):
-    """View Ephemeral cho Người Thổi Sáo chọn 2 người để mê hoặc."""
-    def __init__(self, game: MasoiGame, piper_id: int):
-        super().__init__(timeout=game.settings.night_time)
-        self.game = game
-        self.piper_id = piper_id
-
-        options = []
-        for p in game.get_alive_players():
-            if p.user_id != piper_id:
-                desc = "🎵 Đã bị mê hoặc" if p.piper_charmed else "Chưa bị mê hoặc"
-                label = f"{p.display_name} {'(🎵)' if p.piper_charmed else ''}"
-                options.append(discord.SelectOption(label=label[:25], value=str(p.user_id), description=desc, emoji="🎵"))
-
-        if options:
-            select_max = min(2, len(options))
-            self.select = discord.ui.Select(
-                placeholder=f"🎵 Chọn {select_max} người để mê hoặc...",
-                min_values=select_max,
-                max_values=select_max,
-                options=options[:25],
-                row=0
-            )
-            self.select.callback = self.select_callback
-            self.add_item(self.select)
-
-            self.confirm_btn = discord.ui.Button(label="Xác nhận mê hoặc", style=discord.ButtonStyle.primary, row=1)
-            self.confirm_btn.callback = self.confirm_callback
-            self.add_item(self.confirm_btn)
-
-    async def select_callback(self, interaction: discord.Interaction):
-        await interaction.response.defer()
-
-    async def confirm_callback(self, interaction: discord.Interaction):
-        if not hasattr(self, "select") or not self.select.values:
-            await interaction.response.send_message("❌ Vui lòng chọn người từ danh sách trước!", ephemeral=True)
-            return
-
-        piper_p = self.game.players.get(self.piper_id)
-        if piper_p and piper_p.is_roleblocked:
-            result_msg = "❌ **Kỹ năng bị phong tỏa đêm nay!** (Do bị Vũ Nữ ghé thăm)"
-        else:
-            targets = [int(v) for v in self.select.values]
-            self.game.night_piper_targets = targets
-            names = [self.game.players[t].display_name for t in targets if t in self.game.players]
-            result_msg = f"🎵 **Đã mê hoặc:** {' & '.join(f'**{n}**' for n in names)}"
-        self.stop()
-
-        embed = interaction.message.embeds[0] if interaction.message.embeds else None
-        if embed:
-            embed.add_field(name="\u200b", value=f"──────────────────────────────────────\n{result_msg}", inline=False)
-        await interaction.response.edit_message(embed=embed, view=None)
-
-
-class MayorSuccessionView(discord.ui.View):
-    """View Ephemeral cho Thị Trưởng qua đời chọn người kế nhiệm."""
-    def __init__(self, game: MasoiGame, mayor_id: int):
-        super().__init__(timeout=game.settings.night_time)
-        self.game = game
-        self.mayor_id = mayor_id
-        self.selected_target_id: Optional[int] = None
-
-        options = []
-        for p in game.get_alive_players():
-            if p.user_id != mayor_id:
-                options.append(discord.SelectOption(label=p.display_name, value=str(p.user_id), emoji="🎩"))
-
-        if options:
-            self.select = discord.ui.Select(placeholder="🎩 Chọn 1 người kế nhiệm Thị Trưởng...", options=options[:25], row=0)
-            self.select.callback = self.select_callback
-            self.add_item(self.select)
-
-            self.confirm_btn = discord.ui.Button(label="Xác nhận truyền quyền", style=discord.ButtonStyle.primary, row=1)
-            self.confirm_btn.callback = self.confirm_callback
-            self.add_item(self.confirm_btn)
-
-    async def select_callback(self, interaction: discord.Interaction):
-        self.selected_target_id = int(self.select.values[0])
-        await interaction.response.defer()
-
-    async def confirm_callback(self, interaction: discord.Interaction):
-        if not self.selected_target_id and hasattr(self, "select") and self.select.values:
-            self.selected_target_id = int(self.select.values[0])
-
-        if not self.selected_target_id:
-            await interaction.response.send_message("❌ Vui lòng chọn 1 người từ danh sách trước!", ephemeral=True)
-            return
-
-        target_id = self.selected_target_id
-        self.game.mayor_id = target_id
-        target_p = self.game.players.get(target_id)
-        name = target_p.display_name if target_p else "Người kế nhiệm"
-        self.game.record_log("MAYOR_SUCCESSION", actor_id=self.mayor_id, target_id=target_id, result=f"Chỉ định Thị Trưởng kế nhiệm: {name}")
-        self.stop()
-
-        embed = interaction.message.embeds[0] if interaction.message.embeds else None
-        if embed:
-            divider = "──────────────────────────────────────"
-            embed.add_field(name="\u200b", value=f"{divider}\n🎩 **Đã ghi nhận:** truyền chiếc mũ Thị Trưởng cho **{name}**!", inline=False)
-
-        await interaction.response.edit_message(embed=embed, view=None)
-
-
-class NightCupidView(discord.ui.View):
-    """View Ephemeral chọn 2 người làm Cặp Đôi Tình Nhân cho Thần Tình Yêu."""
-    def __init__(self, game: MasoiGame, cupid_id: int):
-        super().__init__(timeout=game.settings.night_time)
-        self.game = game
-        self.cupid_id = cupid_id
-
-        options = []
-        for p in game.get_alive_players():
-            options.append(discord.SelectOption(label=p.display_name, value=str(p.user_id), emoji="💘"))
-
-        if options:
-            self.select = discord.ui.Select(
-                placeholder="💘 Chọn đúng 2 người làm Cặp Đôi...",
-                min_values=min(2, len(options)),
-                max_values=min(2, len(options)),
-                options=options[:25],
-                row=0
-            )
-            self.select.callback = self.select_callback
-            self.add_item(self.select)
-
-            self.confirm_btn = discord.ui.Button(label="Xác nhận ghép đôi", style=discord.ButtonStyle.primary, row=1)
-            self.confirm_btn.callback = self.confirm_callback
-            self.add_item(self.confirm_btn)
-
-    async def select_callback(self, interaction: discord.Interaction):
-        await interaction.response.defer()
-
-    async def confirm_callback(self, interaction: discord.Interaction):
-        if not hasattr(self, "select") or not self.select.values or len(self.select.values) < 2:
-            await interaction.response.send_message("❌ Vui lòng chọn đúng 2 người từ danh sách trước!", ephemeral=True)
-            return
-
-        id1, id2 = int(self.select.values[0]), int(self.select.values[1])
-        p1, p2 = self.game.players.get(id1), self.game.players.get(id2)
-        if p1 and p2:
-            p1.lover_id = id2
-            p2.lover_id = id1
-            name1, name2 = p1.display_name, p2.display_name
-        else:
-            name1, name2 = "Người 1", "Người 2"
-
-        self.stop()
-        embed = interaction.message.embeds[0] if interaction.message.embeds else None
-        if embed:
-            divider = "──────────────────────────────────────"
-            embed.add_field(name="\u200b", value=f"{divider}\n💘 **Đã ghi nhận:** Ghép đôi **{name1}** 💞 **{name2}**", inline=False)
-
-        await interaction.response.edit_message(embed=embed, view=None)
-
-        # Gửi DM thông báo cho 2 người tình nhân
-        for p_target, p_other in [(p1, p2), (p2, p1)]:
-            if p_target and hasattr(self.game, "cog"):
-                user = self.game.cog.bot.get_user(p_target.user_id)
-                if user:
-                    try:
-                        await user.send(
-                            f"> 💘 **BẠN ĐÃ ĐƯỢC THẦN TÌNH YÊU GHÉP ĐÔI!**\n"
-                            f"> Bạn và **{p_other.display_name}** hiện là **CẶP ĐÔI TÌNH NHÂN**.\n"
-                            f"> ⚠️ *Nếu 1 trong 2 người chết, người còn lại sẽ tự sát chết theo!*"
-                        )
-                    except Exception:
-                        pass
-
-
-class NightWitchView(discord.ui.View):
-    """View Ephemeral cho Phù Thủy (Cứu & Độc)."""
-    def __init__(self, game: MasoiGame, witch_id: int, victim_id: Optional[int]):
-        super().__init__(timeout=game.settings.night_time)
-        self.game = game
-        self.witch_id = witch_id
-        self.victim_id = victim_id
-
-        witch_p = game.players.get(witch_id)
-        has_save = witch_p and not witch_p.witch_save_used
-        victim_p = game.players.get(victim_id) if victim_id else None
-        victim_name = victim_p.display_name if victim_p else "Không ai"
-
-        if victim_p and has_save:
-            btn_save = discord.ui.Button(label=f"🧪 Cứu {victim_name}", style=discord.ButtonStyle.success, row=0)
-            btn_save.callback = self.save_callback
-            self.add_item(btn_save)
-
-        btn_no_save = discord.ui.Button(label="👌 Không dùng bình cứu", style=discord.ButtonStyle.secondary, row=0)
-        btn_no_save.callback = self.no_save_callback
-        self.add_item(btn_no_save)
-
-    async def save_callback(self, interaction: discord.Interaction):
-        witch_p = self.game.players.get(self.witch_id)
-        if witch_p:
-            witch_p.witch_save_used = True
-        self.game.night_witch_save = True
-        victim_p = self.game.players.get(self.victim_id) if self.victim_id else None
-        v_name = victim_p.display_name if victim_p else "nạn nhân"
-        await self.show_poison_step(interaction, f"✅ **Đã ghi nhận:** CỨU **{v_name}**")
-
-    async def no_save_callback(self, interaction: discord.Interaction):
-        self.game.night_witch_save = False
-        await self.show_poison_step(interaction, "👌 Bạn không dùng bình cứu đêm nay.")
-
-    async def show_poison_step(self, interaction: discord.Interaction, prefix_msg: str):
-        witch_p = self.game.players.get(self.witch_id)
-        if not witch_p or witch_p.witch_poison_used:
-            self.stop()
-            embed = interaction.message.embeds[0] if interaction.message.embeds else None
-            if embed:
-                divider = "──────────────────────────────────────"
-                embed.add_field(name="\u200b", value=f"{divider}\n{prefix_msg}\n*(Bạn đã hết bình độc)*", inline=False)
-            await interaction.response.edit_message(embed=embed, view=None)
-            return
-
-        embed_poison = discord.Embed(
-            title=f"🌙 Đêm {self.game.night_count} — Lượt của Phù Thủy",
-            description=f"Bạn có muốn dùng **BÌNH ĐỘC** hạ độc ai không?\nCòn **{self.game.settings.night_time} giây** để quyết định.",
-            color=discord.Color(0xE0A638)
-        )
-        embed_poison.add_field(name="\u200b", value=f"──────────────────────────────────────\n{prefix_msg}", inline=False)
-
-        view = NightWitchPoisonView(self.game, self.witch_id, prefix_msg)
-        await interaction.response.edit_message(embed=embed_poison, view=view)
-
-
-class NightWitchPoisonView(discord.ui.View):
-    def __init__(self, game: MasoiGame, witch_id: int, prefix_msg: str):
-        super().__init__(timeout=game.settings.night_time)
-        self.game = game
-        self.witch_id = witch_id
-        self.prefix_msg = prefix_msg
-        self.selected_target_id: Optional[int] = None
-
-        options = []
-        for p in game.get_alive_players():
-            if p.user_id != witch_id:
-                options.append(discord.SelectOption(label=p.display_name, value=str(p.user_id), emoji="☠️"))
-
-        if options:
-            self.select = discord.ui.Select(placeholder="☠️ Chọn 1 người để hạ độc...", options=options[:25], row=0)
-            self.select.callback = self.select_callback
-            self.add_item(self.select)
-
-            self.confirm_btn = discord.ui.Button(label="Xác nhận lựa chọn", style=discord.ButtonStyle.danger, row=1)
-            self.confirm_btn.callback = self.confirm_callback
-            self.add_item(self.confirm_btn)
-
-        btn_skip = discord.ui.Button(label="👌 Bỏ qua không dùng độc", style=discord.ButtonStyle.secondary, row=1)
-        btn_skip.callback = self.skip_poison_callback
-        self.add_item(btn_skip)
-
-    async def select_callback(self, interaction: discord.Interaction):
-        self.selected_target_id = int(self.select.values[0])
-        await interaction.response.defer()
-
-    async def confirm_callback(self, interaction: discord.Interaction):
-        if not self.selected_target_id and hasattr(self, "select") and self.select.values:
-            self.selected_target_id = int(self.select.values[0])
-
-        if not self.selected_target_id:
-            await interaction.response.send_message("❌ Vui lòng chọn 1 người từ danh sách trước!", ephemeral=True)
-            return
-
-        target_id = self.selected_target_id
-        witch_p = self.game.players.get(self.witch_id)
-        if witch_p:
-            witch_p.witch_poison_used = True
-        self.game.night_witch_poison = target_id
-        target_p = self.game.players.get(target_id)
-        name = target_p.display_name if target_p else "Mục tiêu"
-        self.stop()
-
-        embed = interaction.message.embeds[0] if interaction.message.embeds else None
-        if embed:
-            divider = "──────────────────────────────────────"
-            embed.add_field(name="\u200b", value=f"{divider}\n☠️ **Đã ghi nhận:** hạ độc **{name}**", inline=False)
-
-        await interaction.response.edit_message(embed=embed, view=None)
-
-    async def skip_poison_callback(self, interaction: discord.Interaction):
-        self.game.night_witch_poison = None
-        self.stop()
-        embed = interaction.message.embeds[0] if interaction.message.embeds else None
-        if embed:
-            divider = "──────────────────────────────────────"
-            embed.add_field(name="\u200b", value=f"{divider}\n👌 Bạn không dùng bình độc đêm nay.", inline=False)
-
-        await interaction.response.edit_message(embed=embed, view=None)
-
-
-class NightHunterView(discord.ui.View):
-    """View Ephemeral cho Thợ Săn bắn 1 người khi chết."""
-    def __init__(self, game: MasoiGame, hunter_id: int):
-        super().__init__(timeout=game.settings.night_time)
-        self.game = game
-        self.hunter_id = hunter_id
-        self.selected_target_id: Optional[int] = None
-
-        options = []
-        for p in game.get_alive_players():
-            if p.user_id != hunter_id:
-                options.append(discord.SelectOption(label=p.display_name, value=str(p.user_id), emoji="🏹"))
-
-        if options:
-            self.select = discord.ui.Select(placeholder="🏹 Chọn 1 người để bắn...", options=options[:25], row=0)
-            self.select.callback = self.select_callback
-            self.add_item(self.select)
-
-            self.confirm_btn = discord.ui.Button(label="Xác nhận lựa chọn", style=discord.ButtonStyle.primary, row=1)
-            self.confirm_btn.callback = self.confirm_callback
-            self.add_item(self.confirm_btn)
-
-    async def select_callback(self, interaction: discord.Interaction):
-        self.selected_target_id = int(self.select.values[0])
-        await interaction.response.defer()
-
-    async def confirm_callback(self, interaction: discord.Interaction):
-        if not self.selected_target_id and hasattr(self, "select") and self.select.values:
-            self.selected_target_id = int(self.select.values[0])
-
-        if not self.selected_target_id:
-            await interaction.response.send_message("❌ Vui lòng chọn 1 người từ danh sách trước!", ephemeral=True)
-            return
-
-        target_id = self.selected_target_id
-        target_p = self.game.players.get(target_id)
-        if target_p and target_p.is_alive:
-            target_p.is_alive = False
-            self.game.record_log("HUNTER_SHOOT", actor_id=self.hunter_id, target_id=target_id, result="Thợ Săn kéo theo bắn gục")
-            if target_p.role == Role.WOLF_CUB:
-                self.game.wolf_fury_pending = True
-                self.game.record_log("WOLF_CUB_RAGE", actor_id=target_p.user_id, result="Sói Cuồng Sát bị Thợ Săn bắn gục, bầy Sói sục sôi cuồng nộ cho đêm sau!")
-            if getattr(target_p, "lover_id", None) and target_p.lover_id in self.game.players:
-                lover_p = self.game.players[target_p.lover_id]
-                if lover_p.is_alive:
-                    lover_p.is_alive = False
-                    self.game.record_log("LOVER_DEATH", target_id=lover_p.user_id, result="Chết vì đau thương do tình nhân bị Thợ Săn bắn")
-                    if lover_p.role == Role.WOLF_CUB:
-                        self.game.wolf_fury_pending = True
-                        self.game.record_log("WOLF_CUB_RAGE", actor_id=lover_p.user_id, result="Sói Cuồng Sát qua đời do tình nhân bị Thợ Săn bắn, bầy Sói sục sôi cuồng nộ cho đêm sau!")
-
-        name = target_p.display_name if target_p else "Mục tiêu"
-        self.stop()
-
-        embed = interaction.message.embeds[0] if interaction.message.embeds else None
-        if embed:
-            divider = "──────────────────────────────────────"
-            embed.add_field(name="\u200b", value=f"{divider}\n🏹 **Đã ghi nhận:** kéo theo bắn gục **{name}**", inline=False)
-
-        await interaction.response.edit_message(embed=embed, view=None)
-
-
-# ==============================================================================
-#  Day Discussion & Voting Views
 # ==============================================================================
 
 class VipSetQuoteModal(discord.ui.Modal, title="💬 Lời Trăn Trối VIP Ma Sói"):
@@ -1482,319 +619,21 @@ class VipDashboardView(discord.ui.View):
         await interaction.response.send_modal(modal)
 
 
-class DayDiscussionView(discord.ui.View):
-    """View ở kênh chính trong lúc thảo luận ban ngày."""
-    def __init__(self, game: MasoiGame, cog: "Masoi"):
-        super().__init__(timeout=None)
-        self.game = game
-        self.cog = cog
-
-    @discord.ui.button(label="Yêu cầu bỏ phiếu sớm (0)", style=discord.ButtonStyle.primary, emoji="⏩", custom_id="masoi_early_vote")
-    async def early_vote_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        user_id = interaction.user.id
-        p = self.game.players.get(user_id)
-        if not p or not p.is_alive:
-            await interaction.response.send_message("❌ Chỉ người chơi còn sống mới được yêu cầu bỏ phiếu sớm!", ephemeral=True)
-            return
-
-        self.game.early_vote_requests.add(user_id)
-        alive_count = len(self.game.get_alive_players())
-        req_count = len(self.game.early_vote_requests)
-        button.label = f"Yêu cầu bỏ phiếu sớm ({req_count}/{alive_count})"
-
-        await interaction.response.edit_message(view=self)
-
-        # Nếu đa số người sống đồng ý bỏ phiếu sớm -> Chuyển bước
-        if req_count >= (alive_count // 2 + 1):
-            self.stop()
-
-    async def on_error(self, interaction: discord.Interaction, error: Exception, item) -> None:
-        logger.error("DayDiscussionView error on %s: %s", item, error, exc_info=error)
-        try:
-            if not interaction.response.is_done():
-                await interaction.response.send_message("❌ Đã xảy ra lỗi. Vui lòng thử lại!", ephemeral=True)
-        except Exception:
-            pass
-
-
-class DayVoteView(discord.ui.View):
-    """View bỏ phiếu treo cổ ban ngày."""
-    def __init__(self, game: MasoiGame, cog: "Masoi"):
-        super().__init__(timeout=None)
-        self.game = game
-        self.cog = cog
-
-        options = [discord.SelectOption(label="Bỏ phiếu trắng (Không treo cổ ai)", value="white", emoji="🏳️")]
-        for p in game.get_alive_players():
-            options.append(discord.SelectOption(label=p.display_name, value=str(p.user_id), emoji="⚖️"))
-
-        select = discord.ui.Select(placeholder="⚖️ Chọn người bạn nghi ngờ để bỏ phiếu...", options=options[:25], custom_id="masoi_vote_select")
-        select.callback = self.vote_callback
-        self.add_item(select)
-
-    async def vote_callback(self, interaction: discord.Interaction):
-        user_id = interaction.user.id
-        p = self.game.players.get(user_id)
-        if not p or not p.is_alive:
-            await interaction.response.send_message("❌ Chỉ người chơi còn sống mới được bỏ phiếu!", ephemeral=True)
-            return
-
-        val = interaction.data["values"][0]
-        if val == "white":
-            self.game.day_votes[user_id] = None
-            target_name = "Phiếu trắng"
-        else:
-            target_id = int(val)
-            self.game.day_votes[user_id] = target_id
-            target_p = self.game.players.get(target_id)
-            target_name = target_p.display_name if target_p else "Người chơi"
-
-        await interaction.response.send_message(f"✅ Đã ghi nhận phiếu của bạn cho: **{target_name}**.", ephemeral=True)
-
-        if self.game.settings.vote_display == "REALTIME":
-            await self.cog.update_vote_embed(self.game, interaction.message)
-
-        alive_count = len(self.game.get_alive_players())
-        if len(self.game.day_votes) >= alive_count:
-            self.stop()
-
-    async def on_error(self, interaction: discord.Interaction, error: Exception, item) -> None:
-        logger.error("DayVoteView error on %s: %s", item, error, exc_info=error)
-        try:
-            if not interaction.response.is_done():
-                await interaction.response.send_message("❌ Đã xảy ra lỗi khi ghi nhận phiếu. Vui lòng thử lại!", ephemeral=True)
-        except Exception:
-            pass
-
-
-# ==============================================================================
-#  End Game & Replay Views
-# ==============================================================================
-
-def format_replay_story_line(log: ReplayLog) -> str:
-    """Chuyển đổi ReplayLog thành câu chuyện văn học / Nhật ký truyền cảm."""
-    actor = f"**{log.actor_name}**" if log.actor_name else ""
-    target = f"**{log.target_name}**" if log.target_name else ""
-    event = log.event_type
-
-    if event in ("WOLF_VOTE", "WOLF_KILL"):
-        return f"🐺 **Bầy Sói** âm thầm cất bước trong đêm tối và nhắm nanh cắn {target}."
-    elif event == "GUARD_PROTECT":
-        return f"🛡️ **Bảo Vệ** xuất hiện kịp thời, giơ khiên bảo vệ {target} an toàn!"
-    elif event == "WITCH_SAVE":
-        return f"🧪 **Phù Thủy** nhanh tay dùng **Bình Cứu** hồi sinh {target} khỏi tay Bầy Sói!"
-    elif event == "WITCH_POISON":
-        return f"🧪 **Phù Thủy** mở hũ **Bình Độc**, tàn nhẫn hạ sát {target} trong bóng đêm!"
-    elif event in ("SEER_ACTION", "SEER_INSPECT"):
-        return f"🔮 **Tiên Tri** {actor} bói toán thi triển thần thư, soi rọi thân phận của {target}."
-    elif event == "WOLF_SEER_INSPECT":
-        return f"🐺🔮 **Sói Tiên Tri** {actor} âm thầm thấu thị, biết rõ vai trò cá nhân của {target}."
-    elif event == "CURSED_CONVERT":
-        return f"🌕 **Kẻ Bị Nguyền** {target} bị cắn nhưng không chết — vết cắn phát tác biến thành **Sói Mới**!"
-    elif event == "ELDER_SAVED":
-        return f"👴 **Già Làng** {target} ngoan cường chống đỡ thành công đòn cắn thứ 1 của Bầy Sói!"
-    elif event == "SK_IMMUNE":
-        return f"🔪 **Sát Thủ** {target} với cơ thể thép đã đánh bật đòn tấn công của Bầy Sói!"
-    elif event == "SERIAL_KILLER_KILL":
-        return f"🔪 **Sát Thủ Hàng Loạt** {actor} vung dao trong bóng đêm hạ gục {target}!"
-    elif event == "WITCH_SAVE_SK":
-        return f"🧪 **Phù Thủy** dùng **Bình Cứu** giải cứu {target} khỏi tay Sát Thủ!"
-    elif event == "GUARD_PROTECT_SK":
-        return f"🛡️ **Bảo Vệ** cứu sống {target} khỏi lưỡi dao tàn bạo của Sát Thủ!"
-    elif event == "HARLOT_VISIT":
-        return f"💃 **Vũ Nữ** {actor} ghé thăm {target}, phong tỏa toàn bộ kỹ năng đêm!"
-    elif event == "WOLF_ROLEBLOCKED":
-        return f"🔇 {actor} bị Vũ Nữ phong tỏa, đòn cắn đêm nay hoàn toàn bị vô hiệu!"
-    elif event == "WHITE_WOLF_BITE":
-        return f"🐺⭐ **Sói Trắng** {actor} phản bội hạ sát đồng bọn {target} ngay trong bầy!"
-    elif event == "GIRL_CAUGHT":
-        return f"👧 **Cô Bé** {target} lỡ tay phát ra tiếng động khi nhìn trộm và bị Bầy Sói phát hiện hạ sát!"
-    elif event == "PIPER_CHARM":
-        return f"🎵 **Người Thổi Sáo** {actor} cất tiếng đàn mê hoặc {target or log.result}!"
-    elif event == "LOVER_DEATH":
-        return f"💘 **Bi kịch:** {target} u uất tự sát đi theo tình nhân vừa qua đời!"
-    elif event == "RUSTY_KNIGHT_DYING":
-        return f"⚔️ **Hiệp Sĩ Kiếm Gỉ** {target} ngã xuống, để lại lời nguyền giáng đòn 1 Sói vào đêm sau!"
-    elif event == "RUSTY_KNIGHT_CURSE":
-        return f"⚔️ Lời nguyền của **Hiệp Sĩ Kiếm Gỉ** giáng đòn hạ gục Sói {target}!"
-    elif event == "WOLF_CUB_RAGE":
-        return f"🐺🩸 **Sói Cuồng Sát** {actor or target} ngã xuống! Bầy Sói sục sôi cuồng nộ cắn 2 người đêm tiếp theo!"
-    elif event == "APPRENTICE_PROMOTED":
-        return f"🔮✨ **Tiên Tri Tập Sự** {actor} đứng lên kế thừa di chí, trở thành **Tiên Tri Mới**!"
-    elif event == "NIGHT_DEATH":
-        return f"💀 {target} qua đời trong đêm tối lạnh lẽo..."
-    elif event == "MAYOR_SUCCESSION":
-        return f"🎩 **Thị Trưởng** {actor} chỉ định {target} làm Thị Trưởng kế nhiệm!"
-    elif event == "HUNTER_SHOOT":
-        return f"🏹 **Thợ Săn** {actor} trước khi trút hơi thở cuối cùng đã giương nỏ bắn gục {target}!"
-    elif event == "DAY_EXECUTION":
-        return f"⚖️ **Dân Làng xử tử:** {target} bị dồn phiếu bầu và phải bước lên giàn treo cổ!"
-    elif event == "SCAPEGOAT_EXECUTED":
-        return f"🐐 **Hòa phiếu:** **Dê Tế Thần** {target} tự động bị kéo lên giàn treo gánh tội thay!"
-    elif event == "NIGHT_EVENT":
-        return f"🎴 **Thẻ Sự Kiện Đêm:** {log.result}"
-    elif event == "SOLAR_ECLIPSE_SKIP":
-        return f"☀️ **Nhật Thực Bóng Tối:** Ban ngày dân làng bị che mắt, không thể bỏ phiếu treo cổ!"
-    elif event == "HOLY_LIGHT_SAVED":
-        return f"🛡️ **Thánh Quang Bảo Hộ:** Hào quang thần thánh hóa giải đòn cắn của Bầy Sói cho {target}!"
-    elif event == "BOSS_SHIELD_SAVED":
-        return f"👑🐺 **Chúa Tể Sói** dùng Khiên Vương Giả hóa giải Bình Độc thành công!"
-    elif event == "BOSS_DAMAGE":
-        return f"👑🐺 **Chúa Tể Sói** bị giáng đòn tổn hại 1 Mạng! {log.result}"
-    elif event == "BOSS_KILLED":
-        return f"💥👑🐺 **Chúa Tể Sói** đã bị tiêu diệt hoàn toàn!"
-    elif event == "VOTE_RESULT":
-        return f"⚖️ **Bỏ phiếu ban ngày:** {log.result}."
-    elif event == "GAME_WIN":
-        return f"🏆 **KẾT QUẢ CHUNG CUỘC:** {log.result}"
-    else:
-        a_str = f"**{log.actor_name}**: " if log.actor_name else ""
-        t_str = f" -> **{log.target_name}**" if log.target_name else ""
-        return f"• {a_str}{log.result}{t_str}"
-
-
-class GameEndView(discord.ui.View):
-    """View ở embed kết thúc ván."""
-    def __init__(self, game: MasoiGame, cog: "Masoi"):
-        super().__init__(timeout=None)
-        self.game = game
-        self.cog = cog
-
-    @discord.ui.button(label="Nhật Ký Ván Đấu", style=discord.ButtonStyle.secondary, emoji="📜", custom_id="masoi_replay")
-    async def replay_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        view = ReplayView(self.game)
-        embed = view.get_embed()
-        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
-
-    @discord.ui.button(label="Bảng Xếp Hạng", style=discord.ButtonStyle.primary, emoji="🏆", custom_id="masoi_rankboard")
-    async def rank_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        embed = self.cog.build_rankboard_embed()
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-
-
-class ReplayView(discord.ui.View):
-    """View phân trang xem lại nhật ký diễn biến Storyline dạng Dòng Thời Gian."""
-    def __init__(self, game: MasoiGame):
-        super().__init__(timeout=180)
-        self.game = game
-        self.current_page = 0
-        self.pages = self.build_pages()
-        self.update_buttons()
-
-    def build_pages(self) -> list[dict]:
-        pages = []
-        
-        # Gom nhóm logs theo Đêm và Ngày
-        grouped: Dict[str, list] = {}
-        for log in self.game.replay_logs:
-            key = f"Ngày {log.day}" if "Ban ngày" in log.phase else f"Đêm {log.day}"
-            grouped.setdefault(key, []).append(log)
-
-        # ── TRANG 0: TỔNG QUAN DÒNG THỜI GIAN (STORYLINE RECAP) ──
-        overview_lines = [
-            f"📜 **NHẬT KÝ DÒNG THỜI GIAN VÁN ĐẤU**",
-            f"──────────────────────────────────────",
-        ]
-
-        if not grouped:
-            overview_lines.append("*Ván đấu kết thúc quá nhanh hoặc không ghi nhận được diễn biến.*")
-        else:
-            for key, logs in grouped.items():
-                is_night = key.startswith("Đêm")
-                icon = "🌙" if is_night else "☀️"
-                overview_lines.append(f"{icon} **{key}:**")
-                
-                for log in logs:
-                    line = format_replay_story_line(log)
-                    overview_lines.append(f"  └ {line}")
-                overview_lines.append("")
-
-        if self.game.winner_faction:
-            overview_lines.append(f"🏆 **CHIẾN THẮNG CHUNG CUỘC:** {self.game.winner_faction.value} đã giành thắng lợi!")
-
-        pages.append({
-            "title": "📜 Tổng Quan Dòng Thời Gian",
-            "content": "\n".join(overview_lines)
-        })
-
-        # ── CÁC TRANG TIẾP THEO: CHI TIẾT TỪNG ĐÊM / NGÀY ──
-        for title, logs in grouped.items():
-            is_night = title.startswith("Đêm")
-            icon = "🌙" if is_night else "☀️"
-            lines = [
-                f"📖 **NHẬT KÝ CHI TIẾT — {icon} {title.upper()}**",
-                "──────────────────────────────────────",
-            ]
-            for log in logs:
-                lines.append(f"• {format_replay_story_line(log)}")
-            
-            pages.append({
-                "title": f"{icon} {title}",
-                "content": "\n".join(lines)
-            })
-
-        return pages
-
-    def update_buttons(self):
-        self.btn_overview.disabled = (self.current_page == 0)
-        self.btn_prev.disabled = (self.current_page == 0)
-        self.btn_next.disabled = (self.current_page == len(self.pages) - 1)
-
-    def get_embed(self) -> discord.Embed:
-        page = self.pages[self.current_page]
-        
-        if self.current_page == 0:
-            color = discord.Color.gold()
-        elif "Đêm" in page['title']:
-            color = discord.Color.dark_purple()
-        else:
-            color = discord.Color.orange()
-
-        embed = make_embed(
-            title=f"📜 REPLAY STORYLINE — {page['title']} ({self.current_page + 1}/{len(self.pages)})",
-            description=page["content"],
-            color=color,
-        )
-        embed.set_footer(text=f"Ván ID: {self.game.guild_id}-{self.game.channel_id} · Chuyển trang để xem chi tiết")
-        return embed
-
-    @discord.ui.button(label="Tổng Quan", style=discord.ButtonStyle.primary, emoji="📜", row=0)
-    async def btn_overview(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.current_page = 0
-        self.update_buttons()
-        await interaction.response.edit_message(embed=self.get_embed(), view=self)
-
-    @discord.ui.button(label="Trang Trước", style=discord.ButtonStyle.secondary, emoji="⬅️", row=0)
-    async def btn_prev(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if self.current_page > 0:
-            self.current_page -= 1
-            self.update_buttons()
-            await interaction.response.edit_message(embed=self.get_embed(), view=self)
-
-    @discord.ui.button(label="Trang Sau", style=discord.ButtonStyle.secondary, emoji="➡️", row=0)
-    async def btn_next(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if self.current_page < len(self.pages) - 1:
-            self.current_page += 1
-            self.update_buttons()
-            await interaction.response.edit_message(embed=self.get_embed(), view=self)
-
-
-# ==============================================================================
-#  Main Cog Implementation
-# ==============================================================================
-
 SETTINGS_FILE = Path(__file__).resolve().parent.parent.parent / "data" / "masoi_settings.json"
 
 
 MASOI_CREATE_FEE = 10_000  # 10,000 VND
 
 
-class Masoi(commands.Cog):
+class Masoi(MasoiFlowMixin, MasoiRecoveryMixin, commands.Cog):
     """Cog Ma Sói (Werewolf) cho Discord Bot."""
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.active_games: Dict[str, MasoiGame] = {}  # key: f"{guild_id}-{channel_id}"
+        self._game_tasks = {}
+        self._recovering_channels = set()
+        self._recovery_ready = False
         self.saved_settings: Dict[str, MasoiSettings] = {}
         self.load_all_saved_settings()
 
@@ -1856,6 +695,9 @@ class Masoi(commands.Cog):
         is_boss_mode = sub_clean in ("boss", "b", "masoiboss", "raid")
 
         key = f"{ctx.guild.id}-{ctx.channel.id}"
+        if not getattr(self, "_recovery_ready", True) or key in getattr(self, "_recovering_channels", set()):
+            await ctx.send("⏳ Kênh đang phục hồi ván Ma Sói trước. Hãy chờ khôi phục quyền chat xong.")
+            return
         if key in self.active_games:
             await ctx.send("❌ Đã có một ván Ma Sói đang diễn ra hoặc trong phòng chờ ở kênh này!")
             return
@@ -2160,11 +1002,17 @@ class Masoi(commands.Cog):
         name="masoirank",
         aliases=["masoirankboard", "masoi-rank"],
         brief="Xem Bảng Xếp Hạng Rank Ma Sói.",
-        usage="masoirank",
+        usage="masoirank [soi|solo|dan]",
     )
-    async def masoirank_cmd(self, ctx: commands.Context):
-        embed = self.build_rankboard_embed()
-        await ctx.send(embed=embed)
+    async def masoirank_cmd(self, ctx: commands.Context, faction: Optional[str] = None):
+        aliases = {"soi": RankFaction.WOLF, "sói": RankFaction.WOLF, "wolf": RankFaction.WOLF,
+                   "solo": RankFaction.SOLO, "dan": RankFaction.VILLAGER, "dân": RankFaction.VILLAGER,
+                   "villager": RankFaction.VILLAGER}
+        selected = aliases.get(faction.lower()) if faction else None
+        if faction and selected is None:
+            await ctx.send("❌ Chọn bảng rank: `masoirank soi`, `masoirank solo` hoặc `masoirank dan`.")
+            return
+        await ctx.send(embed=self.build_rankboard_embed(selected), view=RankboardView(self))
 
     @commands.command(
         name="stopmasoi",
@@ -2215,89 +1063,6 @@ class Masoi(commands.Cog):
         )
         await channel.send(embed=embed)
 
-
-    async def check_and_trigger_hunter(self, game: MasoiGame, channel: discord.TextChannel):
-        """Kiểm tra và kích hoạt lượt bắn kéo theo của Thợ Săn khi bị loại (hỗ trợ bắn dây chuyền)."""
-        while True:
-            pending_hunters = [
-                p for p in game.players.values()
-                if p.role == Role.HUNTER and not p.is_alive and not getattr(p, "hunter_shot_used", False)
-            ]
-            if not pending_hunters:
-                break
-
-            for p in pending_hunters:
-                p.hunter_shot_used = True
-                h_user = self.bot.get_user(p.user_id)
-                view = NightHunterView(game, p.user_id)
-                hunter_shot_target_id = None
-
-                if h_user:
-                    embed_hunter = discord.Embed(
-                        title="🏹 Lượt của Thợ Săn — Kéo theo 1 người",
-                        description=f"Bạn đã bị loại! Hãy chọn 1 người để kéo theo chết cùng. Còn **{game.settings.night_time} giây** để quyết định.",
-                        color=discord.Color(0xE0A638)
-                    )
-                    try:
-                        await h_user.send(embed=embed_hunter, view=view)
-                        elapsed = 0
-                        while elapsed < game.settings.night_time:
-                            if view.is_finished() or game.phase == GamePhase.GAME_END:
-                                break
-                            await asyncio.sleep(1)
-                            elapsed += 1
-                        if view.is_finished():
-                            hunter_shot_target_id = view.selected_target_id
-                    except Exception:
-                        pass
-
-                # Thông báo kết quả ra channel chính
-                if hunter_shot_target_id:
-                    shot_p = game.players.get(hunter_shot_target_id)
-                    if shot_p:
-                        role_str = f" *({shot_p.role.emoji} {shot_p.role.value})*" if game.settings.reveal_roles_on_death else ""
-                        embed_announce = discord.Embed(
-                            title="🏹 Thợ Săn Kéo Theo!",
-                            description=(
-                                f"🏹 **{p.display_name}** dùng phát bắn cuối cùng kéo theo "
-                                f"**{shot_p.display_name}**{role_str} cùng ra đi!"
-                            ),
-                            color=discord.Color(0xE0A638)
-                        )
-                        await _safe_send(channel, embed=embed_announce)
-                else:
-                    embed_announce = discord.Embed(
-                        title="🏹 Thợ Săn",
-                        description=f"🏹 **{p.display_name}** đã không dùng phát bắn cuối cùng.",
-                        color=discord.Color(0xE0A638)
-                    )
-                    await _safe_send(channel, embed=embed_announce)
-
-
-    async def check_and_trigger_mayor_succession(self, game: MasoiGame, channel: discord.TextChannel):
-        """Kiểm tra nếu Thị Trưởng vừa qua đời -> Gửi DM cho Thị Trưởng chọn người kế nhiệm."""
-        if game.mayor_id:
-            mayor_p = game.players.get(game.mayor_id)
-            if mayor_p and not mayor_p.is_alive and not getattr(mayor_p, "mayor_passed_succession", False):
-                mayor_p.mayor_passed_succession = True
-                m_user = await self.get_or_fetch_user(mayor_p.user_id)
-                if m_user:
-                    embed_mayor = discord.Embed(
-                        title="🎩 Thị Trưởng Qua Đời — Truyền Ngôi Kế Nhiệm",
-                        description=f"Bạn đã qua đời! Hãy chọn 1 người chơi còn sống để trao lại chiếc mũ **Thị Trưởng (Vote x2)**. Còn **{game.settings.night_time} giây** để quyết định.",
-                        color=discord.Color.gold()
-                    )
-                    view = MayorSuccessionView(game, mayor_p.user_id)
-                    try:
-                        await m_user.send(embed=embed_mayor, view=view)
-                        elapsed = 0
-                        while elapsed < game.settings.night_time:
-                            if view.is_finished() or game.phase == GamePhase.GAME_END:
-                                break
-                            await asyncio.sleep(1)
-                            elapsed += 1
-                    except Exception:
-                        pass
 
     # ──────────────────────────────────────────────
     #  Embed Builders
@@ -2399,7 +1164,13 @@ class Masoi(commands.Cog):
         total_votes = 0
 
         for voter_id, tid in game.day_votes.items():
-            w = 2 if (game.mayor_id and voter_id == game.mayor_id) else 1
+            voter = game.players.get(voter_id)
+            if voter and voter.role == Role.ALPHA_WOLF:
+                w = 3
+            elif game.mayor_id and voter_id == game.mayor_id:
+                w = 2
+            else:
+                w = 1
             total_votes += w
             if tid is None:
                 white_votes += w
@@ -2467,28 +1238,30 @@ class Masoi(commands.Cog):
         )
         return make_embed(title="<a:2336vipgif:1534596901834592286> Thẻ VIP Ma Sói", description=desc, color=discord.Color.gold())
 
-    def build_rankboard_embed(self) -> discord.Embed:
+    def build_rankboard_embed(self, faction: Optional[RankFaction] = None) -> discord.Embed:
         eco = self.get_economy()
         if not eco:
             return make_embed(title="🏆 BẢNG XẾP HẠNG MA SÓI", description="Không kết nối được cơ sở dữ liệu.")
-
-        rows = eco.get_masoi_leaderboard(limit=10)
-        if not rows:
-            return make_embed(title="🏆 BẢNG XẾP HẠNG MA SÓI", description="_Chưa có dữ liệu xếp hạng._")
-
-        lines = []
-        for idx, (uid, pts, plays, wins) in enumerate(rows, 1):
-            icon, tier_name = get_rank_tier(pts)
-            user = self.bot.get_user(uid)
-            name = user.display_name if user else f"User {uid}"
-            win_rate = (wins / plays * 100) if plays > 0 else 0
-            lines.append(f"`#{idx}` {icon} **{name}** — **{pts} pts** ({tier_name}) | 🎮 {plays} ván ({win_rate:.0f}% thắng)")
-
-        return make_embed(
-            title="🏆 BẢNG XẾP HẠNG MA SÓI (TOP 10)",
-            description="\n".join(lines),
+        factions = [faction] if faction else list(RankFaction)
+        embed = make_embed(
+            title=f"🏆 RANK MA SÓI — {faction.label if faction else 'SÓI / SOLO / DÂN'} (TOP 10)",
+            description="Ba bảng điểm độc lập, tính từ hệ thống rank mới; lịch sử cũ được giữ riêng.",
             color=discord.Color.gold(),
         )
+        for group in factions:
+            rows = eco.get_masoi_leaderboard(limit=10, faction=group.value)
+            lines = []
+            for idx, (uid, pts, plays, wins) in enumerate(rows, 1):
+                icon, tier_name = get_rank_tier(pts)
+                win_rate = wins / plays * 100 if plays else 0
+                lines.append(f"`#{idx}` {icon} <@{uid}> — **{pts:+d} pts** · {wins}/{plays} thắng ({win_rate:.0f}%)")
+            value = "\n".join(lines) if lines else "_Chưa có ván xếp hạng cho phe này._"
+            if faction:
+                embed.description += "\n\n" + value
+            else:
+                embed.add_field(name=group.label, value=value, inline=False)
+        embed.set_footer(text="Sói/Dân thắng +20 · Solo +30 · Thua −15 · Bonus khi thắng ≤10 · Điểm có thể âm")
+        return embed
 
     # ──────────────────────────────────────────────
     #  Helper Updates
@@ -2516,6 +1289,8 @@ class Masoi(commands.Cog):
 
     async def update_witch_dm(self, game: MasoiGame):
         """Cập nhật real-time tin nhắn DM của Phù Thủy khi Sói chọn mục tiêu cắn."""
+        if not game.accepts_night_actions(game.night_count):
+            return
         if not game.witch_dm_message or (game.witch_view and game.witch_view.is_finished()):
             return
 
@@ -2532,12 +1307,30 @@ class Masoi(commands.Cog):
             description=f"Đêm nay, bầy Sói nhắm cắn: **{v_name}**.\nBạn có muốn dùng **BÌNH CỨU** không? Còn **{game.settings.night_time} giây** để quyết định.",
             color=discord.Color(0xE0A638)
         )
+        if game.witch_view:
+            game.witch_view.stop()
         view = NightWitchView(game, witch_p.user_id, victim_id)
         game.witch_view = view
         try:
             await game.witch_dm_message.edit(embed=embed, view=view)
         except Exception as e:
             logger.warning("Không thể cập nhật Witch DM: %s", e)
+
+    async def update_night_result_dm(self, message, result: Optional[str], label: str):
+        if not message or not result:
+            return
+        try:
+            embed = message.embeds[0] if message.embeds else None
+            if embed and embed.fields:
+                embed.set_field_at(
+                    len(embed.fields) - 1,
+                    name="\u200b",
+                    value=f"──────────────────────────────────────\n{label}: {result}",
+                    inline=False,
+                )
+                await message.edit(embed=embed, view=None)
+        except Exception as e:
+            logger.warning("Không thể gửi kết quả đêm qua DM: %s", e)
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
@@ -2603,7 +1396,15 @@ class Masoi(commands.Cog):
                         member = None
                 if member:
                     try:
-                        await channel.set_permissions(member, send_messages=False)
+                        if p.user_id not in game.channel_permission_snapshots:
+                            game.channel_permission_snapshots[p.user_id] = copy.deepcopy(
+                                channel.overwrites.get(member)
+                            )
+                        # Persist the original overwrite before touching Discord permissions.
+                        self.checkpoint_game(game)
+                        muted = copy.deepcopy(channel.overwrites.get(member)) or discord.PermissionOverwrite()
+                        muted.send_messages = False
+                        await channel.set_permissions(member, overwrite=muted)
                     except discord.Forbidden:
                         logger.warning("Bot thiếu quyền 'Manage Permissions' để cấm chat người chết!")
                     except Exception as e:
@@ -2611,681 +1412,34 @@ class Masoi(commands.Cog):
 
     async def restore_channel_permissions(self, game: MasoiGame, channel: discord.TextChannel):
         """Khôi phục lại quyền chat bình thường khi ván đấu kết thúc."""
-        if not isinstance(channel, discord.TextChannel):
+        key = f"{game.guild_id}-{game.channel_id}"
+        if (game.phase == GamePhase.GAME_END and self.active_games.get(key) is not game
+                and not getattr(game, "recovering", False) and not game.rank_settled):
+            # Explicitly cancelled sessions must not be replayed as ranked wins on restart.
+            game.winner_faction = None
+            game.checkpoint()
+        if not isinstance(channel, discord.TextChannel) or not game.channel_permission_snapshots:
+            if game.phase == GamePhase.GAME_END and not game.winner_faction and not getattr(game, "recovering", False):
+                self.retire_snapshot(game)
             return
 
         guild = channel.guild
-        for p in game.players.values():
-            member = guild.get_member(p.user_id)
+        snapshots = dict(game.channel_permission_snapshots)
+        for user_id, overwrite in snapshots.items():
+            member = guild.get_member(user_id)
             if not member:
                 try:
-                    member = await guild.fetch_member(p.user_id)
+                    member = await guild.fetch_member(user_id)
                 except Exception:
                     member = None
             if member:
                 try:
-                    await channel.set_permissions(member, overwrite=None)
-                except Exception:
-                    pass
+                    await channel.set_permissions(member, overwrite=overwrite)
+                    game.channel_permission_snapshots.pop(user_id, None)
+                    self.checkpoint_game(game)
+                except Exception as e:
+                    logger.warning("Không thể khôi phục permission cho user %s: %s", user_id, e)
 
     # ──────────────────────────────────────────────
     #  Core State Machine Flow
     # ──────────────────────────────────────────────
-
-    async def start_game(self, game: MasoiGame, message: discord.Message):
-        game.phase = GamePhase.ROLE_ASSIGN
-        game.cog = self
-        game.assign_roles()
-
-        # DM vai trò riêng cho từng người
-        for p in game.players.values():
-            user = self.bot.get_user(p.user_id)
-            if user:
-                extra_info = ""
-                if p.is_wolf:
-                    wolves = [other.display_name for other in game.players.values() if other.is_wolf and other.user_id != p.user_id]
-                    if wolves:
-                        extra_info = f" · Đồng đội Sói: {', '.join(wolves)}"
-                    else:
-                        extra_info = " · Bạn là Sói duy nhất ván này"
-
-                faction_name = p.role.faction.value.replace(" 🐺", "").replace(" 👥", "").replace(" 🃏", "").replace(" 💘", "")
-
-                dm_text = (
-                    f"> {p.role.emoji} **Vai trò của bạn: {p.role.value}**\n"
-                    f"> {faction_name} · {p.role.description}{extra_info}"
-                )
-                try:
-                    await user.send(dm_text)
-                except Exception:
-                    logger.warning("Không thể DM riêng cho user %s", p.user_id)
-
-        # Chạy vòng lặp game
-        await self.game_loop(game, message)
-
-    async def game_loop(self, game: MasoiGame, message: discord.Message):
-        key = f"{game.guild_id}-{game.channel_id}"
-        divider = "──────────────────────────────────────"
-
-        try:
-            while game.phase != GamePhase.GAME_END:
-                # Guard: Kiểm tra xem game có bị force-stop từ bên ngoài không
-                if key not in self.active_games:
-                    logger.info("Game %s đã bị dừng từ bên ngoài, thoát game_loop.", key)
-                    return
-
-                # ── BƯỚC 1: ĐÊM ──
-                game.start_night()
-                game.phase = GamePhase.NIGHT_GUARD
-
-                # Thông báo Thẻ Sự Kiện Đêm nếu bật chế độ Thẻ Sự Kiện
-                if game.settings.enable_events and game.current_night_event:
-                    embed_event = discord.Embed(
-                        title=f"🎴 THẺ SỰ KIỆN ĐÊM {game.night_count} — {game.current_night_event.title}",
-                        description=(
-                            f"{game.current_night_event.description}\n\n"
-                            f"{divider}\n"
-                            f"⚠️ *Sự kiện có hiệu lực ngay trong Đêm {game.night_count} và Ban Ngày tiếp theo!*"
-                        ),
-                        color=discord.Color.purple()
-                    )
-                    await _safe_send(message.channel, embed=embed_event)
-
-                # Gửi DM riêng cho Thần Tình Yêu ở Đêm 1
-                if game.night_count == 1:
-                    cupid_p = game.get_player_by_role(Role.CUPID)
-                    if cupid_p:
-                        c_user = self.bot.get_user(cupid_p.user_id)
-                        if c_user:
-                            embed_cupid = discord.Embed(
-                                title=f"🌙 Đêm 1 — Lượt của Thần Tình Yêu",
-                                description=f"Chọn đúng 2 người để ghép đôi Cặp Đôi Tình Nhân. Còn **{game.settings.night_time} giây** để quyết định.",
-                                color=discord.Color(0xE0A638)
-                            )
-                            view_cupid = NightCupidView(game, cupid_p.user_id)
-                            try:
-                                await c_user.send(embed=embed_cupid, view=view_cupid)
-                            except Exception:
-                                pass
-
-                # Gửi DM riêng cho các vai trò ban đêm
-                # 1. Bảo Vệ
-                guard_p = game.get_player_by_role(Role.GUARD)
-                if guard_p:
-                    g_user = await self.get_or_fetch_user(guard_p.user_id)
-                    if g_user:
-                        embed = discord.Embed(
-                            title=f"<a:moon:1533444241596874792> Đêm {game.night_count} — Lượt của Bảo Vệ",
-                            description=f"Chọn 1 người để bảo vệ đêm nay. Còn **{game.settings.night_time} giây** để quyết định.",
-                            color=discord.Color(0xE0A638)
-                        )
-                        view = NightGuardView(game, guard_p.user_id)
-                        try:
-                            await g_user.send(embed=embed, view=view)
-                        except Exception:
-                            pass
-
-                # 2. Bầy Sói
-                for w in game.get_alive_wolves():
-                    w_user = await self.get_or_fetch_user(w.user_id)
-                    if w_user:
-                        embed = discord.Embed(
-                            title=f"<a:moon:1533444241596874792> Đêm {game.night_count} — Lượt của Sói",
-                            description=f"Chọn 1 người để cắn đêm nay. Còn **{game.settings.night_time} giây** để quyết định.",
-                            color=discord.Color(0xE0A638)
-                        )
-                        view = NightWolfView(game, w.user_id)
-                        try:
-                            await w_user.send(embed=embed, view=view)
-                        except Exception:
-                            pass
-
-                # 3. Tiên Tri
-                seer_p = game.get_player_by_role(Role.SEER)
-                if seer_p:
-                    s_user = await self.get_or_fetch_user(seer_p.user_id)
-                    if s_user:
-                        embed = discord.Embed(
-                            title=f"<a:moon:1533444241596874792> Đêm {game.night_count} — Lượt của Tiên Tri",
-                            description=f"Chọn 1 người để soi phe đêm nay. Còn **{game.settings.night_time} giây** để quyết định.",
-                            color=discord.Color(0xE0A638)
-                        )
-                        view = NightSeerView(game, seer_p.user_id)
-                        try:
-                            await s_user.send(embed=embed, view=view)
-                        except Exception:
-                            pass
-
-                # 4. Phù Thủy
-                witch_p = game.get_player_by_role(Role.WITCH)
-                if witch_p:
-                    wt_user = await self.get_or_fetch_user(witch_p.user_id)
-                    if wt_user:
-                        if game.current_night_event == NightEvent.SEAL_NIGHT:
-                            embed = discord.Embed(
-                                title=f"🌙 Đêm {game.night_count} — Lượt của Phù Thủy",
-                                description="🧪 **Do ảnh hưởng của Thẻ Sự Kiện Phong Ấn Dược Liệu**, tất cả hũ thuốc của bạn đều bị phong tỏa đêm nay!",
-                                color=discord.Color.red()
-                            )
-                            try:
-                                await wt_user.send(embed=embed)
-                            except Exception:
-                                pass
-                        else:
-                            victim_id = game.resolve_wolf_target()
-                            victim_p = game.players.get(victim_id) if victim_id else None
-                            v_name = victim_p.display_name if victim_p else "Không ai"
-                            embed = discord.Embed(
-                                title=f"<a:moon:1533444241596874792> Đêm {game.night_count} — Lượt của Phù Thủy",
-                                description=f"Đêm nay, bầy Sói nhắm cắn: **{v_name}**.\nBạn có muốn dùng **BÌNH CỨU** không? Còn **{game.settings.night_time} giây** để quyết định.",
-                                color=discord.Color(0xE0A638)
-                            )
-                            view = NightWitchView(game, witch_p.user_id, victim_id)
-                            game.witch_view = view
-                            try:
-                                msg = await wt_user.send(embed=embed, view=view)
-                                game.witch_dm_message = msg
-                            except Exception:
-                                pass
-
-                # 5. Sói Tiên Tri
-                wolf_seer_p = game.get_player_by_role(Role.WOLF_SEER)
-                if wolf_seer_p:
-                    ws_user = await self.get_or_fetch_user(wolf_seer_p.user_id)
-                    if ws_user:
-                        embed = discord.Embed(
-                            title=f"<a:moon:1533444241596874792> Đêm {game.night_count} — Lượt của Sói Tiên Tri",
-                            description=f"Chọn 1 người để soi chính xác vai trò cá nhân đêm nay. Còn **{game.settings.night_time} giây** để quyết định.",
-                            color=discord.Color(0xE0A638)
-                        )
-                        view = NightWolfSeerView(game, wolf_seer_p.user_id)
-                        try:
-                            await ws_user.send(embed=embed, view=view)
-                        except Exception:
-                            pass
-
-                # 6. Sát Thủ Hàng Loạt
-                sk_p = game.get_player_by_role(Role.SERIAL_KILLER)
-                if sk_p:
-                    sk_user = await self.get_or_fetch_user(sk_p.user_id)
-                    if sk_user:
-                        embed = discord.Embed(
-                            title=f"<a:moon:1533444241596874792> Đêm {game.night_count} — Lượt của Sát Thủ",
-                            description=f"Chọn 1 nạn nhân để ra tay hạ gục đêm nay. Còn **{game.settings.night_time} giây** để quyết định.",
-                            color=discord.Color(0xE0A638)
-                        )
-                        view = NightSerialKillerView(game, sk_p.user_id)
-                        try:
-                            await sk_user.send(embed=embed, view=view)
-                        except Exception:
-                            pass
-
-                # 7. Vũ Nữ
-                harlot_p = game.get_player_by_role(Role.HARLOT)
-                if harlot_p:
-                    h_user = await self.get_or_fetch_user(harlot_p.user_id)
-                    if h_user:
-                        embed = discord.Embed(
-                            title=f"<a:moon:1533444241596874792> Đêm {game.night_count} — Lượt của Vũ Nữ",
-                            description=f"Chọn 1 người để 'thăm' và phong tỏa kỹ năng đêm. Còn **{game.settings.night_time} giây** để quyết định.",
-                            color=discord.Color(0xE0A638)
-                        )
-                        view = NightHarlotView(game, harlot_p.user_id)
-                        try:
-                            await h_user.send(embed=embed, view=view)
-                        except Exception:
-                            pass
-
-                # 8. Thám Tử
-                inv_p = game.get_player_by_role(Role.INVESTIGATOR)
-                if inv_p:
-                    inv_user = await self.get_or_fetch_user(inv_p.user_id)
-                    if inv_user:
-                        embed = discord.Embed(
-                            title=f"<a:moon:1533444241596874792> Đêm {game.night_count} — Lượt của Thám Tử",
-                            description=f"Chọn 2 người để kiểm tra xem có Sói hay không. Còn **{game.settings.night_time} giây** để quyết định.",
-                            color=discord.Color(0xE0A638)
-                        )
-                        view = NightInvestigatorView(game, inv_p.user_id)
-                        try:
-                            await inv_user.send(embed=embed, view=view)
-                        except Exception:
-                            pass
-
-                # 9. Tiên Tri Tập Sự (khi đã kế thừa)
-                app_p = game.get_player_by_role(Role.APPRENTICE_SEER)
-                if app_p and app_p.apprentice_promoted:
-                    app_user = await self.get_or_fetch_user(app_p.user_id)
-                    if app_user:
-                        embed = discord.Embed(
-                            title=f"<a:moon:1533444241596874792> Đêm {game.night_count} — Lượt của Tiên Tri Tập Sự (Kế Thừa)",
-                            description=f"Bạn đã trở thành Tiên Tri mới! Chọn 1 người để soi phe đêm nay. Còn **{game.settings.night_time} giây** để quyết định.",
-                            color=discord.Color(0xE0A638)
-                        )
-                        view = NightSeerView(game, app_p.user_id)
-                        try:
-                            await app_user.send(embed=embed, view=view)
-                        except Exception:
-                            pass
-
-                # 10. Sói Trắng (mỗi 2 đêm chẵn)
-                white_wolf_p = game.get_player_by_role(Role.WHITE_WOLF)
-                if white_wolf_p and game.night_count % 2 == 0:
-                    other_wolves = [p for p in game.get_alive_wolves() if p.user_id != white_wolf_p.user_id]
-                    if other_wolves:
-                        ww_user = await self.get_or_fetch_user(white_wolf_p.user_id)
-                        if ww_user:
-                            embed = discord.Embed(
-                                title=f"🐺⭐ Đêm {game.night_count} — Lượt Đặc Biệt của Sói Trắng",
-                                description=(
-                                    f"Đêm số **{game.night_count}** (chẵn) — bạn có thể **bí mật cắn thêm 1 Sói** trong bầy!\n"
-                                    f"Còn **{game.settings.night_time} giây** để quyết định."
-                                ),
-                                color=discord.Color(0xE0A638)
-                            )
-                            view = NightWhiteWolfView(game, white_wolf_p.user_id)
-                            try:
-                                await ww_user.send(embed=embed, view=view)
-                            except Exception:
-                                pass
-
-                # 11. Sói Ảo Ảnh
-                phantom_p = game.get_player_by_role(Role.PHANTOM_WOLF)
-                if phantom_p:
-                    ph_user = await self.get_or_fetch_user(phantom_p.user_id)
-                    if ph_user:
-                        embed = discord.Embed(
-                            title=f"🐺👻 Đêm {game.night_count} — Lượt của Sói Ảo Ảnh",
-                            description=(
-                                f"Chọn 1 người dân để **giả dạng**. Nếu Tiên Tri soi người đó đêm nay, họ sẽ thấy kết quả là '**SÓI**'.\n"
-                                f"Còn **{game.settings.night_time} giây** để quyết định."
-                            ),
-                            color=discord.Color(0xE0A638)
-                        )
-                        view = NightPhantomWolfView(game, phantom_p.user_id)
-                        try:
-                            await ph_user.send(embed=embed, view=view)
-                        except Exception:
-                            pass
-
-                # 12. Cô Bé
-                girl_p = game.get_player_by_role(Role.THE_GIRL)
-                if girl_p:
-                    girl_user = await self.get_or_fetch_user(girl_p.user_id)
-                    if girl_user:
-                        embed = discord.Embed(
-                            title=f"👧 Đêm {game.night_count} — Lượt của Cô Bé",
-                            description=(
-                                f"Bạn có muốn **nhìn trộm** xem bầy Sói đang cắn ai không?\n"
-                                f"⚠️ Nếu bị phát hiện (**50% cơ hội**) — bạn chết ngay đêm nay!\n"
-                                f"Còn **{game.settings.night_time} giây** để quyết định."
-                            ),
-                            color=discord.Color(0xE0A638)
-                        )
-                        view = NightGirlView(game, girl_p.user_id)
-                        try:
-                            await girl_user.send(embed=embed, view=view)
-                        except Exception:
-                            pass
-
-                # 13. Người Thổi Sáo
-                piper_p_dm = game.get_player_by_role(Role.PIPER)
-                if piper_p_dm:
-                    piper_user = await self.get_or_fetch_user(piper_p_dm.user_id)
-                    if piper_user:
-                        charmed_count = sum(1 for p in game.players.values() if p.piper_charmed)
-                        total_others = len(game.players) - 1
-                        embed = discord.Embed(
-                            title=f"🎵 Đêm {game.night_count} — Lượt của Người Thổi Sáo",
-                            description=(
-                                f"Chọn **2 người** để mê hoặc đêm nay.\n"
-                                f"📊 Đã mê hoặc: **{charmed_count}/{total_others}** người\n"
-                                f"Còn **{game.settings.night_time} giây** để quyết định."
-                            ),
-                            color=discord.Color(0xE0A638)
-                        )
-                        view = NightPiperView(game, piper_p_dm.user_id)
-                        try:
-                            await piper_user.send(embed=embed, view=view)
-                        except Exception:
-                            pass
-
-                embed_night = discord.Embed(
-                    title=f"<a:moon:1533444241596874792> Ban Đêm — Đêm {game.night_count}",
-                    description=(
-                        f"Màn đêm đã buông xuống làng...\n"
-                        f"Bot đã gửi tin nhắn riêng (DM) tới các vai trò ban đêm để hành động!\n\n"
-                        f"{divider}\n⏱️ **Thời gian đêm:** `{game.settings.night_time}s`"
-                    ),
-                    color=discord.Color(0xE0A638)
-                )
-                night_msg = await _safe_send(message.channel, embed=embed_night)
-
-                # Chờ hết thời gian ban đêm
-                elapsed = 0
-                while elapsed < game.settings.night_time:
-                    if key not in self.active_games or game.phase == GamePhase.GAME_END:
-                        break
-                    await asyncio.sleep(1)
-                    elapsed += 1
-
-                if key not in self.active_games or game.phase == GamePhase.GAME_END:
-                    break
-
-                try:
-                    await night_msg.delete()
-                except Exception:
-                    pass
-
-                # 1.5 Tính toán đêm
-                game.phase = GamePhase.NIGHT_RESOLVE
-                night_deaths = game.resolve_night()
-                await self.check_and_trigger_hunter(game, message.channel)
-                await self.check_and_trigger_mayor_succession(game, message.channel)
-
-                # Thông báo DM cho Kẻ Bị Nguyền vừa biến thành Sói đêm này
-                for p in game.players.values():
-                    if (
-                        p.is_alive
-                        and p.role == Role.CURSED
-                        and p.is_cursed_converted
-                        and not p.cursed_notified
-                    ):
-                        p.cursed_notified = True
-                        cursed_user = await self.get_or_fetch_user(p.user_id)
-                        if cursed_user:
-                            wolf_teammates = [
-                                w.display_name
-                                for w in game.get_alive_wolves()
-                                if w.user_id != p.user_id
-                            ]
-                            teammates_str = (
-                                ", ".join(f"**{n}**" for n in wolf_teammates)
-                                if wolf_teammates else "*Bạn là Sói duy nhất còn sống!*"
-                            )
-                            try:
-                                await cursed_user.send(
-                                    f"🌕🐺 **Bạn đã bị Nguyền và biến thành SÓI!**\n"
-                                    f"> Bầy Sói đã cắn bạn đêm qua \u2014 từ đêm sau bạn là **SÓI** rồi!\n"
-                                    f"> 👥 Đồng đội Sói: {teammates_str}"
-                                )
-                            except Exception:
-                                pass
-
-                # Cập nhật kết quả nhìn trộm cho Cô Bé khi hết Đêm
-                if game.girl_peeking_user_id and not game.girl_caught:
-                    girl_user = await self.get_or_fetch_user(game.girl_peeking_user_id)
-                    if girl_user:
-                        wolf_target_id = game.resolve_wolf_target()
-                        wolf_target_p = game.players.get(wolf_target_id) if wolf_target_id else None
-                        if wolf_target_p:
-                            res_text = f"👀 **Nhìn trộm thành công!** Bầy Sói đã cắn **{wolf_target_p.display_name}** đêm qua!"
-                        else:
-                            res_text = "👀 **Nhìn trộm thành công!** Bầy Sói không cắn ai đêm qua."
-                        try:
-                            await girl_user.send(res_text)
-                        except Exception:
-                            pass
-
-                # Cập nhật DM cho Tiên Tri Tập Sự vừa kế thừa vị trí
-                for app_p in game.players.values():
-                    if app_p.is_alive and app_p.role == Role.APPRENTICE_SEER and app_p.apprentice_promoted and not getattr(app_p, "apprentice_notified", False):
-                        app_p.apprentice_notified = True
-                        app_user = await self.get_or_fetch_user(app_p.user_id)
-                        if app_user:
-                            try:
-                                await app_user.send(
-                                    "🔮✨ **Tiên Tri chính đã qua đời!** Bạn đã chính thức kế thừa vị trí **Tiên Tri mới** của làng!\n"
-                                    "> Từ đêm tiếp theo, bạn có thể sử dụng kỹ năng soi phe."
-                                )
-                            except Exception:
-                                pass
-
-                # Cập nhật lại DM của Tiên Tri với kết quả soi chốt cuối đêm
-                if game.night_seer_result and game.seer_dm_message:
-                    try:
-                        embed = game.seer_dm_message.embeds[0] if game.seer_dm_message.embeds else None
-                        if embed and len(embed.fields) > 0:
-                            divider = "──────────────────────────────────────"
-                            target_name = game.players[game.night_seer_target].display_name if game.night_seer_target and game.night_seer_target in game.players else "Mục tiêu"
-                            embed.set_field_at(
-                                len(embed.fields) - 1,
-                                name="\u200b",
-                                value=f"{divider}\n✅ **Đã ghi nhận:** soi **{target_name}**\n🔮 **Kết quả:** {game.night_seer_result}",
-                                inline=False
-                            )
-                            await game.seer_dm_message.edit(embed=embed)
-                    except Exception:
-                        pass
-
-                # ── BƯỚC 2: CÔNG BỐ BAN NGÀY ──
-                game.phase = GamePhase.DAY_ANNOUNCE
-                game.start_day()
-                await self.sync_channel_permissions(game, message.channel)
-
-                if night_deaths:
-                    death_names = []
-                    quotes = []
-                    eco = self.get_economy()
-                    for uid in night_deaths:
-                        p = game.players[uid]
-                        if game.settings.reveal_roles_on_death:
-                            death_names.append(f"<:die:1533444731000848415> **{p.display_name}** *({p.role.emoji} {p.role.value})*")
-                        else:
-                            death_names.append(f"<:die:1533444731000848415> **{p.display_name}**")
-
-                        if eco:
-                            vip_info = eco.get_masoi_vip_info(p.user_id)
-                            if vip_info["is_vip"] and vip_info["last_words"]:
-                                quotes.append(f"💬 *Lời trăn trối của <a:2336vipgif:1534596901834592286> **{p.display_name}**: \"{vip_info['last_words']}\"*")
-
-                    quote_str = ("\n\n" + "\n".join(quotes)) if quotes else ""
-                    day_msg_text = "Đêm qua trôi qua đầy đau thương... Các nạn nhân đã ra đi:\n" + "\n".join(death_names) + quote_str
-                else:
-                    day_msg_text = "<a:yay:1533444499827851505> Đêm qua trôi qua thật bình yên, không có ai qua đời!"
-
-                embed_announce = discord.Embed(
-                    title=f"<a:yay:1533444499827851505> Ban Ngày — Ngày {game.day_count}",
-                    description=f"{day_msg_text}\n\n{divider}\n💬 Mọi người hãy cùng trao đổi và thảo luận tại kênh này!",
-                    color=discord.Color(0xE0A638)
-                )
-                await _safe_send(message.channel, embed=embed_announce)
-
-                # Kiểm tra thắng ngay sau đêm
-                if game.check_win_condition():
-                    game.phase = GamePhase.GAME_END
-                    break
-
-                # ── BƯỚC 3: THẢO LUẬN BAN NGÀY ──
-                game.phase = GamePhase.DAY_DISCUSSION
-                disc_limit = 30 if game.current_night_event == NightEvent.SILENT_NIGHT else game.settings.discussion_time
-                disc_embed = discord.Embed(
-                    title=f"💬 Ban Ngày — Thảo Luận (Ngày {game.day_count})",
-                    description=f"<a:time:1533445134522384536> **Thời gian thảo luận:** `{disc_limit} giây`.\n"
-                                f"Bấm **Yêu cầu bỏ phiếu sớm** nếu muốn dồn phiếu ngay!\n\n"
-                                f"{divider}\n💬 Mọi người hãy trao đổi ý kiến để tìm ra bầy Sói!",
-                    color=discord.Color(0xE0A638)
-                )
-                disc_view = DayDiscussionView(game, self)
-                disc_msg = await _safe_send(message.channel, embed=disc_embed, view=disc_view)
-
-                # Chờ thảo luận
-                elapsed = 0
-                while elapsed < disc_limit:
-                    if disc_view.is_finished() or key not in self.active_games or game.phase == GamePhase.GAME_END:
-                        break
-                    await asyncio.sleep(1)
-                    elapsed += 1
-
-                if key not in self.active_games or game.phase == GamePhase.GAME_END:
-                    break
-
-                try:
-                    await disc_msg.delete()
-                except Exception:
-                    pass
-
-                # ── BƯỚC 4: BỎ PHIẾU TREO CỔ ──
-                game.phase = GamePhase.DAY_VOTE
-                if game.current_night_event == NightEvent.SOLAR_ECLIPSE:
-                    game.phase = GamePhase.DAY_RESOLVE
-                    eclipse_embed = discord.Embed(
-                        title="☀️ NHẬT THỰC BÓNG TỐI",
-                        description="Do ảnh hưởng của hiện tượng **Nhật Thực Bóng Tối**, ban ngày hôm nay Dân Làng bị bóng tối che mắt và **không thể bỏ phiếu treo cổ**!",
-                        color=discord.Color.dark_red()
-                    )
-                    await _safe_send(message.channel, embed=eclipse_embed)
-                    game.resolve_day_vote()
-                else:
-                    vote_embed = self.build_vote_embed(game, is_final=False)
-                    vote_view = DayVoteView(game, self)
-                    vote_msg = await _safe_send(message.channel, embed=vote_embed, view=vote_view)
-
-                    # Chờ tất cả mọi người bỏ phiếu xong hoặc hết thời gian đếm ngược
-                    elapsed = 0
-                    while elapsed < game.settings.night_time:
-                        if vote_view.is_finished() or len(game.day_votes) >= len(game.get_alive_players()) or key not in self.active_games or game.phase == GamePhase.GAME_END:
-                            break
-                        await asyncio.sleep(1)
-                        elapsed += 1
-
-                    if key not in self.active_games or game.phase == GamePhase.GAME_END:
-                        break
-
-                    # ── BƯỚC 5: XỬ LÝ BỎ PHIẾU ──
-                    game.phase = GamePhase.DAY_RESOLVE
-                    vote_final_embed = self.build_vote_embed(game, is_final=True)
-                    try:
-                        await vote_msg.edit(embed=vote_final_embed, view=None)
-                    except Exception:
-                        pass
-
-                    executed_id = game.resolve_day_vote()
-                    await self.check_and_trigger_hunter(game, message.channel)
-                    await self.check_and_trigger_mayor_succession(game, message.channel)
-                    await self.sync_channel_permissions(game, message.channel)
-
-                    if executed_id:
-                        p = game.players[executed_id]
-                        if p.role == Role.ALPHA_WOLF:
-                            if p.boss_lives > 0:
-                                exec_text = f"👑🐺 **Chúa Tể Sói {p.display_name}** đã hứng chịu đòn dồn phiếu của Dân Làng, nhưng nhờ sở hữu 3 Mạng Vương Giả, hắn đã thoát chết! (HP hiện tại: **{p.boss_lives}/3**)"
-                            else:
-                                exec_text = f"💥👑🐺 **CHÚA TỂ SÓI {p.display_name}** ĐÃ CHÍNH THỨC BỊ DÂN LÀNG TIÊU DIỆT HOÀN TOÀN! Phe Dân Làng đã giải phóng vương quốc!"
-                        elif p.role == Role.SCAPEGOAT and last_log and last_log.event_type == "SCAPEGOAT_EXECUTED":
-                            if game.settings.reveal_roles_on_death:
-                                exec_text = f"🐐 **Do phiếu bầu bị HÒA, Dê Tế Thần {p.display_name}** tự động bị gánh tội và đưa lên giàn treo cổ! *(Vai trò: **{p.role.emoji} {p.role.value}**)*"
-                            else:
-                                exec_text = f"🐐 **Do phiếu bầu bị HÒA, Dê Tế Thần {p.display_name}** tự động bị gánh tội và đưa lên giàn treo cổ!"
-                        else:
-                            if game.settings.reveal_roles_on_death:
-                                exec_text = f"<a:huyay:1533445376563089448> **{p.display_name}** đã bị dân làng xử tử trên giàn treo cổ! *(Vai trò: **{p.role.emoji} {p.role.value}**)*"
-                            else:
-                                exec_text = f"<a:huyay:1533445376563089448> **{p.display_name}** đã bị dân làng xử tử trên giàn treo cổ!"
-
-                        eco = self.get_economy()
-                        if eco:
-                            vip_info = eco.get_masoi_vip_info(p.user_id)
-                            if vip_info["is_vip"] and vip_info["last_words"]:
-                                exec_text += f"\n\n💬 *Lời trăn trối của <a:2336vipgif:1534596901834592286> **{p.display_name}**: \"{vip_info['last_words']}\"*"
-                    else:
-                        last_log = game.replay_logs[-1] if game.replay_logs else None
-                        if last_log and last_log.event_type == "VOTE_RESULT":
-                            exec_text = f"<a:huyay:1533445376563089448> Lượt bỏ phiếu kết thúc: **{last_log.result}**."
-                        else:
-                            exec_text = "<a:huyay:1533445376563089448> Lượt bỏ phiếu kết thúc, không ai bị xử tử."
-
-                    embed_exec = discord.Embed(
-                        title="<a:huyay:1533445376563089448> Kết Quả Xử Tử",
-                        description=f"{exec_text}\n\n{divider}",
-                        color=discord.Color(0xE0A638)
-                    )
-                    await _safe_send(message.channel, embed=embed_exec)
-
-                # Kiểm tra thắng sau bỏ phiếu
-                if game.check_win_condition():
-                    game.phase = GamePhase.GAME_END
-                    break
-
-            # ── BƯỚC 6: KẾT THÚC GAME ──
-            await self.end_game(game, message)
-
-        except asyncio.CancelledError:
-            # Game bị cancel chủ động (thường do force_stop_game)
-            logger.info("Game loop %s bị cancel.", key)
-        except discord.HTTPException as e:
-            logger.error("Discord API error trong game loop %s: %s", key, e, exc_info=True)
-            try:
-                embed_err = make_embed(
-                    title="<a:luuy:1533429265293508888> ĐÃ XẢY RA LỖI KẾT NỐI",
-                    description=(
-                        f"Ván Ma Sói gặp sự cố kết nối với Discord và đã bị hủy!\n"
-                        f"*(Lỗi: {e.status} — {e.text})*\n\n"
-                        f"Dùng `!masoi` để tạo ván mới."
-                    ),
-                    color=discord.Color.red()
-                )
-                await message.channel.send(embed=embed_err)
-            except Exception:
-                pass
-        except Exception as e:
-            logger.exception("Lỗi không xác định trong game loop (Guild %s, Channel %s):", game.guild_id, game.channel_id)
-            try:
-                embed_err = make_embed(
-                    title="<a:luuy:1533429265293508888> ĐÃ XẢY RA LỖI HỆ THỐNG",
-                    description=(
-                        f"Ván Ma Sói gặp sự cố không mong muốn và đã bị hủy!\n"
-                        f"`Chi tiết lỗi: {type(e).__name__}: {e}`\n\n"
-                        f"Dùng `!masoi` để tạo ván mới."
-                    ),
-                    color=discord.Color.red()
-                )
-                await message.channel.send(embed=embed_err)
-            except Exception:
-                pass
-        finally:
-            # Luôn dọn sạch active_games để kênh không bị lock
-            if key in self.active_games:
-                del self.active_games[key]
-                logger.info("Đã dọn sạch active_games cho key %s.", key)
-
-    async def end_game(self, game: MasoiGame, message: discord.Message):
-        game.phase = GamePhase.GAME_END
-        game.end_time = float(asyncio.get_event_loop().time())
-
-        # Cộng điểm rank
-        rank_pts = game.calculate_rank_points()
-        eco = self.get_economy()
-        if eco and game.settings.enable_rank:
-            for uid, pts in rank_pts.items():
-                p = game.players[uid]
-                is_win = (
-                    (p.role.faction == game.winner_faction)
-                    or (uid == game.tanner_winner_id)
-                    or (p.is_cursed_converted and game.winner_faction == Faction.WEREWOLF)
-                )
-                faction_str = p.role.faction.name
-                eco.add_masoi_points(uid, pts, is_win, faction_str)
-
-        # Tổng kết vai trò
-        role_lines = []
-        for p in game.players.values():
-            status = "<a:key:1526234974150459593> Sống" if p.is_alive else "<:die:1533444731000848415> Chết"
-            pts_str = f" (+{rank_pts.get(p.user_id, 0)} pts)" if game.settings.enable_rank else ""
-            role_lines.append(f"• **{p.display_name}** — {p.role.emoji} **{p.role.value}** [{status}]{pts_str}")
-
-        winner_str = game.winner_faction.value if game.winner_faction else "Không có"
-
-        end_embed = make_embed(
-            title=f"<a:w1:1526231439425667093> VÁN BÀN CỜ MA SÓI KẾT THÚC <a:w1:1526231439425667093> {winner_str}",
-            description=(
-                f"<a:w1:1526231439425667093> **{winner_str} đã giành chiến thắng!**<a:w1:1526231439425667093>\n\n"
-                f"**Vai trò tất cả người chơi:**\n" + "\n".join(role_lines) + "\n\n"
-                f" **Tổng thời gian ván:** {game.night_count} Đêm, {game.day_count} Ngày"
-            ),
-            color=discord.Color.green(),
-        )
-
-        end_view = GameEndView(game, self)
-        await message.channel.send(embed=end_embed, view=end_view)
-        await self.restore_channel_permissions(game, message.channel)
