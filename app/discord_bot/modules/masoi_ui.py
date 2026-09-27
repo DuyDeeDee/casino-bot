@@ -6,8 +6,9 @@ from typing import Dict, Optional
 import discord
 from app.discord_bot.modules.helpers import make_embed
 from app.discord_bot.modules.masoi_engine import (
-    ActionIntent, ActionKind, Faction, GamePhase, MasoiGame, NightEvent, Role, RankFaction, ReplayLog,
+    ActionIntent, ActionKind, Faction, GamePhase, MasoiGame, Role, RankFaction, ReplayLog,
 )
+from app.discord_bot.modules.masoi_presentation import ui_lock, remaining_night_seconds, select_badge
 logger = logging.getLogger(__name__)
 
 class NightActionView(discord.ui.View):
@@ -619,7 +620,7 @@ class NightPiperView(NightActionView):
                 options.append(discord.SelectOption(label=label[:25], value=str(p.user_id), description=desc, emoji="🎵"))
 
         if options:
-            select_max = min(2, len(options))
+            select_max = game.required_target_count(ActionKind.INVESTIGATE)
             self.select = discord.ui.Select(
                 placeholder=f"🎵 Chọn {select_max} người để mê hoặc...",
                 min_values=select_max,
@@ -810,26 +811,27 @@ class NightWitchView(NightActionView):
         await self.show_poison_step(interaction, "👌 Bạn không dùng bình cứu đêm nay.")
 
     async def show_poison_step(self, interaction: discord.Interaction, prefix_msg: str):
-        witch_p = self.game.players.get(self.witch_id)
-        if not witch_p or witch_p.witch_poison_used:
+        # Acknowledge before waiting for any in-flight wolf DM edit.
+        await interaction.response.defer()
+        async with ui_lock(self.game, "witch"):
+            if not self.game.accepts_night_actions(self.night):
+                self.stop()
+                return
+            witch_p = self.game.players.get(self.witch_id)
             self.stop()
-            embed = interaction.message.embeds[0] if interaction.message.embeds else None
-            if embed:
-                divider = "──────────────────────────────────────"
-                embed.add_field(name="\u200b", value=f"{divider}\n{prefix_msg}\n*(Bạn đã hết bình độc)*", inline=False)
-            await interaction.response.edit_message(embed=embed, view=None)
-            return
-
-        embed_poison = discord.Embed(
-            title=f"🌙 Đêm {self.game.night_count} — Lượt của Phù Thủy",
-            description=f"Bạn có muốn dùng **BÌNH ĐỘC** hạ độc ai không?\nCòn **{self.game.settings.night_time} giây** để quyết định.",
-            color=discord.Color(0xE0A638)
-        )
-        embed_poison.add_field(name="\u200b", value=f"──────────────────────────────────────\n{prefix_msg}", inline=False)
-
-        self.stop()
-        view = NightWitchPoisonView(self.game, self.witch_id, prefix_msg)
-        await interaction.response.edit_message(embed=embed_poison, view=view)
+            if not witch_p or witch_p.witch_poison_used:
+                self.game.witch_view = None
+                embed = discord.Embed(title="🧪 Phù Thủy", description=f"{prefix_msg}\nBạn đã hết bình độc.", color=discord.Color.gold())
+                await interaction.message.edit(embed=embed, view=None)
+                return
+            embed_poison = discord.Embed(
+                title=f"🌙 Đêm {self.night} — Lượt của Phù Thủy",
+                description=f"Dùng **BÌNH ĐỘC**? Còn **{remaining_night_seconds(self.game)} giây** để quyết định.\n\n{prefix_msg}",
+                color=discord.Color(0xE0A638),
+            )
+            view = NightWitchPoisonView(self.game, self.witch_id, prefix_msg)
+            self.game.witch_view = view
+            await interaction.message.edit(embed=embed_poison, view=view)
 
 
 class NightWitchPoisonView(NightActionView):
@@ -967,12 +969,16 @@ class NightHunterView(discord.ui.View):
 
 class DayDiscussionView(discord.ui.View):
     """View ở kênh chính trong lúc thảo luận ban ngày."""
-    def __init__(self, game: MasoiGame, cog: "Masoi"):
+    def __init__(self, game: MasoiGame, cog: "Masoi", *, prepare: bool = False):
         super().__init__(timeout=None)
         self.game = game
         self.cog = cog
         self.day = game.day_count
-        self.deadline = time.monotonic() + (30 if game.current_night_event == NightEvent.SILENT_NIGHT else game.settings.discussion_time)
+        self.deadline = 0.0 if prepare else time.monotonic() + game.settings.discussion_time
+
+    def open_actions(self):
+        if self.game.phase == GamePhase.DAY_DISCUSSION and not self.is_finished():
+            self.deadline = time.monotonic() + self.game.settings.discussion_time
 
     @discord.ui.button(label="Yêu cầu bỏ phiếu sớm (0)", style=discord.ButtonStyle.primary, emoji="⏩", custom_id="masoi_early_vote")
     async def early_vote_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -988,15 +994,16 @@ class DayDiscussionView(discord.ui.View):
 
         self.game.early_vote_requests.add(user_id)
         self.game.checkpoint()
-        alive_count = len(self.game.get_alive_players())
-        req_count = len(self.game.early_vote_requests)
-        button.label = f"Yêu cầu bỏ phiếu sớm ({req_count}/{alive_count})"
-
-        await interaction.response.edit_message(view=self)
-
-        # Nếu đa số người sống đồng ý bỏ phiếu sớm -> Chuyển bước
-        if req_count >= (alive_count // 2 + 1):
-            self.stop()
+        await interaction.response.defer()
+        async with ui_lock(self.game, "discussion"):
+            if self.is_finished() or self.game.phase != GamePhase.DAY_DISCUSSION or self.day != self.game.day_count:
+                return
+            alive_count = len(self.game.get_alive_players())
+            req_count = len(self.game.early_vote_requests)
+            button.label = f"Yêu cầu bỏ phiếu sớm ({req_count}/{alive_count})"
+            await interaction.message.edit(view=self)
+            if req_count >= (alive_count // 2 + 1):
+                self.stop()
 
     async def on_error(self, interaction: discord.Interaction, error: Exception, item) -> None:
         logger.error("DayDiscussionView error on %s: %s", item, error, exc_info=error)
@@ -1009,12 +1016,12 @@ class DayDiscussionView(discord.ui.View):
 
 class DayVoteView(discord.ui.View):
     """View bỏ phiếu treo cổ ban ngày."""
-    def __init__(self, game: MasoiGame, cog: "Masoi"):
+    def __init__(self, game: MasoiGame, cog: "Masoi", *, prepare: bool = False):
         super().__init__(timeout=None)
         self.game = game
         self.cog = cog
         self.day = game.day_count
-        self.deadline = time.monotonic() + game.settings.night_time
+        self.deadline = 0.0 if prepare else time.monotonic() + game.settings.night_time
 
         options = [discord.SelectOption(label="Bỏ phiếu trắng (Không treo cổ ai)", value="white", emoji="🏳️")]
         for p in game.get_alive_players():
@@ -1023,6 +1030,16 @@ class DayVoteView(discord.ui.View):
         select = discord.ui.Select(placeholder="⚖️ Chọn người bạn nghi ngờ để bỏ phiếu...", options=options[:25], custom_id="masoi_vote_select")
         select.callback = self.vote_callback
         self.add_item(select)
+        self.refresh_badges()
+
+    def open_actions(self):
+        if self.game.phase == GamePhase.DAY_VOTE and not self.is_finished():
+            self.deadline = time.monotonic() + self.game.settings.night_time
+
+    def refresh_badges(self):
+        for option in self.children[0].options:
+            if option.value != "white":
+                option.emoji = select_badge(self.cog.player_badge(int(option.value), "⚖️"))
 
     async def vote_callback(self, interaction: discord.Interaction):
         if (self.is_finished() or self.game.phase != GamePhase.DAY_VOTE
@@ -1081,15 +1098,15 @@ def format_replay_story_line(log: ReplayLog) -> str:
     if event in ("WOLF_VOTE", "WOLF_KILL"):
         return f"🐺 **Bầy Sói** âm thầm cất bước trong đêm tối và nhắm nanh cắn {target}."
     elif event == "GUARD_PROTECT":
-        return f"🛡️ **Bảo Vệ** xuất hiện kịp thời, giơ khiên bảo vệ {target} an toàn!"
+        return f"🛡️ **Bảo Vệ** xuất hiện kịp thời, chặn đòn tấn công trực tiếp vào {target}."
     elif event == "WITCH_SAVE":
-        return f"🧪 **Phù Thủy** nhanh tay dùng **Bình Cứu** hồi sinh {target} khỏi tay Bầy Sói!"
+        return f"🧪 **Phù Thủy** nhanh tay dùng **Bình Cứu** chặn đòn tấn công trực tiếp vào {target} (không hồi sinh)."
     elif event == "WITCH_POISON":
-        return f"🧪 **Phù Thủy** mở hũ **Bình Độc**, tàn nhẫn hạ sát {target} trong bóng đêm!"
+        return f"🧪 **Phù Thủy** mở hũ **Bình Độc**, hạ độc {target}; xem sự kiện qua đời để biết kết quả."
     elif event in ("SEER_ACTION", "SEER_INSPECT"):
-        return f"🔮 **Tiên Tri** {actor} bói toán thi triển thần thư, soi rọi thân phận của {target}."
+        return f"🔮 **Tiên Tri** {actor} bói toán thi triển thần thư, soi {target}: {log.result}"
     elif event == "WOLF_SEER_INSPECT":
-        return f"🐺🔮 **Sói Tiên Tri** {actor} âm thầm thấu thị, biết rõ vai trò cá nhân của {target}."
+        return f"🐺🔮 **Sói Tiên Tri** {actor} âm thầm thấu thị, soi {target}: {log.result}"
     elif event == "CURSED_CONVERT":
         return f"🌕 **Kẻ Bị Nguyền** {target} bị cắn nhưng không chết — vết cắn phát tác biến thành **Sói Mới**!"
     elif event == "ELDER_SAVED":
@@ -1097,7 +1114,7 @@ def format_replay_story_line(log: ReplayLog) -> str:
     elif event == "SK_IMMUNE":
         return f"🔪 **Sát Thủ** {target} với cơ thể thép đã đánh bật đòn tấn công của Bầy Sói!"
     elif event == "SERIAL_KILLER_KILL":
-        return f"🔪 **Sát Thủ Hàng Loạt** {actor} vung dao trong bóng đêm hạ gục {target}!"
+        return f"🔪 **Sát Thủ Hàng Loạt** {actor} vung dao tấn công {target}; chưa chắc mục tiêu đã chết."
     elif event == "WITCH_SAVE_SK":
         return f"🧪 **Phù Thủy** dùng **Bình Cứu** giải cứu {target} khỏi tay Sát Thủ!"
     elif event == "GUARD_PROTECT_SK":
@@ -1107,7 +1124,7 @@ def format_replay_story_line(log: ReplayLog) -> str:
     elif event == "WOLF_ROLEBLOCKED":
         return f"🔇 {actor} bị Vũ Nữ phong tỏa, đòn cắn đêm nay hoàn toàn bị vô hiệu!"
     elif event == "WHITE_WOLF_BITE":
-        return f"🐺⭐ **Sói Trắng** {actor} phản bội hạ sát đồng bọn {target} ngay trong bầy!"
+        return f"🐺⭐ **Sói Trắng** {actor} nhắm cắn thêm đồng bọn {target}; xem kết quả qua đời."
     elif event == "GIRL_CAUGHT":
         return f"👧 **Cô Bé** {target} lỡ tay phát ra tiếng động khi nhìn trộm và bị Bầy Sói phát hiện hạ sát!"
     elif event == "PIPER_CHARM":
@@ -1122,8 +1139,8 @@ def format_replay_story_line(log: ReplayLog) -> str:
         return f"🐺🩸 **Sói Cuồng Sát** {actor or target} ngã xuống! Bầy Sói sục sôi cuồng nộ cắn 2 người đêm tiếp theo!"
     elif event == "APPRENTICE_PROMOTED":
         return f"🔮✨ **Tiên Tri Tập Sự** {actor} đứng lên kế thừa di chí, trở thành **Tiên Tri Mới**!"
-    elif event == "NIGHT_DEATH":
-        return f"💀 {target} qua đời trong đêm tối lạnh lẽo..."
+    elif event in ("NIGHT_DEATH", "HUNTER_DEATH", "DAY_DEATH"):
+        return f"💀 {target} đã qua đời."
     elif event == "MAYOR_SUCCESSION":
         return f"🎩 **Thị Trưởng** {actor} chỉ định {target} làm Thị Trưởng kế nhiệm!"
     elif event == "HUNTER_SHOOT":
@@ -1146,6 +1163,10 @@ def format_replay_story_line(log: ReplayLog) -> str:
         return f"💥👑🐺 **Chúa Tể Sói** đã bị tiêu diệt hoàn toàn!"
     elif event == "VOTE_RESULT":
         return f"⚖️ **Bỏ phiếu ban ngày:** {log.result}."
+    elif event in ("GIRL_PEEK", "INVESTIGATOR_CHECK"):
+        return f"🔎 {actor}: {log.result}"
+    elif event == "GAME_DRAW":
+        return f"🤝 **Ván hòa:** {log.result}"
     elif event == "GAME_WIN":
         return f"🏆 **KẾT QUẢ CHUNG CUỘC:** {log.result}"
     else:
@@ -1235,7 +1256,9 @@ class ReplayView(discord.ui.View):
                     overview_lines.append(f"  └ {line}")
                 overview_lines.append("")
 
-        if self.game.winner_faction:
+        if self.game.winner_faction == Faction.DRAW:
+            overview_lines.append("🤝 **VÁN HÒA:** không còn người sống; không cộng/trừ rank.")
+        elif self.game.winner_faction:
             overview_lines.append(f"🏆 **CHIẾN THẮNG CHUNG CUỘC:** {self.game.winner_faction.value} đã giành thắng lợi!")
 
         pages.append({

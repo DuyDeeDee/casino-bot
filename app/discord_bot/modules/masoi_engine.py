@@ -40,7 +40,7 @@ class Role(Enum):
     RUSTY_KNIGHT = "Hiệp Sĩ Kiếm Gỉ"
     PIPER = "Người Thổi Sáo"
     SCAPEGOAT = "Dê Tế Thần"
-    ALPHA_WOLF = "Chúa Tể Sói"
+    ALPHA_WOLF = "Chúa Tể Sói"  # Legacy snapshots only; never assigned to a new match.
 
     @property
     def emoji(self) -> str:
@@ -92,30 +92,30 @@ class Role(Enum):
         descriptions = {
             Role.WOLF: "Mỗi đêm cùng bầy Sói bỏ phiếu cắn 1 người. Đừng để lộ thân phận ban ngày!",
             Role.VILLAGER: "Không có kỹ năng đêm. Hãy dùng trí tuệ và tranh luận để tìm ra bầy Sói!",
-            Role.SEER: "Mỗi đêm chọn 1 người để soi phe (Sói hay Dân).",
-            Role.GUARD: "Mỗi đêm chọn 1 người để bảo vệ khỏi bị Sói cắn (không chọn trùng 2 đêm liền).",
-            Role.WITCH: "Có 1 bình Cứu (hồi sinh người bị cắn) và 1 bình Độc (giết 1 người), mỗi bình dùng 1 lần/ván.",
-            Role.CUPID: "Đêm 1 chọn 2 người làm Cặp Đôi Tình Nhân. Nếu 1 trong 2 người chết, người kia sẽ chết theo.",
-            Role.HUNTER: "Khi bị loại (bị Sói cắn hoặc bị treo cổ), bạn được chọn 1 người chơi để kéo theo cùng.",
+            Role.SEER: "Mỗi đêm soi 1 người: Sói hay không thuộc bầy Sói; không xác định phe Solo/Dân.",
+            Role.GUARD: "Bảo vệ 1 người khỏi đòn Sói, Sói Trắng và Sát Thủ; không chặn độc, lời nguyền hay chết theo. Không chọn trùng 2 đêm liền.",
+            Role.WITCH: "Có 1 bình Cứu chặn đòn tấn công trực tiếp vào 1 người còn sống (không hồi sinh), và 1 bình Độc; mỗi bình dùng 1 lần/ván. Xác nhận dùng cứu vẫn mất bình dù mục tiêu không bị tấn công.",
+            Role.CUPID: "Đêm 1 ghép 2 Tình Nhân: 1 người chết thì người kia chết theo. Cặp khác mục tiêu lúc ghép (kể cả Sói Trắng + Sói) phải sống sót cuối cùng cùng nhau, cả hai tính rank Solo. Cặp cùng mục tiêu giữ mục tiêu gốc. Kẻ Ngốc bị treo cổ vẫn thắng ngay.",
+            Role.HUNTER: "Khi chết bởi bất kỳ nguyên nhân nào, được bắn 1 người còn sống, kể cả chết do độc hoặc tình nhân. Ngoại lệ: ván kết thúc ngay khi Kẻ Ngốc bị treo cổ.",
             Role.TANNER: "Bạn thuộc phe Độc Lập. Bạn THẮNG NGAY LẬP TỨC nếu bị dân làng treo cổ ban ngày!",
             Role.MAYOR: "Phiếu bầu ban ngày tính x2. Khi qua đời, bạn được chỉ định 1 người kế nhiệm làm Thị Trưởng mới!",
             Role.WOLF_SEER: "Mỗi đêm cùng bầy Sói cắn người và được soi 1 người để biết chính xác vai trò của họ!",
             Role.CURSED: "Ban đầu là Dân. Nếu bị Sói cắn ban đêm, bạn không chết mà biến thành Sói từ đêm sau!",
             Role.ELDER: "Có 2 mạng trước đòn cắn của Sói (lần 1 bị cắn không chết). Tuy nhiên bị treo cổ/độc sẽ chết ngay!",
-            Role.SERIAL_KILLER: "Thuộc phe Độc Lập. Mỗi đêm giết 1 người, miễn nhiễm đòn cắn của Sói. Thắng khi sống sót duy nhất!",
-            Role.WOLF_CUB: "Khi bị loại (bị cắn hoặc treo cổ), bầy Sói sẽ phẫn nộ và được cắn liền 2 người ở đêm tiếp theo!",
+            Role.SERIAL_KILLER: "Thuộc phe Độc Lập. Mỗi đêm giết 1 người, miễn nhiễm đòn cắn của Sói. Thắng khi sống sót duy nhất, trừ mục tiêu Tình Nhân khác phe!",
+            Role.WOLF_CUB: "Khi chết bởi bất kỳ nguyên nhân nào, bầy Sói sẽ phẫn nộ và được cắn liền 2 người ở đêm tiếp theo!",
             Role.HARLOT: "Mỗi đêm chọn 1 người để 'thăm' (phong tỏa). Người đó sẽ bị chặn toàn bộ kỹ năng đêm!",
             Role.APPRENTICE_SEER: "Ban đầu chưa có kỹ năng. Khi Tiên Tri chính qua đời, bạn sẽ kế thừa làm Tiên Tri mới từ đêm tiếp theo!",
-            Role.LYCAN: "Thuộc Phe Dân và thắng cùng Dân. Tuy nhiên nếu Tiên Tri soi vào bạn, kết quả trả về sẽ là 'SÓI'!",
-            Role.INVESTIGATOR: "Mỗi đêm chọn 2 người chơi để kiểm tra xem trong 2 người đó có ít nhất 1 Sói hay không.",
-            Role.WHITE_WOLF: "Thuộc Phe Sói. Mỗi 2 đêm chẵn được bí mật cắn thêm 1 con Sói khác trong bầy. Thắng một mình nếu là sinh vật cuối cùng còn sống!",
-            Role.PHANTOM_WOLF: "Mỗi đêm chọn 1 người dân để 'giả dạng'. Nếu Tiên Tri soi người đó trong đêm đó, kết quả trả về là 'SÓI'.",
+            Role.LYCAN: "Thuộc phe Dân, nhưng Tiên Tri và Thám Tử đều nhận diện bạn là Sói; Sói Tiên Tri vẫn thấy vai trò thật.",
+            Role.INVESTIGATOR: "Chọn đúng 2 người để kiểm tra có Sói hay không (1 nếu chỉ còn 1 người khác); Bán Nguyệt cũng được nhận diện là Sói.",
+            Role.WHITE_WOLF: "Ở trong bầy Sói nhưng mục tiêu và rank Solo. Đêm chẵn được cắn thêm 1 Sói. Thắng khi sống sót duy nhất, trừ mục tiêu Tình Nhân khác phe.",
+            Role.PHANTOM_WOLF: "Mỗi đêm chọn 1 người không thuộc bầy Sói để 'giả dạng'. Nếu Tiên Tri soi người đó trong đêm đó, kết quả trả về là 'SÓI'.",
             Role.MUTE_WOLF: "Thuộc Phe Sói. Ban ngày không được phép chat, chỉ được bỏ phiếu — tạo áp lực tâm lý và nghi ngờ cho dân làng!",
             Role.THE_GIRL: "Mỗi đêm có thể 'nhìn trộm' để xem bầy Sói đang cắn ai. Nhưng nếu bị phát hiện (50% cơ hội) — chết ngay đêm đó!",
             Role.RUSTY_KNIGHT: "Nếu bị Sói cắn chết, đêm kế tiếp 1 con Sói ngẫu nhiên sẽ bị 'lời nguyền' hạ gục. Cái chết có giá trị!",
-            Role.PIPER: "Phe Độc Lập. Mỗi đêm mê hoặc 2 người. Thắng khi toàn bộ người chơi còn sống (kể cả Sói) đều đã bị mê hoặc!",
-            Role.SCAPEGOAT: "Nếu bỏ phiếu ban ngày bị hòa (tie vote), Dê Tế Thần tự động bị treo cổ thay thế. Không công bằng — đó là số phận!",
-            Role.ALPHA_WOLF: "Trùm Cuối ván đấu Raid Boss! Sở hữu 3 Mạng Vương Giả, kháng 1 Bình Độc, phiếu bầu ban ngày tính x3 và cắn 2 người/đêm!",
+            Role.PIPER: "Phe Solo. Mê hoặc đúng 2 người mỗi đêm (1 nếu chỉ còn 1 người khác). Thắng khi mọi người còn sống trừ bản thân đều bị mê hoặc, trừ mục tiêu Tình Nhân khác phe.",
+            Role.SCAPEGOAT: "Tự bị treo cổ khi hòa phiếu cao nhất giữa các ứng viên. Nếu phiếu trắng cao nhất hoặc hòa cao nhất thì không ai bị treo cổ.",
+            Role.ALPHA_WOLF: "Vai trò cũ đã ngừng hỗ trợ; chỉ giữ để đọc lịch sử ván đấu.",
         }
         return descriptions.get(self, "")
 
@@ -165,6 +165,7 @@ class GamePhase(Enum):
 
 
 class NightEvent(Enum):
+    """Legacy event identifiers for decoding old snapshots; no live effects."""
     BLOOD_MOON = "Trăng Máu 🩸"
     DENSE_FOG = "Sương Mù Dày Đặc 🌫️"
     SOLAR_ECLIPSE = "Nhật Thực ☀️"
@@ -173,34 +174,6 @@ class NightEvent(Enum):
     THUNDERSTORM = "Bão Sấm Sét 🌩️"
     WANING_MOON = "Trăng Khuyết 🌘"
     SILENT_NIGHT = "Đêm Câm Lặng 🔇"
-
-    @property
-    def title(self) -> str:
-        names = {
-            NightEvent.BLOOD_MOON: "🩸 TRĂNG MÁU (BLOOD MOON)",
-            NightEvent.DENSE_FOG: "🌫️ SƯƠNG MÙ DÀY ĐẶC (DENSE FOG)",
-            NightEvent.SOLAR_ECLIPSE: "☀️ NHẬT THỰC BÓNG TỐI (SOLAR ECLIPSE)",
-            NightEvent.SEAL_NIGHT: "🧪 PHONG ẤN DƯỢC LIỆU (SEALED POTIONS)",
-            NightEvent.HOLY_LIGHT: "🛡️ THÁNH QUANG BẢO HỘ (HOLY LIGHT)",
-            NightEvent.THUNDERSTORM: "🌩️ BÃO SẤM SÉT (THUNDERSTORM)",
-            NightEvent.WANING_MOON: "🌘 TRĂNG KHUYẾT SUY YẾU (WANING MOON)",
-            NightEvent.SILENT_NIGHT: "🔇 ĐÊM CÂM LẶNG (SILENT NIGHT)",
-        }
-        return names.get(self, self.value)
-
-    @property
-    def description(self) -> str:
-        descs = {
-            NightEvent.BLOOD_MOON: "Sức mạnh bầy Sói bùng nổ! Đêm nay Bầy Sói được cắn liền **2 người**!",
-            NightEvent.DENSE_FOG: "Tầm nhìn bị che khuất! Kết quả bói toán soi phe đêm nay có **50% tỷ lệ bị nhiễu sai lệch**!",
-            NightEvent.SOLAR_ECLIPSE: "Bóng tối bao trùm ban ngày! Ban ngày tiếp theo **không thể bỏ phiếu treo cổ**!",
-            NightEvent.SEAL_NIGHT: "Ma thuật bị phong ấn! Phù Thủy **không thể dùng Bình Cứu hay Bình Độc** đêm nay!",
-            NightEvent.HOLY_LIGHT: "Hào quang thánh bảo vệ ngôi làng! Đêm nay tất cả mọi người được **kháng đòn cắn** của Bầy Sói!",
-            NightEvent.THUNDERSTORM: "Tiếng sấm át tiếng bước chân! Cô Bé đêm nay nhìn trộm **an toàn 100% không bị phát hiện**!",
-            NightEvent.WANING_MOON: "Bầy Sói bị suy yếu! Sói Trắng **không thể cắn đồng bọn** đêm nay!",
-            NightEvent.SILENT_NIGHT: "Thời gian thảo luận ngày tiếp theo bị rút ngắn xuống còn **30 giây**!",
-        }
-        return descs.get(self, "")
 
 
 class ActionKind(Enum):
@@ -250,8 +223,6 @@ class MasoiSettings:
         self.discussion_time: int = 120  # 120 giây (2 phút)
         self.night_time: int = 60  # 60 giây (1 phút)
         self.enable_rank: bool = True  # Có/Không tính rank
-        self.enable_events: bool = False  # Bật/Tắt Chế độ Thẻ Sự Kiện Đêm
-        self.enable_boss_mode: bool = False  # Bật/Tắt Chế độ Trùm Cuối (Raid Boss)
         self.role_setup_mode: str = "AUTO"  # AUTO / CUSTOM
         self.custom_wolf_count: int = 2
         self.custom_special_roles: List[str] = []
@@ -259,8 +230,17 @@ class MasoiSettings:
     def cycle_reveal_roles(self):
         self.reveal_roles_on_death = not self.reveal_roles_on_death
 
+    @property
+    def tanner_enabled(self) -> bool:
+        return isinstance(self.custom_special_roles, list) and "TANNER" in self.custom_special_roles if self.role_setup_mode == "CUSTOM" else self.enable_tanner
+
     def cycle_tanner(self):
-        self.enable_tanner = not self.enable_tanner
+        enabled = not self.tanner_enabled
+        if self.role_setup_mode == "CUSTOM":
+            self.custom_special_roles = [name for name in self.custom_special_roles if name != "TANNER"]
+            if enabled:
+                self.custom_special_roles.append("TANNER")
+        self.enable_tanner = enabled
 
     def cycle_vote_display(self):
         self.vote_display = "END_ONLY" if self.vote_display == "REALTIME" else "REALTIME"
@@ -281,12 +261,6 @@ class MasoiSettings:
     def cycle_rank(self):
         self.enable_rank = not self.enable_rank
 
-    def cycle_events(self):
-        self.enable_events = not self.enable_events
-
-    def cycle_boss_mode(self):
-        self.enable_boss_mode = not self.enable_boss_mode
-
     def to_dict(self) -> dict:
         return {
             "reveal_roles_on_death": self.reveal_roles_on_death,
@@ -296,11 +270,9 @@ class MasoiSettings:
             "discussion_time": self.discussion_time,
             "night_time": self.night_time,
             "enable_rank": self.enable_rank,
-            "enable_events": self.enable_events,
-            "enable_boss_mode": self.enable_boss_mode,
             "role_setup_mode": self.role_setup_mode,
             "custom_wolf_count": self.custom_wolf_count,
-            "custom_special_roles": self.custom_special_roles,
+            "custom_special_roles": list(self.custom_special_roles) if isinstance(self.custom_special_roles, list) else self.custom_special_roles,
         }
 
     @classmethod
@@ -313,11 +285,11 @@ class MasoiSettings:
         s.discussion_time = data.get("discussion_time", 120)
         s.night_time = data.get("night_time", 60)
         s.enable_rank = data.get("enable_rank", True)
-        s.enable_events = data.get("enable_events", False)
-        s.enable_boss_mode = data.get("enable_boss_mode", False)
         s.role_setup_mode = data.get("role_setup_mode", "AUTO")
         s.custom_wolf_count = data.get("custom_wolf_count", 2)
-        s.custom_special_roles = data.get("custom_special_roles", [])
+        roles = data.get("custom_special_roles", [])
+        # Retired Boss roles in old configurations cannot re-enable the removed mode.
+        s.custom_special_roles = [name for name in roles if name != Role.ALPHA_WOLF.name] if isinstance(roles, list) else roles
         return s
 
     def copy(self) -> MasoiSettings:
@@ -336,6 +308,7 @@ class MasoiPlayer:
         self.witch_save_used: bool = False
         self.witch_poison_used: bool = False
         self.protected_last_night: Optional[int] = None  # user_id người được bảo vệ đêm trước
+        self.lover_objective: Optional[bool] = None  # Frozen when paired; None for legacy data.
         self.lover_id: Optional[int] = None  # user_id tình nhân (Thần tình yêu ghép đôi)
         self.hunter_shot_used: bool = False  # Thợ săn đã dùng phát bắn kéo theo chưa
         self.is_cursed_converted: bool = False  # Kẻ Bị Nguyền đã biến thành Sói chưa
@@ -345,8 +318,6 @@ class MasoiPlayer:
         self.apprentice_promoted: bool = False  # Tiên Tri Tập Sự đã kế thừa vị trí Tiên Tri
         self.rusty_knight_curse_triggered: bool = False  # Hiệp Sĩ đã kích hoạt nguyền chưa
         self.piper_charmed: bool = False  # Bị Người Thổi Sáo mê hoặc
-        self.boss_lives: int = 3  # HP Mạng sống của Chúa Tể Sói (Trùm Cuối)
-        self.boss_poison_shield: bool = True  # Khiên kháng 1 lần Bình Độc Phù Thủy của Trùm
 
         # Metrics cho rank bonus
         self.seer_found_wolf: bool = False
@@ -465,7 +436,7 @@ class MasoiGame:
         self.witch_dm_message: Optional[any] = None
         self.witch_view: Optional[any] = None
         self.mayor_id: Optional[int] = None
-        self.current_night_event: Optional[NightEvent] = None  # Thẻ sự kiện đêm hiện tại
+        self.current_night_event: Optional[NightEvent] = None  # Legacy snapshot metadata only.
 
         # Dữ liệu ban ngày
         self.day_votes: Dict[int, Optional[int]] = {}  # voter_id -> target_id (None = White vote)
@@ -523,51 +494,7 @@ class MasoiGame:
         random.shuffle(user_ids)
         n = len(user_ids)
 
-        if self.settings.enable_boss_mode:
-            boss_idx = random.randint(0, n - 1)
-            boss_uid = user_ids[boss_idx]
-            raid_roles = [Role.SEER, Role.GUARD, Role.WITCH, Role.HUNTER, Role.ELDER, Role.RUSTY_KNIGHT, Role.INVESTIGATOR, Role.APPRENTICE_SEER]
-            random.shuffle(raid_roles)
-
-            for uid in user_ids:
-                if uid == boss_uid:
-                    self.players[uid].role = Role.ALPHA_WOLF
-                    self.players[uid].boss_lives = 3
-                else:
-                    role = raid_roles.pop(0) if raid_roles else Role.VILLAGER
-                    self.players[uid].role = role
-            return
-
-        if self.settings.role_setup_mode == "CUSTOM":
-            role_pool: List[Role] = [Role.WOLF] * max(1, self.settings.custom_wolf_count)
-            for role_name in self.settings.custom_special_roles:
-                try:
-                    r = Role[role_name]
-                    if len(role_pool) < n:
-                        role_pool.append(r)
-                except KeyError:
-                    pass
-        else:
-            if n <= 6:
-                role_pool = [Role.WOLF, Role.SEER, Role.GUARD, Role.MAYOR]
-            elif n <= 9:
-                role_pool = [Role.WOLF, Role.WOLF, Role.SEER, Role.GUARD, Role.WITCH, Role.MAYOR, Role.CURSED]
-            elif n <= 12:
-                role_pool = [Role.WOLF, Role.WOLF_SEER, Role.MAYOR, Role.SEER, Role.GUARD, Role.WITCH, Role.HUNTER, Role.CURSED, Role.ELDER]
-                if n >= 12:
-                    role_pool.append(Role.WOLF)
-            else:
-                role_pool = [Role.WOLF, Role.WOLF, Role.WOLF_SEER, Role.MAYOR, Role.SEER, Role.GUARD, Role.WITCH, Role.HUNTER, Role.CURSED, Role.ELDER, Role.SERIAL_KILLER]
-                if n >= 15:
-                    role_pool.append(Role.WOLF)
-
-            if self.settings.enable_tanner and Role.TANNER not in role_pool and len(role_pool) < n:
-                role_pool.append(Role.TANNER)
-
-        while len(role_pool) < n:
-            role_pool.append(Role.VILLAGER)
-
-        role_pool = role_pool[:n]
+        role_pool = self.preview_roles()[:n]
         random.shuffle(role_pool)
 
         for uid, role in zip(user_ids, role_pool):
@@ -581,9 +508,6 @@ class MasoiGame:
         errors: List[str] = []
         if n < 5:
             errors.append("Cần tối thiểu 5 người chơi.")
-            return errors
-
-        if self.settings.enable_boss_mode:
             return errors
 
         if self.settings.role_setup_mode != "CUSTOM":
@@ -608,7 +532,7 @@ class MasoiGame:
             errors.append("Không thể chọn trùng một vai trò đặc biệt.")
 
         if any(role in (Role.WOLF, Role.VILLAGER, Role.ALPHA_WOLF) for role in special_roles):
-            errors.append("Sói Thường/Dân Thường không phải vai trò đặc biệt; Boss cần dùng chế độ Boss.")
+            errors.append("Sói Thường/Dân Thường không phải vai trò đặc biệt; Chúa Tể Sói đã ngừng hỗ trợ.")
 
         total_roles = wolf_count + len(special_roles)
         if total_roles > n:
@@ -628,19 +552,14 @@ class MasoiGame:
     def preview_roles(self) -> List[Role]:
         """Xem trước các vai trò xuất hiện theo số lượng người chơi hiện tại."""
         n = max(5, len(self.players))
-        if self.settings.enable_boss_mode:
-            role_pool = [Role.ALPHA_WOLF, Role.SEER, Role.GUARD, Role.WITCH, Role.HUNTER, Role.ELDER, Role.RUSTY_KNIGHT, Role.INVESTIGATOR]
-            while len(role_pool) < n:
-                role_pool.append(Role.VILLAGER)
-            return role_pool[:n]
-
         if self.settings.role_setup_mode == "CUSTOM":
             role_pool: List[Role] = [Role.WOLF] * max(1, self.settings.custom_wolf_count)
             for role_name in self.settings.custom_special_roles:
                 try:
                     r = Role[role_name]
                     if len(role_pool) < n:
-                        role_pool.append(r)
+                        if r != Role.ALPHA_WOLF:
+                            role_pool.append(r)
                 except KeyError:
                     pass
         else:
@@ -657,7 +576,7 @@ class MasoiGame:
                 if n >= 15:
                     role_pool.append(Role.WOLF)
 
-            if self.settings.enable_tanner and Role.TANNER not in role_pool and len(role_pool) < n:
+            if self.settings.tanner_enabled and Role.TANNER not in role_pool and len(role_pool) < n:
                 role_pool.append(Role.TANNER)
 
         while len(role_pool) < n:
@@ -701,17 +620,8 @@ class MasoiGame:
         self.witch_dm_message = None
         self.witch_view = None
 
-        # Thẻ sự kiện đêm
         self.current_night_event = None
-        if self.settings.enable_events:
-            self.current_night_event = random.choice(list(NightEvent))
-            self.record_log("NIGHT_EVENT", result=f"Thẻ Sự Kiện: {self.current_night_event.title}")
-
-        if self.settings.enable_boss_mode:
-            self.wolf_fury_active = True
-        elif self.current_night_event == NightEvent.BLOOD_MOON:
-            self.wolf_fury_active = True
-        elif self.wolf_fury_pending:
+        if self.wolf_fury_pending:
             self.wolf_fury_active = True
             self.wolf_fury_pending = False
         else:
@@ -785,6 +695,15 @@ class MasoiGame:
             )
         )
 
+    def required_target_count(self, kind: ActionKind) -> int:
+        if kind == ActionKind.GIRL:
+            return 0
+        if kind == ActionKind.CUPID:
+            return 2
+        if kind in (ActionKind.PIPER, ActionKind.INVESTIGATE):
+            return min(2, max(0, len(self.get_alive_players()) - 1))
+        return 1
+
     def submit_night_action(self, intent: ActionIntent):
         """Validate synchronously before storing; never apply gameplay effects here."""
         if not self.accepts_night_actions(intent.night):
@@ -818,14 +737,7 @@ class MasoiGame:
         targets = intent.targets
         if not isinstance(targets, tuple) or len(set(targets)) != len(targets):
             raise ValueError("Danh sách mục tiêu không hợp lệ.")
-        if intent.kind == ActionKind.GIRL:
-            expected = 0
-        elif intent.kind == ActionKind.CUPID:
-            expected = 2
-        elif intent.kind in (ActionKind.PIPER, ActionKind.INVESTIGATE):
-            expected = min(2, len(self.get_alive_players()) - 1)
-        else:
-            expected = 1
+        expected = self.required_target_count(intent.kind)
         optional = intent.kind in (
             ActionKind.WHITE_WOLF, ActionKind.WITCH_SAVE, ActionKind.WITCH_POISON,
         )
@@ -849,13 +761,11 @@ class MasoiGame:
             raise ValueError("Không thể bảo vệ cùng người hai đêm liên tiếp.")
         if intent.kind == ActionKind.CUPID and self.night_count != 1:
             raise ValueError("Thần Tình Yêu chỉ ghép đôi trong đêm đầu.")
-        if intent.kind == ActionKind.WHITE_WOLF and (
-            self.night_count % 2 or self.current_night_event == NightEvent.WANING_MOON
-        ):
+        if intent.kind == ActionKind.WHITE_WOLF and self.night_count % 2:
             raise ValueError("Sói Trắng không thể cắn thêm trong đêm này.")
         if intent.kind in (ActionKind.WITCH_SAVE, ActionKind.WITCH_POISON):
             used = actor.witch_save_used if intent.kind == ActionKind.WITCH_SAVE else actor.witch_poison_used
-            if self.current_night_event == NightEvent.SEAL_NIGHT or (targets and used):
+            if targets and used:
                 raise ValueError("Bình thuốc không còn khả dụng trong đêm này.")
         self._night_intents[key] = intent
         self.checkpoint()
@@ -932,16 +842,6 @@ class MasoiGame:
         return tuple(sorted(died))
 
     def _damage(self, target_id: int, source: str, deaths: Set[int]):
-        target = self.players[target_id]
-        if target.role == Role.ALPHA_WOLF:
-            if source == "poison" and target.boss_poison_shield:
-                target.boss_poison_shield = False
-                self.record_log("BOSS_SHIELD_SAVED", target_id=target_id, result="Khiên hóa giải bình độc")
-                return
-            target.boss_lives = max(0, target.boss_lives - 1)
-            self.record_log("BOSS_DAMAGE", target_id=target_id, result=f"Còn {target.boss_lives}/3 HP")
-            if target.boss_lives:
-                return
         deaths.add(target_id)
 
     def resolve_hunter_shot(self, hunter_id: int, target_id: int) -> Tuple[int, ...]:
@@ -991,6 +891,8 @@ class MasoiGame:
         if cupid:
             one, two = (alive[uid] for uid in cupid.targets)
             one.lover_id, two.lover_id = two.user_id, one.user_id
+            mixed = self.personal_objective(one) != self.personal_objective(two)
+            one.lover_objective = two.lover_objective = mixed
             self.night_cupid_targets = cupid.targets
             self.night_cupid_result = f"💘 Đã ghép đôi **{one.display_name}** và **{two.display_name}**."
             self.record_log("CUPID_PAIR", actor_id=cupid.actor_id, target_id=one.user_id, result=self.night_cupid_result)
@@ -1007,21 +909,24 @@ class MasoiGame:
         girl = active(ActionKind.GIRL)
         if girl:
             self.girl_peeking_user_id = girl.actor_id
-            self.girl_caught = self.current_night_event != NightEvent.THUNDERSTORM and rng.random() < 0.5
+            self.girl_caught = rng.random() < 0.5
             self.girl_result = "😱 Bạn bị phát hiện và sẽ chết đêm nay!" if self.girl_caught else "👀 Nhìn trộm thành công."
         elif action(ActionKind.GIRL):
             self.girl_result = "❌ Kỹ năng nhìn trộm đã bị phong tỏa đêm nay."
 
         wolf_targets = self.resolve_wolf_targets(include_fury=True, rng=rng)
         self.night_resolved_wolf_targets = list(wolf_targets)
+        if girl and not self.girl_caught:
+            names = ", ".join(f"**{alive[uid].display_name}**" for uid in wolf_targets)
+            self.girl_result += f" Bầy Sói nhắm vào {names}." if names else " Bầy Sói không chọn được mục tiêu."
+        if self.girl_result:
+            self.record_log("GIRL_PEEK", actor_id=action(ActionKind.GIRL).actor_id, result=self.girl_result)
         self.night_wolf_votes = {a.actor_id: a.targets[0] for a in actions if a.kind == ActionKind.WOLF_VOTE}
         sk = project(ActionKind.SERIAL_KILL, "night_serial_killer_target")
         white = project(ActionKind.WHITE_WOLF, "night_white_wolf_target")
         save = project(ActionKind.WITCH_SAVE, "night_witch_save_target")
         poison = project(ActionKind.WITCH_POISON, "night_witch_poison")
-        # Recheck potion resources/events at commit, not just at submission.
-        if self.current_night_event == NightEvent.SEAL_NIGHT:
-            save = poison = None
+        # Recheck potion resources at commit, not just at submission.
         if save and (not save.targets or alive[save.actor_id].witch_save_used):
             save = None
         if poison and (not poison.targets or alive[poison.actor_id].witch_poison_used):
@@ -1030,8 +935,6 @@ class MasoiGame:
             alive[save.actor_id].witch_save_used = True
         if poison:
             alive[poison.actor_id].witch_poison_used = True
-        if self.current_night_event == NightEvent.WANING_MOON:
-            white = None
         deaths: Set[int] = set()
         if self.rusty_knight_curse_active:
             wolves = sorted(uid for uid, p in alive.items() if p.is_wolf)
@@ -1039,7 +942,7 @@ class MasoiGame:
                 uid = rng.choice(wolves)
                 self._damage(uid, "curse", deaths)
                 self.record_log("RUSTY_KNIGHT_CURSE", target_id=uid, result="Lời nguyền Hiệp Sĩ")
-        attacks = [(uid, "wolf") for uid in wolf_targets if self.current_night_event != NightEvent.HOLY_LIGHT]
+        attacks = [(uid, "wolf") for uid in wolf_targets]
         if sk and sk.targets:
             attacks.append((sk.targets[0], "serial_killer"))
         if white and white.targets:
@@ -1107,14 +1010,12 @@ class MasoiGame:
             elif kind == ActionKind.SEER:
                 target = targets[0]
                 deceptive = bool(phantom and phantom.targets[0] == target.user_id)
-                if self.current_night_event == NightEvent.DENSE_FOG and rng.random() < 0.5:
-                    result = f"🌫️ Không thể soi chính xác phe của **{target.display_name}** do Sương Mù."
-                elif target.is_wolf or target.role == Role.LYCAN or deceptive:
+                if target.is_wolf or target.role == Role.LYCAN or deceptive:
                     result = f"🐺 **{target.display_name}** là **SÓI**!"
                     if target.is_wolf:
                         actor.seer_found_wolf = True
                 else:
-                    result = f"👤 **{target.display_name}** là **DÂN LÀNG** (không phải Sói)."
+                    result = f"👤 **{target.display_name}**: **KHÔNG THUỘC BẦY SÓI** (có thể là Dân hoặc Solo)."
             elif kind == ActionKind.INVESTIGATE:
                 names = " & ".join(f"**{p.display_name}**" for p in targets)
                 found = any(p.is_wolf or p.role == Role.LYCAN for p in targets)
@@ -1130,6 +1031,16 @@ class MasoiGame:
             a = action(kind)
             if a and result:
                 outcomes.append((a.actor_id, kind.value, result))
+        for kind, used_action in ((ActionKind.WITCH_SAVE, save), (ActionKind.WITCH_POISON, poison)):
+            submitted = action(kind)
+            if submitted:
+                if alive[submitted.actor_id].is_roleblocked:
+                    result = blocked + " Không mất bình."
+                elif used_action:
+                    result = "🧪 Đã dùng bình cứu." if kind == ActionKind.WITCH_SAVE else "☠️ Đã dùng bình độc."
+                else:
+                    result = "👌 Không dùng bình cứu." if kind == ActionKind.WITCH_SAVE else "👌 Không dùng bình độc."
+                outcomes.append((submitted.actor_id, kind.value, result))
         self.night_deaths = list(final_deaths)
         self.record_log("NIGHT_RESOLVED", result=f"Đêm {self.night_count}; RNG seed={self.night_seed}")
         self._night_result = NightResult(
@@ -1149,17 +1060,10 @@ class MasoiGame:
         self.executed_player_id = None
 
     def resolve_day_vote(self) -> Optional[int]:
-        """Tính phiếu bầu treo cổ ban ngày (Thị Trưởng vote x2, Chúa Tể Sói vote x3). Trả về user_id bị xử tử (hoặc None nếu hòa phiếu)."""
-        if self.current_night_event == NightEvent.SOLAR_ECLIPSE:
-            self.record_log("SOLAR_ECLIPSE_SKIP", result="Do ảnh hưởng của Nhật Thực Bóng Tối, ban ngày không thể bỏ phiếu treo cổ!")
-            return None
-
+        """Tính phiếu bầu treo cổ ban ngày (Thị Trưởng vote x2). Trả về user_id bị xử tử (hoặc None nếu hòa phiếu)."""
         counts: Dict[Optional[int], int] = {}
         for voter_id, target_id in self.day_votes.items():
-            voter_p = self.players.get(voter_id)
-            if voter_p and voter_p.role == Role.ALPHA_WOLF:
-                weight = 3
-            elif self.mayor_id and voter_id == self.mayor_id:
+            if self.mayor_id and voter_id == self.mayor_id:
                 weight = 2
             else:
                 weight = 1
@@ -1187,14 +1091,6 @@ class MasoiGame:
                 return None
         else:
             executed_id = top_candidates[0]
-
-        ex_p = self.players[executed_id]
-        if ex_p.role == Role.ALPHA_WOLF:
-            ex_p.boss_lives -= 1
-            if ex_p.boss_lives > 0:
-                ex_p.is_alive = True
-                self.record_log("BOSS_DAMAGE", target_id=executed_id, result=f"Chúa Tể Sói chịu đòn treo cổ nhưng còn {ex_p.boss_lives}/3 Mạng!")
-                return executed_id
 
         self.apply_deaths((executed_id,), "DAY_DEATH")
         self.executed_player_id = executed_id
@@ -1227,13 +1123,13 @@ class MasoiGame:
             return Faction.WHITE_WOLF
         if len(alive_players) == 2:
             p1, p2 = alive_players[0], alive_players[1]
-            if p1.lover_id == p2.user_id and p2.lover_id == p1.user_id and (Faction.WEREWOLF if p1.is_wolf else p1.role.faction) != (Faction.WEREWOLF if p2.is_wolf else p2.role.faction):
+            if self.has_lovers_objective(p1.user_id) and p1.lover_id == p2.user_id:
                 self.winner_faction = Faction.LOVERS
                 self.record_log("GAME_WIN", result="Phe Tình Nhân chiến thắng (cặp đôi sống sót cuối cùng)!")
                 return Faction.LOVERS
 
         # Người Thổi Sáo thắng khi mê hoặc toàn bộ người sống (trừ bản thân)
-        piper_alive_list = [p for p in alive_players if p.role == Role.PIPER]
+        piper_alive_list = [p for p in alive_players if p.role == Role.PIPER and not self.has_lovers_objective(p.user_id)]
         if piper_alive_list:
             piper_check = piper_alive_list[0]
             other_alive = [p for p in alive_players if p.user_id != piper_check.user_id]
@@ -1248,6 +1144,10 @@ class MasoiGame:
             self.winner_faction = Faction.SERIAL_KILLER
             self.record_log("GAME_WIN", result="Sát Thủ Hàng Loạt độc chiếm chiến thắng!")
             return Faction.SERIAL_KILLER
+
+        # Do not end on team parity while a mixed-objective pair is still alive.
+        if any(self.has_lovers_objective(p.user_id) for p in alive_players):
+            return None
 
         alive_wolves = [p for p in alive_players if p.is_wolf]
         alive_non_wolves = [p for p in alive_players if not p.is_wolf and p.role != Role.SERIAL_KILLER]
@@ -1282,23 +1182,39 @@ class MasoiGame:
 
         return points
 
-    def get_rank_faction(self, user_id: int) -> RankFaction:
-        """Rank follows the personal objective, not the winner of the match."""
+    @staticmethod
+    def personal_objective(player: MasoiPlayer) -> Faction:
+        if player.role == Role.WHITE_WOLF:
+            return Faction.WHITE_WOLF
+        return Faction.WEREWOLF if player.is_wolf else player.role.faction
+
+    def has_lovers_objective(self, user_id: int) -> bool:
         player = self.players[user_id]
-        if player.role in (Role.TANNER, Role.SERIAL_KILLER, Role.PIPER, Role.WHITE_WOLF):
-            return RankFaction.SOLO
         partner = self.players.get(player.lover_id)
-        if partner and partner.lover_id == user_id:
-            team = Faction.WEREWOLF if player.is_wolf else player.role.faction
-            partner_team = Faction.WEREWOLF if partner.is_wolf else partner.role.faction
-            if team != partner_team:
-                return RankFaction.SOLO
+        if not partner or partner.lover_id != user_id:
+            return False
+        if player.lover_objective is not None and partner.lover_objective is not None:
+            return player.lover_objective and partner.lover_objective
+        return self.personal_objective(player) != self.personal_objective(partner)
+
+    def lover_goal_text(self, user_id: int) -> str:
+        if self.has_lovers_objective(user_id):
+            return "💘 Mục tiêu: hai bạn phải là 2 người sống cuối cùng; cả hai tính rank Solo. Kẻ Ngốc bị treo cổ vẫn thắng ngay."
+        return "Mục tiêu: giữ điều kiện thắng gốc; vẫn chết theo nhau. Rank theo mục tiêu cá nhân."
+
+    def get_rank_faction(self, user_id: int) -> RankFaction:
+        """Rank and win checks share the same personal objective."""
+        player = self.players[user_id]
+        if self.has_lovers_objective(user_id) or player.role in (Role.TANNER, Role.SERIAL_KILLER, Role.PIPER, Role.WHITE_WOLF):
+            return RankFaction.SOLO
         return RankFaction.WOLF if player.is_wolf else RankFaction.VILLAGER
 
     def did_player_win(self, user_id: int) -> bool:
         """Whether this player's personal win condition was met."""
         player = self.players.get(user_id)
         if not player or not self.winner_faction:
+            return False
+        if self.has_lovers_objective(user_id) and self.winner_faction not in (Faction.LOVERS, Faction.INDEPENDENT):
             return False
         if self.winner_faction == Faction.INDEPENDENT:
             return user_id == self.tanner_winner_id

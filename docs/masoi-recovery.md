@@ -4,6 +4,8 @@
 
 Sửa điều kiện thắng Solo, đồng hồ hành động đêm, lượt Thợ Săn/Thị Trưởng, replay và phục hồi dữ liệu. Không thay đổi lệnh VIP, cấu hình VIP, phí tạo ván hoặc chính sách hoàn phí. Vấn đề hoàn phí VIP được giữ nguyên theo yêu cầu.
 
+Event và Boss đã ngừng hỗ trợ: gỡ lệnh/alias, nút cài đặt, nút hướng dẫn chế độ và dòng chế độ trên lobby. Chỉ giữ phân vai Tự động/Tùy chỉnh. Cấu hình cũ có `enable_events`, `enable_boss_mode` được bỏ qua và không ghi lại; `ALPHA_WOLF` bị loại khỏi cấu hình ván mới. Các tên vai trò/sự kiện và trường HP cũ chỉ còn phục vụ đọc snapshot/lịch sử, không kích hoạt cơ chế chơi đã bỏ. Không cần reset database hoặc xóa rank cũ; ván gián đoạn vẫn được phục hồi theo chính sách hủy an toàn bên dưới.
+
 ## Cấu trúc
 
 - `cogs/masoi.py`: lệnh, lobby, cấu hình, quyền kênh và các thành phần VIP được giữ nguyên.
@@ -27,7 +29,7 @@ Không phục hồi đè lên ván đang sở hữu kênh trong RAM. Khi unload,
 ## Kiểm tra
 
 ```powershell
-.\venv\Scripts\python.exe -m unittest tests.test_masoi_engine tests.test_masoi_cog tests.test_masoi_rank tests.test_masoi_fixes tests.test_masoi_recovery -q
+.\venv\Scripts\python.exe -m unittest tests.test_masoi_engine tests.test_masoi_cog tests.test_masoi_rank tests.test_masoi_fixes tests.test_masoi_recovery tests.test_masoi_standard -q
 .\venv\Scripts\python.exe -m unittest discover -s tests -p 'test*.py' -q
 ```
 

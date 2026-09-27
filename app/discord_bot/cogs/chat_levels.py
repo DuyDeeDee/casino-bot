@@ -5,6 +5,7 @@ import typing
 import discord
 from discord.ext import commands
 
+from app.config import config
 from app.discord_bot.modules.helpers import EMOJI_GOLD, EMOJI_VND, make_embed
 from app.discord_bot.modules.member_levels import (
     CHAT_XP_COOLDOWN_SECONDS,

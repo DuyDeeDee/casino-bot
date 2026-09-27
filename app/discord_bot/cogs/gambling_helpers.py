@@ -16,13 +16,14 @@ from app.discord_bot.modules.wallet_logging import log_wallet_change
 logger = logging.getLogger(__name__)
 
 
-# Career progression ladder: cooldown and XP gain scale with degree tier.
-# Cooldown applies from the HIGHEST degree owned; jobs are weighted toward it.
+# Career progression ladder. Every career uses the same one-hour cooldown;
+# XP gain still scales with the highest degree owned.
+WORK_COOLDOWN_SECONDS = 3600
 CAREER_TIERS: dict[str, dict] = {
-    "bang_cap":        {"tier": 1, "cooldown": 3600,  "xp_per_shift": 1},
-    "bang_kien_truc":  {"tier": 2, "cooldown": 7200,  "xp_per_shift": 2},
-    "bang_phi_hanh":   {"tier": 3, "cooldown": 10800, "xp_per_shift": 3},
-    "bang_bac_si":     {"tier": 4, "cooldown": 18000, "xp_per_shift": 5},
+    "bang_cap":        {"tier": 1, "cooldown": WORK_COOLDOWN_SECONDS, "xp_per_shift": 1},
+    "bang_kien_truc":  {"tier": 2, "cooldown": WORK_COOLDOWN_SECONDS, "xp_per_shift": 2},
+    "bang_phi_hanh":   {"tier": 3, "cooldown": WORK_COOLDOWN_SECONDS, "xp_per_shift": 3},
+    "bang_bac_si":     {"tier": 4, "cooldown": WORK_COOLDOWN_SECONDS, "xp_per_shift": 5},
 }
 # Degree prerequisites (previous degree + total work XP). Thresholds are
 # readable from system_settings so they can be tuned without code changes.
@@ -514,8 +515,8 @@ class GamblingHelpers(commands.Cog, name="General"):
         stats = self.economy.get_simulator_stats(user_id)
         last_work = stats[4] if len(stats) > 4 else 0
         now = int(time.time())
-        # Cooldown theo cấp nghề cao nhất đang sở hữu: ca làm càng cao cấp càng dài
-        cooldown = CAREER_TIERS[highest]["cooldown"] if highest else 3600
+        # Tất cả nghề nghiệp có cùng thời gian nghỉ giữa hai ca: 1 giờ.
+        cooldown = CAREER_TIERS[highest]["cooldown"] if highest else WORK_COOLDOWN_SECONDS
         
         if now - last_work < cooldown:
             remaining = cooldown - (now - last_work)
@@ -598,7 +599,7 @@ class GamblingHelpers(commands.Cog, name="General"):
                 owned_careers.append(item)
 
         if owned_careers:
-            # Ưu tiên nghề cao nhất đang sở hữu (60%) để xứng với cooldown dài
+            # Ưu tiên nghề cao nhất đang sở hữu (60%).
             degreed = [c for c in owned_careers if c in CAREER_TIERS]
             if degreed:
                 top = max(degreed, key=lambda d: CAREER_TIERS[d]["tier"])

@@ -27,7 +27,6 @@ from app.discord_bot.modules.masoi_engine import (
     MasoiGame,
     MasoiPlayer,
     MasoiSettings,
-    NightEvent,
     RankFaction,
     ReplayLog,
     Role,
@@ -43,6 +42,7 @@ from app.discord_bot.modules.masoi_ui import (
     format_replay_story_line,
 )
 
+from app.discord_bot.modules.masoi_presentation import ui_lock, remaining_night_seconds
 from app.discord_bot.modules.masoi_flow import MasoiFlowMixin
 from app.discord_bot.modules.masoi_recovery import MasoiRecoveryMixin
 
@@ -90,8 +90,16 @@ class LobbyView(discord.ui.View):
         super().__init__(timeout=None)
         self.game = game
         self.cog = cog
+        self.update_controls()
 
-    @discord.ui.button(label="Tham gia", style=discord.ButtonStyle.success, emoji="🐾", custom_id="masoi_join")
+    def update_controls(self) -> None:
+        """Disable starting until the lobby has the minimum number of players."""
+        can_start = len(self.game.players) >= 5
+        for item in self.children:
+            if getattr(item, "custom_id", None) == "masoi_start":
+                item.disabled = not can_start
+
+    @discord.ui.button(label="Tham gia", style=discord.ButtonStyle.success, emoji="🐾", custom_id="masoi_join", row=0)
     async def join_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         user = interaction.user
         if not self.game.add_player(user.id, user.display_name):
@@ -104,9 +112,10 @@ class LobbyView(discord.ui.View):
             return
 
         await interaction.response.send_message("✅ Bạn đã tham gia ván Ma Sói!", ephemeral=True)
-        await self.cog.update_lobby_embed(self.game, interaction.message)
+        self.update_controls()
+        await self.cog.update_lobby_embed(self.game, interaction.message, view=self)
 
-    @discord.ui.button(label="Rời đi", style=discord.ButtonStyle.secondary, emoji="🚪", custom_id="masoi_leave")
+    @discord.ui.button(label="Rời phòng", style=discord.ButtonStyle.secondary, emoji="🚪", custom_id="masoi_leave", row=0)
     async def leave_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         user = interaction.user
         if not self.game.remove_player(user.id):
@@ -114,9 +123,10 @@ class LobbyView(discord.ui.View):
             return
 
         await interaction.response.send_message("👋 Bạn đã rời khỏi phòng chờ.", ephemeral=True)
-        await self.cog.update_lobby_embed(self.game, interaction.message)
+        self.update_controls()
+        await self.cog.update_lobby_embed(self.game, interaction.message, view=self)
 
-    @discord.ui.button(label="Bắt đầu", style=discord.ButtonStyle.primary, emoji="⚔️", custom_id="masoi_start")
+    @discord.ui.button(label="Bắt đầu", style=discord.ButtonStyle.primary, emoji="⚔️", custom_id="masoi_start", row=0)
     async def start_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user.id != self.game.host_id:
             await interaction.response.send_message("❌ Chỉ Host mới được bấm bắt đầu!", ephemeral=True)
@@ -142,7 +152,7 @@ class LobbyView(discord.ui.View):
             if not t.cancelled() and t.exception() else None
         )
 
-    @discord.ui.button(label="Cài đặt", style=discord.ButtonStyle.secondary, emoji="⚙️", custom_id="masoi_settings")
+    @discord.ui.button(label="Cài đặt", style=discord.ButtonStyle.secondary, emoji="⚙️", custom_id="masoi_settings", row=1)
     async def settings_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user.id != self.game.host_id:
             await interaction.response.send_message("❌ Chỉ Host mới có quyền truy cập Cài Đặt!", ephemeral=True)
@@ -152,73 +162,19 @@ class LobbyView(discord.ui.View):
         embed = self.cog.build_settings_embed(self.game)
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
-    @discord.ui.button(label="Vai Trò", style=discord.ButtonStyle.secondary, emoji="🎭", custom_id="masoi_roles_info")
+    @discord.ui.button(label="Vai Trò", style=discord.ButtonStyle.secondary, emoji="🎭", custom_id="masoi_roles_info", row=1)
     async def roles_info_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        desc = (
-            "🎭 **HƯỚNG DẪN CHI TIẾT CÁC VAI TRÒ TRONG MA SÓI**\n\n"
-            "🐺 **PHE SÓI (WEREWOLF TEAM)**\n"
-            "• 🐺 **Sói Thường**: Mỗi đêm bỏ phiếu cắn 1 người. Đừng để lộ thân phận ban ngày!\n"
-            "• 🐺🔮 **Sói Tiên Tri**: Cùng cắn với bầy Sói và được soi 1 người để biết chính xác vai trò.\n"
-            "• 🐺🩸 **Sói Cuồng Sát**: Khi bị loại, bầy Sói phẫn nộ và cắn liền 2 người ở đêm tiếp theo.\n"
-            "• 🐺⭐ **Sói Trắng**: Thuộc Phe Sói. Mỗi 2 đêm chẵn bí mật cắn thêm 1 Sói. Thắng một mình nếu sống sót cuối cùng!\n"
-            "• 🐺👻 **Sói Ảo Ảnh**: Mỗi đêm chọn 1 người dân để giả dạng — Tiên Tri soi người đó sẽ thấy 'SÓI'.\n"
-            "• 🔇🐺 **Sói Câm**: Thuộc Phe Sói, ban ngày không được chat — chỉ được bỏ phiếu!\n\n"
-            "👥 **PHE DÂN LÀNG (VILLAGER TEAM)**\n"
-            "• 👤 **Dân Thường**: Dùng trí tuệ và tranh luận ban ngày để tìm ra bầy Sói.\n"
-            "• 🎩 **Thị Trưởng**: Phiếu bầu ban ngày tính x2. Khi qua đời được chọn người kế nhiệm.\n"
-            "• 🔮 **Tiên Tri**: Mỗi đêm chọn 1 người để soi phe (Sói hay Dân).\n"
-            "• 🔮✨ **Tiên Tri Tập Sự**: Khi Tiên Tri chính qua đời, kế thừa trở thành Tiên Tri mới từ đêm sau.\n"
-            "• 🛡️ **Bảo Vệ**: Mỗi đêm chọn 1 người để bảo vệ khỏi bị Sói cắn (không chọn trùng 2 đêm liền).\n"
-            "• 🧪 **Phù Thủy**: Có 1 bình Cứu (hồi sinh) và 1 bình Độc (giết người), mỗi bình dùng 1 lần/ván.\n"
-            "• 💃 **Vũ Nữ**: Mỗi đêm 'thăm' 1 người để phong tỏa (roleblock) toàn bộ kỹ năng đêm của người đó.\n"
-            "• 🎹 **Thợ Săn**: Khi bị loại (bị cắn hoặc treo cổ), được chọn kéo theo 1 người bắn gục.\n"
-            "• 👁️ **Thám Tử**: Mỗi đêm chọn 2 người chơi để kiểm tra xem có Sói hay không.\n"
-            "• 🐺👤 **Bán Nguyệt**: Thuộc phe Dân và thắng cùng Dân, nhưng bị Tiên Tri soi ra là 'SÓI'.\n"
-            "• 🌕 **Kẻ Bị Nguyền**: Ban đầu là Dân. Nếu bị Sói cắn ban đêm, biến thành Sói từ đêm sau.\n"
-            "• 👴 **Già Làng**: Có 2 mạng trước đòn cắn của Sói (lần 1 bị cắn không chết).\n"
-            "• 💘 **Thần Tình Yêu**: Đêm 1 ghép 2 Tình Nhân (1 người chết, người kia chết theo).\n"
-            "• 👧 **Cô Bé**: Mỗi đêm có thể nhìn trộm xem Sói cắn ai (50% bị phát hiện = chết ngay).\n"
-            "• ⚔️ **Hiệp Sĩ Kiếm Gỉ**: Bị Sói cắn chết → đêm sau 1 Sói ngẫu nhiên bị lời nguyền hạ gục.\n"
-            "• 🐐 **Dê Tế Thần**: Khi vote hòa ban ngày, tự động bị treo cổ thay thế.\n\n"
-            "🃃 **PHE ĐỘC LẬP (INDEPENDENT TEAM)**\n"
-            "• 🃃 **Kẻ Ngốc**: Thắng ngay lập tức nếu bị dân làng treo cổ ban ngày!\n"
-            "• 🔪 **Sát Thủ**: Mỗi đêm giết 1 người, miễn nhiễm cắn ban đêm. Thắng khi độc chiếm bàn cờ!\n"
-            "• 🎵 **Người Thổi Sáo**: Mỗi đêm mê hoặc 2 người. Thắng khi mê hoặc hết tất cả người còn sống (kể cả Sói)!\n\n"
-            "──────────────────────────────────────\n"
-            "_Danh sách vai trò xuất hiện sẽ tự động điều chỉnh theo số lượng người chơi._"
-        )
-        embed = make_embed(title="🎭 Các Vai Trò Ma Sói", description=desc, color=discord.Color.purple())
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-
-    @discord.ui.button(label="Chế độ", style=discord.ButtonStyle.secondary, emoji="📜", custom_id="masoi_mode_info", row=1)
-    async def mode_info_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        desc = (
-            "📜 **HƯỚNG DẪN CHI TIẾT CÁC CHẾ ĐỘ CHƠI MA SÓI**\n\n"
-            "👑🐺 **1. CHẾ ĐỘ TRÙM CUỐI (RAID BOSS MODE)**\n"
-            "• **Cách mở:** Dùng lệnh `!masoiboss` hoặc bật trong Cài Đặt (Host).\n"
-            "• **Cơ chế:** Một người chơi thuộc Bầy Sói sẽ trở thành **Chúa Tể Sói (Raid Boss)**.\n"
-            "• **Đặc quyền Chúa Tể Sói:**\n"
-            "  └ 🩸 **3 Mạng sống (3 HP):** Phải bị hạ gục 3 lần (bị vote treo cổ hoặc dính bình độc) mới thực sự qua đời!\n"
-            "  └ ⚖️ **Quyền lực x3:** Phiếu bầu ban ngày của Chúa Tể Sói tính bằng **3 phiếu**.\n"
-            "  └ 🛡️ **Khiên Vương Giả:** Tự động đỡ & miễn nhiễm với đòn Bình Độc đầu tiên từ Phù Thủy.\n"
-            "• **Mục tiêu:** Bầy Sói tiêu diệt hết Dân, còn Phe Dân Làng + Chức Năng cần phối hợp dồn sức tiêu diệt Chúa Tể Sói!\n\n"
-            "🎴 **2. CHẾ ĐỘ THẺ SỰ KIỆN ĐÊM (NIGHT EVENTS)**\n"
-            "• **Cách mở:** Dùng lệnh `!masoievent` hoặc bật trong Cài Đặt (Host).\n"
-            "• **Cơ chế:** Mỗi đêm ngẫu nhiên kích hoạt **1 Thẻ Sự Kiện bí ẩn** tác động lên toàn thể người chơi.\n"
-            "• **Ví dụ các sự kiện:**\n"
-            "  └ 🌫️ **Sương Mù Dày Đặc:** Tiên Tri có 50% khả năng nhận kết quả không xác định.\n"
-            "  └ 🌕 **Trăng Máu:** Bầy Sói được cắn 2 người trong đêm.\n"
-            "  └ ☀️ **Nhật Thực:** Bỏ qua lượt bỏ phiếu treo cổ ban ngày.\n"
-            "  └ 🧪 **Phong Ấn Dược Liệu:** Phù Thủy không được dùng bình thuốc.\n"
-            "  └ ✨ **Thánh Quang:** Hóa giải đòn cắn của bầy Sói, không chặn các nguyên nhân chết khác.\n\n"
-            "🌕 **3. CHẾ ĐỘ TIÊU CHUẨN (STANDARD MODE)**\n"
-            "• **Cách mở:** Dùng lệnh `!masoi` mặc định.\n"
-            "• **Cơ chế:** Ván đấu Ma Sói cổ điển. Sói ẩn nấp đi săn ban đêm, Dân Làng thảo luận và bỏ phiếu treo cổ ban ngày.\n\n"
-            "──────────────────────────────────────\n"
-            "_Chủ phòng có thể chuyển đổi các chế độ bằng nút **⚙️ Cài đặt** trước khi bấm Bắt đầu!_"
-        )
-        embed = make_embed(title="📜 Hướng Dẫn Chế Độ Chơi", description=desc, color=discord.Color.gold())
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        # The role guide and role DMs use exactly the engine's descriptions.
+        groups = [
+            ("🐺 Bầy Sói", [r for r in Role if r.faction == Faction.WEREWOLF and r not in (Role.WHITE_WOLF, Role.ALPHA_WOLF)]),
+            ("👥 Dân Làng", [r for r in Role if r.faction == Faction.VILLAGER]),
+            ("🃏 Solo", [Role.TANNER, Role.SERIAL_KILLER, Role.PIPER, Role.WHITE_WOLF]),
+        ]
+        embeds = []
+        for title, roles in groups:
+            lines = [f"• {r.emoji} **{r.value}**: {r.description}" for r in roles]
+            embeds.append(make_embed(title=f"🎭 Vai Trò — {title}", description="\n".join(lines), color=discord.Color.purple()))
+        await interaction.response.send_message(embeds=embeds, ephemeral=True)
 
     async def on_error(self, interaction: discord.Interaction, error: Exception, item) -> None:
         logger.error("LobbyView error on %s: %s", item, error, exc_info=error)
@@ -230,7 +186,7 @@ class LobbyView(discord.ui.View):
         except Exception:
             pass
 
-    @discord.ui.button(label="Hủy ván", style=discord.ButtonStyle.danger, emoji="⭕", custom_id="masoi_cancel", row=1)
+    @discord.ui.button(label="Hủy phòng", style=discord.ButtonStyle.danger, emoji="⭕", custom_id="masoi_cancel", row=1)
     async def cancel_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user.id != self.game.host_id:
             await interaction.response.send_message("❌ Chỉ Host mới được bấm hủy ván!", ephemeral=True)
@@ -258,14 +214,12 @@ class SettingsView(discord.ui.View):
     def update_button_labels(self):
         s = self.game.settings
         self.btn_reveal.label = f"Hiện vai trò: {'Hiện ngay ✅' if s.reveal_roles_on_death else 'Ẩn tới cuối'}"
-        self.btn_tanner.label = f"Kẻ Ngốc: {'Bật ✅' if s.enable_tanner else 'Tắt'}"
+        self.btn_tanner.label = f"Kẻ Ngốc: {'Bật ✅' if s.tanner_enabled else 'Tắt'}"
         self.btn_vote.label = f"Hiện phiếu: {'Real-time ✅' if s.vote_display == 'REALTIME' else 'Ẩn tới hết giờ'}"
         self.btn_chat.label = f"Người chết chat: {'Được' if s.dead_can_chat else 'Bị cấm ✅'}"
         self.btn_disc_time.label = f"Thời gian thảo luận: {s.discussion_time // 60} phút"
         self.btn_night_time.label = f"Thời gian đêm: {s.night_time}s"
         self.btn_rank.label = f"Tính rank: {'Có ✅' if s.enable_rank else 'Không'}"
-        self.btn_events.label = f"Thẻ Sự Kiện: {'Bật ✅' if s.enable_events else 'Tắt'}"
-        self.btn_boss.label = f"Trùm Cuối: {'Bật 👑' if s.enable_boss_mode else 'Tắt'}"
         self.btn_custom_roles.label = f"Phân vai: {'Tự động ✅' if s.role_setup_mode == 'AUTO' else 'Tùy chỉnh ⚙️'}"
 
     async def check_vip_host(self, interaction: discord.Interaction, feature_name: str) -> bool:
@@ -296,6 +250,7 @@ class SettingsView(discord.ui.View):
         if not await self.interaction_check(interaction):
             return
         self.game.settings.cycle_tanner()
+        await self.cog.update_lobby_embed(self.game, self.lobby_message)
         self.cog.save_game_settings(self.game)
         self.update_button_labels()
         await interaction.response.edit_message(embed=self.cog.build_settings_embed(self.game), view=self)
@@ -348,28 +303,6 @@ class SettingsView(discord.ui.View):
         self.cog.save_game_settings(self.game)
         self.update_button_labels()
         await interaction.response.edit_message(embed=self.cog.build_settings_embed(self.game), view=self)
-
-    @discord.ui.button(style=discord.ButtonStyle.secondary, row=3)
-    async def btn_events(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not await self.interaction_check(interaction):
-            return
-        self.game.settings.cycle_events()
-        self.cog.save_game_settings(self.game)
-        self.update_button_labels()
-        await interaction.response.edit_message(embed=self.cog.build_settings_embed(self.game), view=self)
-        if self.lobby_message:
-            await self.cog.update_lobby_embed(self.game, self.lobby_message)
-
-    @discord.ui.button(style=discord.ButtonStyle.secondary, row=3)
-    async def btn_boss(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not await self.interaction_check(interaction):
-            return
-        self.game.settings.cycle_boss_mode()
-        self.cog.save_game_settings(self.game)
-        self.update_button_labels()
-        await interaction.response.edit_message(embed=self.cog.build_settings_embed(self.game), view=self)
-        if self.lobby_message:
-            await self.cog.update_lobby_embed(self.game, self.lobby_message)
 
     @discord.ui.button(style=discord.ButtonStyle.primary, emoji="🎭", row=3)
     async def btn_custom_roles(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -472,7 +405,7 @@ class CustomRolesConfigView(discord.ui.View):
         self.add_item(self.select_roles)
 
         # Button Chuyển đổi AUTO / CUSTOM
-        btn_mode_label = f"Chế độ hiện tại: {'Tự Động (AUTO) ✅' if s.role_setup_mode == 'AUTO' else 'Tùy Chỉnh (CUSTOM) ⚙️'}"
+        btn_mode_label = f"Phân vai: {'Tự Động (AUTO) ✅' if s.role_setup_mode == 'AUTO' else 'Tùy Chỉnh (CUSTOM) ⚙️'}"
         self.btn_toggle_mode = discord.ui.Button(label=btn_mode_label, style=discord.ButtonStyle.primary, row=2)
         self.btn_toggle_mode.callback = self.toggle_mode_callback
         self.add_item(self.btn_toggle_mode)
@@ -504,7 +437,7 @@ class CustomRolesConfigView(discord.ui.View):
 
         desc = (
             f"🎭 **CẤU HÌNH VAI TRÒ VÁN ĐẤU**\n\n"
-            f"• **Chế độ phân vai:** `{mode_str}`\n"
+            f"• **Phân vai:** `{mode_str}`\n"
             f"• **Số lượng Sói cài đặt:** `{s.custom_wolf_count} Sói`\n"
             f"• **Các vai trò đặc biệt đã chọn:**\n{roles_text}\n\n"
             f"📌 *Lưu ý: Nếu số vai trò cài đặt ít hơn số người chơi trong phòng, các vị trí còn lại sẽ tự động là **Dân Thường**.*"
@@ -532,7 +465,8 @@ class CustomRolesConfigView(discord.ui.View):
         val = int(self.select_wolves.values[0])
         self.game.settings.custom_wolf_count = val
         self.game.settings.role_setup_mode = "CUSTOM"
-        self.btn_toggle_mode.label = "Chế độ hiện tại: Tùy Chỉnh (CUSTOM) ⚙️"
+        self.btn_toggle_mode.label = "Phân vai: Tùy Chỉnh (CUSTOM) ⚙️"
+        await self.cog.update_lobby_embed(self.game, self.parent_view.lobby_message)
         self.cog.save_game_settings(self.game)
         await interaction.response.edit_message(embed=self.get_embed(), view=self)
 
@@ -542,9 +476,10 @@ class CustomRolesConfigView(discord.ui.View):
         if not await self.check_vip_host(interaction):
             return
         selected = self.select_roles.values
-        self.game.settings.custom_special_roles = selected
+        self.game.settings.custom_special_roles = list(selected)
         self.game.settings.role_setup_mode = "CUSTOM"
-        self.btn_toggle_mode.label = "Chế độ hiện tại: Tùy Chỉnh (CUSTOM) ⚙️"
+        self.btn_toggle_mode.label = "Phân vai: Tùy Chỉnh (CUSTOM) ⚙️"
+        await self.cog.update_lobby_embed(self.game, self.parent_view.lobby_message)
         self.cog.save_game_settings(self.game)
         await interaction.response.edit_message(embed=self.get_embed(), view=self)
 
@@ -555,7 +490,8 @@ class CustomRolesConfigView(discord.ui.View):
             return
         s = self.game.settings
         s.role_setup_mode = "CUSTOM" if s.role_setup_mode == "AUTO" else "AUTO"
-        self.btn_toggle_mode.label = f"Chế độ hiện tại: {'Tự Động (AUTO) ✅' if s.role_setup_mode == 'AUTO' else 'Tùy Chỉnh (CUSTOM) ⚙️'}"
+        self.btn_toggle_mode.label = f"Phân vai: {'Tự Động (AUTO) ✅' if s.role_setup_mode == 'AUTO' else 'Tùy Chỉnh (CUSTOM) ⚙️'}"
+        await self.cog.update_lobby_embed(self.game, self.parent_view.lobby_message)
         self.cog.save_game_settings(self.game)
         await interaction.response.edit_message(embed=self.get_embed(), view=self)
 
@@ -676,6 +612,31 @@ class Masoi(MasoiFlowMixin, MasoiRecoveryMixin, commands.Cog):
     def get_economy(self):
         return getattr(self.bot, "economy", None)
 
+    def player_badge(self, user_id: int, fallback: str = "") -> str:
+        eco = self.get_economy()
+        return (eco.get_masoi_custom_badge(user_id) if eco else "") or fallback
+
+    def player_label(self, player) -> str:
+        badge = self.player_badge(player.user_id)
+        return f"{badge} **{player.display_name}**" if badge else f"**{player.display_name}**"
+
+    async def refresh_player_badge_lobbies(self, user_id: int) -> None:
+        """Refresh both waiting lobbies and the current public vote, not past messages."""
+        for game in list(self.active_games.values()):
+            if user_id not in game.players:
+                continue
+            try:
+                if game.phase == GamePhase.LOBBY and game.message_id:
+                    channel = self.bot.get_channel(game.channel_id)
+                    if channel:
+                        message = await channel.fetch_message(game.message_id)
+                        if game.phase == GamePhase.LOBBY:
+                            await self.update_lobby_embed(game, message)
+                elif game.phase == GamePhase.DAY_VOTE:
+                    await self.update_vote_embed(game, getattr(game, "day_vote_message", None))
+            except Exception as e:
+                logger.warning("Không thể cập nhật badge Ma Sói cho user %s: %s", user_id, e)
+
     # ──────────────────────────────────────────────
     #  Commands
     # ──────────────────────────────────────────────
@@ -684,15 +645,15 @@ class Masoi(MasoiFlowMixin, MasoiRecoveryMixin, commands.Cog):
         name="masoi",
         aliases=["werewolf", "ma-soi"],
         brief="Tạo phòng chờ chơi game Ma Sói (Werewolf). Phí tạo phòng: 10,000 VND (Miễn phí cho VIP).",
-        usage="masoi [event/boss]",
+        usage="masoi",
     )
     async def masoi_cmd(self, ctx: commands.Context, *, sub_command: str = ""):
         if sub_command.strip().lower() in ("vip", "v"):
             return await self.masoivip_cmd(ctx)
 
-        sub_clean = sub_command.strip().lower()
-        is_event_mode = sub_clean in ("event", "events", "e", "masoievent")
-        is_boss_mode = sub_clean in ("boss", "b", "masoiboss", "raid")
+        if sub_command.strip():
+            await ctx.send(f"❌ Dùng `{ctx.prefix}masoi` để tạo phòng Ma Sói.")
+            return
 
         key = f"{ctx.guild.id}-{ctx.channel.id}"
         if not getattr(self, "_recovery_ready", True) or key in getattr(self, "_recovering_channels", set()):
@@ -721,17 +682,8 @@ class Masoi(MasoiFlowMixin, MasoiRecoveryMixin, commands.Cog):
         else:
             msg_text = f"<a:yay:1533444499827851505> **{ctx.author.display_name}** đã tạo phòng Ma Sói!"
 
-        if is_event_mode:
-            msg_text += "\n🎴 **[CHẾ ĐỘ THẺ SỰ KIỆN ĐÊM - MASOI EVENT IS ACTIVE!]**"
-        elif is_boss_mode:
-            msg_text += "\n👑🐺 **[CHẾ ĐỘ TRÙM CUỐI - RAID BOSS MODE IS ACTIVE!]**"
-
         game = MasoiGame(ctx.guild.id, ctx.channel.id, ctx.author.id, ctx.author.display_name)
         game.settings = self.get_saved_settings(ctx.guild.id, ctx.channel.id)
-        if is_event_mode:
-            game.settings.enable_events = True
-        if is_boss_mode:
-            game.settings.enable_boss_mode = True
 
         if not is_vip:
             game.settings.reveal_roles_on_death = False
@@ -748,24 +700,6 @@ class Masoi(MasoiFlowMixin, MasoiRecoveryMixin, commands.Cog):
             view=view
         )
         game.message_id = msg.id
-
-    @commands.command(
-        name="masoievent",
-        aliases=["masoi-event", "werewolfevent", "masoi_event"],
-        brief="Tạo phòng chơi Ma Sói ở Chế Độ Thẻ Sự Kiện Đêm (Night Events).",
-        usage="masoievent",
-    )
-    async def masoievent_cmd(self, ctx: commands.Context):
-        await self.masoi_cmd(ctx, sub_command="event")
-
-    @commands.command(
-        name="masoiboss",
-        aliases=["masoi-boss", "werewolfboss", "masoi_boss"],
-        brief="Tạo phòng chơi Ma Sói ở Chế Độ Trùm Cuối (Raid Boss).",
-        usage="masoiboss",
-    )
-    async def masoiboss_cmd(self, ctx: commands.Context):
-        await self.masoi_cmd(ctx, sub_command="boss")
 
     @commands.command(
         name="masoivip",
@@ -970,6 +904,7 @@ class Masoi(MasoiFlowMixin, MasoiRecoveryMixin, commands.Cog):
                 badge = str(matched_emoji)
 
         eco.set_masoi_custom_badge(member.id, badge)
+        await self.refresh_player_badge_lobbies(member.id)
         await ctx.send(f"🎖️ **Đã cài đặt huy hiệu tự chọn thành công cho {member.mention}!**\n> Hiển thị: {badge} **{member.display_name}**")
 
     @commands.command(
@@ -996,6 +931,7 @@ class Masoi(MasoiFlowMixin, MasoiRecoveryMixin, commands.Cog):
             return
 
         eco.remove_masoi_custom_badge(member.id)
+        await self.refresh_player_badge_lobbies(member.id)
         await ctx.send(f"⭕ **Đã xóa huy hiệu tự chọn của {member.mention} thành công!**")
 
     @commands.command(
@@ -1074,21 +1010,35 @@ class Masoi(MasoiFlowMixin, MasoiRecoveryMixin, commands.Cog):
             color=discord.Color(0xE0A638)
         )
         embed.add_field(name="CHỦ PHÒNG", value=f"<a:key:1526234974150459593> **{game.host_name}**", inline=True)
-        embed.add_field(name="SỐ NGƯỜI", value=f"**{len(game.players)} / 20**", inline=True)
+        player_count = len(game.players)
+        start_status = (
+            "✅ Đã đủ người bắt đầu"
+            if player_count >= 5
+            else f"⏳ Cần thêm **{5 - player_count}** người"
+        )
+        embed.add_field(
+            name="SỐ NGƯỜI",
+            value=f"**{player_count}/20**\n{start_status}",
+            inline=True,
+        )
 
         player_lines = []
         eco = self.get_economy()
         for p in game.players.values():
             custom_badge = eco.get_masoi_custom_badge(p.user_id) if eco else ""
-            vip_tag = "<a:2336vipgif:1534596901834592286> " if (eco and eco.is_masoi_vip(p.user_id)) else ""
-            badge_str = f"{custom_badge} " if custom_badge else vip_tag
+            # Badge tùy chỉnh thay đúng emoji cánh trước tên; VIP vẫn giữ emoji riêng
+            # khi người chơi không có badge tùy chỉnh (như cách hiển thị cũ).
+            name_emoji = custom_badge or "<a:wing:1526230985987981393>"
+            vip_tag = (
+                "<a:2336vipgif:1534596901834592286> "
+                if (not custom_badge and eco and eco.is_masoi_vip(p.user_id))
+                else ""
+            )
             if p.user_id == game.host_id:
-                player_lines.append(f"<a:wing:1526230985987981393> {badge_str}**{p.display_name}** *(chủ phòng)*")
+                player_lines.append(f"{name_emoji} {vip_tag}**{p.display_name}** *(chủ phòng)*")
             else:
-                player_lines.append(f"<a:wing:1526230985987981393> {badge_str}**{p.display_name}**")
+                player_lines.append(f"{name_emoji} {vip_tag}**{p.display_name}**")
 
-        players_str = "\n".join(player_lines) if player_lines else "_Chưa có người chơi nào._"
-        divider = "──────────────────────────────────────"
 
         # Thống kê danh sách vai trò dự kiến
         roles_preview = game.preview_roles()
@@ -1102,37 +1052,27 @@ class Masoi(MasoiFlowMixin, MasoiRecoveryMixin, commands.Cog):
             role_items.append(f"{r.emoji} **{r.value}**{cnt_str}")
         roles_str = " • ".join(role_items)
 
-        n_players = len(game.players)
-        role_header = f"🎭 VAI TRÒ DỰ KIẾN ({n_players} người)" if n_players >= 5 else f"🎭 VAI TRÒ DỰ KIẾN (Tính mẫu 5 người)"
+        role_header = (
+            f"🎭 ĐỘI HÌNH DỰ KIẾN ({player_count} người)"
+            if player_count >= 5
+            else "🎭 ĐỘI HÌNH MẪU (5 người)"
+        )
 
-        embed.add_field(name="\u200b", value=divider, inline=False)
-        embed.add_field(name="NGƯỜI CHƠI", value=players_str, inline=False)
+        # A full room with custom emojis can exceed Discord's 1024-char field.
+        chunks, chunk = [], ""
+        for line in (player_lines or ["_Chưa có người chơi nào._"]):
+            if chunk and len(chunk) + len(line) + 1 > 1000:
+                chunks.append(chunk)
+                chunk = ""
+            chunk += ("\n" if chunk else "") + line
+        chunks.append(chunk)
+        for index, value in enumerate(chunks):
+            embed.add_field(name="NGƯỜI CHƠI" if index == 0 else "NGƯỜI CHƠI (tiếp)", value=value, inline=False)
         embed.add_field(name=role_header, value=roles_str, inline=False)
-
-        # Mô tả chi tiết các chế độ chơi đang kích hoạt
-        active_modes = []
-        if game.settings.enable_boss_mode:
-            active_modes.append(
-                "👑🐺 **Chế độ Trùm Cuối (Raid Boss)**:\n"
-                "└ *Chúa Tể Sói sở hữu **3 HP (3 Mạng)**, quyền vote **x3** ban ngày & **Khiên Vương Giả** hóa giải sát thương! Dân Làng phải dồn lực diệt Boss.*"
-            )
-        if game.settings.enable_events:
-            active_modes.append(
-                "🎴 **Chế độ Thẻ Sự Kiện Đêm (Night Events)**:\n"
-                "└ *Mỗi đêm ngẫu nhiên xuất hiện Thẻ Sự Kiện bí ẩn (Sương Mù, Trăng Tròn,...) gây hiệu ứng bất ngờ tác động toàn bàn chơi.*"
-            )
-        if not active_modes:
-            active_modes.append(
-                "🌕 **Chế độ Tiêu Chuẩn (Standard)**:\n"
-                "└ *Luật Ma Sói cổ điển. Sói ẩn nấp đi săn ban đêm, Dân Làng thảo luận và bỏ phiếu treo cổ ban ngày.*"
-            )
-
-        mode_desc_str = "\n".join(active_modes)
-        embed.add_field(name="📌 CHẾ ĐỘ CHƠI ĐANG BẬT", value=mode_desc_str, inline=False)
 
         embed.add_field(
             name="\u200b",
-            value=f"{divider}\n<a:muiten:1533428497098473623> *Bấm **Tham gia** để vào ván, chủ phòng bấm **Bắt đầu** khi đủ 5 người trở lên.*",
+            value="<a:muiten:1533428497098473623> *Bấm **Tham gia** để vào phòng. Chủ phòng có thể bắt đầu khi đủ 5 người.*",
             inline=False
         )
         embed.set_footer(text=f" Phí tạo phòng: {MASOI_CREATE_FEE:,} VND (Miễn phí cho VIP)")
@@ -1144,16 +1084,14 @@ class Masoi(MasoiFlowMixin, MasoiRecoveryMixin, commands.Cog):
         desc = (
             f"⚙️ **Cấu Hình Ván Ma Sói**\n\n"
             f"• **Phân chia vai trò:** `{mode_text}`\n"
-            f"• **Chế độ Thẻ Sự Kiện Đêm:** `{'Bật 🎴' if s.enable_events else 'Tắt'}`\n"
-            f"• **Chế độ Trùm Cuối (Raid Boss):** `{'Bật 👑' if s.enable_boss_mode else 'Tắt'}`\n"
             f"• **Hiện vai trò người chết (<a:2336vipgif:1534596901834592286> VIP):** `{'Hiện ngay' if s.reveal_roles_on_death else 'Ẩn tới cuối ván'}`\n"
-            f"• **Kẻ Ngốc (Tanner):** `{'Bật' if s.enable_tanner else 'Tắt'}`\n"
+            f"• **Kẻ Ngốc (Tanner):** `{'Bật' if s.tanner_enabled else 'Tắt'}`\n"
             f"• **Hiển thị số phiếu:** `{'Real-time' if s.vote_display == 'REALTIME' else 'Ẩn tới hết giờ'}`\n"
-            f"• **Người chết chat ở thread:** `{'Cho phép' if s.dead_can_chat else 'Bị cấm chat'}`\n"
+            f"• **Người chết chat ở kênh chơi:** `{'Cho phép' if s.dead_can_chat else 'Bị cấm chat'}`\n"
             f"• **Thời gian thảo luận (<a:2336vipgif:1534596901834592286> VIP):** `{s.discussion_time // 60} phút`\n"
             f"• **Thời gian hành động đêm (<a:2336vipgif:1534596901834592286> VIP):** `{s.night_time} giây`\n"
             f"• **Tính điểm rank:** `{'Có' if s.enable_rank else 'Không'}`\n\n"
-            f"💡 *Mẹo: Người chơi có thể bấm nút **📜 Chế độ** tại phòng chờ để xem hướng dẫn chi tiết luật chơi!*\n"
+            f"💡 *Bấm **🎭 Vai Trò** tại phòng chờ để xem hướng dẫn.*\n"
             f"_Bấm các nút dưới đây để thay đổi giá trị cấu hình._"
         )
         return make_embed(title="⚙️ Cài Đặt Ván Ma Sói", description=desc, color=discord.Color.purple())
@@ -1164,10 +1102,7 @@ class Masoi(MasoiFlowMixin, MasoiRecoveryMixin, commands.Cog):
         total_votes = 0
 
         for voter_id, tid in game.day_votes.items():
-            voter = game.players.get(voter_id)
-            if voter and voter.role == Role.ALPHA_WOLF:
-                w = 3
-            elif game.mayor_id and voter_id == game.mayor_id:
+            if game.mayor_id and voter_id == game.mayor_id:
                 w = 2
             else:
                 w = 1
@@ -1190,7 +1125,8 @@ class Masoi(MasoiFlowMixin, MasoiRecoveryMixin, commands.Cog):
             c = counts.get(p.user_id, 0)
             bar = make_bar(c, total_votes) if total_votes > 0 else "▒▒▒▒▒▒▒▒"
             vip_tag = "<a:2336vipgif:1534596901834592286> " if (eco and eco.is_masoi_vip(p.user_id)) else ""
-            lines.append(f"• ⚖️ {vip_tag}**{p.display_name}**: `{bar}` **({c} phiếu)**")
+            badge = self.player_badge(p.user_id, "⚖️")
+            lines.append(f"• {badge} {vip_tag}**{p.display_name}**: `{bar}` **({c} phiếu)**")
 
         white_bar = make_bar(white_votes, total_votes) if total_votes > 0 else "▒▒▒▒▒▒▒▒"
         lines.append(f"• 🏳️ **Phiếu trắng**: `{white_bar}` **({white_votes} phiếu)**")
@@ -1198,10 +1134,16 @@ class Masoi(MasoiFlowMixin, MasoiRecoveryMixin, commands.Cog):
         divider = "──────────────────────────────────────"
 
         if not is_final and game.settings.vote_display == "END_ONLY":
-            desc = f"⚖️ **Đang diễn ra bỏ phiếu...**\n_(Số phiếu hiện đang ẩn tới khi kết thúc giờ bỏ phiếu)_\n\n{divider}\n<:ghim:1526238405061640272> *Bấm menu bên dưới để chọn người bạn nghi ngờ.*"
+            names = "\n".join(f"• {self.player_label(p)}" for p in game.get_alive_players())
+            desc = f"⚖️ **Đang diễn ra bỏ phiếu...**\n_(Số phiếu ẩn tới khi kết thúc)_\n\n{names}\n\n{divider}\n<:ghim:1526238405061640272> *Bấm menu bên dưới để chọn người bạn nghi ngờ.*"
         else:
             header_str = "⚖️ **KẾT QUẢ BỎ PHIẾU TREO CỔ**" if is_final else "⚖️ **DIỄN BIẾN BỎ PHIẾU REAL-TIME**"
-            desc = f"{header_str}\n\n" + "\n".join(lines) + f"\n\n{divider}\n<:ghim:1526238405061640272> *Bấm menu bên dưới để bỏ phiếu người nghi ngờ là Sói.*"
+            footer = "🔒 Bỏ phiếu đã kết thúc." if is_final else "<:ghim:1526238405061640272> *Bấm menu bên dưới để bỏ phiếu người nghi ngờ là Sói.*"
+            desc = f"{header_str}\n\n" + "\n".join(lines) + f"\n\n{divider}\n{footer}"
+
+        mayor = game.players.get(game.mayor_id)
+        if mayor and mayor.is_alive:
+            desc += f"\n🎩 Thị Trưởng: {self.player_label(mayor)} — phiếu x2."
 
         embed = discord.Embed(
             title=f"⚖️ Bỏ Phiếu Treo Cổ — Ngày {game.day_count}",
@@ -1267,61 +1209,101 @@ class Masoi(MasoiFlowMixin, MasoiRecoveryMixin, commands.Cog):
     #  Helper Updates
     # ──────────────────────────────────────────────
 
-    async def update_lobby_embed(self, game: MasoiGame, message: discord.Message):
+    async def update_lobby_embed(
+        self,
+        game: MasoiGame,
+        message: discord.Message,
+        view: discord.ui.View | None = None,
+    ):
         """Cập nhật real-time embed phòng chờ."""
         if not message:
             return
         embed = self.build_lobby_embed(game)
         try:
-            await _safe_edit(message, embed=embed)
+            edit_kwargs = {"embed": embed}
+            if view is not None:
+                edit_kwargs["view"] = view
+            await _safe_edit(message, **edit_kwargs)
         except Exception as e:
             logger.warning("Không thể edit lobby embed: %s", e)
 
     async def update_vote_embed(self, game: MasoiGame, message: discord.Message):
-        """Cập nhật real-time embed diễn biến bỏ phiếu."""
+        """Serialize live edits with badge refresh and final vote closure."""
         if not message:
             return
-        embed = self.build_vote_embed(game, is_final=False)
-        try:
-            await _safe_edit(message, embed=embed)
-        except Exception as e:
-            logger.warning("Không thể edit vote embed: %s", e)
+        day = game.day_count
+        async with ui_lock(game, "vote"):
+            if game.phase != GamePhase.DAY_VOTE or game.day_count != day:
+                return
+            view = getattr(game, "day_vote_view", None)
+            if view and (view.day != day or view.is_finished()):
+                return
+            try:
+                if view:
+                    view.refresh_badges()
+                    await _safe_edit(message, embed=self.build_vote_embed(game), view=view)
+                else:
+                    await _safe_edit(message, embed=self.build_vote_embed(game))
+            except Exception as e:
+                logger.warning("Không thể edit vote embed: %s", e)
 
     async def update_witch_dm(self, game: MasoiGame):
-        """Cập nhật real-time tin nhắn DM của Phù Thủy khi Sói chọn mục tiêu cắn."""
-        if not game.accepts_night_actions(game.night_count):
-            return
-        if not game.witch_dm_message or (game.witch_view and game.witch_view.is_finished()):
-            return
+        """Do not let a pending wolf edit restore the save menu over poison."""
+        night = game.night_count
+        async with ui_lock(game, "witch"):
+            if not game.accepts_night_actions(night) or not game.witch_dm_message:
+                return
+            if (game.witch_view and (game.witch_view.is_finished() or not isinstance(game.witch_view, NightWitchView))):
+                return
+            witch_p = game.get_player_by_role(Role.WITCH)
+            if not witch_p or witch_p.witch_save_used or (witch_p.user_id, ActionKind.WITCH_SAVE) in game._night_intents:
+                return
+            victim_id = game.resolve_wolf_target()
+            victim_p = game.players.get(victim_id)
+            v_name = victim_p.display_name if victim_p else "Không ai"
+            embed = discord.Embed(
+                title=f"🌙 Đêm {night} — Lượt của Phù Thủy",
+                description=f"Bầy Sói đang nhắm cắn: **{v_name}**.\nDùng **BÌNH CỨU**? Còn **{remaining_night_seconds(game)} giây**.",
+                color=discord.Color(0xE0A638),
+            )
+            previous = game.witch_view
+            view = NightWitchView(game, witch_p.user_id, victim_id)
+            game.witch_view = view
+            try:
+                await game.witch_dm_message.edit(embed=embed, view=view)
+            except Exception as e:
+                # Keep the previously delivered controls usable when an optional refresh fails.
+                view.stop()
+                game.witch_view = previous
+                logger.warning("Không thể cập nhật Witch DM: %s", e)
+            else:
+                if previous:
+                    previous.stop()
 
-        witch_p = game.get_player_by_role(Role.WITCH)
-        if not witch_p or witch_p.witch_save_used:
-            return
-
-        victim_id = game.resolve_wolf_target()
-        victim_p = game.players.get(victim_id) if victim_id else None
-        v_name = victim_p.display_name if victim_p else "Không ai"
-
-        embed = discord.Embed(
-            title=f"<a:moon:1533444241596874792> Đêm {game.night_count} — Lượt của Phù Thủy",
-            description=f"Đêm nay, bầy Sói nhắm cắn: **{v_name}**.\nBạn có muốn dùng **BÌNH CỨU** không? Còn **{game.settings.night_time} giây** để quyết định.",
-            color=discord.Color(0xE0A638)
-        )
-        if game.witch_view:
-            game.witch_view.stop()
-        view = NightWitchView(game, witch_p.user_id, victim_id)
-        game.witch_view = view
-        try:
-            await game.witch_dm_message.edit(embed=embed, view=view)
-        except Exception as e:
-            logger.warning("Không thể cập nhật Witch DM: %s", e)
+    async def close_witch_dm(self, game: MasoiGame):
+        async with ui_lock(game, "witch"):
+            message = game.witch_dm_message
+            result = game._night_result
+            if not message or result is None:
+                return
+            outcomes = [text for _, kind, text in result.outcomes if kind in (ActionKind.WITCH_SAVE.value, ActionKind.WITCH_POISON.value)]
+            embed = discord.Embed(title=f"🧪 Kết Quả Phù Thủy — Đêm {result.night}", description="Đêm đã kết thúc.\n" + ("\n".join(outcomes) or "Bạn không xác nhận dùng bình trong đêm này."), color=discord.Color.gold())
+            try:
+                await message.edit(embed=embed, view=None)
+            except Exception:
+                logger.warning("Không thể đóng Witch DM đêm %s", result.night)
 
     async def update_night_result_dm(self, message, result: Optional[str], label: str):
         if not message or not result:
             return
         try:
             embed = message.embeds[0] if message.embeds else None
-            if embed and embed.fields:
+            if embed is None:
+                embed = discord.Embed(title=label, color=discord.Color.gold())
+            if not embed.fields:
+                embed.add_field(name="\u200b", value=f"{label}: {result}", inline=False)
+                await message.edit(embed=embed, view=None)
+            else:
                 embed.set_field_at(
                     len(embed.fields) - 1,
                     name="\u200b",

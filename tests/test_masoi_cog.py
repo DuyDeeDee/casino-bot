@@ -88,7 +88,9 @@ class NightViewTests(unittest.IsolatedAsyncioTestCase):
         game.witch_dm_message = interaction(1).message
         event = interaction(1)
         await view.save_callback(event)
-        poison_view = event.response.edit_message.call_args.kwargs["view"]
+        event.response.defer.assert_awaited_once()
+        poison_view = event.message.edit.call_args.kwargs["view"]
+        self.assertIs(game.witch_view, poison_view)
         self.assertTrue(view.is_finished())
         self.assertLessEqual(poison_view.timeout, 10)
         self.assertFalse(game.players[1].witch_save_used)

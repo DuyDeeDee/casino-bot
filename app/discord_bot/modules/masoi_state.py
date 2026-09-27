@@ -63,7 +63,8 @@ def restore_game(data):
         for key, value in fields.items():
             if key == "role":
                 player.role = Role[value]
-            elif key in vars(player) or key == "mayor_passed_succession":
+            elif key in vars(player) or key in ("mayor_passed_succession", "boss_lives", "boss_poison_shield"):
+                # Preserve retired Boss fields only while reading archived/pending snapshots.
                 setattr(player, key, value)
         game.players[player.user_id] = player
     game.join_order = list(data["join_order"])

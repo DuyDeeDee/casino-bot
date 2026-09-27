@@ -2,7 +2,7 @@ import unittest
 from dataclasses import FrozenInstanceError
 from unittest.mock import patch
 from app.discord_bot.modules.masoi_engine import (
-    ActionIntent, ActionKind, GamePhase, MasoiGame, Role, Faction, NightEvent,
+    ActionIntent, ActionKind, GamePhase, MasoiGame, Role, Faction,
 )
 
 
@@ -11,7 +11,6 @@ def make_game(*roles):
     for uid, role in enumerate(roles, 1):
         game.add_player(uid, f"Player {uid}")
         game.players[uid].role = role
-    game.settings.enable_events = False
     game.start_night()
     return game
 
@@ -99,14 +98,14 @@ class NightPipelineTests(unittest.TestCase):
         self.assertEqual(game.resolve_night().deaths, (2,))
 
     def test_repeated_resolution_returns_same_frozen_snapshot(self):
-        game = make_game(Role.WITCH, Role.ALPHA_WOLF)
+        game = make_game(Role.WITCH, Role.WOLF)
         submit(game, 1, ActionKind.WITCH_POISON, 2)
         result = game.resolve_night()
         logs = len(game.replay_logs)
         self.assertIs(game.resolve_night(), result)
         self.assertEqual(len(game.replay_logs), logs)
-        self.assertEqual(game.players[2].boss_lives, 3)
-        self.assertFalse(game.players[2].boss_poison_shield)
+        self.assertEqual(result.deaths, (2,))
+        self.assertTrue(game.players[1].witch_poison_used)
         with self.assertRaises(FrozenInstanceError):
             result.deaths = (2,)
 
@@ -180,12 +179,12 @@ class NightPipelineTests(unittest.TestCase):
         submit(game, 1, ActionKind.WHITE_WOLF, 2)
         self.assertEqual(game.resolve_night().deaths, (2,))
 
-    def test_sealed_and_spent_potions_rejected(self):
+    def test_spent_potions_rejected(self):
         game = make_game(Role.WITCH, Role.VILLAGER)
         game.players[1].witch_poison_used = True
         with self.assertRaises(ValueError):
             submit(game, 1, ActionKind.WITCH_POISON, 2)
-        game.current_night_event = NightEvent.SEAL_NIGHT
+        game.players[1].witch_save_used = True
         with self.assertRaises(ValueError):
             submit(game, 1, ActionKind.WITCH_SAVE, 2)
 
@@ -289,11 +288,7 @@ class NightPipelineTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             game.resolve_hunter_shot(2, 4)
 
-    def test_hunter_damage_boss_and_promote_apprentice(self):
-        game = make_game(Role.HUNTER, Role.ALPHA_WOLF, Role.SEER, Role.APPRENTICE_SEER)
-        game.players[1].is_alive = False
-        self.assertEqual(game.resolve_hunter_shot(1, 2), ())
-        self.assertEqual(game.players[2].boss_lives, 2)
+    def test_hunter_kill_promotes_apprentice(self):
         other = make_game(Role.HUNTER, Role.SEER, Role.APPRENTICE_SEER)
         other.players[1].is_alive = False
         self.assertEqual(other.resolve_hunter_shot(1, 2), (2,))
@@ -325,16 +320,15 @@ class NightPipelineTests(unittest.TestCase):
         game.start_night()
         self.assertEqual(game.resolve_night().deaths, (1,))
 
-    def test_holy_light_and_thunderstorm(self):
-        game = make_game(Role.WOLF, Role.THE_GIRL, Role.VILLAGER)
-        game.current_night_event = NightEvent.HOLY_LIGHT
-        submit(game, 1, ActionKind.WOLF_VOTE, 3)
-        self.assertEqual(game.resolve_night().deaths, ())
-        game.start_night()
-        game.current_night_event = NightEvent.THUNDERSTORM
-        submit(game, 2, ActionKind.GIRL)
-        self.assertEqual(game.resolve_night().deaths, ())
-        self.assertFalse(game.girl_caught)
+    def test_girl_detection_uses_night_seed(self):
+        for seed, caught in ((0, False), (1, True)):
+            with self.subTest(seed=seed):
+                game = make_game(Role.WOLF, Role.THE_GIRL, Role.VILLAGER)
+                game.night_seed = seed
+                submit(game, 2, ActionKind.GIRL)
+                result = game.resolve_night()
+                self.assertEqual(game.girl_caught, caught)
+                self.assertEqual(result.deaths, (2,) if caught else ())
 
     def test_custom_immediate_wolf_majority_rejected(self):
         game = make_game(*([Role.VILLAGER] * 5))

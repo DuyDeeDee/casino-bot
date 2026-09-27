@@ -328,19 +328,19 @@ SHOP_ITEMS = {
         "name": "Bằng Kiến Trúc Sư 📐",
         "cost": 10,
         "currency": "gold",
-        "description": f"Mở khóa các dự án thiết kế công trình trong lệnh $work (1,620,000-2,700,000 {EMOJI_VND}/ca, cooldown 2h). ⚠️ Yêu cầu: Bằng Công Nghệ + 15 XP nghề."
+        "description": f"Mở khóa các dự án thiết kế công trình trong lệnh $work (1,620,000-2,700,000 {EMOJI_VND}/ca, cooldown 1h). ⚠️ Yêu cầu: Bằng Công Nghệ + 15 XP nghề."
     },
     "bang_phi_hanh": {
         "name": "Chứng Chỉ Phi Hành Gia 🚀",
         "cost": 15,
         "currency": "gold",
-        "description": f"Mở khóa nhiệm vụ thám hiểm vũ trụ trong lệnh $work (4,050,000-7,200,000 {EMOJI_VND}/ca, cooldown 3h). ⚠️ Yêu cầu: Bằng Kiến Trúc Sư + 40 XP nghề."
+        "description": f"Mở khóa nhiệm vụ thám hiểm vũ trụ trong lệnh $work (4,050,000-7,200,000 {EMOJI_VND}/ca, cooldown 1h). ⚠️ Yêu cầu: Bằng Kiến Trúc Sư + 40 XP nghề."
     },
     "bang_bac_si": {
         "name": "Bằng Bác Sĩ Chuyên Khoa 🩺",
         "cost": 35,
         "currency": "gold",
-        "description": f"Mở khóa công việc chăm sóc sức khỏe VIP trong lệnh $work (10,800,000-18,000,000 {EMOJI_VND}/ca, cooldown 5h). ⚠️ Yêu cầu: Chứng Chỉ Phi Hành Gia + 80 XP nghề."
+        "description": f"Mở khóa công việc chăm sóc sức khỏe VIP trong lệnh $work (10,800,000-18,000,000 {EMOJI_VND}/ca, cooldown 1h). ⚠️ Yêu cầu: Chứng Chỉ Phi Hành Gia + 80 XP nghề."
     },
     "the_tho_mo": {
         "name": "Nghề Khai Thác Vàng ⛏️",

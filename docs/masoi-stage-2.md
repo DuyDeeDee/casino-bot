@@ -15,7 +15,7 @@
 1. Vũ Nữ phong tỏa kỹ năng, kể cả vote của Sói.
 2. Ghép đôi, ảo ảnh, mê hoặc, nhìn trộm và thiết lập bảo vệ.
 3. Chốt vote Sói, đòn đánh độc lập và lựa chọn bình thuốc.
-4. Phân giải bảo vệ, miễn nhiễm, chuyển phe, HP Boss, bình độc và lời nguyền.
+4. Phân giải bảo vệ, miễn nhiễm, chuyển phe, bình độc và lời nguyền.
 5. Áp dụng chết và chết dây chuyền; kích hoạt Sói Cuồng Sát, kế thừa Tiên Tri.
 6. Trả kết quả soi dựa trên hành động đã chốt, sau khi biết trạng thái phong tỏa.
 7. Cog xử lý lượt Thợ Săn và truyền quyền Thị Trưởng; sau đó mới xét thắng.
@@ -24,9 +24,9 @@ Người còn sống tại thời điểm chốt vẫn hành động trong đêm
 
 Bảo vệ và bình cứu chặn đòn đánh trực tiếp (Sói/Sát Thủ/Sói Trắng), không chặn bình độc, lời nguyền, chết vì tình nhân hoặc bị phát hiện khi nhìn trộm. Bình cứu chỉ bảo vệ đúng một người; xác nhận dùng sẽ tiêu hao bình dù người đó cuối cùng không bị tấn công. Nếu Vũ Nữ phong tỏa Phù Thủy thì bình không tiêu hao. Điểm cứu/bảo vệ tính theo số mục tiêu, không nhân lên khi cùng người bị nhiều đòn đánh.
 
-HP Boss áp dụng cho các đòn sát thương trực tiếp và phát bắn Thợ Săn; khiên chỉ chặn bình độc đầu tiên. Chết vì tình nhân không được HP ngăn lại. Chuỗi chết ban đêm, xử tử và Thợ Săn dùng chung `apply_deaths()`.
+Chuỗi chết ban đêm, xử tử và Thợ Săn dùng chung `apply_deaths()`. Event và Boss đã được gỡ khỏi ván mới; không còn thẻ sự kiện, HP/khiên Boss hoặc phiếu x3. Sói Cuồng Sát vẫn kích hoạt cắn hai người ở đêm sau khi chết.
 
-Vote Sói hòa được phân xử theo user ID tăng dần để không phụ thuộc thứ tự callback. Cuồng nộ chọn hai mục tiêu nhiều phiếu nhất; nếu chỉ có một mục tiêu, chọn nạn nhân thứ hai bằng RNG của đêm. Preview cho Phù Thủy chỉ tính mục tiêu chính, không dùng RNG hoặc ghi replay. Seed được lưu trong kết quả và replay; để tái hiện cần cùng trạng thái đầu đêm, sự kiện và danh sách intent.
+Vote Sói hòa được phân xử theo user ID tăng dần để không phụ thuộc thứ tự callback. Cuồng nộ chọn hai mục tiêu nhiều phiếu nhất; nếu chỉ có một mục tiêu, chọn nạn nhân thứ hai bằng RNG của đêm. Preview cho Phù Thủy chỉ tính mục tiêu chính, không dùng RNG hoặc ghi replay. Seed được lưu trong kết quả và replay; để tái hiện cần cùng trạng thái đầu đêm và danh sách intent.
 
 ## Kiểm tra
 

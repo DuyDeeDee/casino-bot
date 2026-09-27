@@ -5,9 +5,10 @@ import logging
 import time
 import discord
 from app.discord_bot.modules.helpers import make_embed
-from app.discord_bot.modules.masoi_engine import Faction, GamePhase, MasoiGame, NightEvent, Role
+from app.discord_bot.modules.masoi_engine import Faction, GamePhase, MasoiGame, Role
 from app.discord_bot.modules.masoi_delivery import deliver_night, NightDeliveryError
 from app.discord_bot.modules.masoi_rank import MasoiRankService
+from app.discord_bot.modules.masoi_presentation import ui_lock, new_deaths
 from app.discord_bot.modules.masoi_ui import (
     NightHunterView, MayorSuccessionView, DayDiscussionView, DayVoteView, GameEndView,
 )
@@ -75,8 +76,8 @@ class MasoiFlowMixin:
                         embed_announce = discord.Embed(
                             title="🏹 Thợ Săn Kéo Theo!",
                             description=(
-                                f"🏹 **{p.display_name}** dùng phát bắn cuối cùng kéo theo "
-                                + (f"**{shot_p.display_name}**{role_str} cùng ra đi!" if not shot_p.is_alive else f"**{shot_p.display_name}** chịu sát thương nhưng vẫn sống (còn {shot_p.boss_lives}/3 HP).")
+                                f"🏹 {self.player_label(p)} dùng phát bắn cuối cùng kéo theo "
+                                + f"{self.player_label(shot_p)}{role_str} cùng ra đi!"
                             ),
                             color=discord.Color(0xE0A638)
                         )
@@ -84,7 +85,7 @@ class MasoiFlowMixin:
                 else:
                     embed_announce = discord.Embed(
                         title="🏹 Thợ Săn",
-                        description=f"🏹 **{p.display_name}** đã không dùng phát bắn cuối cùng.",
+                        description=f"🏹 {self.player_label(p)} đã không dùng phát bắn cuối cùng.",
                         color=discord.Color(0xE0A638)
                     )
                     await _safe_send(channel, embed=embed_announce)
@@ -119,6 +120,26 @@ class MasoiFlowMixin:
                         raise NightDeliveryError(f"Lỗi DM lượt kế nhiệm của {mayor_p.display_name}; ván không tính rank.") from exc
                     finally:
                         view.stop()
+                    if game.phase == GamePhase.GAME_END:
+                        return
+                    successor = game.players.get(game.mayor_id)
+                    if successor and successor.is_alive and successor.user_id != mayor_p.user_id:
+                        await _safe_send(channel, embed=discord.Embed(
+                            title="🎩 Thị Trưởng Kế Nhiệm",
+                            description=f"{self.player_label(successor)} đã nhận chức Thị Trưởng. Phiếu bầu từ nay tính **x2**, vai trò gốc không thay đổi.",
+                            color=discord.Color.gold(),
+                        ))
+                        new_user = await self.get_or_fetch_user(successor.user_id)
+                        if new_user:
+                            try:
+                                await asyncio.wait_for(new_user.send("🎩 Bạn là Thị Trưởng kế nhiệm! Phiếu bầu ban ngày tính x2; vai trò và kỹ năng gốc giữ nguyên."), timeout=15)
+                            except Exception:
+                                logger.warning("Không gửi được DM thông báo kế nhiệm cho %s", successor.user_id)
+                    else:
+                        game.mayor_id = None
+                        game.record_log("MAYOR_VACANT", actor_id=mayor_p.user_id, result="Không có người kế nhiệm; mọi phiếu còn lại tính x1.")
+                        await _safe_send(channel, embed=discord.Embed(title="🎩 Chức Thị Trưởng Đang Trống", description="Không chọn được người kế nhiệm. Mọi phiếu bầu còn lại tính x1.", color=discord.Color.gold()))
+
 
     async def start_game(self, game: MasoiGame, message: discord.Message):
         if game.phase != GamePhase.LOBBY:
@@ -231,19 +252,6 @@ class MasoiFlowMixin:
                 game.start_night()
                 game.prepare_night_delivery()
 
-                # Thông báo Thẻ Sự Kiện Đêm nếu bật chế độ Thẻ Sự Kiện
-                if game.settings.enable_events and game.current_night_event:
-                    embed_event = discord.Embed(
-                        title=f"🎴 THẺ SỰ KIỆN ĐÊM {game.night_count} — {game.current_night_event.title}",
-                        description=(
-                            f"{game.current_night_event.description}\n\n"
-                            f"{divider}\n"
-                            f"⚠️ *Sự kiện có hiệu lực ngay trong Đêm {game.night_count} và Ban Ngày tiếp theo!*"
-                        ),
-                        color=discord.Color.purple()
-                    )
-                    await _safe_send(message.channel, embed=embed_event)
-
                 await deliver_night(self, game)
                 if self.active_games.get(key) is not game or game.phase == GamePhase.GAME_END:
                     break
@@ -282,10 +290,15 @@ class MasoiFlowMixin:
 
                 # 1.5 Tính toán đêm
                 game.phase = GamePhase.NIGHT_RESOLVE
-                night_result = game.resolve_night()
-                night_deaths = night_result.deaths
+                alive_before_night = {p.user_id for p in game.get_alive_players()}
+                game.resolve_night()
+                await self.close_witch_dm(game)
+                if self.active_games.get(key) is not game or game.phase == GamePhase.GAME_END:
+                    break
                 await self.check_and_trigger_hunter(game, message.channel)
                 await self.check_and_trigger_mayor_succession(game, message.channel)
+                night_deaths = new_deaths(game, alive_before_night)
+                game.night_deaths = list(night_deaths)
 
                 if self.active_games.get(key) is not game or game.phase == GamePhase.GAME_END:
                     break
@@ -320,16 +333,7 @@ class MasoiFlowMixin:
                                 pass
 
                 if game.girl_result:
-                    girl_result = game.girl_result
-                    girl_p = game.players.get(game.girl_peeking_user_id)
-                    if girl_p and not girl_p.is_roleblocked and not game.girl_caught:
-                        wolf_target_id = game.night_resolved_wolf_targets[0] if game.night_resolved_wolf_targets else None
-                        wolf_target_p = game.players.get(wolf_target_id) if wolf_target_id else None
-                        if wolf_target_p:
-                            girl_result += f" Bầy Sói đang nhắm vào **{wolf_target_p.display_name}**."
-                        else:
-                            girl_result += " Bầy Sói không chọn được mục tiêu."
-                    await self.update_night_result_dm(game.girl_dm_message, girl_result, "👧 Kết quả Cô Bé")
+                    await self.update_night_result_dm(game.girl_dm_message, game.girl_result, "👧 Kết quả Cô Bé")
 
                 await self.update_night_result_dm(game.night_cupid_dm_message, game.night_cupid_result, "💘 Kết quả Thần Tình Yêu")
                 if game.night_cupid_result and game.night_cupid_targets and game.night_cupid_result.startswith("💘"):
@@ -342,7 +346,8 @@ class MasoiFlowMixin:
                                     await user.send(
                                         "> 💘 **BẠN ĐÃ ĐƯỢC THẦN TÌNH YÊU GHÉP ĐÔI!**\n"
                                         f"> Bạn và **{partner.display_name}** hiện là **CẶP ĐÔI TÌNH NHÂN**.\n"
-                                        "> ⚠️ *Nếu 1 trong 2 người chết, người kia cũng sẽ chết theo!*"
+                                        "> ⚠️ *Nếu 1 trong 2 người chết, người kia cũng sẽ chết theo!*\n"
+                                        f"> {game.lover_goal_text(target.user_id)}"
                                     )
                                 except Exception:
                                     pass
@@ -389,7 +394,7 @@ class MasoiFlowMixin:
                     for uid in night_deaths:
                         p = game.players[uid]
                         if game.settings.reveal_roles_on_death:
-                            death_names.append(f"<:die:1533444731000848415> **{p.display_name}** *({p.role.emoji} {p.role.value})*")
+                            death_names.append(f"<:die:1533444731000848415> {self.player_label(p)} *({p.role.emoji} {p.role.value})*")
                         else:
                             death_names.append(f"<:die:1533444731000848415> **{p.display_name}**")
 
@@ -420,7 +425,7 @@ class MasoiFlowMixin:
 
                 # ── BƯỚC 3: THẢO LUẬN BAN NGÀY ──
                 game.phase = GamePhase.DAY_DISCUSSION
-                disc_limit = 30 if game.current_night_event == NightEvent.SILENT_NIGHT else game.settings.discussion_time
+                disc_limit = game.settings.discussion_time
                 disc_embed = discord.Embed(
                     title=f"💬 Ban Ngày — Thảo Luận (Ngày {game.day_count})",
                     description=f"<a:time:1533445134522384536> **Thời gian thảo luận:** `{disc_limit} giây`.\n"
@@ -428,16 +433,20 @@ class MasoiFlowMixin:
                                 f"{divider}\n💬 Mọi người hãy trao đổi ý kiến để tìm ra bầy Sói!",
                     color=discord.Color(0xE0A638)
                 )
-                disc_view = DayDiscussionView(game, self)
+                disc_view = DayDiscussionView(game, self, prepare=True)
+                game.discussion_view = disc_view
                 disc_msg = await _safe_send(message.channel, embed=disc_embed, view=disc_view)
 
-                # Chờ thảo luận
-                elapsed = 0
-                while elapsed < disc_limit:
+                game.discussion_view = disc_view
+                if self.active_games.get(key) is not game or game.phase == GamePhase.GAME_END:
+                    disc_view.stop()
+                    break
+                disc_view.open_actions()
+                # One monotonic deadline, opened only after delivery.
+                while time.monotonic() < disc_view.deadline:
                     if disc_view.is_finished() or self.active_games.get(key) is not game or game.phase == GamePhase.GAME_END:
                         break
-                    await asyncio.sleep(1)
-                    elapsed += 1
+                    await asyncio.sleep(min(1, max(0, disc_view.deadline - time.monotonic())))
 
                 if self.active_games.get(key) is not game or game.phase == GamePhase.GAME_END:
                     break
@@ -453,85 +462,84 @@ class MasoiFlowMixin:
 
                 # ── BƯỚC 4: BỎ PHIẾU TREO CỔ ──
                 game.phase = GamePhase.DAY_VOTE
-                if game.current_night_event == NightEvent.SOLAR_ECLIPSE:
-                    game.phase = GamePhase.DAY_RESOLVE
-                    eclipse_embed = discord.Embed(
-                        title="☀️ NHẬT THỰC BÓNG TỐI",
-                        description="Do ảnh hưởng của hiện tượng **Nhật Thực Bóng Tối**, ban ngày hôm nay Dân Làng bị bóng tối che mắt và **không thể bỏ phiếu treo cổ**!",
-                        color=discord.Color.dark_red()
-                    )
-                    await _safe_send(message.channel, embed=eclipse_embed)
-                    game.resolve_day_vote()
-                else:
-                    vote_embed = self.build_vote_embed(game, is_final=False)
-                    vote_view = DayVoteView(game, self)
-                    vote_msg = await _safe_send(message.channel, embed=vote_embed, view=vote_view)
+                vote_embed = self.build_vote_embed(game, is_final=False)
+                vote_view = DayVoteView(game, self, prepare=True)
+                game.day_vote_view = vote_view
+                vote_msg = await _safe_send(message.channel, embed=vote_embed, view=vote_view)
 
-                    # Chờ tất cả mọi người bỏ phiếu xong hoặc hết thời gian đếm ngược
-                    elapsed = 0
-                    while elapsed < game.settings.night_time:
-                        if vote_view.is_finished() or len(game.day_votes) >= len(game.get_alive_players()) or self.active_games.get(key) is not game or game.phase == GamePhase.GAME_END:
-                            break
-                        await asyncio.sleep(1)
-                        elapsed += 1
+                game.day_vote_message = vote_msg
+                game.day_vote_view = vote_view
+                if self.active_games.get(key) is not game or game.phase == GamePhase.GAME_END:
+                    vote_view.stop()
+                    break
+                vote_view.open_actions()
 
-                    if self.active_games.get(key) is not game or game.phase == GamePhase.GAME_END:
+                # Chờ đủ phiếu hoặc tới đúng deadline đã mở sau khi gửi.
+                while time.monotonic() < vote_view.deadline:
+                    if vote_view.is_finished() or len(game.day_votes) >= len(game.get_alive_players()) or self.active_games.get(key) is not game or game.phase == GamePhase.GAME_END:
                         break
+                    await asyncio.sleep(min(1, max(0, vote_view.deadline - time.monotonic())))
 
-                    # ── BƯỚC 5: XỬ LÝ BỎ PHIẾU ──
-                    game.phase = GamePhase.DAY_RESOLVE
-                    vote_final_embed = self.build_vote_embed(game, is_final=True)
+                if self.active_games.get(key) is not game or game.phase == GamePhase.GAME_END:
+                    break
+
+                # ── BƯỚC 5: XỬ LÝ BỎ PHIẾU ──
+                # Close synchronously before awaiting the lock: queued live edits cannot reopen.
+                game.phase = GamePhase.DAY_RESOLVE
+                vote_view.stop()
+                async with ui_lock(game, "vote"):
                     try:
-                        await vote_msg.edit(embed=vote_final_embed, view=None)
+                        await vote_msg.edit(embed=self.build_vote_embed(game, is_final=True), view=None)
                     except Exception:
                         pass
+                game.day_vote_message = None
+                game.day_vote_view = None
+                if self.active_games.get(key) is not game or game.phase == GamePhase.GAME_END:
+                    break
+                alive_before_vote = {p.user_id for p in game.get_alive_players()}
+                executed_id = game.resolve_day_vote()
+                last_log = game.replay_logs[-1] if game.replay_logs else None
+                if game.winner_faction != Faction.INDEPENDENT:
+                    await self.check_and_trigger_hunter(game, message.channel)
+                    await self.check_and_trigger_mayor_succession(game, message.channel)
+                await self.sync_channel_permissions(game, message.channel)
 
-                    vote_view.stop()
-                    if self.active_games.get(key) is not game or game.phase == GamePhase.GAME_END:
-                        break
-                    executed_id = game.resolve_day_vote()
-                    last_log = game.replay_logs[-1] if game.replay_logs else None
-                    if game.winner_faction != Faction.INDEPENDENT:
-                        await self.check_and_trigger_hunter(game, message.channel)
-                        await self.check_and_trigger_mayor_succession(game, message.channel)
-                    await self.sync_channel_permissions(game, message.channel)
-
-                    if executed_id:
-                        p = game.players[executed_id]
-                        if p.role == Role.ALPHA_WOLF:
-                            if p.boss_lives > 0:
-                                exec_text = f"👑🐺 **Chúa Tể Sói {p.display_name}** đã hứng chịu đòn dồn phiếu của Dân Làng, nhưng nhờ sở hữu 3 Mạng Vương Giả, hắn đã thoát chết! (HP hiện tại: **{p.boss_lives}/3**)"
-                            else:
-                                exec_text = f"💥👑🐺 **CHÚA TỂ SÓI {p.display_name}** ĐÃ CHÍNH THỨC BỊ DÂN LÀNG TIÊU DIỆT HOÀN TOÀN! Phe Dân Làng đã giải phóng vương quốc!"
-                        elif p.role == Role.SCAPEGOAT and any(log.event_type == "SCAPEGOAT_EXECUTED" and log.day == game.day_count and log.target_id == executed_id for log in game.replay_logs):
-                            if game.settings.reveal_roles_on_death:
-                                exec_text = f"🐐 **Do phiếu bầu bị HÒA, Dê Tế Thần {p.display_name}** tự động bị gánh tội và đưa lên giàn treo cổ! *(Vai trò: **{p.role.emoji} {p.role.value}**)*"
-                            else:
-                                exec_text = f"🐐 **Do phiếu bầu bị HÒA, Dê Tế Thần {p.display_name}** tự động bị gánh tội và đưa lên giàn treo cổ!"
+                if executed_id:
+                    p = game.players[executed_id]
+                    if p.role == Role.SCAPEGOAT and any(log.event_type == "SCAPEGOAT_EXECUTED" and log.day == game.day_count and log.target_id == executed_id for log in game.replay_logs):
+                        if game.settings.reveal_roles_on_death:
+                            exec_text = f"🐐 **Do phiếu bầu bị HÒA, Dê Tế Thần {self.player_badge(p.user_id)} {p.display_name}** tự động bị gánh tội và đưa lên giàn treo cổ! *(Vai trò: **{p.role.emoji} {p.role.value}**)*"
                         else:
-                            if game.settings.reveal_roles_on_death:
-                                exec_text = f"<a:huyay:1533445376563089448> **{p.display_name}** đã bị dân làng xử tử trên giàn treo cổ! *(Vai trò: **{p.role.emoji} {p.role.value}**)*"
-                            else:
-                                exec_text = f"<a:huyay:1533445376563089448> **{p.display_name}** đã bị dân làng xử tử trên giàn treo cổ!"
-
-                        eco = self.get_economy()
-                        if eco:
-                            vip_info = eco.get_masoi_vip_info(p.user_id)
-                            if vip_info["is_vip"] and vip_info["last_words"]:
-                                exec_text += f"\n\n💬 *Lời trăn trối của <a:2336vipgif:1534596901834592286> **{p.display_name}**: \"{vip_info['last_words']}\"*"
+                            exec_text = f"🐐 **Do phiếu bầu bị HÒA, Dê Tế Thần {p.display_name}** tự động bị gánh tội và đưa lên giàn treo cổ!"
                     else:
-                        last_log = game.replay_logs[-1] if game.replay_logs else None
-                        if last_log and last_log.event_type == "VOTE_RESULT":
-                            exec_text = f"<a:huyay:1533445376563089448> Lượt bỏ phiếu kết thúc: **{last_log.result}**."
+                        if game.settings.reveal_roles_on_death:
+                            exec_text = f"<a:huyay:1533445376563089448> {self.player_label(p)} đã bị dân làng xử tử trên giàn treo cổ! *(Vai trò: **{p.role.emoji} {p.role.value}**)*"
                         else:
-                            exec_text = "<a:huyay:1533445376563089448> Lượt bỏ phiếu kết thúc, không ai bị xử tử."
+                            exec_text = f"<a:huyay:1533445376563089448> {self.player_label(p)} đã bị dân làng xử tử trên giàn treo cổ!"
 
-                    embed_exec = discord.Embed(
-                        title="<a:huyay:1533445376563089448> Kết Quả Xử Tử",
-                        description=f"{exec_text}\n\n{divider}",
-                        color=discord.Color(0xE0A638)
-                    )
-                    await _safe_send(message.channel, embed=embed_exec)
+                    eco = self.get_economy()
+                    if eco:
+                        vip_info = eco.get_masoi_vip_info(p.user_id)
+                        if vip_info["is_vip"] and vip_info["last_words"]:
+                            exec_text += f"\n\n💬 *Lời trăn trối của <a:2336vipgif:1534596901834592286> **{p.display_name}**: \"{vip_info['last_words']}\"*"
+                else:
+                    last_log = game.replay_logs[-1] if game.replay_logs else None
+                    if last_log and last_log.event_type == "VOTE_RESULT":
+                        exec_text = f"<a:huyay:1533445376563089448> Lượt bỏ phiếu kết thúc: **{last_log.result}**."
+                    else:
+                        exec_text = "<a:huyay:1533445376563089448> Lượt bỏ phiếu kết thúc, không ai bị xử tử."
+
+                additional_deaths = [uid for uid in new_deaths(game, alive_before_vote) if uid != executed_id]
+                if additional_deaths:
+                    names = [self.player_label(game.players[uid]) + (f" ({game.players[uid].role.emoji} {game.players[uid].role.value})" if game.settings.reveal_roles_on_death else "") for uid in additional_deaths]
+                    exec_text += "\n\n💀 Những người qua đời theo dây chuyền:\n" + "\n".join(names)
+
+                embed_exec = discord.Embed(
+                    title="<a:huyay:1533445376563089448> Kết Quả Xử Tử",
+                    description=f"{exec_text}\n\n{divider}",
+                    color=discord.Color(0xE0A638)
+                )
+                await _safe_send(message.channel, embed=embed_exec)
 
                 if self.active_games.get(key) is not game or game.phase == GamePhase.GAME_END:
                     break
@@ -590,6 +598,11 @@ class MasoiFlowMixin:
         finally:
             game.phase = GamePhase.GAME_END
             game.stop_night_views()
+            for view in (getattr(game, "discussion_view", None), getattr(game, "day_vote_view", None)):
+                if view:
+                    view.stop()
+            game.day_vote_message = None
+            game.day_vote_view = None
             try:
                 await self.restore_channel_permissions(game, message.channel)
             except Exception:
@@ -624,7 +637,7 @@ class MasoiFlowMixin:
             status = "<a:key:1526234974150459593> Sống" if p.is_alive else "<:die:1533444731000848415> Chết"
             pts_str = f" ({game.get_rank_faction(p.user_id).label}: {rank_pts.get(p.user_id, 0):+d} pts)" if game.settings.enable_rank else ""
             result = "Hòa" if game.winner_faction == Faction.DRAW else "Thắng" if game.did_player_win(p.user_id) else "Thua"
-            role_lines.append(f"• **{p.display_name}** — {p.role.emoji} **{p.role.value}** [{status} · {result}]{pts_str}")
+            role_lines.append(f"• {self.player_label(p)} — {p.role.emoji} **{p.role.value}** [{status} · {result}]{pts_str}")
 
         winner_str = game.winner_faction.value if game.winner_faction else "Không có"
 
