@@ -141,8 +141,23 @@ class MasoiFlowMixin:
                         await _safe_send(channel, embed=discord.Embed(title="🎩 Chức Thị Trưởng Đang Trống", description="Không chọn được người kế nhiệm. Mọi phiếu bầu còn lại tính x1.", color=discord.Color.gold()))
 
 
+    async def ensure_custom_role_access(self, game: MasoiGame, message: discord.Message) -> bool:
+        if game.settings.role_setup_mode == "CUSTOM":
+            economy = self.get_economy()
+            if not economy or not economy.is_masoi_vip(game.host_id):
+                game.phase = GamePhase.LOBBY
+                await message.edit(view=LobbyView(game, self))
+                await message.channel.send(
+                    "❌ Chỉ Host đang có VIP Ma Sói mới được bắt đầu với phân vai CUSTOM. "
+                    "Ván chưa bắt đầu; Host hãy chuyển về AUTO trong Cài đặt rồi thử lại."
+                )
+                return False
+        return True
+
     async def start_game(self, game: MasoiGame, message: discord.Message):
         if game.phase != GamePhase.LOBBY:
+            return
+        if not await self.ensure_custom_role_access(game, message):
             return
         setup_errors = game.validate_role_setup()
         if setup_errors:
@@ -184,6 +199,9 @@ class MasoiFlowMixin:
             )
             return
 
+        # The preflight can wait minutes for DMs; entitlement may expire meanwhile.
+        if not await self.ensure_custom_role_access(game, message):
+            return
         game.phase = GamePhase.ROLE_ASSIGN
         game.cog = self
         try:

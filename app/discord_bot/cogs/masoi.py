@@ -446,14 +446,13 @@ class CustomRolesConfigView(discord.ui.View):
 
     async def check_vip_host(self, interaction: discord.Interaction) -> bool:
         eco = self.cog.get_economy()
-        if eco and not eco.is_masoi_vip(interaction.user.id):
+        if not eco or not eco.is_masoi_vip(self.game.host_id):
             await interaction.response.send_message(
                 "❌ **TÍNH NĂNG CHỈ DÀNH CHO VIP HOST!**\n"
                 "Tính năng **Tùy Chỉnh Vai Trò (`CUSTOM`)** chỉ dành cho Host có gói VIP Ma Sói.\n"
                 "👉 Dùng lệnh **`i?masoivip`** để nâng cấp gói VIP!",
                 ephemeral=True
             )
-            self.game.settings.role_setup_mode = "AUTO"
             return False
         return True
 
@@ -486,9 +485,10 @@ class CustomRolesConfigView(discord.ui.View):
     async def toggle_mode_callback(self, interaction: discord.Interaction):
         if not await self.interaction_check(interaction):
             return
-        if not await self.check_vip_host(interaction):
-            return
         s = self.game.settings
+        # Every host may leave CUSTOM; only a current VIP may enable it.
+        if s.role_setup_mode == "AUTO" and not await self.check_vip_host(interaction):
+            return
         s.role_setup_mode = "CUSTOM" if s.role_setup_mode == "AUTO" else "AUTO"
         self.btn_toggle_mode.label = f"Phân vai: {'Tự Động (AUTO) ✅' if s.role_setup_mode == 'AUTO' else 'Tùy Chỉnh (CUSTOM) ⚙️'}"
         await self.cog.update_lobby_embed(self.game, self.parent_view.lobby_message)
@@ -579,7 +579,7 @@ class Masoi(MasoiFlowMixin, MasoiRecoveryMixin, commands.Cog):
                 with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
                     data = json.load(f)
                     for key, val in data.items():
-                        self.saved_settings[key] = MasoiSettings.from_dict(val)
+                        self.saved_settings[key] = self.shared_settings_only(MasoiSettings.from_dict(val))
         except Exception as e:
             logger.warning("Không thể đọc file masoi_settings.json: %s", e)
 
@@ -595,18 +595,28 @@ class Masoi(MasoiFlowMixin, MasoiRecoveryMixin, commands.Cog):
     def save_game_settings(self, game: MasoiGame):
         key_channel = f"{game.guild_id}-{game.channel_id}"
         key_guild = str(game.guild_id)
-        saved = game.settings.copy()
+        # Role customization belongs to this lobby, never to another host's room.
+        saved = self.shared_settings_only(game.settings)
         self.saved_settings[key_channel] = saved
         self.saved_settings[key_guild] = saved
         self.save_settings_to_file()
+
+    @staticmethod
+    def shared_settings_only(settings: MasoiSettings) -> MasoiSettings:
+        saved = settings.copy()
+        defaults = MasoiSettings()
+        saved.role_setup_mode = defaults.role_setup_mode
+        saved.custom_wolf_count = defaults.custom_wolf_count
+        saved.custom_special_roles = []
+        return saved
 
     def get_saved_settings(self, guild_id: int, channel_id: int) -> MasoiSettings:
         key_channel = f"{guild_id}-{channel_id}"
         key_guild = str(guild_id)
         if key_channel in self.saved_settings:
-            return self.saved_settings[key_channel].copy()
+            return self.shared_settings_only(self.saved_settings[key_channel])
         if key_guild in self.saved_settings:
-            return self.saved_settings[key_guild].copy()
+            return self.shared_settings_only(self.saved_settings[key_guild])
         return MasoiSettings()
 
     def get_economy(self):

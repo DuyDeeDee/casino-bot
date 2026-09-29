@@ -1,5 +1,19 @@
 # Đồng bộ Ma Sói: hiển thị và luật chơi
 
+## Cấu hình vai trò giữa các bàn (bổ sung)
+
+Cấu hình AUTO/CUSTOM, số Sói và danh sách vai trò đặc biệt chỉ thuộc lobby
+hiện tại. Bàn mới luôn khởi tạo phân vai AUTO, kể cả khi file cài đặt cũ của
+kênh/server còn chứa CUSTOM; các cài đặt chung khác vẫn được giữ như trước.
+Lưu cài đặt lobby không còn đưa cấu hình vai trò CUSTOM vào mẫu dùng chung.
+
+CUSTOM vẫn dành cho Host VIP. Khi bấm bắt đầu, bot kiểm tra lại quyền VIP;
+nếu Host không còn VIP hoặc không đọc được dữ liệu quyền, ván chưa được chia
+vai và lobby được mở lại. Host không VIP vẫn có thể chuyển CUSTOM về AUTO để
+tiếp tục; không thể chọn số Sói/vai trò CUSTOM hoặc bật CUSTOM. Không thay đổi
+quyền lợi VIP, phí và cách chia đội hình CUSTOM hợp lệ cho ván hiện tại.
+Chưa áp dụng giới hạn số Sói theo số người (lớp thứ ba sẽ làm riêng).
+
 ## Các thay đổi
 
 - Badge đọc trực tiếp từ dữ liệu hiện tại khi dựng bảng phiếu, menu bỏ phiếu,
