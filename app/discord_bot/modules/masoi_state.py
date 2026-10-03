@@ -37,7 +37,7 @@ def snapshot_game(game):
         "event": game.current_night_event.name if game.current_night_event else None,
         "settings": game.settings.to_dict(), "players": players, "join_order": list(game.join_order),
         "winner": game.winner_faction.name if game.winner_faction else None,
-        "rank_results": MasoiRankService.results(game) if game.winner_faction and game.winner_faction != Faction.DRAW and game.settings.enable_rank else [],
+        "rank_results": MasoiRankService.results(game) if game.has_rankable_result() and game.settings.enable_rank else [],
         "rank_settled": bool(getattr(game, "rank_settled", False)),
         "result_announced": bool(getattr(game, "result_announced", False)),
         "recovery_notified": bool(getattr(game, "recovery_notified", False)),

@@ -1,5 +1,7 @@
 # Đồng bộ Ma Sói: hiển thị và luật chơi
 
+> Tài liệu này ghi lại đợt đồng bộ trước khi thay đổi role và mở lại Event. Danh sách và luật role hiện hành xem [Ma Sói: role hiện hành](masoi-roles.md); luật Event hiện hành xem [thẻ sự kiện](masoi-event.md). Các đoạn nhắc role đã gỡ và trạng thái Event cũ bên dưới chỉ là lịch sử.
+
 ## Cấu hình vai trò giữa các bàn (bổ sung)
 
 Cấu hình AUTO/CUSTOM, số Sói và danh sách vai trò đặc biệt chỉ thuộc lobby
@@ -12,7 +14,7 @@ nếu Host không còn VIP hoặc không đọc được dữ liệu quyền, v�
 vai và lobby được mở lại. Host không VIP vẫn có thể chuyển CUSTOM về AUTO để
 tiếp tục; không thể chọn số Sói/vai trò CUSTOM hoặc bật CUSTOM. Không thay đổi
 quyền lợi VIP, phí và cách chia đội hình CUSTOM hợp lệ cho ván hiện tại.
-Chưa áp dụng giới hạn số Sói theo số người (lớp thứ ba sẽ làm riêng).
+Đã áp dụng giới hạn Sói theo số người ở bản role hiện hành (5–6: 1; 7–11: 2; 12–14: 3; 15–20: 4).
 
 ## Các thay đổi
 

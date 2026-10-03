@@ -1,5 +1,7 @@
 # Ma Sói — hợp đồng xử lý đêm (Giai đoạn 2)
 
+> Đây là tài liệu lịch sử của giai đoạn 2. Vũ Nữ phong tỏa và các role đã gỡ không còn áp dụng cho ván mới. Xem [Ma Sói: role hiện hành](masoi-roles.md).
+
 ## Luồng dữ liệu
 
 `NightActionView → ActionIntent → submit_night_action → lock_night → resolve_night → NightResult`

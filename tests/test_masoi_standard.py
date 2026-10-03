@@ -16,22 +16,22 @@ from tests.test_masoi_engine import make_game, submit
 
 
 class StandardRulesTests(unittest.TestCase):
-    def test_old_mode_settings_are_ignored_and_not_saved_again(self):
+    def test_event_settings_are_restored_but_boss_is_not(self):
         settings = MasoiSettings.from_dict({
             "enable_events": True, "enable_boss_mode": True,
             "custom_special_roles": ["ALPHA_WOLF", "SEER", "GUARD"],
         })
-        self.assertFalse(hasattr(settings, "enable_events"))
+        self.assertTrue(settings.enable_events)
         self.assertFalse(hasattr(settings, "enable_boss_mode"))
-        self.assertNotIn("enable_events", settings.to_dict())
+        self.assertTrue(settings.to_dict()["enable_events"])
         self.assertNotIn("enable_boss_mode", settings.to_dict())
         self.assertEqual(settings.custom_special_roles, ["SEER", "GUARD"])
 
-    def test_stale_flags_cannot_create_boss_or_random_events(self):
+    def test_boss_flag_cannot_create_boss_when_events_are_off(self):
         for count in (5, 8, 12, 16, 20):
             game = make_game(*([Role.VILLAGER] * count))
             # Even obsolete in-memory attributes must have no effect.
-            game.settings.enable_events = True
+            game.settings.enable_events = False
             game.settings.enable_boss_mode = True
             preview = Counter(game.preview_roles())
             game.assign_roles()
@@ -100,33 +100,36 @@ class StandardRulesTests(unittest.TestCase):
         self.assertEqual(restored.get_rank_faction(1), RankFaction.WOLF)
         self.assertEqual(restored.calculate_rank_points(), {1: 20, 2: -15})
         self.assertFalse(restored.accepts_night_actions(restored.night_count))
-        self.assertNotIn("enable_events", restored.settings.to_dict())
+        self.assertTrue(restored.settings.enable_events)
+        self.assertTrue(restored.settings.to_dict()["enable_events"])
 
 
 class StandardUITests(unittest.IsolatedAsyncioTestCase):
-    async def test_removed_commands_and_aliases_are_not_registered(self):
+    async def test_event_commands_return_but_boss_commands_do_not(self):
         names = {name for cmd in Masoi.__cog_commands__ for name in (cmd.name, *cmd.aliases)}
-        for retired in ("masoievent", "masoi-event", "werewolfevent", "masoi_event",
-                        "masoiboss", "masoi-boss", "werewolfboss", "masoi_boss"):
+        for retired in ("masoiboss", "masoi-boss", "werewolfboss", "masoi_boss"):
             self.assertNotIn(retired, names)
+        for active in ("masoievent", "masoi-event", "werewolfevent", "masoi_event"):
+            self.assertIn(active, names)
         self.assertIn("masoi", names)
         self.assertIn("masoivip", names)
 
-    async def test_lobby_and_settings_no_longer_show_modes(self):
+    async def test_lobby_has_no_mode_line_but_settings_show_events(self):
         game = make_game(*([Role.VILLAGER] * 5))
         game.phase = GamePhase.LOBBY
         cog = make_cog(game)
         lobby, settings = LobbyView(game, cog), SettingsView(game, cog, None)
         try:
             self.assertNotIn("masoi_mode_info", {item.custom_id for item in lobby.children})
-            self.assertFalse(hasattr(settings, "btn_events"))
+            self.assertTrue(hasattr(settings, "btn_events"))
             self.assertFalse(hasattr(settings, "btn_boss"))
             lobby_data = str(cog.build_lobby_embed(game).to_dict()).casefold()
             settings_data = str(cog.build_settings_embed(game).to_dict()).casefold()
-            for text in (lobby_data, settings_data):
-                self.assertNotIn("chế độ", text)
-                self.assertNotIn("trùm", text)
-                self.assertNotIn("thẻ sự kiện", text)
+            self.assertNotIn("chế độ", lobby_data)
+            self.assertNotIn("thẻ sự kiện", lobby_data)
+            self.assertNotIn("trùm", lobby_data)
+            self.assertIn("thẻ sự kiện", settings_data)
+            self.assertNotIn("trùm", settings_data)
         finally:
             lobby.stop()
             settings.stop()
@@ -145,13 +148,13 @@ class StandardUITests(unittest.IsolatedAsyncioTestCase):
             parent.stop()
             view.stop()
 
-    async def test_old_mode_arguments_are_rejected_before_fees(self):
+    async def test_boss_arguments_are_rejected_before_fees(self):
         game = make_game(Role.WOLF, Role.VILLAGER)
         cog = make_cog(game)
         ctx = SimpleNamespace(prefix="!", send=AsyncMock())
-        for argument in ("event", "events", "boss", "raid", "e", "b"):
+        for argument in ("boss", "raid", "b", "unknown"):
             await Masoi.masoi_cmd.callback(cog, ctx, sub_command=argument)
-        self.assertEqual(ctx.send.await_count, 6)
+        self.assertEqual(ctx.send.await_count, 4)
         cog.get_economy.assert_not_called()
 
     async def test_vip_command_route_is_unchanged(self):
@@ -194,6 +197,7 @@ class StandardUITests(unittest.IsolatedAsyncioTestCase):
             await Masoi.masoi_cmd.callback(cog, ctx)
             created = cog.active_games["1-2"]
             self.assertNotIn("enable_boss_mode", created.settings.to_dict())
+            self.assertFalse(created.settings.enable_events)
             if vip:
                 eco.add_money.assert_not_called()
             else:

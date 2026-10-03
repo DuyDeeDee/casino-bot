@@ -236,9 +236,10 @@ class LiveUISyncTests(unittest.IsolatedAsyncioTestCase):
         embeds = event.response.send_message.call_args.kwargs["embeds"]
         text = "\n".join(e.description for e in embeds)
         for role in Role:
-            if role != Role.ALPHA_WOLF:
+            if role not in masoi.RETIRED_ROLES:
                 self.assertIn(role.description, text)
-        self.assertNotIn(Role.ALPHA_WOLF.value, text)
+        for retired in masoi.RETIRED_ROLES:
+            self.assertNotIn(f"**{retired.value}**", text)
         self.assertLessEqual(sum(len(e) for e in embeds), 6000)
         self.assertTrue(all(len(e.description) <= 4096 for e in embeds))
         view.stop()
@@ -282,8 +283,8 @@ class LiveUISyncTests(unittest.IsolatedAsyncioTestCase):
         view.stop()
 
     async def test_target_count_dm_and_controls_match_with_one_or_two_targets(self):
-        for role, kind, cls in ((Role.PIPER, ActionKind.PIPER, masoi.NightPiperView), (Role.INVESTIGATOR, ActionKind.INVESTIGATE, masoi.NightInvestigatorView)):
-            for others in (1, 2):
+        for role, kind, cls in ((Role.INVESTIGATOR, ActionKind.INVESTIGATE, masoi.NightInvestigatorView),):
+            for others in (2, 3):
                 game = make_game(role, *([Role.VILLAGER] * others))
                 game.prepare_night_delivery()
                 cog = make_cog(game)
@@ -292,9 +293,9 @@ class LiveUISyncTests(unittest.IsolatedAsyncioTestCase):
                 await deliver_night(cog, game)
                 kwargs = user.send.call_args.kwargs
                 self.assertIsInstance(kwargs["view"], cls)
-                self.assertIn(f"Chọn đúng {others} người", kwargs["embed"].description)
+                self.assertIn("Chọn đúng 2 người", kwargs["embed"].description)
                 self.assertEqual(kwargs["view"].select.min_values, game.required_target_count(kind))
-                self.assertEqual(kwargs["view"].select.max_values, others)
+                self.assertEqual(kwargs["view"].select.max_values, 2)
                 game.stop_night_views()
 
     async def test_witch_inflight_wolf_edit_cannot_restore_save_over_poison(self):
@@ -404,7 +405,7 @@ class LiveUISyncTests(unittest.IsolatedAsyncioTestCase):
         first.response.defer.assert_awaited_once()
         second.response.defer.assert_awaited_once()
 
-    async def test_witch_commit_dm_says_roleblock_did_not_spend_potion(self):
+    async def test_witch_commit_dm_says_visit_did_not_block_potion(self):
         game = make_game(Role.WITCH, Role.HARLOT, Role.VILLAGER)
         submit(game, 1, ActionKind.WITCH_POISON, 3)
         submit(game, 2, ActionKind.HARLOT, 1)
@@ -412,9 +413,9 @@ class LiveUISyncTests(unittest.IsolatedAsyncioTestCase):
         game.resolve_night()
         await make_cog(game).close_witch_dm(game)
         kwargs = game.witch_dm_message.edit.call_args.kwargs
-        self.assertIn("Không mất bình", kwargs["embed"].description)
+        self.assertIn("Đã dùng bình độc", kwargs["embed"].description)
         self.assertIsNone(kwargs["view"])
-        self.assertFalse(game.players[1].witch_poison_used)
+        self.assertTrue(game.players[1].witch_poison_used)
 
     async def test_result_dm_without_confirmation_field_still_gets_result(self):
         game = make_game(Role.SEER, Role.WOLF)

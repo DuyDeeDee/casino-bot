@@ -9,14 +9,14 @@
 | Thua bất kỳ phe nào | −15 |
 | Thưởng kỹ năng khi thắng | +5/mốc, tổng thưởng tối đa +10 |
 
-Mốc thưởng: soi ra Sói thật, số mục tiêu được Bảo Vệ cứu và số lượt dùng bình có ích của Phù Thủy. Không thưởng chỉ vì sống sót; người chết vẫn được tính thắng nếu mục tiêu đội được hoàn thành. Người thua luôn nhận −15, không được thưởng kỹ năng để bù thành điểm dương. Điểm tích lũy có thể âm, không chặn tại 0. Không có người thắng, ván bị hủy, hòa vì không còn người sống hoặc tắt rank thì không ghi kết quả xếp hạng.
+Mốc thưởng: soi ra Sói thật, số mục tiêu được Bảo Vệ cứu và số lượt dùng bình có ích của Phù Thủy. Không thưởng chỉ vì sống sót; người chết vẫn được tính thắng nếu mục tiêu đội được hoàn thành. Người thua luôn nhận −15, không được thưởng kỹ năng để bù thành điểm dương. Điểm tích lũy có thể âm, không chặn tại 0. Ván bị hủy, hòa không có thắng cá nhân hoặc tắt rank thì không ghi kết quả xếp hạng.
 
-Sói Trắng và Sát Thủ chỉ thắng khi là người sống cuối cùng. Không chốt thắng đội Sói khi Sói Trắng, Sát Thủ hoặc Người Thổi Sáo còn sống; không chốt thắng Dân khi Sói, Sát Thủ hoặc Người Thổi Sáo còn sống. Người Thổi Sáo vẫn thắng theo mục tiêu mê hoặc; cặp tình nhân khác phe thắng khi còn đúng hai người liên kết với nhau. Nhờ đó, thắng đội không cắt ngang mục tiêu Solo rồi trừ điểm tất cả người chơi.
+Kẻ Phóng Hỏa chỉ thắng khi là người sống cuối cùng. Không chốt thắng đội Sói hoặc Dân khi Kẻ Phóng Hỏa còn sống. Thợ Săn Người nhận thắng cá nhân nếu mục tiêu bị treo cổ khi mình còn sống, nhưng ván vẫn tiếp tục; nếu mục tiêu chết cách khác, role này gia nhập phe Sói. Cặp tình nhân khác phe thắng khi còn đúng hai người liên kết với nhau. Nếu ván hòa sau khi Thợ Săn Người đã đạt mục tiêu, chỉ thắng cá nhân đó được ghi rank; người khác không bị trừ điểm.
 
 ## Ba bảng độc lập
 
-- **Sói (`WOLF`)**: các vai Sói chơi theo đội và Kẻ Bị Nguyền đã hóa Sói.
-- **Solo (`SOLO`)**: Kẻ Ngốc, Sát Thủ, Người Thổi Sáo, Sói Trắng và cặp tình nhân khác phe. Các mục tiêu độc lập phải thật sự thắng; không được nhận thắng theo phe gốc. Cặp tình nhân khác phe được phân nhóm dựa trên phe thực tế cuối ván, kể cả khi đã chết.
+- **Sói (`WOLF`)**: các vai Sói chơi theo đội, Kẻ Bị Nguyền đã hóa Sói và Thợ Săn Người đã gia nhập phe Sói.
+- **Solo (`SOLO`)**: Kẻ Ngốc, Kẻ Phóng Hỏa, Thợ Săn Người chưa gia nhập phe Sói và cặp tình nhân khác phe. Các mục tiêu độc lập phải thật sự thắng; không được nhận thắng theo phe gốc.
 - **Dân (`VILLAGER`)**: các vai còn lại, bao gồm Bán Nguyệt và Kẻ Bị Nguyền chưa hóa Sói. Cặp tình nhân cùng phe vẫn tính rank theo đội.
 
 Mỗi người có điểm, số ván, thắng, thua riêng ở từng bảng. Hạng Đồng/Bạc/Vàng/Kim Cương vẫn dùng các mốc 0/100/300/700; điểm âm thuộc Đồng.

@@ -4,7 +4,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import discord
-from app.discord_bot.modules.masoi_engine import ActionKind, GamePhase, Role
+from app.discord_bot.modules.masoi_engine import ActionKind, GamePhase, NightEvent, Role
 from app.discord_bot.modules import masoi_ui as ui
 
 logger = logging.getLogger(__name__)
@@ -20,14 +20,13 @@ async def deliver_night(cog, game, *, timeout=15, concurrency=6):
     jobs = []
     simple = {
         Role.GUARD: (ui.NightGuardView, "Chọn một người để bảo vệ; không chọn cùng người hai đêm liên tiếp."),
+        Role.DOCTOR: (ui.NightDoctorView, "Cứu một người khác khỏi đòn giết trực tiếp; tối đa 2 đêm/người trong ván."),
         Role.SEER: (ui.NightSeerView, "Chọn một người để soi phe."),
         Role.WOLF_SEER: (ui.NightWolfSeerView, "Chọn một người để soi chính xác vai trò."),
-        Role.SERIAL_KILLER: (ui.NightSerialKillerView, "Chọn một nạn nhân. Mục tiêu gốc: sống sót duy nhất, trừ mục tiêu Tình Nhân dưới đây."),
-        Role.HARLOT: (ui.NightHarlotView, "Chọn một người để phong tỏa toàn bộ hành động đêm."),
-        Role.INVESTIGATOR: (ui.NightInvestigatorView, f"Chọn đúng {game.required_target_count(ActionKind.INVESTIGATE)} người để kiểm tra có Sói hay không."),
+        Role.HARLOT: (ui.NightHarlotView, "Ghé thăm một người hoặc ở nhà. Vắng nhà tránh đòn tấn công, nhưng ghé Sói/Kẻ Phóng Hỏa hoặc người bị giết sẽ chết."),
+        Role.INVESTIGATOR: (ui.NightInvestigatorView, "Chọn đúng 2 người để so họ cùng hay khác phe thật (Dân/Sói/Solo)."),
+        Role.ARSONIST: (ui.NightArsonistView, f"Chọn đúng {game.required_target_count(ActionKind.ARSON_DOUSE)} người để tẩm xăng xuyên bảo vệ, hoặc châm lửa đốt tất cả người đã bị tẩm."),
         Role.PHANTOM_WOLF: (ui.NightPhantomWolfView, "Chọn một người không thuộc bầy Sói để tạo ảo ảnh."),
-        Role.THE_GIRL: (ui.NightGirlView, "Bạn có thể nhìn trộm; có 50% khả năng bị phát hiện, mỗi lần nhìn trộm."),
-        Role.PIPER: (ui.NightPiperView, f"Chọn đúng {game.required_target_count(ActionKind.PIPER)} người để mê hoặc."),
     }
 
     def queue(player, view, description, *, witch=False):
@@ -50,10 +49,7 @@ async def deliver_night(cog, game, *, timeout=15, concurrency=6):
             queue(player, ui.NightSeerView(game, player.user_id), "Bạn đã kế thừa Tiên Tri. Chọn một người để soi phe.")
         if player.role == Role.CUPID and game.night_count == 1:
             queue(player, ui.NightCupidView(game, player.user_id), "Chọn đúng hai người để ghép đôi.")
-        if player.role == Role.WHITE_WOLF and game.night_count % 2 == 0:
-            if any(p.user_id != player.user_id for p in game.get_alive_wolves()):
-                queue(player, ui.NightWhiteWolfView(game, player.user_id), "Bạn có thể bí mật cắn thêm một Sói khác hoặc bỏ qua.")
-        if player.role == Role.WITCH:
+        if player.role == Role.WITCH and game.active_night_event != NightEvent.SEAL_NIGHT:
             victim = game.resolve_wolf_target()
             view = ui.NightWitchView(game, player.user_id, victim)
             game.witch_view = view

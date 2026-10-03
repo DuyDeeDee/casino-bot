@@ -29,21 +29,21 @@ class StageOneRegressionTests(unittest.TestCase):
         self.assertEqual(set(game.resolve_night().deaths), {5})
         self.assertTrue(game.players[3].witch_save_used)
 
-    def test_blocked_witch_does_not_spend_potion(self):
+    def test_harlot_does_not_block_witch(self):
         game = make_game(Role.WOLF, Role.WITCH, Role.HARLOT, Role.VILLAGER)
         submit(game, 1, ActionKind.WOLF_VOTE, 4)
         submit(game, 3, ActionKind.HARLOT, 2)
         submit(game, 2, ActionKind.WITCH_SAVE, 4)
-        self.assertEqual(set(game.resolve_night().deaths), {4})
-        self.assertFalse(game.players[2].witch_save_used)
+        self.assertEqual(set(game.resolve_night().deaths), set())
+        self.assertTrue(game.players[2].witch_save_used)
 
-    def test_blocked_seer_gets_no_information(self):
+    def test_harlot_does_not_block_seer(self):
         game = make_game(Role.SEER, Role.HARLOT, Role.WOLF)
         submit(game, 2, ActionKind.HARLOT, 1)
         submit(game, 1, ActionKind.SEER, 3)
         game.resolve_night()
-        self.assertIn("phong tỏa", game.night_seer_result)
-        self.assertFalse(game.players[1].seer_found_wolf)
+        self.assertIn("SÓI", game.night_seer_result)
+        self.assertTrue(game.players[1].seer_found_wolf)
 
     def test_lycan_is_not_rank_bonus_for_finding_real_wolf(self):
         game = make_game(Role.SEER, Role.LYCAN, Role.WOLF)
@@ -213,22 +213,22 @@ class NightPipelineTests(unittest.TestCase):
         self.assertEqual(len(results[0].deaths), 2)
         self.assertEqual(games[0].resolve_wolf_targets(), list(results[0].wolf_targets))
 
-    def test_blocked_wolf_vote_removed_before_tally(self):
+    def test_harlot_visiting_wolf_dies_without_blocking_vote(self):
         game = make_game(Role.WOLF, Role.WOLF, Role.HARLOT, Role.VILLAGER, Role.VILLAGER)
         submit(game, 1, ActionKind.WOLF_VOTE, 4)
         submit(game, 2, ActionKind.WOLF_VOTE, 5)
         submit(game, 3, ActionKind.HARLOT, 1)
-        self.assertEqual(game.resolve_night().deaths, (5,))
+        self.assertEqual(game.resolve_night().deaths, (3, 4))
 
-    def test_blocked_guard_does_not_save(self):
+    def test_harlot_does_not_block_guard(self):
         game = make_game(Role.WOLF, Role.GUARD, Role.HARLOT, Role.VILLAGER)
         submit(game, 1, ActionKind.WOLF_VOTE, 4)
         submit(game, 2, ActionKind.GUARD, 4)
         submit(game, 3, ActionKind.HARLOT, 2)
-        self.assertEqual(game.resolve_night().deaths, (4,))
-        self.assertEqual(game.players[2].guard_saved_count, 0)
+        self.assertEqual(game.resolve_night().deaths, ())
+        self.assertEqual(game.players[2].guard_saved_count, 1)
 
-    def test_blocked_piper_and_cupid_have_no_effect(self):
+    def test_harlot_does_not_block_other_night_skills(self):
         for role, kind, targets in (
             (Role.CUPID, ActionKind.CUPID, (2, 3)),
             (Role.PIPER, ActionKind.PIPER, (2, 3)),
@@ -237,9 +237,11 @@ class NightPipelineTests(unittest.TestCase):
             submit(game, 1, kind, *targets)
             submit(game, 2, ActionKind.HARLOT, 1)
             game.resolve_night()
-            self.assertIsNone(game.players[2].lover_id)
-            self.assertFalse(game.players[2].piper_charmed)
-            self.assertFalse(game.players[3].piper_charmed)
+            if role == Role.CUPID:
+                self.assertEqual(game.players[2].lover_id, 3)
+            else:
+                self.assertTrue(game.players[2].piper_charmed)
+                self.assertTrue(game.players[3].piper_charmed)
 
     def test_dying_seer_and_phantom_actions_still_apply(self):
         game = make_game(Role.SEER, Role.PHANTOM_WOLF, Role.WITCH, Role.VILLAGER)

@@ -5,7 +5,7 @@ import logging
 import time
 import discord
 from app.discord_bot.modules.helpers import make_embed
-from app.discord_bot.modules.masoi_engine import Faction, GamePhase, MasoiGame, Role
+from app.discord_bot.modules.masoi_engine import Faction, GamePhase, MasoiGame, NightEvent, Role
 from app.discord_bot.modules.masoi_delivery import deliver_night, NightDeliveryError
 from app.discord_bot.modules.masoi_rank import MasoiRankService
 from app.discord_bot.modules.masoi_presentation import ui_lock, new_deaths
@@ -32,23 +32,27 @@ class MasoiFlowMixin:
         while True:
             pending_hunters = [
                 p for p in game.players.values()
-                if p.role == Role.HUNTER and not p.is_alive and not getattr(p, "hunter_shot_used", False)
+                if p.role in (Role.HUNTER, Role.YOUNG_WOLF) and not p.is_alive and not getattr(p, "hunter_shot_used", False)
             ]
             if not pending_hunters:
                 break
 
             for p in pending_hunters:
+                if not any(target.is_alive and (p.role != Role.YOUNG_WOLF or not target.is_wolf) for target in game.players.values()):
+                    p.hunter_shot_used = True
+                    game.checkpoint()
+                    continue
                 h_user = await self.get_or_fetch_user(p.user_id)
                 view = NightHunterView(game, p.user_id)
                 hunter_shot_target_id = None
                 if not h_user:
                     view.stop()
-                    raise NightDeliveryError(f"Không gửi được lượt bắn cho Thợ Săn {p.display_name}; ván không tính rank.")
+                    raise NightDeliveryError(f"Không gửi được lượt kéo theo cho {p.display_name}; ván không tính rank.")
 
                 if h_user:
                     embed_hunter = discord.Embed(
-                        title="🏹 Lượt của Thợ Săn — Kéo theo 1 người",
-                        description=f"Bạn đã bị loại! Hãy chọn 1 người để kéo theo chết cùng. Còn **{game.settings.night_time} giây** để quyết định.",
+                        title=f"🏹 Lượt của {p.role.value} — Kéo theo 1 người",
+                        description=f"Bạn đã bị loại! Hãy chọn 1 người {'ngoài bầy Sói ' if p.role == Role.YOUNG_WOLF else ''}để kéo theo. Còn **{game.settings.night_time} giây** để quyết định.",
                         color=discord.Color(0xE0A638)
                     )
                     try:
@@ -64,7 +68,7 @@ class MasoiFlowMixin:
                             hunter_shot_target_id = view.confirmed_target_id
                     except Exception as exc:
                         view.stop()
-                        raise NightDeliveryError(f"Lỗi DM lượt Thợ Săn {p.display_name}; ván không tính rank.") from exc
+                        raise NightDeliveryError(f"Lỗi DM lượt kéo theo {p.display_name}; ván không tính rank.") from exc
 
                 view.stop()
                 p.hunter_shot_used = True
@@ -74,7 +78,7 @@ class MasoiFlowMixin:
                     if shot_p:
                         role_str = f" *({shot_p.role.emoji} {shot_p.role.value})*" if game.settings.reveal_roles_on_death else ""
                         embed_announce = discord.Embed(
-                            title="🏹 Thợ Săn Kéo Theo!",
+                            title=f"🏹 {p.role.value} Kéo Theo!",
                             description=(
                                 f"🏹 {self.player_label(p)} dùng phát bắn cuối cùng kéo theo "
                                 + f"{self.player_label(shot_p)}{role_str} cùng ra đi!"
@@ -84,11 +88,43 @@ class MasoiFlowMixin:
                         await _safe_send(channel, embed=embed_announce)
                 else:
                     embed_announce = discord.Embed(
-                        title="🏹 Thợ Săn",
+                        title=f"🏹 {p.role.value}",
                         description=f"🏹 {self.player_label(p)} đã không dùng phát bắn cuối cùng.",
                         color=discord.Color(0xE0A638)
                     )
                     await _safe_send(channel, embed=embed_announce)
+
+        for p in game.players.values():
+            if p.role != Role.HUMAN_HUNTER:
+                continue
+            state = "SUCCESS" if p.human_hunter_succeeded else "WOLF" if p.human_hunter_joined_wolves else ""
+            if not state or state == p.human_hunter_notified_state:
+                continue
+            user = await self.get_or_fetch_user(p.user_id)
+            if not user:
+                raise NightDeliveryError(f"Không gửi được kết quả Thợ Săn Người cho {p.display_name}; ván không tính rank.")
+            if state == "SUCCESS":
+                note = "🎯 Mục tiêu của bạn đã bị treo cổ. Bạn đã đạt thắng cá nhân; ván tiếp tục đến khi có phe thắng."
+            else:
+                wolves = [w.display_name for w in game.get_alive_wolves() if w.user_id != p.user_id]
+                note = "🎯 Mục tiêu đã chết cách khác. Từ nay bạn thuộc bầy Sói. Đồng đội: " + (", ".join(wolves) or "không còn Sói khác")
+            try:
+                await asyncio.wait_for(user.send(note), timeout=15)
+            except Exception as exc:
+                raise NightDeliveryError(f"Lỗi DM kết quả Thợ Săn Người cho {p.display_name}; ván không tính rank.") from exc
+            if state == "WOLF":
+                for wolf in game.get_alive_wolves():
+                    if wolf.user_id == p.user_id:
+                        continue
+                    teammate = await self.get_or_fetch_user(wolf.user_id)
+                    if not teammate:
+                        raise NightDeliveryError("Không báo được đồng đội Sói mới; ván không tính rank.")
+                    try:
+                        await asyncio.wait_for(teammate.send(f"🐺 **{p.display_name}** đã gia nhập bầy Sói sau khi mục tiêu của Thợ Săn Người chết."), timeout=15)
+                    except Exception as exc:
+                        raise NightDeliveryError("Lỗi DM đồng đội Sói mới; ván không tính rank.") from exc
+            p.human_hunter_notified_state = state
+            game.checkpoint()
 
 
     async def check_and_trigger_mayor_succession(self, game: MasoiGame, channel: discord.TextChannel):
@@ -229,6 +265,9 @@ class MasoiFlowMixin:
                         extra_info = f" · Đồng đội Sói: {', '.join(wolves)}"
                     else:
                         extra_info = " · Bạn là Sói duy nhất ván này"
+                if p.role == Role.HUMAN_HUNTER and p.human_hunter_target_id in game.players:
+                    target = game.players[p.human_hunter_target_id]
+                    extra_info = f" · Mục tiêu cần được treo cổ: {target.display_name}"
 
                 faction_name = p.role.faction.value.replace(" 🐺", "").replace(" 👥", "").replace(" 🃏", "").replace(" 💘", "")
 
@@ -269,6 +308,16 @@ class MasoiFlowMixin:
                 # ── BƯỚC 1: ĐÊM ──
                 game.start_night()
                 game.prepare_night_delivery()
+
+                event = game.active_night_event
+                if event:
+                    await _safe_send(message.channel, embed=discord.Embed(
+                        title=f"🎴 Sự kiện Đêm {game.night_count} — {event.value}",
+                        description=event.description,
+                        color=discord.Color.purple(),
+                    ))
+                    if self.active_games.get(key) is not game or game.phase == GamePhase.GAME_END:
+                        break
 
                 await deliver_night(self, game)
                 if self.active_games.get(key) is not game or game.phase == GamePhase.GAME_END:
@@ -443,7 +492,7 @@ class MasoiFlowMixin:
 
                 # ── BƯỚC 3: THẢO LUẬN BAN NGÀY ──
                 game.phase = GamePhase.DAY_DISCUSSION
-                disc_limit = game.settings.discussion_time
+                disc_limit = min(30, game.settings.discussion_time) if game.active_night_event == NightEvent.SILENT_NIGHT else game.settings.discussion_time
                 disc_embed = discord.Embed(
                     title=f"💬 Ban Ngày — Thảo Luận (Ngày {game.day_count})",
                     description=f"<a:time:1533445134522384536> **Thời gian thảo luận:** `{disc_limit} giây`.\n"
@@ -451,7 +500,7 @@ class MasoiFlowMixin:
                                 f"{divider}\n💬 Mọi người hãy trao đổi ý kiến để tìm ra bầy Sói!",
                     color=discord.Color(0xE0A638)
                 )
-                disc_view = DayDiscussionView(game, self, prepare=True)
+                disc_view = DayDiscussionView(game, self, prepare=True, duration=disc_limit)
                 game.discussion_view = disc_view
                 disc_msg = await _safe_send(message.channel, embed=disc_embed, view=disc_view)
 
@@ -469,17 +518,27 @@ class MasoiFlowMixin:
                 if self.active_games.get(key) is not game or game.phase == GamePhase.GAME_END:
                     break
 
+                async with ui_lock(game, "discussion"):
+                    if self.active_games.get(key) is not game or game.phase == GamePhase.GAME_END:
+                        break
+                    disc_view.stop()
+                    game.phase = GamePhase.DAY_VOTE
                 try:
                     await disc_msg.delete()
                 except Exception:
                     pass
 
-                disc_view.stop()
-                if self.active_games.get(key) is not game or game.phase == GamePhase.GAME_END:
-                    break
+                if game.active_night_event == NightEvent.SOLAR_ECLIPSE:
+                    game.phase = GamePhase.DAY_RESOLVE
+                    game.record_log("SOLAR_ECLIPSE_SKIP", result="Nhật Thực: bỏ qua lượt treo cổ ban ngày")
+                    await _safe_send(message.channel, embed=discord.Embed(
+                        title="☀️ Nhật Thực — Không treo cổ",
+                        description="Hôm nay làng đã thảo luận nhưng không thể bỏ phiếu treo cổ. Đêm tiếp theo bắt đầu.",
+                        color=discord.Color.purple(),
+                    ))
+                    continue
 
                 # ── BƯỚC 4: BỎ PHIẾU TREO CỔ ──
-                game.phase = GamePhase.DAY_VOTE
                 vote_embed = self.build_vote_embed(game, is_final=False)
                 vote_view = DayVoteView(game, self, prepare=True)
                 game.day_vote_view = vote_view
@@ -654,12 +713,15 @@ class MasoiFlowMixin:
         for p in game.players.values():
             status = "<a:key:1526234974150459593> Sống" if p.is_alive else "<:die:1533444731000848415> Chết"
             pts_str = f" ({game.get_rank_faction(p.user_id).label}: {rank_pts.get(p.user_id, 0):+d} pts)" if game.settings.enable_rank else ""
-            result = "Hòa" if game.winner_faction == Faction.DRAW else "Thắng" if game.did_player_win(p.user_id) else "Thua"
+            result = "Thắng" if game.did_player_win(p.user_id) else "Hòa" if game.winner_faction == Faction.DRAW else "Thua"
             role_lines.append(f"• {self.player_label(p)} — {p.role.emoji} **{p.role.value}** [{status} · {result}]{pts_str}")
 
         winner_str = game.winner_faction.value if game.winner_faction else "Không có"
 
-        outcome_text = "Ván đấu hòa; không cộng/trừ rank." if game.winner_faction == Faction.DRAW else f"**{winner_str} đã giành chiến thắng!**"
+        outcome_text = ("Ván đấu hòa; Thợ Săn Người đạt mục tiêu vẫn nhận thắng cá nhân."
+                        if game.winner_faction == Faction.DRAW and game.has_rankable_result() else
+                        "Ván đấu hòa; không cộng/trừ rank." if game.winner_faction == Faction.DRAW else
+                        f"**{winner_str} đã giành chiến thắng!**")
         end_embed = make_embed(
             title=f"<a:w1:1526231439425667093> VÁN BÀN CỜ MA SÓI KẾT THÚC <a:w1:1526231439425667093> {winner_str}",
             description=(

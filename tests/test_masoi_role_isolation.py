@@ -16,6 +16,7 @@ class RolePreferenceIsolationTests(unittest.TestCase):
         game.settings.role_setup_mode = "CUSTOM"
         game.settings.custom_wolf_count = 2
         game.settings.custom_special_roles = ["SEER", "GUARD"]
+        game.settings.enable_events = True
         game.settings.vote_display = "END_ONLY"
         game.settings.enable_rank = False
         cog = make_cog(game)
@@ -32,12 +33,14 @@ class RolePreferenceIsolationTests(unittest.TestCase):
             self.assertEqual(saved.role_setup_mode, "AUTO")
             self.assertEqual(saved.custom_wolf_count, MasoiSettings().custom_wolf_count)
             self.assertEqual(saved.custom_special_roles, [])
+            self.assertFalse(saved.enable_events)
             self.assertEqual(saved.vote_display, "END_ONLY")
             self.assertFalse(saved.enable_rank)
         for channel in (2, 3):
             next_room = cog.get_saved_settings(1, channel)
             self.assertEqual(next_room.role_setup_mode, "AUTO")
             self.assertEqual(next_room.custom_special_roles, [])
+            self.assertFalse(next_room.enable_events)
             self.assertEqual(Counter(make_preview(next_room)), Counter([Role.WOLF, Role.SEER, Role.GUARD, Role.MAYOR, Role.VILLAGER]))
 
     def test_legacy_shared_custom_data_is_sanitized_on_read(self):
@@ -158,6 +161,7 @@ class RoleGateTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_current_vip_can_still_start_their_valid_custom_room(self):
         game, cog, message = self.lobby()
+        game.settings.custom_wolf_count = 1
         eco = SimpleNamespace(is_masoi_vip=Mock(return_value=True))
         cog.get_economy.return_value = eco
         cog.get_or_fetch_user.return_value = SimpleNamespace(send=AsyncMock())
@@ -166,11 +170,12 @@ class RoleGateTests(unittest.IsolatedAsyncioTestCase):
         await cog.start_game(game, message)
         game.assign_roles.assert_called_once()
         eco.is_masoi_vip.assert_called_with(game.host_id)
-        self.assertEqual(Counter(p.role for p in game.players.values()), Counter([Role.WOLF, Role.WOLF, Role.SEER, Role.VILLAGER, Role.VILLAGER]))
+        self.assertEqual(Counter(p.role for p in game.players.values()), Counter([Role.WOLF, Role.SEER, Role.VILLAGER, Role.VILLAGER, Role.VILLAGER]))
         cog.game_loop.assert_awaited_once()
 
     async def test_vip_expiring_during_dm_preflight_prevents_role_assignment(self):
         game, cog, message = self.lobby()
+        game.settings.custom_wolf_count = 1
         eco = SimpleNamespace(is_masoi_vip=Mock(side_effect=[True, False]))
         cog.get_economy.return_value = eco
         cog.get_or_fetch_user.return_value = SimpleNamespace(send=AsyncMock())

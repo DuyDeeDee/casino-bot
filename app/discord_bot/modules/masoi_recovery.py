@@ -59,7 +59,7 @@ class MasoiRecoveryMixin:
         economy = self.get_economy()
         if economy is None:
             return
-        requires_rank = bool(game.winner_faction and game.winner_faction != Faction.DRAW and game.settings.enable_rank)
+        requires_rank = bool(game.has_rankable_result() and game.settings.enable_rank)
         key = f"{game.guild_id}-{game.channel_id}"
         announced = not game.winner_faction or getattr(game, "result_announced", False)
         if not game.channel_permission_snapshots and (not requires_rank or game.rank_settled) and announced:
@@ -92,7 +92,7 @@ class MasoiRecoveryMixin:
                 game = restore_game(data)
                 if game.rank_match_id != row["match_id"] or (game.guild_id, game.channel_id) != (row["guild_id"], row["channel_id"]):
                     raise ValueError("Snapshot identity mismatch")
-                if game.winner_faction and game.settings.enable_rank and game.winner_faction != Faction.DRAW:
+                if game.has_rankable_result() and game.settings.enable_rank:
                     # Completed-only replay; no active match is awarded or penalized.
                     MasoiRankService.settle(game, economy)
                 game.phase = GamePhase.GAME_END
@@ -116,7 +116,9 @@ class MasoiRecoveryMixin:
                     self.checkpoint_game(game)
                     continue
                 if not data.get("recovery_notified") and not data.get("result_announced"):
-                    text = ("🔄 Đã phục hồi ván Ma Sói hòa; không cộng/trừ rank."
+                    text = ("🔄 Đã phục hồi ván Ma Sói hòa; thắng cá nhân của Thợ Săn Người vẫn được tính rank."
+                            if game.winner_faction == Faction.DRAW and game.has_rankable_result() else
+                            "🔄 Đã phục hồi ván Ma Sói hòa; không cộng/trừ rank."
                             if game.winner_faction == Faction.DRAW else
                             "🔄 Đã phục hồi kết quả Ma Sói đã chốt; rank được lưu đúng một lần."
                             if game.winner_faction else

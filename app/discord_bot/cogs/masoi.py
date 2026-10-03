@@ -30,6 +30,7 @@ from app.discord_bot.modules.masoi_engine import (
     RankFaction,
     ReplayLog,
     Role,
+    RETIRED_ROLES,
     get_rank_tier,
 )
 
@@ -166,9 +167,9 @@ class LobbyView(discord.ui.View):
     async def roles_info_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         # The role guide and role DMs use exactly the engine's descriptions.
         groups = [
-            ("🐺 Bầy Sói", [r for r in Role if r.faction == Faction.WEREWOLF and r not in (Role.WHITE_WOLF, Role.ALPHA_WOLF)]),
-            ("👥 Dân Làng", [r for r in Role if r.faction == Faction.VILLAGER]),
-            ("🃏 Solo", [Role.TANNER, Role.SERIAL_KILLER, Role.PIPER, Role.WHITE_WOLF]),
+            ("🐺 Bầy Sói", [r for r in Role if r.faction == Faction.WEREWOLF and r not in RETIRED_ROLES]),
+            ("👥 Dân Làng", [r for r in Role if r.faction == Faction.VILLAGER and r not in RETIRED_ROLES]),
+            ("🃏 Solo", [Role.TANNER, Role.ARSONIST, Role.HUMAN_HUNTER]),
         ]
         embeds = []
         for title, roles in groups:
@@ -220,6 +221,7 @@ class SettingsView(discord.ui.View):
         self.btn_disc_time.label = f"Thời gian thảo luận: {s.discussion_time // 60} phút"
         self.btn_night_time.label = f"Thời gian đêm: {s.night_time}s"
         self.btn_rank.label = f"Tính rank: {'Có ✅' if s.enable_rank else 'Không'}"
+        self.btn_events.label = f"Thẻ sự kiện: {'Bật ✅' if s.enable_events else 'Tắt'}"
         self.btn_custom_roles.label = f"Phân vai: {'Tự động ✅' if s.role_setup_mode == 'AUTO' else 'Tùy chỉnh ⚙️'}"
 
     async def check_vip_host(self, interaction: discord.Interaction, feature_name: str) -> bool:
@@ -304,6 +306,15 @@ class SettingsView(discord.ui.View):
         self.update_button_labels()
         await interaction.response.edit_message(embed=self.cog.build_settings_embed(self.game), view=self)
 
+    @discord.ui.button(style=discord.ButtonStyle.secondary, emoji="🎴", row=3)
+    async def btn_events(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not await self.interaction_check(interaction):
+            return
+        self.game.settings.cycle_events()
+        self.cog.save_game_settings(self.game)
+        self.update_button_labels()
+        await interaction.response.edit_message(embed=self.cog.build_settings_embed(self.game), view=self)
+
     @discord.ui.button(style=discord.ButtonStyle.primary, emoji="🎭", row=3)
     async def btn_custom_roles(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not await self.interaction_check(interaction):
@@ -361,27 +372,27 @@ class CustomRolesConfigView(discord.ui.View):
         special_roles_def = [
             (Role.WOLF_SEER, "Sói Tiên Tri"),
             (Role.WOLF_CUB, "Sói Cuồng Sát"),
-            (Role.WHITE_WOLF, "Sói Trắng"),
+            (Role.YOUNG_WOLF, "Sói Trẻ"),
             (Role.PHANTOM_WOLF, "Sói Ảo Ảnh"),
-            (Role.MUTE_WOLF, "Sói Câm"),
             (Role.MAYOR, "Thị Trưởng"),
             (Role.SEER, "Tiên Tri"),
             (Role.APPRENTICE_SEER, "Tiên Tri Tập Sự"),
             (Role.GUARD, "Bảo Vệ"),
+            (Role.DOCTOR, "Bác Sĩ"),
             (Role.WITCH, "Phù Thủy"),
-            (Role.HARLOT, "Vũ Nữ"),
+            (Role.HARLOT, "Kĩ Nữ"),
             (Role.HUNTER, "Thợ Săn"),
-            (Role.THE_GIRL, "Cô Bé"),
+            (Role.GUNNER, "Xạ Thủ"),
             (Role.RUSTY_KNIGHT, "Hiệp Sĩ Kiếm Gỉ"),
             (Role.CURSED, "Kẻ Bị Nguyền"),
             (Role.ELDER, "Già Làng"),
             (Role.CUPID, "Thần Tình Yêu"),
             (Role.LYCAN, "Bán Nguyệt"),
             (Role.INVESTIGATOR, "Thám Tử"),
-            (Role.PIPER, "Người Thổi Sáo"),
+            (Role.ARSONIST, "Kẻ Phóng Hỏa"),
+            (Role.HUMAN_HUNTER, "Thợ Săn Người"),
             (Role.SCAPEGOAT, "Dê Tế Thần"),
             (Role.TANNER, "Kẻ Ngốc"),
-            (Role.SERIAL_KILLER, "Sát Thủ"),
         ]
 
         role_options = []
@@ -608,6 +619,7 @@ class Masoi(MasoiFlowMixin, MasoiRecoveryMixin, commands.Cog):
         saved.role_setup_mode = defaults.role_setup_mode
         saved.custom_wolf_count = defaults.custom_wolf_count
         saved.custom_special_roles = []
+        saved.enable_events = False
         return saved
 
     def get_saved_settings(self, guild_id: int, channel_id: int) -> MasoiSettings:
@@ -655,14 +667,16 @@ class Masoi(MasoiFlowMixin, MasoiRecoveryMixin, commands.Cog):
         name="masoi",
         aliases=["werewolf", "ma-soi"],
         brief="Tạo phòng chờ chơi game Ma Sói (Werewolf). Phí tạo phòng: 10,000 VND (Miễn phí cho VIP).",
-        usage="masoi",
+        usage="masoi [event]",
     )
     async def masoi_cmd(self, ctx: commands.Context, *, sub_command: str = ""):
         if sub_command.strip().lower() in ("vip", "v"):
             return await self.masoivip_cmd(ctx)
 
-        if sub_command.strip():
-            await ctx.send(f"❌ Dùng `{ctx.prefix}masoi` để tạo phòng Ma Sói.")
+        sub_clean = sub_command.strip().lower()
+        is_event = sub_clean in ("event", "events", "e", "masoievent")
+        if sub_clean and not is_event:
+            await ctx.send(f"❌ Dùng `{ctx.prefix}masoi` hoặc `{ctx.prefix}masoievent` để tạo phòng Ma Sói.")
             return
 
         key = f"{ctx.guild.id}-{ctx.channel.id}"
@@ -694,6 +708,7 @@ class Masoi(MasoiFlowMixin, MasoiRecoveryMixin, commands.Cog):
 
         game = MasoiGame(ctx.guild.id, ctx.channel.id, ctx.author.id, ctx.author.display_name)
         game.settings = self.get_saved_settings(ctx.guild.id, ctx.channel.id)
+        game.settings.enable_events = is_event
 
         if not is_vip:
             game.settings.reveal_roles_on_death = False
@@ -710,6 +725,15 @@ class Masoi(MasoiFlowMixin, MasoiRecoveryMixin, commands.Cog):
             view=view
         )
         game.message_id = msg.id
+
+    @commands.command(
+        name="masoievent",
+        aliases=["masoi-event", "werewolfevent", "masoi_event"],
+        brief="Tạo phòng Ma Sói với thẻ sự kiện đêm.",
+        usage="masoievent",
+    )
+    async def masoievent_cmd(self, ctx: commands.Context):
+        await type(self).masoi_cmd.callback(self, ctx, sub_command="event")
 
     @commands.command(
         name="masoivip",
@@ -1101,6 +1125,7 @@ class Masoi(MasoiFlowMixin, MasoiRecoveryMixin, commands.Cog):
             f"• **Thời gian thảo luận (<a:2336vipgif:1534596901834592286> VIP):** `{s.discussion_time // 60} phút`\n"
             f"• **Thời gian hành động đêm (<a:2336vipgif:1534596901834592286> VIP):** `{s.night_time} giây`\n"
             f"• **Tính điểm rank:** `{'Có' if s.enable_rank else 'Không'}`\n\n"
+            f"• **Thẻ sự kiện đêm:** `{'Bật' if s.enable_events else 'Tắt'}`\n\n"
             f"💡 *Bấm **🎭 Vai Trò** tại phòng chờ để xem hướng dẫn.*\n"
             f"_Bấm các nút dưới đây để thay đổi giá trị cấu hình._"
         )
@@ -1347,21 +1372,6 @@ class Masoi(MasoiFlowMixin, MasoiRecoveryMixin, commands.Cog):
                     logger.warning("Bot thiếu quyền 'Manage Messages' để xoá tin nhắn của người chết!")
                 except Exception as e:
                     logger.warning("Không thể xoá tin nhắn người chết: %s", e)
-
-        # Sói Câm (MUTE_WOLF) không được chat ban ngày
-        if game.phase in (GamePhase.DAY_ANNOUNCE, GamePhase.DAY_DISCUSSION, GamePhase.DAY_VOTE, GamePhase.DAY_RESOLVE):
-            mute_player = game.players.get(message.author.id)
-            if mute_player and mute_player.is_alive and mute_player.role == Role.MUTE_WOLF:
-                try:
-                    await message.delete()
-                    await message.channel.send(
-                        f"🔇 {message.author.mention}, bạn là **Sói Câm** — không được chat ban ngày, chỉ được bỏ phiếu!",
-                        delete_after=5
-                    )
-                except discord.Forbidden:
-                    logger.warning("Bot thiếu quyền 'Manage Messages' để xoá tin nhắn của Sói Câm!")
-                except Exception as e:
-                    logger.warning("Không thể xoá tin nhắn của Sói Câm: %s", e)
 
     async def get_or_fetch_user(self, user_id: int) -> Optional[discord.User]:
         user = self.bot.get_user(user_id)
