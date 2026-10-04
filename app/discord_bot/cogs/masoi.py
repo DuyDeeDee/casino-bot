@@ -34,6 +34,7 @@ from app.discord_bot.modules.masoi_engine import (
     RankFaction,
     ReplayLog,
     Role,
+    RETIRED_ROLES,
     get_rank_tier,
 )
 
@@ -171,12 +172,13 @@ class LobbyView(discord.ui.View):
 
     @discord.ui.button(label="Vai Trò", style=discord.ButtonStyle.secondary, emoji="🎭", custom_id="masoi_roles_info", row=1)
     async def roles_info_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # The role guide and role DMs use exactly the engine's descriptions.
-        available = set(self.game.preview_roles())
+        # Show the complete guide for every role still supported by new games,
+        # not just the roles selected for this lobby's current roster preview.
+        available = set(Role) - RETIRED_ROLES
         groups = [
             ("🐺 Bầy Sói", [r for r in Role if r in available and r.faction == Faction.WEREWOLF]),
             ("👥 Dân Làng", [r for r in Role if r in available and r.faction == Faction.VILLAGER]),
-            ("🃏 Solo", [r for r in (Role.TANNER, Role.ARSONIST, Role.HUMAN_HUNTER) if r in available]),
+            ("🃏 Solo", [r for r in Role if r in available and r.faction == Faction.INDEPENDENT]),
         ]
         embeds = []
         for title, roles in groups:
