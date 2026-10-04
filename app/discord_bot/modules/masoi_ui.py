@@ -196,7 +196,7 @@ class NightDoctorView(NightActionView):
         super().__init__(game, doctor_id)
         options = [discord.SelectOption(label=p.display_name, value=str(p.user_id), emoji="🩺")
                    for p in game.get_alive_players()
-                   if p.user_id != doctor_id and p.doctor_protection_count < 2]
+                   if p.user_id != doctor_id]
         if options:
             self.select = discord.ui.Select(placeholder="🩺 Chọn người cần cứu", options=options[:25])
             self.select.callback = self.select_callback
@@ -234,8 +234,22 @@ class NightArsonistView(NightActionView):
             button = discord.ui.Button(label="Tẩm xăng", style=discord.ButtonStyle.primary, row=1)
             button.callback = self.douse_callback
             self.add_item(button)
-        if any(p.is_alive and p.is_doused for p in game.players.values()):
-            button = discord.ui.Button(label="Thiêu tất cả người dính xăng", style=discord.ButtonStyle.danger, row=2)
+        doused_options = [
+            discord.SelectOption(label=p.display_name, value=str(p.user_id), emoji="🔥")
+            for p in game.get_alive_players() if p.is_doused
+        ]
+        max_ignite_targets = game.required_target_count(ActionKind.ARSON_IGNITE)
+        if max_ignite_targets:
+            self.ignite_select = discord.ui.Select(
+                placeholder=f"🔥 Chọn tối đa {max_ignite_targets} người để châm lửa",
+                min_values=1,
+                max_values=max_ignite_targets,
+                options=doused_options[:25],
+                row=2,
+            )
+            self.ignite_select.callback = self.select_callback
+            self.add_item(self.ignite_select)
+            button = discord.ui.Button(label="Châm lửa", style=discord.ButtonStyle.danger, row=3)
             button.callback = self.ignite_callback
             self.add_item(button)
 
@@ -256,9 +270,16 @@ class NightArsonistView(NightActionView):
             await interaction.response.edit_message(content=f"🔥 Đã tẩm xăng {required} mục tiêu. Hiệu ứng được xử lý cuối đêm.", embed=None, view=None)
 
     async def ignite_callback(self, interaction):
-        if await self.interaction_check(interaction) and await self.record_action(interaction, ActionKind.ARSON_IGNITE):
+        if not await self.interaction_check(interaction):
+            return
+        if not hasattr(self, "ignite_select") or not self.ignite_select.values:
+            await interaction.response.send_message("❌ Hãy chọn ít nhất 1 người đang dính xăng để châm lửa.", ephemeral=True)
+            return
+        targets = tuple(int(value) for value in self.ignite_select.values)
+        if await self.record_action(interaction, ActionKind.ARSON_IGNITE, targets):
             self.stop()
-            await interaction.response.edit_message(content="🔥 Đã chọn châm lửa. Hiệu ứng được xử lý cuối đêm.", embed=None, view=None)
+            names = ", ".join(f"**{self.game.players[uid].display_name}**" for uid in targets)
+            await interaction.response.edit_message(content=f"🔥 Đã chọn châm lửa {names} (tối đa 4 mục tiêu). Hiệu ứng được xử lý cuối đêm.", embed=None, view=None)
 
 
 class NightWolfView(NightActionView):
@@ -1349,7 +1370,7 @@ def format_replay_story_line(log: ReplayLog) -> str:
     elif event == "BIGMOUTH_REVEAL":
         return f"📣 {log.result}"
     elif event == "DOCTOR_PROTECT":
-        return f"🩺 **Bác Sĩ** {actor} cứu {target} khỏi đòn giết trực tiếp."
+        return f"🩺 **Bác Sĩ** {actor} cứu {target} khỏi Sói cắn."
     elif event == "ARSON_DOUSE":
         return f"🔥 **Kẻ Phóng Hỏa** {actor} tẩm xăng {target}."
     elif event == "ARSON_IGNITE":

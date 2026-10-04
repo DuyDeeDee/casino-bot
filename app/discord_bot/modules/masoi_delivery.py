@@ -19,8 +19,8 @@ async def deliver_night(cog, game, *, timeout=15, concurrency=6):
         raise ValueError("Night delivery requires the preparation phase")
     jobs = []
     simple = {
-        Role.GUARD: (ui.NightGuardView, "Chọn một người để bảo vệ; không chọn cùng người hai đêm liên tiếp."),
-        Role.DOCTOR: (ui.NightDoctorView, "Cứu một người khác khỏi đòn giết trực tiếp; tối đa 2 đêm/người trong ván."),
+        Role.GUARD: (ui.NightGuardView, "Chọn một người để chặn mọi đòn tấn công ban đêm; không chọn cùng người hai đêm liên tiếp."),
+        Role.DOCTOR: (ui.NightDoctorView, "Chọn một người khác để cứu khỏi Sói cắn. Có thể chọn cùng người nhiều đêm không giới hạn."),
         Role.SEER: (ui.NightSeerView, "Chọn một người để soi phe."),
         Role.WOLF_SEER: (ui.NightWolfSeerView, "Chọn một người để soi chính xác vai trò."),
         Role.WOLF_GUARD: (ui.NightWolfGuardView, "Chọn một người khác để che chở khỏi kỹ năng giết của Dân và treo cổ trong ngày và đêm kế tiếp. Sau khi cứu thành công một lần, bạn mất kỹ năng này."),
@@ -28,7 +28,7 @@ async def deliver_night(cog, game, *, timeout=15, concurrency=6):
         Role.BIGMOUTH: (ui.NightBigmouthView, "Chọn người có role sẽ được tiết lộ khi bạn chết. Bạn có thể đổi lựa chọn vào các đêm sau."),
         Role.HARLOT: (ui.NightHarlotView, "Ghé thăm một người hoặc ở nhà. Vắng nhà tránh đòn tấn công, nhưng ghé Sói/Kẻ Phóng Hỏa hoặc người bị giết sẽ chết."),
         Role.INVESTIGATOR: (ui.NightInvestigatorView, "Chọn đúng 2 người để so họ cùng hay khác phe thật (Dân/Sói/Solo)."),
-        Role.ARSONIST: (ui.NightArsonistView, f"Chọn đúng {game.required_target_count(ActionKind.ARSON_DOUSE)} người để tẩm xăng xuyên bảo vệ, hoặc châm lửa đốt tất cả người đã bị tẩm."),
+        Role.ARSONIST: (ui.NightArsonistView, f"Chọn đúng {game.required_target_count(ActionKind.ARSON_DOUSE)} người để tẩm xăng xuyên bảo vệ, hoặc chọn tối đa 4 người đang dính xăng để châm lửa."),
         Role.PHANTOM_WOLF: (ui.NightPhantomWolfView, "Chọn một người không thuộc bầy Sói để tạo ảo ảnh."),
     }
 

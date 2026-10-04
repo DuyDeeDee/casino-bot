@@ -116,7 +116,7 @@ class WolfGuardTests(unittest.TestCase):
         other.resolve_night()
         other.start_day()
         other.start_night()
-        self.submit(other, 3, ActionKind.ARSON_IGNITE)
+        self.submit(other, 3, ActionKind.ARSON_IGNITE, 2, 4)
         self.assertIn(2, other.resolve_night().deaths)
         self.assertFalse(other.players[1].wolf_guard_used)
 

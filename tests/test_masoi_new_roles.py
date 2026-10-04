@@ -108,7 +108,7 @@ class NewRoleRulesTests(unittest.TestCase):
         self.assertNotEqual(game.personal_objective(game.players[1]), game.personal_objective(game.players[2]))
         self.assertNotEqual(game.personal_objective(game.players[2]), game.personal_objective(game.players[3]))
 
-    def test_doctor_blocks_direct_attacks_but_not_dousing(self):
+    def test_doctor_repeatedly_saves_same_target_from_wolf_bites_only(self):
         game = game_with(Role.DOCTOR, Role.WOLF, Role.ARSONIST, Role.VILLAGER, Role.VILLAGER)
         submit(game, 1, ActionKind.DOCTOR, 4)
         submit(game, 2, ActionKind.WOLF_VOTE, 4)
@@ -118,14 +118,21 @@ class NewRoleRulesTests(unittest.TestCase):
         self.assertEqual(game.players[4].doctor_protection_count, 1)
         game.start_night()
         submit(game, 1, ActionKind.DOCTOR, 4)
-        submit(game, 3, ActionKind.ARSON_IGNITE)
-        self.assertEqual(game.resolve_night().deaths, (5,))
+        submit(game, 3, ActionKind.ARSON_IGNITE, 4, 5)
+        self.assertEqual(game.resolve_night().deaths, (4, 5))
         self.assertFalse(game.players[4].is_doused)
         game.start_night()
         with self.assertRaises(ValueError):
-            submit(game, 1, ActionKind.DOCTOR, 4)
-        with self.assertRaises(ValueError):
             submit(game, 1, ActionKind.DOCTOR, 1)
+
+        repeat = game_with(Role.DOCTOR, Role.WOLF, Role.VILLAGER)
+        for night in range(3):
+            if night:
+                repeat.start_night()
+            submit(repeat, 1, ActionKind.DOCTOR, 3)
+            submit(repeat, 2, ActionKind.WOLF_VOTE, 3)
+            self.assertEqual(repeat.resolve_night().deaths, ())
+        self.assertEqual(repeat.players[3].doctor_protection_count, 3)
 
     def test_harlot_away_and_dangerous_visit(self):
         game = game_with(Role.HARLOT, Role.WOLF, Role.VILLAGER, Role.VILLAGER)
@@ -146,7 +153,7 @@ class NewRoleRulesTests(unittest.TestCase):
         submit(game, 1, ActionKind.ARSON_DOUSE, 2)
         self.assertEqual(game.resolve_night().deaths, ())
         game.start_night()
-        submit(game, 1, ActionKind.ARSON_IGNITE)
+        submit(game, 1, ActionKind.ARSON_IGNITE, 2)
         self.assertEqual(game.resolve_night().deaths, (2,))
         self.assertEqual(game.check_win_condition(), Faction.ARSONIST)
 
@@ -207,8 +214,9 @@ class NewRoleUITests(unittest.IsolatedAsyncioTestCase):
         game.resolve_night()
         game.start_night()
         ignition = NightArsonistView(game, 2)
+        ignition.ignite_select._values = ["3", "4"]
         await ignition.ignite_callback(interaction(2))
-        self.assertIn((2, ActionKind.ARSON_IGNITE), game._night_intents)
+        self.assertEqual(game._night_intents[(2, ActionKind.ARSON_IGNITE)].targets, (3, 4))
 
     async def test_gunner_public_button_and_target_control(self):
         game = game_with(Role.GUNNER, Role.VILLAGER, Role.WOLF, Role.VILLAGER)

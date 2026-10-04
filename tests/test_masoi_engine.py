@@ -51,6 +51,64 @@ class StageOneRegressionTests(unittest.TestCase):
         game.resolve_night()
         self.assertFalse(game.players[1].seer_found_wolf)
 
+    def test_new_role_skill_metrics_give_win_bonus_with_existing_cap(self):
+        metric_names = (
+            "doctor_saved_count", "strongman_saved_count",
+            "forensic_investigation_count", "priest_wolf_kill_count",
+            "bigmouth_reveal_count",
+        )
+        for metric in metric_names:
+            with self.subTest(metric=metric):
+                game = make_game(Role.VILLAGER)
+                game.winner_faction = Faction.VILLAGER
+                setattr(game.players[1], metric, 1)
+                self.assertEqual(game.calculate_rank_points()[1], 25)
+        game = make_game(Role.VILLAGER)
+        game.winner_faction = Faction.VILLAGER
+        for metric in metric_names:
+            setattr(game.players[1], metric, 10)
+        self.assertEqual(game.calculate_rank_points()[1], 30)
+        game.winner_faction = Faction.WEREWOLF
+        self.assertEqual(game.calculate_rank_points()[1], -15)
+
+    def test_new_role_skill_results_are_recorded_for_rank(self):
+        doctor = make_game(Role.DOCTOR, Role.WOLF, Role.VILLAGER)
+        submit(doctor, 1, ActionKind.DOCTOR, 3)
+        submit(doctor, 2, ActionKind.WOLF_VOTE, 3)
+        doctor.resolve_night()
+        self.assertEqual(doctor.players[1].doctor_saved_count, 1)
+
+        strongman = make_game(Role.STRONGMAN, Role.WOLF, Role.VILLAGER)
+        submit(strongman, 1, ActionKind.STRONGMAN, 3)
+        submit(strongman, 2, ActionKind.WOLF_VOTE, 3)
+        strongman.resolve_night()
+        self.assertEqual(strongman.players[1].strongman_saved_count, 1)
+
+        forensic = make_game(Role.FORENSIC, Role.WOLF, Role.VILLAGER)
+        submit(forensic, 2, ActionKind.WOLF_VOTE, 3)
+        forensic.resolve_night()
+        forensic.start_night()
+        submit(forensic, 1, ActionKind.FORENSIC, 3)
+        forensic.resolve_night()
+        self.assertEqual(forensic.players[1].forensic_investigation_count, 1)
+
+        priest = make_game(Role.PRIEST, Role.WOLF, Role.VILLAGER)
+        submit(priest, 1, ActionKind.HOLY_WATER, 2)
+        priest.resolve_night()
+        self.assertEqual(priest.players[1].priest_wolf_kill_count, 1)
+
+        bigmouth = make_game(Role.BIGMOUTH, Role.VILLAGER, Role.WOLF)
+        submit(bigmouth, 1, ActionKind.BIGMOUTH, 3)
+        bigmouth.resolve_night()
+        bigmouth.apply_deaths((1,), "NIGHT_DEATH")
+        self.assertEqual(bigmouth.players[1].bigmouth_reveal_count, 1)
+
+        bigmouth_town = make_game(Role.BIGMOUTH, Role.VILLAGER)
+        submit(bigmouth_town, 1, ActionKind.BIGMOUTH, 2)
+        bigmouth_town.resolve_night()
+        bigmouth_town.apply_deaths((1,), "NIGHT_DEATH")
+        self.assertEqual(bigmouth_town.players[1].bigmouth_reveal_count, 0)
+
     def test_converted_cursed_does_not_win_with_village(self):
         game = make_game(Role.CURSED, Role.VILLAGER)
         game.players[1].is_cursed_converted = True
@@ -268,11 +326,51 @@ class NightPipelineTests(unittest.TestCase):
         self.assertEqual(game.resolve_night().deaths, ())
         self.assertEqual(game.players[3].guard_saved_count, 1)
 
-    def test_poison_not_cancelled_by_guard(self):
+    def test_guard_blocks_poison(self):
         game = make_game(Role.WITCH, Role.GUARD, Role.VILLAGER)
         submit(game, 1, ActionKind.WITCH_POISON, 3)
         submit(game, 2, ActionKind.GUARD, 3)
-        self.assertEqual(game.resolve_night().deaths, (3,))
+        self.assertEqual(game.resolve_night().deaths, ())
+        self.assertEqual(game.players[2].guard_saved_count, 1)
+
+    def test_guard_blocks_poison_and_arson_fire(self):
+        game = make_game(Role.GUARD, Role.WITCH, Role.VILLAGER, Role.ARSONIST)
+        game.players[3].is_doused = True
+        submit(game, 1, ActionKind.GUARD, 3)
+        submit(game, 2, ActionKind.WITCH_POISON, 3)
+        submit(game, 4, ActionKind.ARSON_IGNITE, 3)
+        self.assertEqual(game.resolve_night().deaths, ())
+        self.assertEqual(game.players[1].guard_saved_count, 1)
+
+    def test_guard_blocks_rusty_knight_curse(self):
+        game = make_game(Role.GUARD, Role.WOLF, Role.VILLAGER)
+        game.rusty_knight_curse_active = True
+        submit(game, 1, ActionKind.GUARD, 2)
+        self.assertEqual(game.resolve_night().deaths, ())
+        self.assertEqual(game.players[1].guard_saved_count, 1)
+
+    def test_doctor_only_blocks_wolf_and_can_repeat_same_target(self):
+        game = make_game(Role.DOCTOR, Role.WOLF, Role.ARSONIST, Role.VILLAGER)
+        submit(game, 1, ActionKind.DOCTOR, 4)
+        submit(game, 2, ActionKind.WOLF_VOTE, 4)
+        self.assertEqual(game.resolve_night().deaths, ())
+        game.start_night()
+        game.players[4].is_doused = True
+        submit(game, 1, ActionKind.DOCTOR, 4)
+        submit(game, 3, ActionKind.ARSON_IGNITE, 4)
+        self.assertEqual(game.resolve_night().deaths, (4,))
+        self.assertEqual(game.players[4].doctor_protection_count, 2)
+        self.assertEqual(game.players[1].doctor_saved_count, 1)
+
+    def test_arsonist_can_ignite_at_most_four_doused_targets(self):
+        game = make_game(Role.ARSONIST, *([Role.VILLAGER] * 5))
+        for uid in range(2, 7):
+            game.players[uid].is_doused = True
+        with self.assertRaises(ValueError):
+            submit(game, 1, ActionKind.ARSON_IGNITE, 2, 3, 4, 5, 6)
+        submit(game, 1, ActionKind.ARSON_IGNITE, 2, 3, 4, 5)
+        self.assertEqual(game.resolve_night().deaths, (2, 3, 4, 5))
+        self.assertTrue(game.players[6].is_doused)
 
     def test_lover_cub_death_triggers_fury_and_hunter_continuation(self):
         game = make_game(Role.WOLF, Role.HUNTER, Role.WOLF_CUB, Role.VILLAGER)

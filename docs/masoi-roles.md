@@ -2,7 +2,7 @@
 
 ## Danh sách và đội hình
 
-Phòng chờ nhận từ **5 đến 16 người**, dùng phân vai AUTO hoặc CUSTOM theo cài đặt. Riêng khi có **đúng 16 người**, ván dùng đội hình bên dưới thay cho thiết lập phân vai thường; đội hình được chọn một lần cho phòng rồi chia ngẫu nhiên:
+Phòng chờ nhận từ **8 đến 16 người**, dùng phân vai AUTO hoặc CUSTOM theo cài đặt. Riêng khi có **đúng 16 người**, ván dùng đội hình bên dưới thay cho thiết lập phân vai thường; đội hình được chọn một lần cho phòng rồi chia ngẫu nhiên:
 
 | Nhóm | Số lượng | Vai trò |
 | --- | ---: | --- |
@@ -28,9 +28,10 @@ Ván mới không còn Sói Trắng, Người Thổi Sáo, Cô Bé, Sát Thủ, 
 | --- | --- |
 | Kĩ Nữ | Ghé một người hoặc ở nhà. Khi đi thăm, tránh đòn tấn công nhắm vào mình; chết nếu ghé Sói, Kẻ Phóng Hỏa hoặc người thực sự chết đêm đó. Không phong tỏa kỹ năng. |
 | Thám Tử | Chọn đúng hai người, nhận kết quả cùng/khác phe thật: Dân, Sói, Solo. Bán Nguyệt là Dân trong kết quả này. |
-| Kẻ Phóng Hỏa | Mỗi đêm tẩm xăng hai người khác (một nếu chỉ còn một mục tiêu) hoặc châm lửa. Tẩm xuyên bảo vệ; lửa có thể được Bảo Vệ, Bác Sĩ hoặc bình cứu chặn. Thắng khi sống một mình. |
+| Kẻ Phóng Hỏa | Mỗi đêm tẩm xăng hai người khác (một nếu chỉ còn một mục tiêu) hoặc chọn tối đa 4 người đang dính xăng để châm lửa. Tẩm xuyên bảo vệ; lửa có thể được Bảo Vệ hoặc bình cứu chặn. Thắng khi sống một mình. |
 | Thợ Săn Người | Nhận bí mật một mục tiêu Dân lúc chia vai. Mục tiêu bị treo cổ khi role còn sống: thắng cá nhân +30, ván tiếp tục. Mục tiêu chết cách khác: gia nhập Sói, nhận quyền vote và xếp rank Sói. |
-| Bác Sĩ | Cứu một người khác khỏi đòn giết trực tiếp trong đêm, gồm độc, lửa và lời nguyền Hiệp Sĩ. Cùng một người tối đa hai đêm/ván; không tự cứu, không chặn chết theo hoặc Kĩ Nữ ghé nhầm. |
+| Bảo Vệ | Mỗi đêm bảo vệ một người khỏi mọi đòn tấn công ban đêm (Sói, Solo, lửa, độc, nước thánh, lời nguyền). Không chặn treo cổ hoặc chết theo; không chọn cùng người hai đêm liên tiếp. |
+| Bác Sĩ | Mỗi đêm chọn một người khác và cứu họ khỏi Sói cắn. Có thể chọn cùng một người không giới hạn số lần; không chặn đòn Solo, lửa, độc, treo cổ hoặc chết theo. |
 | Sói Trẻ | Cùng bầy Sói vote cắn. Khi chết, có một lượt kéo theo người còn sống không thuộc bầy Sói trước khi xét thắng. |
 | Xạ Thủ | Hai viên đạn, tối đa một/ngày, chỉ trong thảo luận từ Ngày 2. Phát đầu tiết lộ công khai vai trò. Bắn gây chết trực tiếp rồi xử lý chết dây chuyền. |
 

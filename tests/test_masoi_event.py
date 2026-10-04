@@ -41,7 +41,7 @@ class EventRulesTests(unittest.TestCase):
         game.current_night_event = NightEvent.HOLY_LIGHT
         game.players[3].is_doused = True
         submit(game, 1, ActionKind.WOLF_VOTE, 3)
-        submit(game, 2, ActionKind.ARSON_IGNITE)
+        submit(game, 2, ActionKind.ARSON_IGNITE, 3)
         self.assertEqual(game.resolve_night().deaths, (3,))
         self.assertTrue(any(log.event_type == "HOLY_LIGHT_SAVED" for log in game.replay_logs))
 
