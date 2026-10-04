@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from collections import Counter
 import discord
 from app.discord_bot.modules.helpers import make_embed
 from app.discord_bot.modules.masoi_engine import Faction, GamePhase, MasoiGame, NightEvent, Role
@@ -307,6 +308,22 @@ class MasoiFlowMixin:
             return
         if game.phase == GamePhase.GAME_END:
             return
+        role_counts = Counter(player.role for player in game.players.values())
+        role_lines = [
+            f"{role.emoji} **{role.value}**" + (f" ×{count}" if count > 1 else "")
+            for role, count in sorted(role_counts.items(), key=lambda item: item[0].value)
+        ]
+        await _safe_send(
+            message.channel,
+            embed=discord.Embed(
+                title="⚔️ Ván Ma Sói bắt đầu",
+                description=(
+                    f"👥 **Số người chơi:** {len(game.players)}\n"
+                    f"🎭 **Đội hình ván này:**\n" + " • ".join(role_lines)
+                ),
+                color=discord.Color(0xE0A638),
+            ),
+        )
         # Chạy vòng lặp game
         await self.game_loop(game, message)
 

@@ -249,7 +249,7 @@ RETIRED_ROLES = frozenset({
     Role.SERIAL_KILLER, Role.MUTE_WOLF, Role.ALPHA_WOLF,
 })
 
-MASOI_MIN_PLAYER_COUNT = 5
+MASOI_MIN_PLAYER_COUNT = 8
 MASOI_MAX_PLAYER_COUNT = 16
 MASOI_PLAYER_COUNT = 16  # Special fixed roster is used only at exactly 16 players.
 
