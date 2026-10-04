@@ -18,6 +18,7 @@ from typing import Dict, Optional
 import discord
 from discord.ext import commands
 
+from app.config import config
 from app.discord_bot.modules.helpers import EMOJI_VND, make_embed
 from app.discord_bot.modules.masoi_engine import (
     ActionIntent,
@@ -309,6 +310,8 @@ class SettingsView(discord.ui.View):
     @discord.ui.button(style=discord.ButtonStyle.secondary, row=3)
     async def btn_rank(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not await self.interaction_check(interaction):
+            return
+        if not self.game.settings.enable_rank and not await self.check_vip_host(interaction, "Bật tính rank Ma Sói"):
             return
         self.game.settings.cycle_rank()
         self.cog.save_game_settings(self.game)
@@ -992,6 +995,54 @@ class Masoi(MasoiFlowMixin, MasoiRecoveryMixin, commands.Cog):
             await ctx.send("❌ Chọn bảng rank: `masoirank soi`, `masoirank solo` hoặc `masoirank dan`.")
             return
         await ctx.send(embed=self.build_rankboard_embed(selected), view=RankboardView(self))
+
+    @commands.command(
+        name="resetmasoirank",
+        aliases=["masoirankreset", "reset-rank-masoi"],
+        brief="[ADMIN BOT] Reset rank Ma Sói của một người hoặc toàn bộ người chơi.",
+        usage="resetmasoirank <@user|user_id|all>",
+        hidden=True,
+    )
+    async def resetmasoirank_cmd(self, ctx: commands.Context, target: Optional[str] = None):
+        bot_admin_ids = set(getattr(config.bot, "admin_ids", []) or [])
+        bot_owner_ids = set(getattr(config.bot, "owner_ids", []) or [])
+        is_bot_admin = ctx.author.id in bot_admin_ids or ctx.author.id in bot_owner_ids
+        if not is_bot_admin:
+            try:
+                is_bot_admin = await self.bot.is_owner(ctx.author)
+            except Exception:
+                is_bot_admin = False
+        if not is_bot_admin:
+            await ctx.send("❌ Chỉ Admin Bot hoặc Bot Owner mới được reset rank Ma Sói.")
+            return
+
+        if not target:
+            await ctx.send(f"❌ Dùng lệnh: `{ctx.prefix}resetmasoirank <@user|user_id|all>`")
+            return
+
+        eco = self.get_economy()
+        if not eco:
+            await ctx.send("❌ Không kết nối được Database!")
+            return
+
+        if target.lower() in {"all", "toanbo", "toàn-bộ"}:
+            result = eco.reset_masoi_rank()
+            await ctx.send(
+                "✅ Đã reset rank Ma Sói của toàn bộ người chơi "
+                f"(3 bảng rank: {result['faction_rows']} dòng; thống kê cũ: {result['aggregate_rows']} dòng)."
+            )
+            return
+
+        user_id_text = target.strip().strip("<@!>")
+        if not user_id_text.isdigit() or int(user_id_text) <= 0:
+            await ctx.send(f"❌ Nhập mention/ID người chơi hoặc `all`. Ví dụ: `{ctx.prefix}resetmasoirank @user`")
+            return
+        user_id = int(user_id_text)
+        result = eco.reset_masoi_rank(user_id)
+        await ctx.send(
+            f"✅ Đã reset toàn bộ rank Ma Sói cho <@{user_id}> "
+            f"(3 bảng rank: {result['faction_rows']} dòng; thống kê cũ: {result['aggregate_rows']} dòng)."
+        )
 
     @commands.command(
         name="stopmasoi",

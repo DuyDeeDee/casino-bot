@@ -11,7 +11,7 @@ import threading
 import time
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Tuple, List
+from typing import Tuple, List, Optional
 
 from app.config import config
 
@@ -4961,6 +4961,31 @@ class Economy:
         )
         row = self.cur.fetchone() or (0, 0, 0, 0)
         return dict(user_id=user_id, faction=faction, points=row[0], plays=row[1], wins=row[2], losses=row[3])
+
+    def reset_masoi_rank(self, user_id: Optional[int] = None) -> dict:
+        """Reset Ma Sói rank/stat totals for one player or everyone, preserving badges and match idempotency."""
+        if user_id is not None and (type(user_id) is not int or user_id <= 0):
+            raise ValueError("Invalid user ID")
+
+        with self.transaction():
+            if user_id is None:
+                self.cur.execute("DELETE FROM user_masoi_faction_stats")
+                faction_rows = self.cur.rowcount
+                self.cur.execute(
+                    """UPDATE user_masoi_stats SET points=0, plays=0, wins=0, losses=0,
+                       wolf_wins=0, villager_wins=0, tanner_wins=0"""
+                )
+            else:
+                self.cur.execute("DELETE FROM user_masoi_faction_stats WHERE user_id=?", (user_id,))
+                faction_rows = self.cur.rowcount
+                self.cur.execute(
+                    """UPDATE user_masoi_stats SET points=0, plays=0, wins=0, losses=0,
+                       wolf_wins=0, villager_wins=0, tanner_wins=0 WHERE user_id=?""",
+                    (user_id,),
+                )
+            aggregate_rows = self.cur.rowcount
+
+        return {"faction_rows": faction_rows, "aggregate_rows": aggregate_rows}
 
     def _write_masoi_result(self, user_id: int, points_delta: int, is_win: bool, faction: str):
         """Called inside a transaction; SQL increments prevent stale read/modify/write."""
