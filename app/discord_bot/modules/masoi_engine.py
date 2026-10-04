@@ -25,6 +25,7 @@ class Role(Enum):
     TANNER = "Kẻ Ngốc"
     MAYOR = "Thị Trưởng"
     WOLF_SEER = "Sói Tiên Tri"
+    WOLF_GUARD = "Ác Sói"
     CURSED = "Kẻ Bị Nguyền"
     ELDER = "Già Làng"
     SERIAL_KILLER = "Sát Thủ"
@@ -46,6 +47,10 @@ class Role(Enum):
     DOCTOR = "Bác Sĩ"
     YOUNG_WOLF = "Sói Trẻ"
     GUNNER = "Xạ Thủ"
+    FORENSIC = "Pháp Y"
+    STRONGMAN = "Lực Sĩ"
+    PRIEST = "Mục Sư"
+    BIGMOUTH = "Cậu Bé Mồm To"
 
     @property
     def emoji(self) -> str:
@@ -60,6 +65,7 @@ class Role(Enum):
             Role.TANNER: "🃏",
             Role.MAYOR: "🎩",
             Role.WOLF_SEER: "🐺🔮",
+            Role.WOLF_GUARD: "🐺🛡️",
             Role.CURSED: "🌕",
             Role.ELDER: "👴",
             Role.SERIAL_KILLER: "🔪",
@@ -81,12 +87,16 @@ class Role(Enum):
             Role.DOCTOR: "🩺",
             Role.YOUNG_WOLF: "🐺🧸",
             Role.GUNNER: "🔫",
+            Role.FORENSIC: "🧬",
+            Role.STRONGMAN: "💪",
+            Role.PRIEST: "✝️",
+            Role.BIGMOUTH: "📣",
         }
         return emojis.get(self, "❓")
 
     @property
     def faction(self) -> Faction:
-        if self in (Role.WOLF, Role.WOLF_SEER, Role.WOLF_CUB, Role.WHITE_WOLF, Role.PHANTOM_WOLF, Role.MUTE_WOLF, Role.ALPHA_WOLF, Role.YOUNG_WOLF):
+        if self in (Role.WOLF, Role.WOLF_SEER, Role.WOLF_GUARD, Role.WOLF_CUB, Role.WHITE_WOLF, Role.PHANTOM_WOLF, Role.MUTE_WOLF, Role.ALPHA_WOLF, Role.YOUNG_WOLF):
             return Faction.WEREWOLF
         elif self in (Role.TANNER, Role.ARSONIST, Role.HUMAN_HUNTER):
             return Faction.INDEPENDENT
@@ -110,6 +120,7 @@ class Role(Enum):
             Role.TANNER: "Bạn thuộc phe Độc Lập. Bạn THẮNG NGAY LẬP TỨC nếu bị dân làng treo cổ ban ngày!",
             Role.MAYOR: "Phiếu bầu ban ngày tính x2. Khi qua đời, bạn được chỉ định 1 người kế nhiệm làm Thị Trưởng mới!",
             Role.WOLF_SEER: "Mỗi đêm cùng bầy Sói cắn người và được soi 1 người để biết chính xác vai trò của họ!",
+            Role.WOLF_GUARD: "Mỗi đêm chọn một người được che chở khỏi kỹ năng giết của Dân và treo cổ trong ngày và đêm kế tiếp. Sau một lần cứu thành công, mất khả năng bảo vệ.",
             Role.CURSED: "Ban đầu là Dân. Nếu bị Sói cắn ban đêm, bạn không chết mà biến thành Sói từ đêm sau!",
             Role.ELDER: "Có 2 mạng trước đòn cắn của Sói (lần 1 bị cắn không chết). Tuy nhiên bị treo cổ/độc sẽ chết ngay!",
             Role.SERIAL_KILLER: "Thuộc phe Độc Lập. Mỗi đêm giết 1 người, miễn nhiễm đòn cắn của Sói. Thắng khi sống sót duy nhất, trừ mục tiêu Tình Nhân khác phe!",
@@ -131,6 +142,10 @@ class Role(Enum):
             Role.DOCTOR: "Mỗi đêm cứu 1 người khác khỏi các đòn giết trực tiếp, kể cả lửa/độc/lời nguyền. Không tự cứu; tối đa 2 lần cứu cùng một người trong ván. Không cứu chết theo hay Kĩ Nữ thăm nhầm.",
             Role.YOUNG_WOLF: "Thuộc bầy Sói. Khi chết, được chọn 1 người không thuộc bầy Sói còn sống chết theo.",
             Role.GUNNER: "Phe Dân. Có 2 viên đạn, bắn tối đa 1 người mỗi ngày trong giờ thảo luận từ Ngày 2. Vai trò lộ ra sau phát bắn đầu.",
+            Role.FORENSIC: "Mỗi đêm chọn một người chết đêm trước. Nhận 2 nghi phạm có thể đã giết họ; nếu hung thủ thuộc phe Solo, nhận 3 nghi phạm.",
+            Role.STRONGMAN: "Mỗi đêm bảo vệ một người khác. Nếu bạn hoặc người đó bị tấn công, cả hai sống sót và bạn cùng kẻ tấn công biết vai trò của nhau. Bạn chết khi đêm kế tiếp bắt đầu.",
+            Role.PRIEST: "Mỗi ván một lần, vẩy nước thánh lên một người: nếu họ là Sói, họ chết; nếu không, bạn chết.",
+            Role.BIGMOUTH: "Mỗi đêm chọn một người (có thể đổi lựa chọn). Khi bạn chết, vai trò người đó được công khai.",
         }
         return descriptions.get(self, "")
 
@@ -206,6 +221,11 @@ class NightEvent(Enum):
 
 class ActionKind(Enum):
     GUARD = "guard"
+    WOLF_GUARD = "wolf_guard"
+    FORENSIC = "forensic"
+    STRONGMAN = "strongman"
+    HOLY_WATER = "holy_water"
+    BIGMOUTH = "bigmouth"
     DOCTOR = "doctor"
     WOLF_VOTE = "wolf_vote"
     SEER = "seer"
@@ -228,6 +248,8 @@ RETIRED_ROLES = frozenset({
     Role.WHITE_WOLF, Role.PIPER, Role.THE_GIRL,
     Role.SERIAL_KILLER, Role.MUTE_WOLF, Role.ALPHA_WOLF,
 })
+
+MASOI_PLAYER_COUNT = 16
 
 
 @dataclass(frozen=True)
@@ -365,6 +387,17 @@ class MasoiPlayer:
         self.doctor_protection_count: int = 0
         self.gunner_bullets_used: int = 0
         self.gunner_last_shot_day: int = 0
+        self.wolf_guard_used: bool = False
+        self.wolf_guard_shield_owner_id: Optional[int] = None
+        self.wolf_guard_shield_day: int = 0
+        self.wolf_guard_shield_night: int = 0
+        self.holy_water_used: bool = False
+        self.bigmouth_target_id: Optional[int] = None
+        self.strongman_target_id: Optional[int] = None
+        self.strongman_injured: bool = False
+        self.strongman_death_night: int = 0
+        self.last_death_source: str = ""
+        self.last_death_night: int = 0
         self.human_hunter_target_id: Optional[int] = None
         self.human_hunter_succeeded: bool = False
         self.human_hunter_joined_wolves: bool = False
@@ -377,7 +410,7 @@ class MasoiPlayer:
 
     @property
     def is_wolf(self) -> bool:
-        return self.role in (Role.WOLF, Role.WOLF_SEER, Role.WOLF_CUB, Role.WHITE_WOLF, Role.PHANTOM_WOLF, Role.MUTE_WOLF, Role.ALPHA_WOLF, Role.YOUNG_WOLF) or self.is_cursed_converted or self.human_hunter_joined_wolves
+        return self.role in (Role.WOLF, Role.WOLF_SEER, Role.WOLF_GUARD, Role.WOLF_CUB, Role.WHITE_WOLF, Role.PHANTOM_WOLF, Role.MUTE_WOLF, Role.ALPHA_WOLF, Role.YOUNG_WOLF) or self.is_cursed_converted or self.human_hunter_joined_wolves
 
 
 class ReplayLog:
@@ -435,6 +468,7 @@ class MasoiGame:
         self.settings: MasoiSettings = MasoiSettings()
         self.players: Dict[int, MasoiPlayer] = {}
         self.join_order: List[int] = []
+        self._auto_role_pool: Optional[List[Role]] = None
 
         self.night_count: int = 0
         self.day_count: int = 0
@@ -452,6 +486,8 @@ class MasoiGame:
 
         # Dữ liệu tạm trong đêm
         self.night_guard_target: Optional[int] = None
+        self.night_wolf_guard_target: Optional[int] = None
+        self.night_strongman_target: Optional[int] = None
         self.night_doctor_target: Optional[int] = None
         self.night_wolf_votes: Dict[int, int] = {}  # wolf_id -> target_id
         self.night_resolved_wolf_targets: List[int] = []
@@ -472,6 +508,11 @@ class MasoiGame:
         self.night_investigator_targets: Optional[Tuple[int, int]] = None
         self.night_investigator_result: Optional[str] = None
         self.night_investigator_dm_message: Optional[any] = None
+        self.night_forensic_result: Optional[str] = None
+        self.night_forensic_dm_message: Optional[any] = None
+        self.night_priest_result: Optional[str] = None
+        self.night_strongman_reveals: List[Tuple[int, int]] = []
+        self.night_start_deaths: Tuple[int, ...] = ()
         self.night_white_wolf_target: Optional[int] = None  # Sói Trắng cắn thêm 1 Sói (mỗi 2 đêm chẵn)
         self.night_phantom_wolf_target: Optional[int] = None  # Sói Ảo Ảnh giả dạng người dân
         self.night_piper_targets: List[int] = []  # Người Thổi Sáo mê hoặc 2 người
@@ -533,7 +574,7 @@ class MasoiGame:
             return False
         if user_id in self.players:
             return False
-        if len(self.players) >= 20:
+        if len(self.players) >= MASOI_PLAYER_COUNT:
             return False
         self.players[user_id] = MasoiPlayer(user_id, display_name)
         self.join_order.append(user_id)
@@ -563,6 +604,9 @@ class MasoiGame:
 
     def assign_roles(self):
         """Phân chia vai trò ngẫu nhiên cho người chơi."""
+        errors = self.validate_role_setup()
+        if errors:
+            raise ValueError(" ".join(errors))
         user_ids = list(self.players.keys())
         random.shuffle(user_ids)
         n = len(user_ids)
@@ -585,97 +629,28 @@ class MasoiGame:
         """Return configuration errors that would create an unwinnable or invalid setup."""
         n = len(self.players)
         errors: List[str] = []
-        if n < 5:
-            errors.append("Cần tối thiểu 5 người chơi.")
+        if n != MASOI_PLAYER_COUNT:
+            errors.append(f"Cần đúng {MASOI_PLAYER_COUNT} người chơi để bắt đầu.")
             return errors
 
-        if self.settings.role_setup_mode != "CUSTOM":
-            return errors
-
-        wolf_count = self.settings.custom_wolf_count
-        if type(wolf_count) is not int or wolf_count < 1:
-            errors.append("Số lượng Sói phải ít nhất là 1.")
-            return errors
-
-        special_roles: List[Role] = []
-        if not isinstance(self.settings.custom_special_roles, list):
-            errors.append("Danh sách vai trò đặc biệt phải là một danh sách hợp lệ.")
-            return errors
-        for role_name in self.settings.custom_special_roles:
-            try:
-                special_roles.append(Role[role_name])
-            except (KeyError, TypeError):
-                errors.append(f"Vai trò không hợp lệ: {role_name!r}.")
-
-        if len(special_roles) != len(set(special_roles)):
-            errors.append("Không thể chọn trùng một vai trò đặc biệt.")
-
-        if any(role in (Role.WOLF, Role.VILLAGER) or role in RETIRED_ROLES for role in special_roles):
-            errors.append("Cấu hình chứa vai trò thường hoặc vai trò đã ngừng hỗ trợ.")
-
-        total_roles = wolf_count + len(special_roles)
-        if total_roles > n:
-            errors.append(
-                f"Cấu hình có {total_roles} vai trò cho {n} người; hãy bỏ bớt vai trò đặc biệt hoặc giảm số Sói."
-            )
-
-        wolves = wolf_count + sum(role.faction == Faction.WEREWOLF for role in special_roles)
-        if wolves >= n - wolves:
-            errors.append("Số Sói phải ít hơn số người không thuộc phe Sói khi bắt đầu.")
-        max_wolves = 1 if n <= 6 else 2 if n <= 11 else 3 if n <= 14 else 4
-        if wolves > max_wolves:
-            errors.append(f"Bàn {n} người có tối đa {max_wolves} Sói để giữ cân bằng.")
-        if Role.WOLF_CUB in special_roles and Role.YOUNG_WOLF in special_roles:
-            errors.append("Sói Cuồng Sát và Sói Trẻ không được xuất hiện cùng ván.")
-        minimums = {Role.YOUNG_WOLF: 7, Role.ARSONIST: 10, Role.HUMAN_HUNTER: 9, Role.GUNNER: 9}
-        for role, minimum in minimums.items():
-            if role in special_roles and n < minimum:
-                errors.append(f"{role.value} cần tối thiểu {minimum} người chơi.")
-        if Role.HUMAN_HUNTER in special_roles and n - total_roles < 1 and not any(role.faction == Faction.VILLAGER for role in special_roles):
-            errors.append("Thợ Săn Người cần ít nhất 1 mục tiêu Dân.")
-
-        if Role.APPRENTICE_SEER in special_roles and Role.SEER not in special_roles:
-            errors.append("Tiên Tri Tập Sự cần có Tiên Tri chính trong đội hình.")
-
+        if self.settings.role_setup_mode != "AUTO":
+            return ["Ván 16 người dùng đội hình cố định; hãy chọn phân vai AUTO."]
         return errors
 
     def preview_roles(self) -> List[Role]:
-        """Xem trước các vai trò xuất hiện theo số lượng người chơi hiện tại."""
-        n = max(5, len(self.players))
-        if self.settings.role_setup_mode == "CUSTOM":
-            wolf_count = self.settings.custom_wolf_count if type(self.settings.custom_wolf_count) is int else 1
-            role_pool: List[Role] = [Role.WOLF] * max(1, min(n, wolf_count))
-            for role_name in self.settings.custom_special_roles if isinstance(self.settings.custom_special_roles, list) else []:
-                try:
-                    r = Role[role_name]
-                    if len(role_pool) < n:
-                        if r not in RETIRED_ROLES:
-                            role_pool.append(r)
-                except (KeyError, TypeError):
-                    pass
-        else:
-            if n <= 6:
-                role_pool = [Role.WOLF, Role.SEER, Role.GUARD, Role.MAYOR]
-            elif n <= 9:
-                role_pool = [Role.WOLF, Role.WOLF, Role.SEER, Role.GUARD, Role.WITCH, Role.MAYOR, Role.CURSED]
-            elif n <= 12:
-                role_pool = [Role.WOLF, Role.WOLF_SEER, Role.MAYOR, Role.SEER, Role.DOCTOR, Role.WITCH, Role.HUNTER, Role.CURSED, Role.HARLOT]
-                if n >= 12:
-                    role_pool.extend((Role.YOUNG_WOLF, Role.ELDER))
-            else:
-                role_pool = [Role.WOLF, Role.YOUNG_WOLF, Role.WOLF_SEER, Role.MAYOR, Role.INVESTIGATOR, Role.DOCTOR, Role.WITCH, Role.HUNTER, Role.CURSED, Role.ELDER, Role.HARLOT, Role.ARSONIST]
-                if n >= 15:
-                    role_pool.extend((Role.WOLF, Role.GUNNER))
-                if n >= 17:
-                    role_pool.append(Role.HUMAN_HUNTER)
-
-            if self.settings.tanner_enabled and Role.TANNER not in role_pool and len(role_pool) < n:
-                role_pool.append(Role.TANNER)
-
-        while len(role_pool) < n:
-            role_pool.append(Role.VILLAGER)
-
-        return role_pool[:n]
+        """One stable random 16-role roster per lobby, shared by preview and assignment."""
+        if self._auto_role_pool is None:
+            self._auto_role_pool = [
+                Role.WOLF, Role.WOLF_SEER, Role.WOLF_GUARD,
+                random.choice((Role.WOLF_CUB, Role.YOUNG_WOLF, Role.PHANTOM_WOLF)),
+                *random.sample((Role.GUARD, Role.DOCTOR, Role.STRONGMAN), 2),
+                *random.sample((Role.INVESTIGATOR, Role.SEER, Role.FORENSIC), 2),
+                random.choice((Role.HARLOT, Role.APPRENTICE_SEER)),
+                *random.sample((Role.WITCH, Role.HUNTER, Role.GUNNER, Role.PRIEST), 2),
+                Role.ARSONIST, random.choice((Role.TANNER, Role.HUMAN_HUNTER)),
+                *random.sample((Role.SCAPEGOAT, Role.ELDER, Role.CUPID, Role.MAYOR, Role.LYCAN, Role.BIGMOUTH), 3),
+            ]
+        return list(self._auto_role_pool)
 
     def start_night(self):
         """Reset dữ liệu chuẩn bị vào Đêm mới."""
@@ -691,12 +666,18 @@ class MasoiGame:
         for p in self.players.values():
             p.is_roleblocked = False
         self.night_guard_target = None
+        self.night_wolf_guard_target = None
         self.night_doctor_target = None
         self.night_wolf_votes.clear()
         self.night_resolved_wolf_targets = []
         self.night_seer_target = None
         self.night_seer_actor_id = None
         self.night_seer_result = None
+        self.night_forensic_result = None
+        self.night_forensic_dm_message = None
+        self.night_priest_result = None
+        self.night_strongman_reveals = []
+        self.night_start_deaths = ()
         self.night_wolf_seer_target = None
         self.night_wolf_seer_result = None
         self.night_wolf_seer_dm_message = None
@@ -741,6 +722,13 @@ class MasoiGame:
         self.girl_dm_message = None
         self.girl_result = None
         self.seer_dm_message = None
+        expiring_injuries = [
+            player.user_id for player in self.players.values()
+            if player.is_alive and player.strongman_injured and player.strongman_death_night <= self.night_count
+        ]
+        for uid in expiring_injuries:
+            self.players[uid].strongman_injured = False
+        self.night_start_deaths = self.apply_deaths(expiring_injuries, "STRONGMAN_INJURY_DEATH") if expiring_injuries else ()
 
     def prepare_night_delivery(self):
         self.phase = GamePhase.NIGHT_PREPARE
@@ -814,7 +802,10 @@ class MasoiGame:
         if not actor or not actor.is_alive:
             raise ValueError("Bạn không còn quyền hành động trong ván này.")
         roles = {
-            ActionKind.GUARD: Role.GUARD, ActionKind.DOCTOR: Role.DOCTOR, ActionKind.SEER: Role.SEER,
+            ActionKind.GUARD: Role.GUARD, ActionKind.WOLF_GUARD: Role.WOLF_GUARD,
+            ActionKind.FORENSIC: Role.FORENSIC, ActionKind.STRONGMAN: Role.STRONGMAN,
+            ActionKind.HOLY_WATER: Role.PRIEST, ActionKind.BIGMOUTH: Role.BIGMOUTH,
+            ActionKind.DOCTOR: Role.DOCTOR, ActionKind.SEER: Role.SEER,
             ActionKind.HARLOT: Role.HARLOT, ActionKind.INVESTIGATE: Role.INVESTIGATOR,
             ActionKind.WOLF_SEER: Role.WOLF_SEER, ActionKind.SERIAL_KILL: Role.SERIAL_KILLER,
             ActionKind.WHITE_WOLF: Role.WHITE_WOLF, ActionKind.PHANTOM: Role.PHANTOM_WOLF,
@@ -834,6 +825,10 @@ class MasoiGame:
             )
         if not authorized:
             raise ValueError("Vai trò của bạn không có kỹ năng này.")
+        if intent.kind == ActionKind.WOLF_GUARD and actor.wolf_guard_used:
+            raise ValueError("Ác Sói đã cứu thành công một người và hết khả năng bảo vệ.")
+        if intent.kind == ActionKind.HOLY_WATER and actor.holy_water_used:
+            raise ValueError("Mục Sư đã dùng nước thánh trong ván này.")
         key = (intent.actor_id, intent.kind)
         if key in self._night_intents:
             raise ValueError("Bạn đã xác nhận kỹ năng này trong đêm.")
@@ -848,7 +843,13 @@ class MasoiGame:
             raise ValueError("Số lượng mục tiêu không hợp lệ.")
         for uid in targets:
             target = self.players.get(uid)
-            if not target or not target.is_alive:
+            if not target:
+                raise ValueError("Mục tiêu không tồn tại trong ván.")
+            if intent.kind == ActionKind.FORENSIC:
+                if (target.is_alive or target.last_death_night != self.night_count - 1
+                        or target.last_death_source not in {"wolf", "white_wolf", "serial_killer", "arson"}):
+                    raise ValueError("Pháp Y chỉ được chọn người chết đêm trước bởi Sói hoặc Solo.")
+            elif not target.is_alive:
                 raise ValueError("Mục tiêu không còn sống trong ván.")
             if uid == actor.user_id and intent.kind not in (
                 ActionKind.GUARD, ActionKind.CUPID, ActionKind.WITCH_SAVE,
@@ -930,6 +931,7 @@ class MasoiGame:
     def apply_deaths(self, victims, event_type: str) -> Tuple[int, ...]:
         """One death pipeline for night, execution and hunter continuations."""
         pending = set(victims)
+        direct_victims = set(pending)
         died = set()
         while pending:
             uid = min(pending)
@@ -937,9 +939,21 @@ class MasoiGame:
             player = self.players.get(uid)
             if not player or not player.is_alive:
                 continue
+            source = {
+                "DAY_DEATH": "execution", "HUNTER_DEATH": "hunter",
+                "GUNNER_DEATH": "gunner",
+            }.get(event_type)
+            if uid in direct_victims and source and self.consume_wolf_guard_shield(uid, source):
+                continue
             player.is_alive = False
             died.add(uid)
             self.record_log(event_type, target_id=uid, result="Người chơi qua đời")
+            if player.role == Role.BIGMOUTH and player.bigmouth_target_id in self.players:
+                target = self.players[player.bigmouth_target_id]
+                self.record_log(
+                    "BIGMOUTH_REVEAL", actor_id=uid, target_id=target.user_id,
+                    result=f"Cậu Bé Mồm To tiết lộ: {target.display_name} là {target.role.value}.",
+                )
             if player.role == Role.WOLF_CUB:
                 self.wolf_fury_pending = True
                 self.record_log("WOLF_CUB_RAGE", actor_id=uid, result="Sói Cuồng Sát qua đời: cuồng nộ đêm sau")
@@ -964,8 +978,34 @@ class MasoiGame:
                     self.record_log("HUMAN_HUNTER_CONVERT", actor_id=hunter.user_id, result="Mục tiêu chết cách khác; gia nhập phe Sói")
         return tuple(sorted(died))
 
+    def consume_wolf_guard_shield(self, target_id: int, source: str) -> bool:
+        if source not in {"execution", "hunter", "gunner", "poison", "curse", "holy_water"}:
+            return False
+        target = self.players[target_id]
+        owner = self.players.get(target.wolf_guard_shield_owner_id)
+        if not owner or owner.wolf_guard_used:
+            return False
+        day_active = source in {"execution", "hunter", "gunner"} and self.day_count == target.wolf_guard_shield_day
+        night_active = source in {"poison", "curse", "holy_water"} and self.night_count == target.wolf_guard_shield_night
+        if not (day_active or night_active):
+            return False
+        owner.wolf_guard_used = True
+        for player in self.players.values():
+            if player.wolf_guard_shield_owner_id == owner.user_id:
+                player.wolf_guard_shield_owner_id = None
+                player.wolf_guard_shield_day = 0
+                player.wolf_guard_shield_night = 0
+        self.record_log("WOLF_GUARD_SAVE", actor_id=owner.user_id, target_id=target_id, result=f"Ác Sói chặn {source} và mất kỹ năng bảo vệ")
+        return True
+
     def _damage(self, target_id: int, source: str, deaths: Set[int]):
+        if target_id in deaths or self.consume_wolf_guard_shield(target_id, source):
+            return
         deaths.add(target_id)
+        target = self.players.get(target_id)
+        if target:
+            target.last_death_source = source
+            target.last_death_night = self.night_count
 
     def resolve_hunter_shot(self, hunter_id: int, target_id: int) -> Tuple[int, ...]:
         hunter, target = self.players.get(hunter_id), self.players.get(target_id)
@@ -1032,6 +1072,17 @@ class MasoiGame:
         guard = project(ActionKind.GUARD, "night_guard_target")
         if guard:
             alive[guard.actor_id].protected_last_night = guard.targets[0]
+        wolf_guard = active(ActionKind.WOLF_GUARD)
+        self.night_wolf_guard_target = wolf_guard.targets[0] if wolf_guard else None
+        strongman = active(ActionKind.STRONGMAN)
+        self.night_strongman_target = strongman.targets[0] if strongman else None
+        forensic = active(ActionKind.FORENSIC)
+        bigmouth = active(ActionKind.BIGMOUTH)
+        priest = active(ActionKind.HOLY_WATER)
+        if bigmouth:
+            alive[bigmouth.actor_id].bigmouth_target_id = bigmouth.targets[0]
+        if priest:
+            alive[priest.actor_id].holy_water_used = True
         doctor = project(ActionKind.DOCTOR, "night_doctor_target")
         if doctor:
             alive[doctor.targets[0]].doctor_protection_count += 1
@@ -1090,12 +1141,39 @@ class MasoiGame:
         if poison:
             alive[poison.actor_id].witch_poison_used = True
         deaths: Set[int] = set()
+        strongman_protected: Set[int] = set()
+        strongman_triggered = False
+
+        def strongman_intercepts(target_id: int, attacker_id: Optional[int], source: str) -> bool:
+            nonlocal strongman_triggered
+            if not strongman:
+                return False
+            pair = {strongman.actor_id, strongman.targets[0]}
+            if target_id in strongman_protected:
+                return True
+            if strongman_triggered or target_id not in pair:
+                return False
+            strongman_triggered = True
+            strongman_protected.update(pair)
+            guard_player = self.players[strongman.actor_id]
+            guard_player.strongman_injured = True
+            guard_player.strongman_death_night = self.night_count + 1
+            if attacker_id and attacker_id in self.players:
+                self.night_strongman_reveals.append((strongman.actor_id, attacker_id))
+            self.record_log(
+                "STRONGMAN_INTERCEPT", actor_id=strongman.actor_id, target_id=target_id,
+                result=f"Lực Sĩ chặn {source}; Lực Sĩ và người được bảo vệ sống sót",
+            )
+            return True
+
         if self.rusty_knight_curse_active:
             wolves = sorted(uid for uid, p in alive.items() if p.is_wolf)
             if wolves:
                 uid = rng.choice(wolves)
                 if doctor and uid == doctor.targets[0]:
                     self.record_log("DOCTOR_PROTECT", actor_id=doctor.actor_id, target_id=uid, result="Bác Sĩ chặn lời nguyền Hiệp Sĩ")
+                elif strongman_intercepts(uid, None, "lời nguyền của Hiệp Sĩ"):
+                    pass
                 else:
                     self._damage(uid, "curse", deaths)
                     self.record_log("RUSTY_KNIGHT_CURSE", target_id=uid, result="Lời nguyền Hiệp Sĩ")
@@ -1109,17 +1187,31 @@ class MasoiGame:
                 if player.is_doused:
                     attacks.append((uid, "arson"))
                     player.is_doused = False
+        if priest:
+            holy_target = alive[priest.targets[0]]
+            if holy_target.is_wolf:
+                attacks.append((holy_target.user_id, "holy_water"))
+                self.night_priest_result = f"✝️ **{holy_target.display_name}** thuộc bầy Sói. Nước thánh đã được vẩy lên họ."
+            else:
+                deaths.add(priest.actor_id)
+                alive[priest.actor_id].last_death_source = "holy_water_fail"
+                alive[priest.actor_id].last_death_night = self.night_count
+                self.night_priest_result = "✝️ Mục tiêu không thuộc bầy Sói. Nước thánh đã giết bạn."
+                self.record_log("HOLY_WATER_FAIL", actor_id=priest.actor_id, target_id=holy_target.user_id, result="Mục Sư chọn nhầm dân làng và chết")
         saved_targets, protected_targets = set(), set()
         for uid, source in attacks:
             target = alive[uid]
-            event = {"wolf": "WOLF_KILL", "serial_killer": "SERIAL_KILLER_KILL", "white_wolf": "WHITE_WOLF_BITE", "arson": "ARSON_IGNITE"}[source]
-            actor_id = sk.actor_id if source == "serial_killer" else white.actor_id if source == "white_wolf" else ignite.actor_id if source == "arson" else None
+            event = {"wolf": "WOLF_KILL", "serial_killer": "SERIAL_KILLER_KILL", "white_wolf": "WHITE_WOLF_BITE", "arson": "ARSON_IGNITE", "holy_water": "HOLY_WATER_KILL"}[source]
+            wolf_attackers = sorted(a.actor_id for a in actions if a.kind == ActionKind.WOLF_VOTE and a.targets and a.targets[0] == uid)
+            actor_id = sk.actor_id if source == "serial_killer" else white.actor_id if source == "white_wolf" else ignite.actor_id if source == "arson" else priest.actor_id if source == "holy_water" else wolf_attackers[0] if source == "wolf" and wolf_attackers else None
             self.record_log(event, actor_id=actor_id, target_id=uid, result="Tấn công đêm")
             if source == "wolf" and self.active_night_event == NightEvent.HOLY_LIGHT:
                 self.record_log("HOLY_LIGHT_SAVED", target_id=uid, result="Thánh Quang chặn đòn cắn của bầy Sói")
                 continue
             if visit and visit.targets and uid == visit.actor_id:
                 self.record_log("HARLOT_AWAY", actor_id=uid, result="Kĩ Nữ vắng nhà, thoát đòn tấn công")
+                continue
+            if strongman_intercepts(uid, actor_id, source):
                 continue
             if doctor and uid == doctor.targets[0]:
                 protected_targets.add(uid)
@@ -1159,6 +1251,8 @@ class MasoiGame:
                 self.record_log("DOCTOR_PROTECT", actor_id=doctor.actor_id, target_id=uid, result="Bác Sĩ chặn độc")
             elif visit and visit.targets and uid == visit.actor_id:
                 self.record_log("HARLOT_AWAY", actor_id=uid, result="Kĩ Nữ vắng nhà, thoát độc")
+            elif strongman_intercepts(uid, poison.actor_id, "độc của Phù Thủy"):
+                pass
             else:
                 self._damage(uid, "poison", deaths)
             if alive[uid].is_wolf and uid in deaths:
@@ -1173,6 +1267,25 @@ class MasoiGame:
                 deaths.add(visit.actor_id)
                 self.record_log("HARLOT_DANGER", actor_id=visit.actor_id, target_id=visited.user_id, result="Kĩ Nữ chết khi ghé thăm mục tiêu nguy hiểm")
         final_deaths = self.apply_deaths(deaths, "NIGHT_DEATH")
+        if forensic:
+            victim = self.players[forensic.targets[0]]
+            suspect_count = 3 if victim.last_death_source in {"serial_killer", "arson"} else 2
+            suspects = rng.sample([p for p in self.players.values() if p.user_id != victim.user_id], suspect_count)
+            names = ", ".join(f"**{p.display_name}**" for p in suspects)
+            self.night_forensic_result = f"🧬 Người đã giết **{victim.display_name}** có thể nằm trong số nghi phạm: {names}."
+            self.record_log("FORENSIC_RESULT", actor_id=forensic.actor_id, target_id=victim.user_id, result=self.night_forensic_result)
+        if wolf_guard and not alive[wolf_guard.actor_id].wolf_guard_used:
+            for player in self.players.values():
+                if player.wolf_guard_shield_owner_id == wolf_guard.actor_id:
+                    player.wolf_guard_shield_owner_id = None
+                    player.wolf_guard_shield_day = 0
+                    player.wolf_guard_shield_night = 0
+            protected = self.players[wolf_guard.targets[0]]
+            if protected.is_alive:
+                protected.wolf_guard_shield_owner_id = wolf_guard.actor_id
+                protected.wolf_guard_shield_day = self.day_count + 1
+                protected.wolf_guard_shield_night = self.night_count + 1
+                self.record_log("WOLF_GUARD_SHIELD", actor_id=wolf_guard.actor_id, target_id=protected.user_id, result="Bảo vệ trong ngày và đêm kế tiếp")
 
         # Use deadline actors, not alive-role lookups, after applying deaths.
         outcomes = []
@@ -1281,6 +1394,9 @@ class MasoiGame:
             executed_id = top_candidates[0]
 
         self.apply_deaths((executed_id,), "DAY_DEATH")
+        if self.players[executed_id].is_alive:
+            self.record_log("DAY_EXECUTION_BLOCKED", target_id=executed_id, result="Ác Sói chặn treo cổ")
+            return None
         self.executed_player_id = executed_id
 
         self.record_log("DAY_EXECUTION", target_id=executed_id, result=f"Bị treo cổ với {max_votes} phiếu")

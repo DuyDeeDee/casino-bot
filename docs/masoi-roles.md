@@ -2,9 +2,25 @@
 
 ## Danh sách và đội hình
 
-Ván mới không còn Sói Trắng, Người Thổi Sáo, Cô Bé, Sát Thủ, Sói Câm. ID cũ vẫn tồn tại để đọc snapshot và replay lịch sử, nhưng không thể chọn trong CUSTOM và không xuất hiện ở AUTO. Quyền VIP, phí và tính năng VIP không thay đổi.
+Mỗi ván mới cần đúng **16 người**. Phòng chờ chứa tối đa 16 người và Host chỉ bắt đầu được khi đủ người. Đội hình được chọn một lần cho mỗi phòng rồi chia ngẫu nhiên cho người chơi:
 
-AUTO mở Bác Sĩ và Kĩ Nữ từ 10 người, Sói Trẻ từ 12, Thám Tử cùng Kẻ Phóng Hỏa từ 13, Xạ Thủ từ 15, Thợ Săn Người từ 17. CUSTOM có thể chọn các role này ở bàn đủ người; Sói Trẻ cần ít nhất 7, Xạ Thủ/Thợ Săn Người 9, Kẻ Phóng Hỏa 10 người. Tổng Sói (kể cả Sói đặc biệt) tối đa 1/2/3/4 tương ứng với bàn 5–6 / 7–11 / 12–14 / 15–20 người. Sói Cuồng Sát và Sói Trẻ không được cùng ván.
+| Nhóm | Số lượng | Vai trò |
+| --- | ---: | --- |
+| Sói | 4 | Sói Thường, Sói Tiên Tri, Ác Sói và 1 trong Sói Cuồng Sát/Sói Trẻ/Sói Ảo Ảnh |
+| Cover | 2 | Chọn 2 trong Bảo Vệ, Bác Sĩ, Lực Sĩ |
+| Thông tin | 2 | Chọn 2 trong Thám Tử, Tiên Tri, Pháp Y |
+| Cận thông tin | 1 | Kĩ Nữ hoặc Tiên Tri Tập Sự |
+| Dân mạnh | 2 | Chọn 2 trong Phù Thủy, Thợ Săn, Xạ Thủ, Mục Sư |
+| Solo | 2 | Kẻ Phóng Hỏa và đúng 1 trong Kẻ Ngốc/Thợ Săn Người |
+| Dân còn lại | 3 | Chọn 3 trong Dê Tế Thần, Già Làng, Thần Tình Yêu, Thị Trưởng, Bán Nguyệt, Cậu Bé Mồm To |
+
+Ác Sói chọn một người khác vào ban đêm. Lá chắn của người đó có hiệu lực trong ngày và đêm kế tiếp, chặn một lần treo cổ hoặc kỹ năng giết của phe Dân (độc Phù Thủy, đạn Thợ Săn/Xạ Thủ, lời nguyền Hiệp Sĩ). Lá chắn không chặn Sói hay phe Solo. Sau lần cứu thành công đầu tiên, Ác Sói mất kỹ năng bảo vệ nhưng vẫn bỏ phiếu cắn cùng bầy.
+
+Pháp Y chọn một người bị giết đêm trước bởi Sói hoặc Solo và nhận ngẫu nhiên 2 nghi phạm; nếu nguồn giết là Solo, nhận 3. Lực Sĩ chọn một người khác mỗi đêm. Nếu một trong hai bị tấn công, cả Lực Sĩ và mục tiêu sống sót, còn Lực Sĩ và kẻ tấn công nhận DM role của nhau. Lực Sĩ chết khi đêm kế tiếp bắt đầu. Mục Sư dùng nước thánh một lần trong ván: giết mục tiêu nếu họ là Sói, nếu không Mục Sư chết. Cậu Bé Mồm To chọn một người mỗi đêm; nếu Cậu Bé chết, role người đó được công khai.
+
+Ván mới không còn Sói Trắng, Người Thổi Sáo, Cô Bé, Sát Thủ, Sói Câm. ID cũ vẫn tồn tại để đọc snapshot và replay lịch sử. Quyền VIP, phí và các tính năng VIP khác không thay đổi.
+
+Các thiết lập số Sói, phân vai CUSTOM và nút bật Kẻ Ngốc không áp dụng cho ván 16 người. Kẻ Ngốc và Thợ Săn Người loại trừ nhau trong mỗi ván.
 
 ## Luật kỹ năng
 

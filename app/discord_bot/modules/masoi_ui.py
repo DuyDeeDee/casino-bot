@@ -98,6 +98,99 @@ class NightGuardView(NightActionView):
         await interaction.response.edit_message(embed=embed, view=None)
 
 
+class NightWolfGuardView(NightActionView):
+    def __init__(self, game: MasoiGame, actor_id: int):
+        super().__init__(game, actor_id)
+        options = [discord.SelectOption(label=p.display_name, value=str(p.user_id), emoji="🛡️")
+                   for p in game.get_alive_players() if p.user_id != actor_id]
+        if options:
+            self.select = discord.ui.Select(placeholder="🐺 Chọn người để che chở", options=options[:25])
+            self.select.callback = self.select_callback
+            self.add_item(self.select)
+            button = discord.ui.Button(label="Xác nhận bảo vệ", style=discord.ButtonStyle.primary, row=1)
+            button.callback = self.confirm_callback
+            self.add_item(button)
+
+    async def select_callback(self, interaction):
+        if await self.interaction_check(interaction):
+            await interaction.response.defer()
+
+    async def confirm_callback(self, interaction):
+        if not await self.interaction_check(interaction):
+            return
+        if not hasattr(self, "select") or not self.select.values:
+            await interaction.response.send_message("❌ Hãy chọn 1 người.", ephemeral=True)
+            return
+        uid = int(self.select.values[0])
+        if await self.record_action(interaction, ActionKind.WOLF_GUARD, (uid,)):
+            self.stop()
+            await interaction.response.edit_message(content=f"🐺🛡️ Đã chọn bảo vệ **{self.game.players[uid].display_name}** trong ngày và đêm kế tiếp.", embed=None, view=None)
+
+
+class NightRolePickView(NightActionView):
+    def __init__(self, game, actor_id, kind, candidates, placeholder, button_label, emoji):
+        super().__init__(game, actor_id)
+        self.kind = kind
+        self.select = discord.ui.Select(
+            placeholder=placeholder,
+            options=[discord.SelectOption(label=p.display_name, value=str(p.user_id), emoji=emoji)
+                     for p in candidates[:25]],
+        )
+        self.select.callback = self.select_callback
+        self.add_item(self.select)
+        button = discord.ui.Button(label=button_label, style=discord.ButtonStyle.primary, row=1)
+        button.callback = self.confirm_callback
+        self.add_item(button)
+
+    async def select_callback(self, interaction):
+        if await self.interaction_check(interaction):
+            await interaction.response.defer()
+
+    async def confirm_callback(self, interaction):
+        if not await self.interaction_check(interaction):
+            return
+        if not self.select.values:
+            await interaction.response.send_message("❌ Hãy chọn một người.", ephemeral=True)
+            return
+        target_id = int(self.select.values[0])
+        if await self.record_action(interaction, self.kind, (target_id,)):
+            self.stop()
+            await interaction.response.edit_message(
+                content=f"✅ Đã ghi nhận lựa chọn: **{self.game.players[target_id].display_name}**.",
+                embed=None, view=None,
+            )
+
+
+class NightForensicView(NightRolePickView):
+    def __init__(self, game, actor_id):
+        candidates = [p for p in game.players.values()
+                      if not p.is_alive and p.last_death_night == game.night_count - 1
+                      and p.last_death_source in {"wolf", "white_wolf", "serial_killer", "arson"}]
+        super().__init__(game, actor_id, ActionKind.FORENSIC, candidates,
+                         "Chọn người bị giết đêm trước", "Điều tra", "🧬")
+
+
+class NightStrongmanView(NightRolePickView):
+    def __init__(self, game, actor_id):
+        candidates = [p for p in game.get_alive_players() if p.user_id != actor_id]
+        super().__init__(game, actor_id, ActionKind.STRONGMAN, candidates,
+                         "Chọn người để bảo vệ đêm nay", "Bảo vệ", "💪")
+
+
+class NightPriestView(NightRolePickView):
+    def __init__(self, game, actor_id):
+        candidates = [p for p in game.get_alive_players() if p.user_id != actor_id]
+        super().__init__(game, actor_id, ActionKind.HOLY_WATER, candidates,
+                         "Chọn người để vẩy nước thánh", "Vẩy nước thánh", "✝️")
+
+
+class NightBigmouthView(NightRolePickView):
+    def __init__(self, game, actor_id):
+        candidates = [p for p in game.get_alive_players() if p.user_id != actor_id]
+        super().__init__(game, actor_id, ActionKind.BIGMOUTH, candidates,
+                         "Chọn vai trò sẽ được tiết lộ khi bạn chết", "Chọn người", "📣")
+
+
 class NightDoctorView(NightActionView):
     def __init__(self, game: MasoiGame, doctor_id: int):
         super().__init__(game, doctor_id)
@@ -1040,7 +1133,8 @@ class NightHunterView(discord.ui.View):
         embed = interaction.message.embeds[0] if interaction.message.embeds else None
         if embed:
             divider = "──────────────────────────────────────"
-            embed.add_field(name="\u200b", value=f"{divider}\n🏹 **Đã ghi nhận:** kéo theo bắn gục **{name}**", inline=False)
+            outcome = "mục tiêu sống sót nhờ lá chắn của Ác Sói" if target_p and target_p.is_alive else "mục tiêu đã qua đời"
+            embed.add_field(name="\u200b", value=f"{divider}\n🏹 **Đã bắn:** **{name}**; {outcome}.", inline=False)
 
         await interaction.response.edit_message(embed=embed, view=None)
 
@@ -1130,7 +1224,7 @@ class GunnerTargetView(discord.ui.View):
                 return
             target_id = int(self.select.values[0])
             try:
-                game.resolve_gunner_shot(self.gunner_id, target_id)
+                deaths = game.resolve_gunner_shot(self.gunner_id, target_id)
             except ValueError as exc:
                 await interaction.response.send_message(f"❌ {exc}", ephemeral=True)
                 return
@@ -1138,7 +1232,13 @@ class GunnerTargetView(discord.ui.View):
             await interaction.response.edit_message(content="🔫 Đã bắn mục tiêu.", view=None)
             gunner = game.players[self.gunner_id]
             target = game.players[target_id]
-            await interaction.channel.send(f"🔫 **{gunner.display_name}** lộ diện là **Xạ Thủ** và bắn **{target.display_name}**!")
+            notice = f"🔫 **{gunner.display_name}** lộ diện là **Xạ Thủ** và bắn **{target.display_name}**!"
+            if target_id not in deaths:
+                notice += f"\n🐺🛡️ **{target.display_name}** sống sót nhờ lá chắn của Ác Sói; lá chắn đã bị tiêu hao."
+            reveal_lines = self.discussion.cog.bigmouth_reveal_lines(game, deaths)
+            if reveal_lines:
+                notice += "\n" + "\n".join(reveal_lines)
+            await interaction.channel.send(notice)
             await self.discussion.cog.check_and_trigger_hunter(game, interaction.channel)
             await self.discussion.cog.check_and_trigger_mayor_succession(game, interaction.channel)
             await self.discussion.cog.sync_channel_permissions(game, interaction.channel)
@@ -1232,6 +1332,22 @@ def format_replay_story_line(log: ReplayLog) -> str:
         return f"🐺 **Bầy Sói** âm thầm cất bước trong đêm tối và nhắm nanh cắn {target}."
     elif event == "GUARD_PROTECT":
         return f"🛡️ **Bảo Vệ** xuất hiện kịp thời, chặn đòn tấn công trực tiếp vào {target}."
+    elif event == "WOLF_GUARD_SHIELD":
+        return f"🐺🛡️ **Ác Sói** {actor} bí mật che chở cho {target} trong ngày và đêm kế tiếp."
+    elif event == "WOLF_GUARD_SAVE":
+        return f"🐺🛡️ Lá chắn của **Ác Sói** {actor} cứu {target} một lần rồi tan biến."
+    elif event == "DAY_EXECUTION_BLOCKED":
+        return f"🐺🛡️ {target} sống sót sau lượt treo cổ nhờ lá chắn của Ác Sói."
+    elif event == "STRONGMAN_INTERCEPT":
+        return f"💪 **Lực Sĩ** {actor} chặn đòn tấn công nhắm vào {target}; Lực Sĩ bị thương nặng."
+    elif event == "FORENSIC_RESULT":
+        return f"🧬 **Pháp Y** {actor} khám nghiệm {target}: {log.result}"
+    elif event == "HOLY_WATER_KILL":
+        return f"✝️ **Mục Sư** {actor} dùng nước thánh tấn công Sói {target}."
+    elif event == "HOLY_WATER_FAIL":
+        return f"✝️ **Mục Sư** {actor} chọn nhầm {target}; nước thánh khiến chính Mục Sư thiệt mạng."
+    elif event == "BIGMOUTH_REVEAL":
+        return f"📣 {log.result}"
     elif event == "DOCTOR_PROTECT":
         return f"🩺 **Bác Sĩ** {actor} cứu {target} khỏi đòn giết trực tiếp."
     elif event == "ARSON_DOUSE":
@@ -1282,7 +1398,7 @@ def format_replay_story_line(log: ReplayLog) -> str:
         return f"🐺🩸 **Sói Cuồng Sát** {actor or target} ngã xuống! Bầy Sói sục sôi cuồng nộ cắn 2 người đêm tiếp theo!"
     elif event == "APPRENTICE_PROMOTED":
         return f"🔮✨ **Tiên Tri Tập Sự** {actor} đứng lên kế thừa di chí, trở thành **Tiên Tri Mới**!"
-    elif event in ("NIGHT_DEATH", "HUNTER_DEATH", "DAY_DEATH", "YOUNG_WOLF_DEATH", "GUNNER_DEATH"):
+    elif event in ("NIGHT_DEATH", "HUNTER_DEATH", "DAY_DEATH", "YOUNG_WOLF_DEATH", "GUNNER_DEATH", "STRONGMAN_INJURY_DEATH"):
         return f"💀 {target} đã qua đời."
     elif event == "MAYOR_SUCCESSION":
         return f"🎩 **Thị Trưởng** {actor} chỉ định {target} làm Thị Trưởng kế nhiệm!"

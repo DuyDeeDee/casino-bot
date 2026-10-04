@@ -1,4 +1,9 @@
 *.db
+*.db-*
+Ilis_Farm/
+/logs/
+/fonts/
+/.gitkeep
 data/*
 !data/.gitkeep
 !data/logs/

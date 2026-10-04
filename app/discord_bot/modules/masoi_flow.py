@@ -27,6 +27,16 @@ def LobbyView(game, cog):
 
 
 class MasoiFlowMixin:
+    @staticmethod
+    def bigmouth_reveal_lines(game: MasoiGame, dead_ids):
+        lines = []
+        for uid in dead_ids:
+            player = game.players.get(uid)
+            target = game.players.get(player.bigmouth_target_id) if player and player.role == Role.BIGMOUTH else None
+            if target:
+                lines.append(f"📣 **Cậu Bé Mồm To tiết lộ:** {target.display_name} là {target.role.emoji} **{target.role.value}**.")
+        return lines
+
     async def check_and_trigger_hunter(self, game: MasoiGame, channel: discord.TextChannel):
         """Kiểm tra và kích hoạt lượt bắn kéo theo của Thợ Săn khi bị loại (hỗ trợ bắn dây chuyền)."""
         while True:
@@ -43,6 +53,7 @@ class MasoiFlowMixin:
                     game.checkpoint()
                     continue
                 h_user = await self.get_or_fetch_user(p.user_id)
+                alive_before_shot = {player.user_id for player in game.get_alive_players()}
                 view = NightHunterView(game, p.user_id)
                 hunter_shot_target_id = None
                 if not h_user:
@@ -76,12 +87,17 @@ class MasoiFlowMixin:
                 if hunter_shot_target_id:
                     shot_p = game.players.get(hunter_shot_target_id)
                     if shot_p:
-                        role_str = f" *({shot_p.role.emoji} {shot_p.role.value})*" if game.settings.reveal_roles_on_death else ""
+                        blocked = shot_p.is_alive
+                        role_str = f" *({shot_p.role.emoji} {shot_p.role.value})*" if game.settings.reveal_roles_on_death and not blocked else ""
+                        shot_deaths = alive_before_shot - {player.user_id for player in game.get_alive_players()}
+                        reveal_lines = self.bigmouth_reveal_lines(game, shot_deaths)
                         embed_announce = discord.Embed(
                             title=f"🏹 {p.role.value} Kéo Theo!",
                             description=(
-                                f"🏹 {self.player_label(p)} dùng phát bắn cuối cùng kéo theo "
-                                + f"{self.player_label(shot_p)}{role_str} cùng ra đi!"
+                                f"🏹 {self.player_label(p)} bắn {self.player_label(shot_p)}{role_str}. "
+                                + ("🐺🛡️ Mục tiêu sống sót nhờ lá chắn của Ác Sói." if blocked
+                                   else "Mục tiêu đã qua đời.")
+                                + ("\n\n" + "\n".join(reveal_lines) if reveal_lines else "")
                             ),
                             color=discord.Color(0xE0A638)
                         )
@@ -307,6 +323,18 @@ class MasoiFlowMixin:
 
                 # ── BƯỚC 1: ĐÊM ──
                 game.start_night()
+                if game.night_start_deaths:
+                    await self.check_and_trigger_hunter(game, message.channel)
+                    await self.check_and_trigger_mayor_succession(game, message.channel)
+                    names = [self.player_label(game.players[uid]) for uid in game.night_start_deaths]
+                    notice = "💪 **Lực Sĩ qua đời vì vết thương từ đêm trước:** " + ", ".join(names)
+                    reveals = self.bigmouth_reveal_lines(game, game.night_start_deaths)
+                    if reveals:
+                        notice += "\n" + "\n".join(reveals)
+                    await _safe_send(message.channel, notice)
+                    if game.check_win_condition():
+                        game.phase = GamePhase.GAME_END
+                        break
                 game.prepare_night_delivery()
 
                 event = game.active_night_event
@@ -445,6 +473,42 @@ class MasoiFlowMixin:
                     game.night_wolf_seer_result,
                     "🐺🔮 Kết quả Sói Tiên Tri",
                 )
+                if game.night_forensic_result:
+                    forensic_actor = next((p for p in game.players.values() if p.role == Role.FORENSIC), None)
+                    forensic_user = await self.get_or_fetch_user(forensic_actor.user_id) if forensic_actor else None
+                    if forensic_user:
+                        try:
+                            await forensic_user.send(f"🧬 **Kết quả Pháp Y — Đêm {game.night_count}**\n{game.night_forensic_result}")
+                        except Exception:
+                            logger.warning("Không gửi được kết quả Pháp Y cho %s", forensic_actor.user_id)
+                if game.night_priest_result:
+                    priest_actor = next((p for p in game.players.values() if p.role == Role.PRIEST), None)
+                    priest_user = await self.get_or_fetch_user(priest_actor.user_id) if priest_actor else None
+                    if priest_user:
+                        try:
+                            await priest_user.send(game.night_priest_result)
+                        except Exception:
+                            logger.warning("Không gửi được kết quả nước thánh cho %s", priest_actor.user_id)
+
+                for strongman_id, attacker_id in game.night_strongman_reveals:
+                    strongman_player = game.players[strongman_id]
+                    attacker = game.players[attacker_id]
+                    strongman_user = await self.get_or_fetch_user(strongman_id)
+                    attacker_user = await self.get_or_fetch_user(attacker_id)
+                    try:
+                        if strongman_user:
+                            await strongman_user.send(
+                                f"💪 Bạn đã bảo vệ thành công. Kẻ tấn công là **{attacker.display_name}** "
+                                f"({attacker.role.emoji} **{attacker.role.value}**). Bạn sẽ qua đời khi đêm kế tiếp bắt đầu."
+                            )
+                        if attacker_user:
+                            await attacker_user.send(
+                                f"💥 Bạn đã tấn công **{strongman_player.display_name}** được Lực Sĩ bảo vệ. "
+                                f"Role của họ là {strongman_player.role.emoji} **{strongman_player.role.value}**; "
+                                f"họ cũng đã biết role của bạn ({attacker.role.emoji} **{attacker.role.value}**)."
+                            )
+                    except Exception:
+                        logger.warning("Không gửi được DM tiết lộ role của Lực Sĩ")
 
                 if self.active_games.get(key) is not game or game.phase == GamePhase.GAME_END:
                     break
@@ -472,6 +536,9 @@ class MasoiFlowMixin:
 
                     quote_str = ("\n\n" + "\n".join(quotes)) if quotes else ""
                     day_msg_text = "Đêm qua trôi qua đầy đau thương... Các nạn nhân đã ra đi:\n" + "\n".join(death_names) + quote_str
+                    reveals = self.bigmouth_reveal_lines(game, night_deaths)
+                    if reveals:
+                        day_msg_text += "\n\n" + "\n".join(reveals)
                 else:
                     day_msg_text = "<a:yay:1533444499827851505> Đêm qua trôi qua thật bình yên, không có ai qua đời!"
 
@@ -601,15 +668,21 @@ class MasoiFlowMixin:
                             exec_text += f"\n\n💬 *Lời trăn trối của <a:2336vipgif:1534596901834592286> **{p.display_name}**: \"{vip_info['last_words']}\"*"
                 else:
                     last_log = game.replay_logs[-1] if game.replay_logs else None
-                    if last_log and last_log.event_type == "VOTE_RESULT":
+                    if last_log and last_log.event_type == "DAY_EXECUTION_BLOCKED":
+                        exec_text = f"🐺🛡️ **{last_log.target_name}** được Ác Sói che chở và sống sót sau lượt treo cổ. Lá chắn đã bị tiêu hao."
+                    elif last_log and last_log.event_type == "VOTE_RESULT":
                         exec_text = f"<a:huyay:1533445376563089448> Lượt bỏ phiếu kết thúc: **{last_log.result}**."
                     else:
                         exec_text = "<a:huyay:1533445376563089448> Lượt bỏ phiếu kết thúc, không ai bị xử tử."
 
-                additional_deaths = [uid for uid in new_deaths(game, alive_before_vote) if uid != executed_id]
+                vote_deaths = new_deaths(game, alive_before_vote)
+                additional_deaths = [uid for uid in vote_deaths if uid != executed_id]
                 if additional_deaths:
                     names = [self.player_label(game.players[uid]) + (f" ({game.players[uid].role.emoji} {game.players[uid].role.value})" if game.settings.reveal_roles_on_death else "") for uid in additional_deaths]
                     exec_text += "\n\n💀 Những người qua đời theo dây chuyền:\n" + "\n".join(names)
+                reveals = self.bigmouth_reveal_lines(game, vote_deaths)
+                if reveals:
+                    exec_text += "\n\n" + "\n".join(reveals)
 
                 embed_exec = discord.Embed(
                     title="<a:huyay:1533445376563089448> Kết Quả Xử Tử",

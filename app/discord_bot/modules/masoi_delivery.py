@@ -23,6 +23,9 @@ async def deliver_night(cog, game, *, timeout=15, concurrency=6):
         Role.DOCTOR: (ui.NightDoctorView, "Cứu một người khác khỏi đòn giết trực tiếp; tối đa 2 đêm/người trong ván."),
         Role.SEER: (ui.NightSeerView, "Chọn một người để soi phe."),
         Role.WOLF_SEER: (ui.NightWolfSeerView, "Chọn một người để soi chính xác vai trò."),
+        Role.WOLF_GUARD: (ui.NightWolfGuardView, "Chọn một người khác để che chở khỏi kỹ năng giết của Dân và treo cổ trong ngày và đêm kế tiếp. Sau khi cứu thành công một lần, bạn mất kỹ năng này."),
+        Role.STRONGMAN: (ui.NightStrongmanView, "Chọn một người khác để bảo vệ. Nếu bạn hoặc người đó bị tấn công, cả hai sống sót; bạn và kẻ tấn công biết role nhau. Bạn sẽ chết khi đêm sau bắt đầu."),
+        Role.BIGMOUTH: (ui.NightBigmouthView, "Chọn người có role sẽ được tiết lộ khi bạn chết. Bạn có thể đổi lựa chọn vào các đêm sau."),
         Role.HARLOT: (ui.NightHarlotView, "Ghé thăm một người hoặc ở nhà. Vắng nhà tránh đòn tấn công, nhưng ghé Sói/Kẻ Phóng Hỏa hoặc người bị giết sẽ chết."),
         Role.INVESTIGATOR: (ui.NightInvestigatorView, "Chọn đúng 2 người để so họ cùng hay khác phe thật (Dân/Sói/Solo)."),
         Role.ARSONIST: (ui.NightArsonistView, f"Chọn đúng {game.required_target_count(ActionKind.ARSON_DOUSE)} người để tẩm xăng xuyên bảo vệ, hoặc châm lửa đốt tất cả người đã bị tẩm."),
@@ -42,7 +45,7 @@ async def deliver_night(cog, game, *, timeout=15, concurrency=6):
     for player in game.get_alive_players():
         if player.is_wolf:
             queue(player, ui.NightWolfView(game, player.user_id), "Bỏ phiếu cắn một người không thuộc bầy Sói.")
-        if player.role in simple:
+        if player.role in simple and (player.role != Role.WOLF_GUARD or not player.wolf_guard_used):
             view_type, description = simple[player.role]
             queue(player, view_type(game, player.user_id), description)
         if player.role == Role.APPRENTICE_SEER and player.apprentice_promoted:
@@ -54,6 +57,18 @@ async def deliver_night(cog, game, *, timeout=15, concurrency=6):
             view = ui.NightWitchView(game, player.user_id, victim)
             game.witch_view = view
             queue(player, view, "Bầy Sói chưa chốt mục tiêu; tin nhắn sẽ cập nhật khi Sói bỏ phiếu. Bình cứu chỉ bảo vệ một người.", witch=True)
+        if player.role == Role.FORENSIC:
+            has_previous_night_victim = any(
+                not candidate.is_alive
+                and candidate.last_death_night == game.night_count - 1
+                and candidate.last_death_source in {"wolf", "white_wolf", "serial_killer", "arson"}
+                for candidate in game.players.values()
+            )
+            if has_previous_night_victim:
+                view = ui.NightForensicView(game, player.user_id)
+                queue(player, view, "Chọn người bị giết đêm trước để nhận các nghi phạm có thể là hung thủ.")
+        if player.role == Role.PRIEST and not player.holy_water_used:
+            queue(player, ui.NightPriestView(game, player.user_id), "Vẩy nước thánh lên một người khác. Sói sẽ chết; nếu không phải Sói, bạn sẽ chết. Dùng một lần trong ván.")
 
     semaphore = asyncio.Semaphore(concurrency)
     async def send_job(job):
