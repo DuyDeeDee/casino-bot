@@ -2,7 +2,7 @@
 
 ## Danh sách và đội hình
 
-Mỗi ván mới cần đúng **16 người**. Phòng chờ chứa tối đa 16 người và Host chỉ bắt đầu được khi đủ người. Đội hình được chọn một lần cho mỗi phòng rồi chia ngẫu nhiên cho người chơi:
+Phòng chờ nhận từ **5 đến 16 người**, dùng phân vai AUTO hoặc CUSTOM theo cài đặt. Riêng khi có **đúng 16 người**, ván dùng đội hình bên dưới thay cho thiết lập phân vai thường; đội hình được chọn một lần cho phòng rồi chia ngẫu nhiên:
 
 | Nhóm | Số lượng | Vai trò |
 | --- | ---: | --- |
@@ -20,7 +20,7 @@ Pháp Y chọn một người bị giết đêm trước bởi Sói hoặc Solo 
 
 Ván mới không còn Sói Trắng, Người Thổi Sáo, Cô Bé, Sát Thủ, Sói Câm. ID cũ vẫn tồn tại để đọc snapshot và replay lịch sử. Quyền VIP, phí và các tính năng VIP khác không thay đổi.
 
-Các thiết lập số Sói, phân vai CUSTOM và nút bật Kẻ Ngốc không áp dụng cho ván 16 người. Kẻ Ngốc và Thợ Săn Người loại trừ nhau trong mỗi ván.
+Ở bàn đúng 16 người, thiết lập số Sói, phân vai CUSTOM và nút bật Kẻ Ngốc không áp dụng. Các số người khác vẫn dùng thiết lập cũ. Kẻ Ngốc và Thợ Săn Người loại trừ nhau trong đội hình 16 người.
 
 ## Luật kỹ năng
 

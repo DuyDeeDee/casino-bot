@@ -16,12 +16,46 @@ def game_with(*roles):
 
 
 class FixedRosterTests(unittest.TestCase):
-    def test_room_requires_exactly_sixteen_players(self):
-        game = game_with(*([Role.VILLAGER] * 15))
+    def test_room_keeps_original_five_to_sixteen_player_range(self):
+        game = game_with(*([Role.VILLAGER] * 4))
         self.assertTrue(game.validate_role_setup())
-        self.assertTrue(game.add_player(16, "16"))
+        self.assertEqual(len(game.preview_roles()), 5)
+        self.assertTrue(game.add_player(5, "5"))
+        self.assertEqual(game.validate_role_setup(), [])
+        self.assertEqual(len(game.preview_roles()), 5)
+        for uid in range(6, 17):
+            self.assertTrue(game.add_player(uid, str(uid)))
         self.assertFalse(game.add_player(17, "17"))
         self.assertEqual(game.validate_role_setup(), [])
+
+    def test_non_sixteen_auto_roster_keeps_original_small_game_roles(self):
+        game = game_with(*([Role.VILLAGER] * 8))
+        roster = game.preview_roles()
+        self.assertEqual(len(roster), 8)
+        self.assertEqual(roster.count(Role.WOLF), 2)
+        self.assertIn(Role.SEER, roster)
+        self.assertIn(Role.GUARD, roster)
+        self.assertNotIn(Role.STRONGMAN, roster)
+        self.assertNotIn(Role.FORENSIC, roster)
+        self.assertNotIn(Role.PRIEST, roster)
+        self.assertNotIn(Role.BIGMOUTH, roster)
+
+    def test_custom_roles_still_work_below_sixteen_and_sixteen_uses_fixed_roster(self):
+        small = game_with(*([Role.VILLAGER] * 5))
+        small.settings.role_setup_mode = "CUSTOM"
+        small.settings.custom_wolf_count = 1
+        small.settings.custom_special_roles = ["SEER"]
+        self.assertEqual(small.validate_role_setup(), [])
+        self.assertEqual(Counter(small.preview_roles()), Counter({Role.WOLF: 1, Role.SEER: 1, Role.VILLAGER: 3}))
+
+        full = game_with(*([Role.VILLAGER] * 16))
+        full.settings.role_setup_mode = "CUSTOM"
+        full.settings.custom_wolf_count = 1
+        full.settings.custom_special_roles = ["SEER"]
+        self.assertEqual(full.validate_role_setup(), [])
+        self.assertEqual(len(full.preview_roles()), 16)
+        self.assertIn(Role.WOLF_GUARD, full.preview_roles())
+        self.assertIn(Role.ARSONIST, full.preview_roles())
 
     def test_roster_categories_and_assignment(self):
         for _ in range(30):

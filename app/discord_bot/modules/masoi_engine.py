@@ -249,7 +249,9 @@ RETIRED_ROLES = frozenset({
     Role.SERIAL_KILLER, Role.MUTE_WOLF, Role.ALPHA_WOLF,
 })
 
-MASOI_PLAYER_COUNT = 16
+MASOI_MIN_PLAYER_COUNT = 5
+MASOI_MAX_PLAYER_COUNT = 16
+MASOI_PLAYER_COUNT = 16  # Special fixed roster is used only at exactly 16 players.
 
 
 @dataclass(frozen=True)
@@ -574,7 +576,7 @@ class MasoiGame:
             return False
         if user_id in self.players:
             return False
-        if len(self.players) >= MASOI_PLAYER_COUNT:
+        if len(self.players) >= MASOI_MAX_PLAYER_COUNT:
             return False
         self.players[user_id] = MasoiPlayer(user_id, display_name)
         self.join_order.append(user_id)
@@ -629,28 +631,107 @@ class MasoiGame:
         """Return configuration errors that would create an unwinnable or invalid setup."""
         n = len(self.players)
         errors: List[str] = []
-        if n != MASOI_PLAYER_COUNT:
-            errors.append(f"Cần đúng {MASOI_PLAYER_COUNT} người chơi để bắt đầu.")
+        if n < MASOI_MIN_PLAYER_COUNT:
+            errors.append(f"Cần ít nhất {MASOI_MIN_PLAYER_COUNT} người chơi để bắt đầu.")
+            return errors
+        if n > MASOI_MAX_PLAYER_COUNT:
+            errors.append(f"Phòng chỉ nhận tối đa {MASOI_MAX_PLAYER_COUNT} người chơi.")
             return errors
 
-        if self.settings.role_setup_mode != "AUTO":
-            return ["Ván 16 người dùng đội hình cố định; hãy chọn phân vai AUTO."]
+        # Exactly 16 players use the requested fixed roster, regardless of lobby role settings.
+        if n == MASOI_PLAYER_COUNT:
+            return errors
+
+        if self.settings.role_setup_mode != "CUSTOM":
+            return errors
+
+        wolf_count = self.settings.custom_wolf_count
+        if type(wolf_count) is not int or wolf_count < 1:
+            errors.append("Số lượng Sói phải ít nhất là 1.")
+            return errors
+
+        special_roles: List[Role] = []
+        if not isinstance(self.settings.custom_special_roles, list):
+            errors.append("Danh sách vai trò đặc biệt phải là một danh sách hợp lệ.")
+            return errors
+        for role_name in self.settings.custom_special_roles:
+            try:
+                special_roles.append(Role[role_name])
+            except (KeyError, TypeError):
+                errors.append(f"Vai trò không hợp lệ: {role_name!r}.")
+
+        if len(special_roles) != len(set(special_roles)):
+            errors.append("Không thể chọn trùng một vai trò đặc biệt.")
+        if any(role in (Role.WOLF, Role.VILLAGER) or role in RETIRED_ROLES for role in special_roles):
+            errors.append("Cấu hình chứa vai trò thường hoặc vai trò đã ngừng hỗ trợ.")
+
+        total_roles = wolf_count + len(special_roles)
+        if total_roles > n:
+            errors.append(f"Cấu hình có {total_roles} vai trò cho {n} người; hãy bỏ bớt vai trò đặc biệt hoặc giảm số Sói.")
+
+        wolves = wolf_count + sum(role.faction == Faction.WEREWOLF for role in special_roles)
+        if wolves >= n - wolves:
+            errors.append("Số Sói phải ít hơn số người không thuộc phe Sói khi bắt đầu.")
+        max_wolves = 1 if n <= 6 else 2 if n <= 11 else 3 if n <= 14 else 4
+        if wolves > max_wolves:
+            errors.append(f"Bàn {n} người có tối đa {max_wolves} Sói để giữ cân bằng.")
+        if Role.WOLF_CUB in special_roles and Role.YOUNG_WOLF in special_roles:
+            errors.append("Sói Cuồng Sát và Sói Trẻ không được xuất hiện cùng ván.")
+        minimums = {Role.YOUNG_WOLF: 7, Role.ARSONIST: 10, Role.HUMAN_HUNTER: 9, Role.GUNNER: 9}
+        for role, minimum in minimums.items():
+            if role in special_roles and n < minimum:
+                errors.append(f"{role.value} cần tối thiểu {minimum} người chơi.")
+        if Role.HUMAN_HUNTER in special_roles and n - total_roles < 1 and not any(role.faction == Faction.VILLAGER for role in special_roles):
+            errors.append("Thợ Săn Người cần ít nhất 1 mục tiêu Dân.")
         return errors
 
     def preview_roles(self) -> List[Role]:
-        """One stable random 16-role roster per lobby, shared by preview and assignment."""
-        if self._auto_role_pool is None:
-            self._auto_role_pool = [
-                Role.WOLF, Role.WOLF_SEER, Role.WOLF_GUARD,
-                random.choice((Role.WOLF_CUB, Role.YOUNG_WOLF, Role.PHANTOM_WOLF)),
-                *random.sample((Role.GUARD, Role.DOCTOR, Role.STRONGMAN), 2),
-                *random.sample((Role.INVESTIGATOR, Role.SEER, Role.FORENSIC), 2),
-                random.choice((Role.HARLOT, Role.APPRENTICE_SEER)),
-                *random.sample((Role.WITCH, Role.HUNTER, Role.GUNNER, Role.PRIEST), 2),
-                Role.ARSONIST, random.choice((Role.TANNER, Role.HUMAN_HUNTER)),
-                *random.sample((Role.SCAPEGOAT, Role.ELDER, Role.CUPID, Role.MAYOR, Role.LYCAN, Role.BIGMOUTH), 3),
-            ]
-        return list(self._auto_role_pool)
+        """Use the fixed requested lineup at 16; retain the original lineup otherwise."""
+        n = max(MASOI_MIN_PLAYER_COUNT, len(self.players))
+        if n == MASOI_PLAYER_COUNT:
+            if self._auto_role_pool is None:
+                self._auto_role_pool = [
+                    Role.WOLF, Role.WOLF_SEER, Role.WOLF_GUARD,
+                    random.choice((Role.WOLF_CUB, Role.YOUNG_WOLF, Role.PHANTOM_WOLF)),
+                    *random.sample((Role.GUARD, Role.DOCTOR, Role.STRONGMAN), 2),
+                    *random.sample((Role.INVESTIGATOR, Role.SEER, Role.FORENSIC), 2),
+                    random.choice((Role.HARLOT, Role.APPRENTICE_SEER)),
+                    *random.sample((Role.WITCH, Role.HUNTER, Role.GUNNER, Role.PRIEST), 2),
+                    Role.ARSONIST, random.choice((Role.TANNER, Role.HUMAN_HUNTER)),
+                    *random.sample((Role.SCAPEGOAT, Role.ELDER, Role.CUPID, Role.MAYOR, Role.LYCAN, Role.BIGMOUTH), 3),
+                ]
+            return list(self._auto_role_pool)
+
+        if self.settings.role_setup_mode == "CUSTOM":
+            wolf_count = self.settings.custom_wolf_count if type(self.settings.custom_wolf_count) is int else 1
+            role_pool: List[Role] = [Role.WOLF] * max(1, min(n, wolf_count))
+            for role_name in self.settings.custom_special_roles if isinstance(self.settings.custom_special_roles, list) else []:
+                try:
+                    role = Role[role_name]
+                    if len(role_pool) < n and role not in RETIRED_ROLES:
+                        role_pool.append(role)
+                except (KeyError, TypeError):
+                    pass
+        elif n <= 6:
+            role_pool = [Role.WOLF, Role.SEER, Role.GUARD, Role.MAYOR]
+        elif n <= 9:
+            role_pool = [Role.WOLF, Role.WOLF, Role.SEER, Role.GUARD, Role.WITCH, Role.MAYOR, Role.CURSED]
+        elif n <= 12:
+            role_pool = [Role.WOLF, Role.WOLF_SEER, Role.MAYOR, Role.SEER, Role.DOCTOR, Role.WITCH, Role.HUNTER, Role.CURSED, Role.HARLOT]
+            if n >= 12:
+                role_pool.extend((Role.YOUNG_WOLF, Role.ELDER))
+        else:
+            role_pool = [Role.WOLF, Role.YOUNG_WOLF, Role.WOLF_SEER, Role.MAYOR, Role.INVESTIGATOR, Role.DOCTOR, Role.WITCH, Role.HUNTER, Role.CURSED, Role.ELDER, Role.HARLOT, Role.ARSONIST]
+            if n >= 15:
+                role_pool.extend((Role.WOLF, Role.GUNNER))
+            if n >= 17:
+                role_pool.append(Role.HUMAN_HUNTER)
+
+        if self.settings.tanner_enabled and Role.TANNER not in role_pool and len(role_pool) < n:
+            role_pool.append(Role.TANNER)
+        while len(role_pool) < n:
+            role_pool.append(Role.VILLAGER)
+        return role_pool[:n]
 
     def start_night(self):
         """Reset dữ liệu chuẩn bị vào Đêm mới."""

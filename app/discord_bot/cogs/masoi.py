@@ -27,6 +27,8 @@ from app.discord_bot.modules.masoi_engine import (
     MasoiGame,
     MasoiPlayer,
     MasoiSettings,
+    MASOI_MAX_PLAYER_COUNT,
+    MASOI_MIN_PLAYER_COUNT,
     MASOI_PLAYER_COUNT,
     RankFaction,
     ReplayLog,
@@ -95,12 +97,12 @@ class LobbyView(discord.ui.View):
 
     def update_controls(self) -> None:
         """Disable starting until the lobby has the minimum number of players."""
-        can_start = len(self.game.players) == MASOI_PLAYER_COUNT
+        can_start = not self.game.validate_role_setup()
         for item in self.children:
             if getattr(item, "custom_id", None) == "masoi_start":
                 item.disabled = not can_start
             elif getattr(item, "custom_id", None) == "masoi_join":
-                item.disabled = len(self.game.players) >= MASOI_PLAYER_COUNT
+                item.disabled = len(self.game.players) >= MASOI_MAX_PLAYER_COUNT
 
     @discord.ui.button(label="Tham gia", style=discord.ButtonStyle.success, emoji="🐾", custom_id="masoi_join", row=0)
     async def join_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -108,8 +110,8 @@ class LobbyView(discord.ui.View):
         if not self.game.add_player(user.id, user.display_name):
             if user.id in self.game.players:
                 await interaction.response.send_message("❌ Bạn đã ở trong phòng chờ rồi!", ephemeral=True)
-            elif len(self.game.players) >= MASOI_PLAYER_COUNT:
-                await interaction.response.send_message(f"❌ Phòng chờ đã đầy (tối đa {MASOI_PLAYER_COUNT} người)!", ephemeral=True)
+            elif len(self.game.players) >= MASOI_MAX_PLAYER_COUNT:
+                await interaction.response.send_message(f"❌ Phòng chờ đã đầy (tối đa {MASOI_MAX_PLAYER_COUNT} người)!", ephemeral=True)
             else:
                 await interaction.response.send_message("❌ Không thể tham gia lúc này.", ephemeral=True)
             return
@@ -135,9 +137,10 @@ class LobbyView(discord.ui.View):
             await interaction.response.send_message("❌ Chỉ Host mới được bấm bắt đầu!", ephemeral=True)
             return
 
-        if len(self.game.players) != MASOI_PLAYER_COUNT:
+        setup_errors = self.game.validate_role_setup()
+        if setup_errors:
             await interaction.response.send_message(
-                f"❌ Cần đúng **{MASOI_PLAYER_COUNT} người** để bắt đầu! Hiện có {len(self.game.players)} người.",
+                "❌ " + " ".join(setup_errors),
                 ephemeral=True
             )
             return
@@ -208,8 +211,9 @@ class SettingsView(discord.ui.View):
         self.cog = cog
         self.lobby_message = lobby_message
         self.update_button_labels()
-        self.remove_item(self.btn_tanner)
-        self.remove_item(self.btn_custom_roles)
+        if len(game.players) == MASOI_PLAYER_COUNT:
+            self.remove_item(self.btn_tanner)
+            self.remove_item(self.btn_custom_roles)
 
     async def interaction_check(self, interaction: discord.Interaction):
         if interaction.user.id != self.game.host_id or self.game.phase != GamePhase.LOBBY:
@@ -1050,14 +1054,16 @@ class Masoi(MasoiFlowMixin, MasoiRecoveryMixin, commands.Cog):
         )
         embed.add_field(name="CHỦ PHÒNG", value=f"<a:key:1526234974150459593> **{game.host_name}**", inline=True)
         player_count = len(game.players)
-        start_status = (
-            "✅ Đã đủ người bắt đầu"
-            if player_count == MASOI_PLAYER_COUNT
-            else f"⏳ Cần thêm **{MASOI_PLAYER_COUNT - player_count}** người"
-        )
+        setup_errors = game.validate_role_setup()
+        if not setup_errors:
+            start_status = "✅ Đã đủ người bắt đầu"
+        elif player_count < MASOI_MIN_PLAYER_COUNT:
+            start_status = f"⏳ Cần thêm **{MASOI_MIN_PLAYER_COUNT - player_count}** người (tối thiểu {MASOI_MIN_PLAYER_COUNT})"
+        else:
+            start_status = "⚙️ Cần kiểm tra lại cấu hình phân vai"
         embed.add_field(
             name="SỐ NGƯỜI",
-            value=f"**{player_count}/{MASOI_PLAYER_COUNT}**\n{start_status}",
+            value=f"**{player_count}/{MASOI_MAX_PLAYER_COUNT}**\n{start_status}",
             inline=True,
         )
 
@@ -1092,7 +1098,8 @@ class Masoi(MasoiFlowMixin, MasoiRecoveryMixin, commands.Cog):
         roles_str = " • ".join(role_items)
 
         role_header = (
-            f"🎭 ĐỘI HÌNH VÁN NÀY ({MASOI_PLAYER_COUNT} người)"
+            f"🎭 ĐỘI HÌNH 16 NGƯỜI" if player_count == MASOI_PLAYER_COUNT
+            else f"🎭 ĐỘI HÌNH DỰ KIẾN ({len(roles_preview)} người)"
         )
 
         # A full room with custom emojis can exceed Discord's 1024-char field.
@@ -1109,7 +1116,10 @@ class Masoi(MasoiFlowMixin, MasoiRecoveryMixin, commands.Cog):
 
         embed.add_field(
             name="\u200b",
-            value=f"<a:muiten:1533428497098473623> *Bấm **Tham gia** để vào phòng. Chủ phòng có thể bắt đầu khi đủ {MASOI_PLAYER_COUNT} người.*",
+            value=(
+                f"<a:muiten:1533428497098473623> *Bấm **Tham gia** để vào phòng. Có thể bắt đầu từ {MASOI_MIN_PLAYER_COUNT} đến {MASOI_MAX_PLAYER_COUNT} người; "
+                f"đúng 16 người sẽ dùng đội hình 16 role riêng.*"
+            ),
             inline=False
         )
         embed.set_footer(text=f" Phí tạo phòng: {MASOI_CREATE_FEE:,} VND (Miễn phí cho VIP)")
@@ -1117,10 +1127,14 @@ class Masoi(MasoiFlowMixin, MasoiRecoveryMixin, commands.Cog):
 
     def build_settings_embed(self, game: MasoiGame) -> discord.Embed:
         s = game.settings
-        mode_text = f"Đội hình cố định {MASOI_PLAYER_COUNT} người"
+        mode_text = (
+            f"Đội hình cố định 16 người" if len(game.players) == MASOI_PLAYER_COUNT
+            else f"{'Tự động' if s.role_setup_mode == 'AUTO' else 'Tùy chỉnh'} ({MASOI_MIN_PLAYER_COUNT}–{MASOI_MAX_PLAYER_COUNT} người)"
+        )
         desc = (
             f"⚙️ **Cấu Hình Ván Ma Sói**\n\n"
             f"• **Phân chia vai trò:** `{mode_text}`\n"
+            f"• **Bàn đúng 16 người:** dùng đội hình 16 role riêng; cài đặt phân vai AUTO/CUSTOM không áp dụng.\n"
             f"• **Hiện vai trò người chết (<a:2336vipgif:1534596901834592286> VIP):** `{'Hiện ngay' if s.reveal_roles_on_death else 'Ẩn tới cuối ván'}`\n"
             f"• **Hiển thị số phiếu:** `{'Real-time' if s.vote_display == 'REALTIME' else 'Ẩn tới hết giờ'}`\n"
             f"• **Người chết chat ở kênh chơi:** `{'Cho phép' if s.dead_can_chat else 'Bị cấm chat'}`\n"
