@@ -750,6 +750,20 @@ SERVER_ADMIN_SECTIONS = {
                 "example": "removemasoibadge @User",
             },
             {
+                "name": "addmasoirank <@user> <điểm> [phe]",
+                "aliases": ["givemasoirank", "congdiemmasoi"],
+                "perm": "Admin / Owner",
+                "desc": "Cộng hoặc trừ điểm rank Ma Sói cho người chơi (phe: soi, solo, dan hoặc all).",
+                "example": "addmasoirank @User 50 soi",
+            },
+            {
+                "name": "resetmasoirank <@user|user_id|all>",
+                "aliases": ["masoirankreset", "reset-rank-masoi"],
+                "perm": "Admin / Owner",
+                "desc": "Reset điểm rank Ma Sói của người chơi hoặc toàn bộ server về 0.",
+                "example": "resetmasoirank @User",
+            },
+            {
                 "name": "masoiviplist",
                 "aliases": ["listvipmasoi"],
                 "perm": "Quản lý Server / Quản trị viên",

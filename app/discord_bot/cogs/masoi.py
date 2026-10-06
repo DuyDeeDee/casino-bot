@@ -999,6 +999,171 @@ class Masoi(MasoiFlowMixin, MasoiRecoveryMixin, commands.Cog):
         await ctx.send(embed=self.build_rankboard_embed(selected), view=RankboardView(self))
 
     @commands.command(
+        name="addmasoirank",
+        aliases=["givemasoirank", "congdiemmasoi", "congmasoirank", "add-rank-masoi", "adjustmasoirank"],
+        brief="[ADMIN/OWNER] Cộng hoặc trừ điểm rank Ma Sói cho người chơi.",
+        usage="addmasoirank <@user|user_id> <số_điểm> [soi|solo|dan|all]",
+        hidden=True,
+    )
+    async def addmasoirank_cmd(
+        self,
+        ctx: commands.Context,
+        target: Optional[str] = None,
+        arg2: Optional[str] = None,
+        arg3: Optional[str] = None,
+    ):
+        # 1. Kiểm tra quyền hạn: Quản trị viên server hoặc Admin/Owner bot
+        is_server_admin = False
+        if hasattr(ctx.author, "guild_permissions"):
+            perms = ctx.author.guild_permissions
+            is_server_admin = perms.administrator or perms.manage_guild
+
+        bot_admin_ids = set(getattr(config.bot, "admin_ids", []) or [])
+        bot_owner_ids = set(getattr(config.bot, "owner_ids", []) or [])
+        is_bot_admin = (
+            ctx.author.id in bot_admin_ids
+            or ctx.author.id in bot_owner_ids
+        )
+        if not is_bot_admin:
+            try:
+                is_bot_admin = await self.bot.is_owner(ctx.author)
+            except Exception:
+                is_bot_admin = False
+
+        if not (is_server_admin or is_bot_admin):
+            await ctx.send("❌ **Lỗi:** Chỉ có Admin hoặc Owner mới có quyền sử dụng lệnh này!")
+            return
+
+        # 2. Hướng dẫn nếu thiếu tham số
+        if not target:
+            embed_help = make_embed(
+                title="📖 HƯỚNG DẪN LỆNH CỘNG RANK MA SÓI (ADMIN)",
+                description=(
+                    f"**Cú pháp:** `{ctx.prefix}addmasoirank <@user|user_id> <số_điểm> [phe]`\n\n"
+                    "📌 **Các phe hợp lệ:**\n"
+                    "• `all` (Mặc định): Cộng cho cả 3 bảng rank (Sói, Solo, Dân)\n"
+                    "• `soi` / `wolf`: Chỉ cộng cho bảng rank **🐺 Phe Sói**\n"
+                    "• `solo`: Chỉ cộng cho bảng rank **🃏 Phe Solo** (Tanner, Thổi Sáo, Sát Thủ, Lovers...)\n"
+                    "• `dan` / `villager`: Chỉ cộng cho bảng rank **👥 Phe Dân Làng**\n\n"
+                    "💡 **Ví dụ:**\n"
+                    f"• `{ctx.prefix}addmasoirank @User 50` — Cộng 50 điểm cho cả 3 bảng rank\n"
+                    f"• `{ctx.prefix}addmasoirank @User 100 soi` — Cộng 100 điểm riêng cho phe Sói\n"
+                    f"• `{ctx.prefix}addmasoirank @User -20 dan` — Trừ 20 điểm phe Dân"
+                ),
+                color=discord.Color.blue(),
+            )
+            await ctx.send(embed=embed_help)
+            return
+
+        # 3. Phân giải tham số điểm và phe (cho phép đảo thứ tự: <điểm> [phe] hoặc [phe] <điểm>)
+        if not arg2:
+            await ctx.send(f"❌ Vui lòng nhập số điểm cần cộng/trừ! Ví dụ: `{ctx.prefix}addmasoirank {target} 50`")
+            return
+
+        points: Optional[int] = None
+        faction_raw: str = "all"
+
+        try:
+            points = int(arg2)
+            if arg3:
+                faction_raw = arg3
+        except ValueError:
+            if arg3:
+                try:
+                    points = int(arg3)
+                    faction_raw = arg2
+                except ValueError:
+                    points = None
+            else:
+                points = None
+
+        if points is None:
+            await ctx.send(f"❌ Số điểm phải là một số nguyên hợp lệ (VD: `50` hoặc `-20`). Ví dụ: `{ctx.prefix}addmasoirank {target} 50 soi`")
+            return
+
+        if points == 0:
+            await ctx.send("❌ Số điểm cộng/trừ phải khác 0!")
+            return
+
+        # 4. Phân giải người chơi mục tiêu
+        user_id_text = target.strip().strip("<@!>")
+        if not user_id_text.isdigit() or int(user_id_text) <= 0:
+            await ctx.send(f"❌ Vui lòng nhập mention hoặc ID người chơi hợp lệ. Ví dụ: `{ctx.prefix}addmasoirank @user 50`")
+            return
+        user_id = int(user_id_text)
+
+        # 5. Phân giải phe
+        faction_map = {
+            "all": "ALL", "tatca": "ALL", "tấtcả": "ALL", "toanbo": "ALL", "toàn-bộ": "ALL", "ca3": "ALL", "cả3": "ALL",
+            "soi": "WOLF", "sói": "WOLF", "wolf": "WOLF",
+            "solo": "SOLO",
+            "dan": "VILLAGER", "dân": "VILLAGER", "villager": "VILLAGER",
+        }
+        normalized_faction = faction_map.get(faction_raw.lower().strip())
+        if not normalized_faction:
+            await ctx.send(
+                "❌ Phe chọn không hợp lệ! Vui lòng chọn một trong các phe sau:\n"
+                "• `all`: Cả 3 bảng rank (Mặc định)\n"
+                "• `soi` / `wolf`: Phe Sói\n"
+                "• `solo`: Phe Solo\n"
+                "• `dan` / `villager`: Phe Dân"
+            )
+            return
+
+        # 6. Gọi Database cập nhật điểm
+        eco = self.get_economy()
+        if not eco:
+            await ctx.send("❌ Không kết nối được Database!")
+            return
+
+        try:
+            res = eco.add_masoi_rank_points_admin(user_id, points, normalized_faction)
+        except Exception as e:
+            logger.error("Lỗi khi điều chỉnh điểm rank Ma Sói: %s", e, exc_info=True)
+            await ctx.send(f"❌ Đã xảy ra lỗi khi cập nhật điểm rank: {e}")
+            return
+
+        # 7. Phản hồi kết quả
+        faction_labels = {
+            "WOLF": "🐺 Sói",
+            "SOLO": "🃏 Solo",
+            "VILLAGER": "👥 Dân",
+        }
+
+        user = self.bot.get_user(user_id)
+        if not user:
+            try:
+                user = await self.bot.fetch_user(user_id)
+            except Exception:
+                user = None
+        user_name = user.display_name if user else f"User {user_id}"
+
+        action_word = "Cộng" if points > 0 else "Trừ"
+        sign = "+" if points > 0 else ""
+
+        lines = []
+        for f_key, stats in res["factions"].items():
+            f_name = faction_labels.get(f_key, f_key)
+            pts = stats["points"]
+            tier_icon, tier_name = get_rank_tier(pts)
+            lines.append(f"• **{f_name}:** **{pts:+d} pts** ({tier_icon} {tier_name}) — {stats['wins']}/{stats['plays']} thắng")
+
+        desc = (
+            f"✅ **Đã {action_word.lower()} {sign}{points:,} điểm rank Ma Sói cho <@{user_id}> ({user_name})!**\n\n"
+            f"📊 **Bảng điểm xếp hạng sau khi cập nhật:**\n"
+            + "\n".join(lines) + "\n\n"
+            f"🌟 **Tổng điểm tích lũy:** `{res['total_points']:+d} pts`\n"
+            f"🔍 Dùng lệnh `{ctx.prefix}masoirank` để kiểm tra Bảng Xếp Hạng."
+        )
+
+        embed = make_embed(
+            title=f"🏆 {action_word.upper()} ĐIỂM RANK MA SÓI THÀNH CÔNG",
+            description=desc,
+            color=discord.Color.green() if points > 0 else discord.Color.orange(),
+        )
+        await ctx.send(embed=embed)
+
+    @commands.command(
         name="resetmasoirank",
         aliases=["masoirankreset", "reset-rank-masoi"],
         brief="[ADMIN BOT] Reset rank Ma Sói của một người hoặc toàn bộ người chơi.",

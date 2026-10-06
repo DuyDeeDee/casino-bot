@@ -171,6 +171,35 @@ class RankDatabaseTests(unittest.TestCase):
             self.eco.settle_masoi_match("duplicate", [(1, 20, True, "WOLF"), (1, 20, True, "WOLF")])
         self.assertEqual(self.eco.get_masoi_stats(1)["plays"], 0)
 
+    def test_add_masoi_rank_points_admin_single_and_all_factions(self):
+        # Adding to single faction
+        res = self.eco.add_masoi_rank_points_admin(1, 50, "WOLF")
+        self.assertEqual(res["points_delta"], 50)
+        self.assertEqual(res["factions"]["WOLF"]["points"], 50)
+        self.assertEqual(res["factions"]["WOLF"]["plays"], 1)
+        self.assertEqual(self.eco.get_masoi_rank_stats(1, "WOLF")["points"], 50)
+        self.assertEqual(self.eco.get_masoi_rank_stats(1, "SOLO")["points"], 0)
+        self.assertEqual(self.eco.get_masoi_stats(1)["points"], 50)
+
+        # Adding to ALL factions (default)
+        self.eco.add_masoi_rank_points_admin(2, 30, "ALL")
+        self.assertEqual(self.eco.get_masoi_rank_stats(2, "WOLF")["points"], 30)
+        self.assertEqual(self.eco.get_masoi_rank_stats(2, "SOLO")["points"], 30)
+        self.assertEqual(self.eco.get_masoi_rank_stats(2, "VILLAGER")["points"], 30)
+        self.assertEqual(self.eco.get_masoi_stats(2)["points"], 30)
+
+        # Subtracting points
+        self.eco.add_masoi_rank_points_admin(1, -20, "WOLF")
+        self.assertEqual(self.eco.get_masoi_rank_stats(1, "WOLF")["points"], 30)
+
+        # Invalid parameters
+        with self.assertRaises(ValueError):
+            self.eco.add_masoi_rank_points_admin(-1, 50)
+        with self.assertRaises(ValueError):
+            self.eco.add_masoi_rank_points_admin(1, 0)
+        with self.assertRaises(ValueError):
+            self.eco.add_masoi_rank_points_admin(1, 50, "INVALID_FACTION")
+
     def test_upgrade_preserves_legacy_points_and_badge_without_guessing_factions(self):
         self.eco.cur.execute("INSERT INTO user_masoi_stats(user_id, points, plays, wins, custom_badge) VALUES(1, 999, 10, 8, 'VIP')")
         self.eco.cur.execute("DROP TABLE user_masoi_faction_stats")
@@ -247,3 +276,38 @@ class RankUITests(unittest.IsolatedAsyncioTestCase):
         ctx.send.call_args.kwargs["view"].stop()
         await Masoi.masoirank_cmd.callback(cog, ctx, "invalid")
         self.assertIn("Chọn bảng rank", ctx.send.call_args.args[0])
+
+    async def test_addmasoirank_command_permissions_and_execution(self):
+        cog = make_cog(make_game(Role.WOLF))
+        cog.bot = SimpleNamespace(get_user=Mock(return_value=None), fetch_user=AsyncMock(return_value=None), is_owner=AsyncMock(return_value=False))
+        eco = Mock()
+        eco.add_masoi_rank_points_admin.return_value = {
+            "user_id": 123456,
+            "points_delta": 50,
+            "factions": {"WOLF": {"points": 50, "plays": 1, "wins": 0, "losses": 0}},
+            "total_points": 50,
+        }
+        cog.get_economy.return_value = eco
+
+        # Unauthorized user
+        unauth_ctx = SimpleNamespace(
+            author=SimpleNamespace(id=99999, guild_permissions=SimpleNamespace(administrator=False, manage_guild=False)),
+            send=AsyncMock(),
+            prefix="!",
+        )
+        await Masoi.addmasoirank_cmd.callback(cog, unauth_ctx, "<@123456>", "50", "soi")
+        unauth_ctx.send.assert_called_once()
+        self.assertIn("Chỉ có Admin hoặc Owner", unauth_ctx.send.call_args.args[0])
+        eco.add_masoi_rank_points_admin.assert_not_called()
+
+        # Authorized server admin user
+        admin_ctx = SimpleNamespace(
+            author=SimpleNamespace(id=88888, guild_permissions=SimpleNamespace(administrator=True, manage_guild=True)),
+            send=AsyncMock(),
+            prefix="!",
+        )
+        await Masoi.addmasoirank_cmd.callback(cog, admin_ctx, "<@123456>", "50", "soi")
+        eco.add_masoi_rank_points_admin.assert_called_once_with(123456, 50, "WOLF")
+        self.assertIn("embed", admin_ctx.send.call_args.kwargs)
+        embed = admin_ctx.send.call_args.kwargs["embed"]
+        self.assertIn("CỘNG ĐIỂM RANK MA SÓI THÀNH CÔNG", embed.title)

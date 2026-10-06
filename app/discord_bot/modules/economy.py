@@ -4917,14 +4917,18 @@ class Economy:
 
     @staticmethod
     def _masoi_rank_faction(faction: str) -> str:
+        if not isinstance(faction, str):
+            raise ValueError("Invalid Ma Sói rank faction")
+        clean = faction.upper().strip()
         aliases = {
             "WEREWOLF": "WOLF", "INDEPENDENT": "SOLO", "SERIAL_KILLER": "SOLO",
             "PIPER": "SOLO", "WHITE_WOLF": "SOLO", "LOVERS": "SOLO",
+            "SOI": "WOLF", "SÓI": "WOLF", "DAN": "VILLAGER", "DÂN": "VILLAGER",
         }
-        faction = aliases.get(faction, faction)
-        if faction not in ("WOLF", "SOLO", "VILLAGER"):
+        clean = aliases.get(clean, clean)
+        if clean not in ("WOLF", "SOLO", "VILLAGER"):
             raise ValueError("Invalid Ma Sói rank faction")
-        return faction
+        return clean
 
     def save_masoi_session(self, state: dict) -> None:
         payload = json.dumps(state, ensure_ascii=False, allow_nan=False)
@@ -5026,6 +5030,67 @@ class Economy:
         rank_faction = self._validate_masoi_result(user_id, points_delta, is_win, faction)
         with self.transaction():
             self._write_masoi_result(user_id, points_delta, is_win, rank_faction)
+
+    def add_masoi_rank_points_admin(
+        self, user_id: int, points_delta: int, faction: Optional[str] = None
+    ) -> dict:
+        """Admin adjustment of Ma Sói rank points for a user without recording a match.
+        If faction is None or 'ALL', updates all 3 factions ('WOLF', 'SOLO', 'VILLAGER').
+        Otherwise updates the specific faction ('WOLF', 'SOLO', or 'VILLAGER').
+        Also updates lifetime aggregate in user_masoi_stats.
+        """
+        if type(user_id) is not int or user_id <= 0:
+            raise ValueError("Invalid user ID")
+        if type(points_delta) is not int or points_delta == 0:
+            raise ValueError("Invalid points delta")
+
+        if faction is None or str(faction).strip().upper() in ("ALL", "ALL_FACTIONS", "TOANBO", "TATCA"):
+            target_factions = ["WOLF", "SOLO", "VILLAGER"]
+        else:
+            target_factions = [self._masoi_rank_faction(faction)]
+
+        updated_factions = {}
+        with self.transaction():
+            for f in target_factions:
+                self.cur.execute(
+                    """INSERT INTO user_masoi_faction_stats (user_id, faction, points, plays, wins, losses)
+                       VALUES (?, ?, ?, 1, 0, 0)
+                       ON CONFLICT(user_id, faction) DO UPDATE SET
+                         points = user_masoi_faction_stats.points + excluded.points,
+                         plays = CASE WHEN user_masoi_faction_stats.plays <= 0 THEN 1 ELSE user_masoi_faction_stats.plays END""",
+                    (user_id, f, points_delta),
+                )
+                self.cur.execute(
+                    "SELECT points, plays, wins, losses FROM user_masoi_faction_stats WHERE user_id=? AND faction=?",
+                    (user_id, f),
+                )
+                row = self.cur.fetchone()
+                updated_factions[f] = {
+                    "points": row[0],
+                    "plays": row[1],
+                    "wins": row[2],
+                    "losses": row[3],
+                }
+
+            # Lifetime aggregate
+            self.cur.execute(
+                """INSERT INTO user_masoi_stats (user_id, points, plays, wins, losses, wolf_wins, villager_wins, tanner_wins)
+                   VALUES (?, ?, 1, 0, 0, 0, 0, 0)
+                   ON CONFLICT(user_id) DO UPDATE SET
+                     points = user_masoi_stats.points + excluded.points,
+                     plays = CASE WHEN user_masoi_stats.plays <= 0 THEN 1 ELSE user_masoi_stats.plays END""",
+                (user_id, points_delta),
+            )
+            self.cur.execute("SELECT points, plays FROM user_masoi_stats WHERE user_id=?", (user_id,))
+            agg_row = self.cur.fetchone()
+            total_points = agg_row[0] if agg_row else 0
+
+        return {
+            "user_id": user_id,
+            "points_delta": points_delta,
+            "factions": updated_factions,
+            "total_points": total_points,
+        }
 
     def settle_masoi_match(self, match_id: str, results: list[tuple[int, int, bool, str]]) -> bool:
         """All players commit atomically, at most once per match ID."""
