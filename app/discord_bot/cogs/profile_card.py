@@ -37,15 +37,26 @@ PICS_DIR = Path(config.storage.data_dir) / "profile_pics"
 PICS_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def is_admin_or_owner(user: discord.Member | discord.User) -> bool:
-    """Check if the user is a Bot Owner, Bot Admin, or Server Administrator."""
+async def is_bot_admin_or_owner(ctx: commands.Context) -> bool:
+    """Check if the user is a Bot Owner or Bot Admin (excludes server admins)."""
     bot_owner_ids = set(getattr(config.bot, "owner_ids", []) or [])
     bot_admin_ids = set(getattr(config.bot, "admin_ids", []) or [])
-    if user.id in bot_owner_ids or user.id in bot_admin_ids:
+    if ctx.author.id in bot_owner_ids or ctx.author.id in bot_admin_ids:
         return True
-    if isinstance(user, discord.Member) and user.guild_permissions.administrator:
-        return True
+    try:
+        if await ctx.bot.is_owner(ctx.author):
+            return True
+    except Exception:
+        pass
     return False
+
+
+def is_admin_or_owner(user: discord.Member | discord.User) -> bool:
+    """Check if the user is a Bot Owner or Bot Admin (excludes server admins)."""
+    bot_owner_ids = set(getattr(config.bot, "owner_ids", []) or [])
+    bot_admin_ids = set(getattr(config.bot, "admin_ids", []) or [])
+    return user.id in bot_owner_ids or user.id in bot_admin_ids
+
 
 
 def build_profile_embed(
@@ -168,7 +179,7 @@ class ProfileCard(commands.Cog, name="ProfileCard"):
         if is_empty:
             if member.id == ctx.author.id:
                 return await ctx.reply(
-                    f"❌ Bạn chưa setup profile! Nhờ Admin/Owner dùng `{p}set` để tạo hoặc `{p}mau` để xem mẫu.",
+                    f"❌ Bạn chưa setup profile! Nhờ Admin Bot dùng `{p}set` để tạo hoặc `{p}mau` để xem mẫu.",
                     mention_author=False,
                 )
             else:
@@ -189,9 +200,9 @@ class ProfileCard(commands.Cog, name="ProfileCard"):
     # ── mau command ──────────────────────────────────────────────────────────
     @commands.command(name="mau", aliases=["profilemau"])
     async def show_sample_card(self, ctx: commands.Context):
-        """Show sample profile card layout and instructions (Admin/Owner only)."""
-        if not is_admin_or_owner(ctx.author):
-            return await ctx.reply("❌ Lệnh này chỉ dành cho Admin/Owner!", mention_author=False)
+        """Show sample profile card layout and instructions (Bot Admin only)."""
+        if not await is_bot_admin_or_owner(ctx):
+            return await ctx.reply("❌ Lệnh này chỉ dành cho Admin Bot!", mention_author=False)
 
         bot_member = ctx.guild.me
         avatar_url = bot_member.display_avatar.url
@@ -207,7 +218,7 @@ class ProfileCard(commands.Cog, name="ProfileCard"):
                 "Viết gì cũng được — hỗ trợ **bold**, *italic*, emoji 🎀",
                 "và nhiều dòng văn bản (dùng `/n` để xuống dòng).\n",
                 "─────────────────────────────",
-                "**Cách setup profile card (Admin/Owner):**",
+                "**Cách setup profile card (Admin Bot):**",
                 f"`{p}set title <text>` — tiêu đề *(tối đa 50 ký tự)*",
                 f"`{p}set content <text>` — nội dung *(dùng `/n` để xuống dòng)*",
                 f"`{p}set img <url / đính kèm>` — thêm ảnh *(tối đa 10 ảnh)*",
@@ -229,15 +240,15 @@ class ProfileCard(commands.Cog, name="ProfileCard"):
     # ── pset / set command ────────────────────────────────────────────────────
     @commands.command(name="pset", aliases=["setprofile", "profile-set", "pcardset"])
     async def set_profile_card(self, ctx: commands.Context, *, raw_args: str = ""):
-        """Setup/customize a profile card (Admin/Owner only)."""
-        if not is_admin_or_owner(ctx.author):
-            return await ctx.reply("❌ Lệnh này chỉ dành cho Admin/Owner!", mention_author=False)
+        """Setup/customize a profile card (Bot Admin only)."""
+        if not await is_bot_admin_or_owner(ctx):
+            return await ctx.reply("❌ Lệnh này chỉ dành cho Admin Bot!", mention_author=False)
 
         p = config.bot.prefix or "i?"
         parts = raw_args.strip().split()
         if not parts:
             help_lines = [
-                "**Cách setup profile card:**",
+                "**Cách setup profile card (Admin Bot):**",
                 f"`{p}set title <text>` — tiêu đề (tối đa 50 ký tự, emoji = 2 ký tự)",
                 f"`{p}set content <text>` — nội dung (dùng `/n` để xuống dòng)",
                 f"`{p}set img <url>` hoặc đính kèm ảnh — thêm ảnh (tối đa 10)",
