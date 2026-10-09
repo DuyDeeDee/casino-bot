@@ -119,6 +119,15 @@ class TestProfileCardDB(unittest.TestCase):
         self.assertTrue(ok)
         self.assertIsNone(find_shortcut("myname", self.guild_id))
 
+    def test_brand_new_user_shortcut(self):
+        new_uid = "brand_new_user_12345"
+        self.assertIsNone(get_card(new_uid, self.guild_id))
+        card = get_card(new_uid, self.guild_id) or {}
+        self.assertEqual(card.get("shorts") or [], [])
+        add_shortcut(new_uid, self.guild_id, "newbie")
+        self.assertEqual(find_shortcut("newbie", self.guild_id), new_uid)
+        remove_all_shortcuts(new_uid, self.guild_id)
+
 
 if __name__ == "__main__":
     unittest.main()

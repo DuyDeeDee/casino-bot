@@ -445,8 +445,9 @@ class ProfileCard(commands.Cog, name="ProfileCard"):
                     f"❌ Từ khoá **{kw}** đã được người khác dùng!",
                     mention_author=False,
                 )
-            card = get_card(target.id, ctx.guild.id)
-            if kw in [s.lower() for s in (card.get("shorts") or [])]:
+            card = get_card(target.id, ctx.guild.id) or {}
+            existing_shorts = card.get("shorts") or []
+            if kw in [s.lower() for s in existing_shorts]:
                 return await ctx.reply(
                     f"❌ Từ khoá **{kw}** đã tồn tại rồi!",
                     mention_author=False,
@@ -475,7 +476,7 @@ class ProfileCard(commands.Cog, name="ProfileCard"):
                 n = int(cmd_args[2])
                 removed = remove_image(target.id, ctx.guild.id, n)
                 if not removed:
-                    card = get_card(target.id, ctx.guild.id)
+                    card = get_card(target.id, ctx.guild.id) or {}
                     total = len(card.get("images") or [])
                     return await ctx.reply(
                         f"❌ Số ảnh không hợp lệ! Có {total} ảnh (1–{total})",
