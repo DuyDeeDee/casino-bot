@@ -281,8 +281,8 @@ class ProfileCard(commands.Cog, name="ProfileCard"):
         for_str = f" cho {target.display_name}" if target.id != ctx.author.id else ""
         sub = cmd_args[0].lower()
 
-        # ── sub: title ──
-        if sub == "title":
+        # ── sub: title / name ──
+        if sub in ["title", "name"]:
             text = " ".join(cmd_args[1:]).strip()
             if not text:
                 return await ctx.reply("❌ Thiếu nội dung tiêu đề!", mention_author=False)
@@ -294,8 +294,8 @@ class ProfileCard(commands.Cog, name="ProfileCard"):
             upsert_card(target.id, ctx.guild.id, title=text)
             return await ctx.reply(f"✅ Đã set tiêu đề{for_str}: **{text}**", mention_author=False)
 
-        # ── sub: content ──
-        if sub == "content":
+        # ── sub: content / bio / desc ──
+        if sub in ["content", "desc", "description", "bio", "text"]:
             text = " ".join(cmd_args[1:]).strip().replace("/n", "\n")
             if not text:
                 return await ctx.reply("❌ Thiếu nội dung!", mention_author=False)
@@ -310,8 +310,8 @@ class ProfileCard(commands.Cog, name="ProfileCard"):
             upsert_card(target.id, ctx.guild.id, footer=text)
             return await ctx.reply(f"✅ Đã set footer{for_str}: **{text}**", mention_author=False)
 
-        # ── sub: img ──
-        if sub == "img":
+        # ── sub: img / image / pic ──
+        if sub in ["img", "image", "images", "pic", "pics", "photo"]:
             attachment = ctx.message.attachments[0] if ctx.message.attachments else None
             url = attachment.url if attachment else (cmd_args[1] if len(cmd_args) > 1 else None)
 
@@ -435,8 +435,8 @@ class ProfileCard(commands.Cog, name="ProfileCard"):
                 mention_author=False,
             )
 
-        # ── sub: short ──
-        if sub == "short":
+        # ── sub: short / shortcut ──
+        if sub in ["short", "shortcut", "shortcuts"]:
             kw = " ".join(cmd_args[1:]).strip().lower()
             if not kw:
                 return await ctx.reply(
@@ -460,8 +460,8 @@ class ProfileCard(commands.Cog, name="ProfileCard"):
                 mention_author=False,
             )
 
-        # ── sub: remove ──
-        if sub == "remove":
+        # ── sub: remove / delete / del ──
+        if sub in ["remove", "delete", "del", "rem"]:
             if len(cmd_args) < 2:
                 return await ctx.reply(
                     f"❌ Dùng: `{p}set remove <title|content|footer|theme|font|short|img>`",
@@ -469,7 +469,7 @@ class ProfileCard(commands.Cog, name="ProfileCard"):
                 )
             field = cmd_args[1].lower()
 
-            if field == "img":
+            if field in ["img", "image", "images", "pic", "pics"]:
                 if len(cmd_args) < 3 or not cmd_args[2].isdigit():
                     return await ctx.reply(
                         f"❌ Thiếu số thứ tự ảnh! VD: `{p}set remove img 1`",
@@ -513,7 +513,7 @@ class ProfileCard(commands.Cog, name="ProfileCard"):
                 upsert_card(target.id, ctx.guild.id, **{key: None})
                 return await ctx.reply(f"✅ Đã xoá {field}{for_str}!", mention_author=False)
 
-            if field == "short":
+            if field in ["short", "shortcut", "shortcuts"]:
                 if len(cmd_args) > 2:
                     kw = " ".join(cmd_args[2:]).strip().lower()
                     ok = remove_shortcut(target.id, ctx.guild.id, kw)
@@ -531,12 +531,13 @@ class ProfileCard(commands.Cog, name="ProfileCard"):
                         f"✅ Đã xoá tất cả từ khoá{for_str}!", mention_author=False
                     )
 
-            if field in ["theme", "color"]:
+            if field in ["theme", "color", "colour"]:
                 upsert_card(target.id, ctx.guild.id, color=None)
                 return await ctx.reply(f"✅ Đã xoá màu theme{for_str}!", mention_author=False)
 
-            if field in ["title", "content", "footer"]:
-                upsert_card(target.id, ctx.guild.id, **{field: ""})
+            if field in ["title", "name", "content", "desc", "footer"]:
+                key = "title" if field in ["title", "name"] else "content" if field in ["content", "desc"] else "footer"
+                upsert_card(target.id, ctx.guild.id, **{key: ""})
                 return await ctx.reply(f"✅ Đã xoá {field}{for_str}!", mention_author=False)
 
             return await ctx.reply(

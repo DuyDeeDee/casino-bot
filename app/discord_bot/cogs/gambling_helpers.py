@@ -1,5 +1,6 @@
 import logging
 import random
+import re
 import time
 from contextlib import suppress
 
@@ -226,11 +227,18 @@ class GamblingHelpers(commands.Cog, name="General"):
         *args: str,
     ):
         profile_subcmds = {
-            "title", "content", "footer", "img", "theme", "color",
-            "font", "fonttitle", "fontcontent", "fontfooter", "short", "remove"
+            "title", "name", "content", "desc", "description", "bio", "text",
+            "footer", "img", "image", "images", "pic", "pics", "photo",
+            "theme", "color", "colour", "font", "fonttitle", "fontcontent",
+            "fontfooter", "short", "shortcut", "shortcuts", "remove", "delete",
+            "del", "rem", "list", "reset"
         }
         is_profile = False
         if not args:
+            is_profile = True
+        elif not args[0].lstrip("-+").isdigit() and not re.match(r"^<@!?\d+>$", args[0]):
+            is_profile = True
+        elif len(args) > 1 and re.match(r"^<@!?\d+>$", args[0]) and not args[1].lstrip("-+").isdigit():
             is_profile = True
         elif args[0].lower() in profile_subcmds:
             is_profile = True
@@ -250,22 +258,29 @@ class GamblingHelpers(commands.Cog, name="General"):
         money = None
         credits = None
 
-        if len(args) == 1:
-            try:
-                money = int(args[0])
-            except ValueError:
-                user_id = int(args[0].strip("<@!>"))
-        elif len(args) == 2:
-            try:
+        try:
+            if len(args) == 1:
+                try:
+                    money = int(args[0])
+                except ValueError:
+                    user_id = int(args[0].strip("<@!>"))
+            elif len(args) == 2:
+                try:
+                    user_id = int(args[0].strip("<@!>"))
+                    money = int(args[1])
+                except ValueError:
+                    money = int(args[0])
+                    credits = int(args[1])
+            elif len(args) >= 3:
                 user_id = int(args[0].strip("<@!>"))
                 money = int(args[1])
-            except ValueError:
-                money = int(args[0])
-                credits = int(args[1])
-        elif len(args) >= 3:
-            user_id = int(args[0].strip("<@!>"))
-            money = int(args[1])
-            credits = int(args[2])
+                credits = int(args[2])
+        except (ValueError, TypeError):
+            p = config.bot.prefix or "i?"
+            return await ctx.reply(
+                f"❌ Sai cú pháp! Dùng `{p}set <@user/id> <tiền> [credits]` hoặc `{p}set <tiền>`",
+                mention_author=False,
+            )
 
         before = self.economy.get_entry(user_id)
         if money is not None:
