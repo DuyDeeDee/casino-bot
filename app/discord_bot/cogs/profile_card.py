@@ -220,10 +220,7 @@ class ProfileCard(commands.Cog, name="ProfileCard"):
                 f"**Xem profile:** `{p}pr5` hoặc `{p}pr5 @user`",
             ]
         )
-        embed.set_image(
-            url="https://res.cloudinary.com/dntxislrw/image/upload/v1780888404/Locket_1780772560918_9_b6b8ua.webp"
-        )
-        embed.set_footer(text="Nội dung footer  ·  1 / 3  (◀ ▶ để đổi ảnh khi có nhiều ảnh)")
+        embed.set_footer(text="Nội dung footer mẫu  ·  (◀ ▶ để đổi ảnh khi album có nhiều ảnh)")
 
         await ctx.reply(embed=embed, mention_author=False)
 
