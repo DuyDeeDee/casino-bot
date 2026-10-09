@@ -1,19 +1,21 @@
-"""Database and shortcut management for Profile Cards."""
+"""Database and shortcut management for Profile Cards.
+Uses a dedicated profile_cards.db with WAL mode to avoid database locking conflicts.
+"""
+from contextlib import contextmanager
 import json
 import logging
+from pathlib import Path
 import sqlite3
 import threading
-from pathlib import Path
 from typing import Any, Optional
 
 from app.config import config
 
 logger = logging.getLogger(__name__)
 
-DB_PATH = Path(config.storage.database_path)
-_db_lock = threading.Lock()
-
-from contextlib import contextmanager
+DB_PATH = Path(config.storage.data_dir) / "profile_cards.db"
+_db_lock = threading.RLock()
+_db_initialized = False
 
 # In-memory shortcuts cache: (str(guild_id), keyword.lower()) -> str(user_id)
 _shortcuts: dict[tuple[str, str], str] = {}
@@ -21,7 +23,11 @@ _shortcuts: dict[tuple[str, str], str] = {}
 
 @contextmanager
 def _get_connection():
-    conn = sqlite3.connect(str(DB_PATH), timeout=20.0)
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(DB_PATH), timeout=30.0)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=NORMAL")
+    conn.execute("PRAGMA busy_timeout=30000")
     conn.row_factory = sqlite3.Row
     try:
         yield conn
@@ -30,30 +36,77 @@ def _get_connection():
 
 
 def init_db() -> None:
-    """Initialize profile_cards table in SQLite."""
-    with _db_lock, _get_connection() as conn:
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS profile_cards (
-                user_id TEXT NOT NULL,
-                guild_id TEXT NOT NULL,
-                title TEXT DEFAULT '',
-                content TEXT DEFAULT '',
-                footer TEXT DEFAULT '',
-                images TEXT DEFAULT '[]',
-                color INTEGER DEFAULT NULL,
-                shorts TEXT DEFAULT '[]',
-                font_title TEXT DEFAULT NULL,
-                font_content TEXT DEFAULT NULL,
-                font_footer TEXT DEFAULT NULL,
-                PRIMARY KEY (user_id, guild_id)
+    """Initialize profile_cards table in SQLite (runs only once)."""
+    global _db_initialized
+    if _db_initialized:
+        return
+
+    with _db_lock:
+        if _db_initialized:
+            return
+
+        with _get_connection() as conn:
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS profile_cards (
+                    user_id TEXT NOT NULL,
+                    guild_id TEXT NOT NULL,
+                    title TEXT DEFAULT '',
+                    content TEXT DEFAULT '',
+                    footer TEXT DEFAULT '',
+                    images TEXT DEFAULT '[]',
+                    color INTEGER DEFAULT NULL,
+                    shorts TEXT DEFAULT '[]',
+                    font_title TEXT DEFAULT NULL,
+                    font_content TEXT DEFAULT NULL,
+                    font_footer TEXT DEFAULT NULL,
+                    PRIMARY KEY (user_id, guild_id)
+                )
+                """
             )
-            """
-        )
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_profile_cards_guild ON profile_cards(guild_id)"
-        )
-        conn.commit()
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_profile_cards_guild ON profile_cards(guild_id)"
+            )
+            conn.commit()
+
+            # Migrate any existing records from economy.db if present
+            legacy_db = Path(config.storage.database_path)
+            if legacy_db.exists() and legacy_db.resolve() != DB_PATH.resolve():
+                try:
+                    with sqlite3.connect(str(legacy_db), timeout=5.0) as leg_conn:
+                        leg_conn.row_factory = sqlite3.Row
+                        cur = leg_conn.execute(
+                            "SELECT name FROM sqlite_master WHERE type='table' AND name='profile_cards'"
+                        )
+                        if cur.fetchone():
+                            rows = leg_conn.execute("SELECT * FROM profile_cards").fetchall()
+                            for r in rows:
+                                conn.execute(
+                                    """
+                                    INSERT OR IGNORE INTO profile_cards (
+                                        user_id, guild_id, title, content, footer, images,
+                                        color, shorts, font_title, font_content, font_footer
+                                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                    """,
+                                    (
+                                        str(r["user_id"]),
+                                        str(r["guild_id"]),
+                                        r["title"] or "",
+                                        r["content"] or "",
+                                        r["footer"] or "",
+                                        r["images"] or "[]",
+                                        r["color"],
+                                        r["shorts"] or "[]",
+                                        r["font_title"],
+                                        r["font_content"],
+                                        r["font_footer"],
+                                    ),
+                                )
+                            conn.commit()
+                except Exception as e:
+                    logger.debug("Legacy profile_cards migration skipped: %s", e)
+
+        _db_initialized = True
 
 
 def load_shortcuts() -> int:
@@ -120,33 +173,48 @@ def get_card(user_id: str | int, guild_id: str | int) -> Optional[dict[str, Any]
 
 
 def upsert_card(user_id: str | int, guild_id: str | int, **fields) -> dict[str, Any]:
-    """Update or insert profile card fields."""
+    """Update or insert profile card fields in a single connection transaction."""
     init_db()
     uid, gid = str(user_id), str(guild_id)
-    current = get_card(uid, gid)
-    if current is None:
-        current = {
-            "user_id": uid,
-            "guild_id": gid,
-            "title": "",
-            "content": "",
-            "footer": "",
-            "images": [],
-            "color": None,
-            "shorts": [],
-            "font_title": None,
-            "font_content": None,
-            "font_footer": None,
-        }
-
-    for k, v in fields.items():
-        if k in current:
-            current[k] = v
-
-    images_json = json.dumps(current["images"], ensure_ascii=False)
-    shorts_json = json.dumps(current["shorts"], ensure_ascii=False)
 
     with _db_lock, _get_connection() as conn:
+        cur = conn.execute(
+            "SELECT * FROM profile_cards WHERE user_id = ? AND guild_id = ?",
+            (uid, gid),
+        )
+        row = cur.fetchone()
+        if row:
+            current = dict(row)
+            try:
+                current["images"] = json.loads(current["images"] or "[]")
+            except Exception:
+                current["images"] = []
+            try:
+                current["shorts"] = json.loads(current["shorts"] or "[]")
+            except Exception:
+                current["shorts"] = []
+        else:
+            current = {
+                "user_id": uid,
+                "guild_id": gid,
+                "title": "",
+                "content": "",
+                "footer": "",
+                "images": [],
+                "color": None,
+                "shorts": [],
+                "font_title": None,
+                "font_content": None,
+                "font_footer": None,
+            }
+
+        for k, v in fields.items():
+            if k in current:
+                current[k] = v
+
+        images_json = json.dumps(current["images"], ensure_ascii=False)
+        shorts_json = json.dumps(current["shorts"], ensure_ascii=False)
+
         conn.execute(
             """
             INSERT INTO profile_cards (
@@ -185,9 +253,7 @@ def upsert_card(user_id: str | int, guild_id: str | int, **fields) -> dict[str, 
 
 def add_image(user_id: str | int, guild_id: str | int, filename: str) -> int:
     """Add image filename to card images list. Returns total images."""
-    card = get_card(user_id, guild_id) or {
-        "images": [],
-    }
+    card = get_card(user_id, guild_id) or {"images": []}
     images = card.get("images", [])
     images.append(filename)
     upsert_card(user_id, guild_id, images=images)
