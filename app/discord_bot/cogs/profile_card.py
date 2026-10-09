@@ -84,6 +84,8 @@ def build_profile_embed(
 
     if desc_parts:
         embed.description = "\n".join(desc_parts)
+    else:
+        embed.description = "*Chưa có nội dung mô tả.*"
 
     files = []
     idx = 0
@@ -253,25 +255,35 @@ class ProfileCard(commands.Cog, name="ProfileCard"):
             return await ctx.reply("\n".join(help_lines), mention_author=False)
 
         target = ctx.author
-        cmd_args = parts
+        cmd_tokens = []
+        found_target = False
 
-        # Check if first argument is a user mention or ID
-        mention_match = re.match(r"^<@!?(\d+)>$", parts[0])
-        if mention_match:
-            uid = int(mention_match.group(1))
-            target = ctx.guild.get_member(uid) or await self._fetch_member_safe(ctx.guild, uid)
-            cmd_args = parts[1:]
-        elif parts[0].isdigit() and len(parts[0]) >= 17:
-            uid = int(parts[0])
-            target = ctx.guild.get_member(uid) or await self._fetch_member_safe(ctx.guild, uid)
-            cmd_args = parts[1:]
+        for token in parts:
+            mention_match = re.match(r"^<@!?(\d+)>$", token)
+            if not found_target and mention_match:
+                uid = int(mention_match.group(1))
+                mem = ctx.guild.get_member(uid) or await self._fetch_member_safe(ctx.guild, uid)
+                if mem:
+                    target = mem
+                    found_target = True
+                    continue
+            elif not found_target and token.isdigit() and len(token) >= 17:
+                uid = int(token)
+                mem = ctx.guild.get_member(uid) or await self._fetch_member_safe(ctx.guild, uid)
+                if mem:
+                    target = mem
+                    found_target = True
+                    continue
+            cmd_tokens.append(token)
+
+        cmd_args = cmd_tokens
 
         if not target:
             return await ctx.reply("❌ Không tìm thấy thành viên được chỉ định!", mention_author=False)
 
         if not cmd_args:
             return await ctx.reply(
-                f"❌ Thiếu subcommand! Ví dụ: `{p}set {target.mention} title Xin chào`",
+                f"❌ Thiếu subcommand! Ví dụ: `{p}set {target.mention} title Xin chào` hoặc `{p}set {target.mention} shortcut zh28`",
                 mention_author=False,
             )
 
@@ -564,14 +576,7 @@ class ProfileCard(commands.Cog, name="ProfileCard"):
         if not target_uid:
             return
 
-        card = get_card(target_uid, message.guild.id)
-        if not card or (
-            not card.get("title")
-            and not card.get("content")
-            and not card.get("footer")
-            and not card.get("images")
-        ):
-            return
+        card = get_card(target_uid, message.guild.id) or {}
 
         try:
             target_member = message.guild.get_member(int(target_uid)) or await self._fetch_member_safe(

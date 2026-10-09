@@ -120,7 +120,8 @@ class TestProfileCardDB(unittest.TestCase):
         self.assertIsNone(find_shortcut("myname", self.guild_id))
 
     def test_brand_new_user_shortcut(self):
-        new_uid = "brand_new_user_12345"
+        import time
+        new_uid = f"brand_new_user_{int(time.time() * 1000)}"
         self.assertIsNone(get_card(new_uid, self.guild_id))
         card = get_card(new_uid, self.guild_id) or {}
         self.assertEqual(card.get("shorts") or [], [])
