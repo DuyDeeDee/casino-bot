@@ -227,8 +227,8 @@ class ProfileCard(commands.Cog, name="ProfileCard"):
 
         await ctx.reply(embed=embed, mention_author=False)
 
-    # ── set command ──────────────────────────────────────────────────────────
-    @commands.command(name="set")
+    # ── pset / set command ────────────────────────────────────────────────────
+    @commands.command(name="pset", aliases=["setprofile", "profile-set", "pcardset"])
     async def set_profile_card(self, ctx: commands.Context, *, raw_args: str = ""):
         """Setup/customize a profile card (Admin/Owner only)."""
         if not is_admin_or_owner(ctx.author):

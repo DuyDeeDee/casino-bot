@@ -219,17 +219,54 @@ class GamblingHelpers(commands.Cog, name="General"):
                 pass
         return True
 
-    @commands.command(hidden=True)
-    @commands.is_owner()
+    @commands.command(name="set", aliases=["setmoney", "setwallet"], hidden=True)
     async def set(
         self,
         ctx: commands.Context,
-        user_id: int | None = None,
-        money: int | None = None,
-        credits: int | None = None,
+        *args: str,
     ):
-        if user_id is None:
-            user_id = ctx.author.id
+        profile_subcmds = {
+            "title", "content", "footer", "img", "theme", "color",
+            "font", "fonttitle", "fontcontent", "fontfooter", "short", "remove"
+        }
+        is_profile = False
+        if not args:
+            is_profile = True
+        elif args[0].lower() in profile_subcmds:
+            is_profile = True
+        elif len(args) > 1 and args[1].lower() in profile_subcmds:
+            is_profile = True
+
+        if is_profile:
+            profile_cog = ctx.bot.get_cog("ProfileCard")
+            if profile_cog:
+                return await profile_cog.set_profile_card(ctx, raw_args=" ".join(args))
+
+        # Phải là owner bot mới được set tiền/credits ví
+        if not await ctx.bot.is_owner(ctx.author):
+            raise commands.NotOwner("You do not own this bot.")
+
+        user_id = ctx.author.id
+        money = None
+        credits = None
+
+        if len(args) == 1:
+            try:
+                money = int(args[0])
+            except ValueError:
+                user_id = int(args[0].strip("<@!>"))
+        elif len(args) == 2:
+            try:
+                user_id = int(args[0].strip("<@!>"))
+                money = int(args[1])
+            except ValueError:
+                money = int(args[0])
+                credits = int(args[1])
+        elif len(args) >= 3:
+            user_id = int(args[0].strip("<@!>"))
+            money = int(args[1])
+            credits = int(args[2])
+
         before = self.economy.get_entry(user_id)
         if money is not None:
             self.economy.set_money(user_id, money)
@@ -245,6 +282,10 @@ class GamblingHelpers(commands.Cog, name="General"):
             ctx=ctx,
             actor_user_id=ctx.author.id,
         )
+        try:
+            await ctx.message.add_reaction("✅")
+        except Exception:
+            pass
 
     @commands.command(name="resetall", aliases=["reset", "reset-all", "ecoreset"], hidden=True)
     @commands.is_owner()
