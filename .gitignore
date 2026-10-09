@@ -1,6 +1,7 @@
 *.db
 *.db-*
 Ilis_Farm/
+Ilis_AFK/
 /logs/
 /fonts/
 /.gitkeep
@@ -11,6 +12,9 @@ data/logs/*
 !data/logs/.gitkeep
 !data/fonts/
 !data/fonts/*
+!data/profile_pics/
+data/profile_pics/*
+!data/profile_pics/.gitkeep
 .vscode
 
 # Byte-compiled / optimized / DLL files

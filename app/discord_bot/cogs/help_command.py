@@ -8,13 +8,14 @@ from app.discord_bot.modules.helpers import ABS_PATH, make_embed
 
 # Các lệnh kiểm tra quyền admin ngay TRONG thân hàm (không bọc decorator) nên quét động
 # theo metadata không thấy được — phải liệt kê tường minh tại đây.
-EXTRA_ADMIN_COMMANDS = {"invest max"}
+EXTRA_ADMIN_COMMANDS = {"invest max", "set", "mau"}
 
 
 # ──────────────────────────────────────────────
 #  Mapping cog → nhóm hiển thị
 # ──────────────────────────────────────────────
 COG_GROUP_MAPPING = {
+    "ProfileCard":   ("<:function:1531341821257716025>", "Function"),
     "Blackjack":     ("<:cobac:1531333888931135518>", "Cờ Bạc"),
     "MultiBlackjack":("<:cobac:1531333888931135518>", "Cờ Bạc"),
     "GamblingGames": ("<:cobac:1531333888931135518>", "Cờ Bạc"),

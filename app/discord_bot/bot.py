@@ -50,6 +50,7 @@ from app.discord_bot.cogs import (
     ServerEvents,
     SportsBet,
     ChatLevels,
+    ProfileCard,
 )
 
 from app.discord_bot.modules.economy import Economy
@@ -92,6 +93,7 @@ COGS = (
     ServerEvents,
     SportsBet,
     ChatLevels,
+    ProfileCard,
 )
 
 

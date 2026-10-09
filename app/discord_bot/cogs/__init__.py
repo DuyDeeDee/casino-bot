@@ -34,3 +34,4 @@ from .bank import Bank
 from .server_events import ServerEvents
 from .sportsbet import SportsBet
 from .chat_levels import ChatLevels
+from .profile_card import ProfileCard
