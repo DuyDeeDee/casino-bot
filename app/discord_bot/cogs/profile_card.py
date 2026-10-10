@@ -18,11 +18,13 @@ from app.discord_bot.modules.profile_card_db import (
     add_shortcut,
     find_shortcut,
     get_card,
+    get_profile_heart_count,
     is_keyword_taken,
     load_shortcuts,
     remove_all_shortcuts,
     remove_image,
     remove_shortcut,
+    toggle_profile_heart,
     upsert_card,
 )
 from app.discord_bot.modules.profile_card_fonts import (
@@ -120,13 +122,18 @@ def build_profile_embed(
 
 
 class ProfilePaginationView(discord.ui.View):
-    """View with Prev / Next buttons to navigate multi-image profile cards."""
+    """View for profile image pagination and giving/toggling a heart."""
 
     def __init__(self, target_member: discord.Member, current_index: int, total_images: int):
         super().__init__(timeout=180.0)
         self.target_member = target_member
         self.current_index = current_index
         self.total_images = total_images
+        self.prev_button.disabled = total_images <= 1
+        self.next_button.disabled = total_images <= 1
+        self.heart_button.label = str(
+            get_profile_heart_count(target_member.id, target_member.guild.id)
+        )
 
     @discord.ui.button(emoji="<:zh_trai:1558495370588327976>", style=discord.ButtonStyle.secondary)
     async def prev_button(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -137,6 +144,25 @@ class ProfilePaginationView(discord.ui.View):
     async def next_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.current_index = (self.current_index + 1) % self.total_images
         await self._update(interaction)
+
+    @discord.ui.button(emoji="<a:zh_traitim:1558520261546868827>", label="0", style=discord.ButtonStyle.secondary, row=1)
+    async def heart_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        count, is_liked = toggle_profile_heart(
+            self.target_member.id,
+            self.target_member.guild.id,
+            interaction.user.id,
+        )
+        button.label = str(count)
+        button.style = (
+            discord.ButtonStyle.primary if count else discord.ButtonStyle.secondary
+        )
+        await interaction.response.edit_message(view=self)
+        message = (
+            "Bạn đã thả tim profile này <a:zh_traitim:1558520261546868827>"
+            if is_liked
+            else "Bạn đã bỏ tim profile này."
+        )
+        await interaction.followup.send(message, ephemeral=True)
 
     async def _update(self, interaction: discord.Interaction):
         card = get_card(self.target_member.id, self.target_member.guild.id)
@@ -222,12 +248,8 @@ class ProfileCard(commands.Cog, name="ProfileCard"):
 
         images = card.get("images") or []
         embed, files = build_profile_embed(card, member, 0)
-        view = ProfilePaginationView(member, 0, len(images)) if len(images) > 1 else None
-
-        if view:
-            await ctx.reply(embed=embed, files=files, view=view, mention_author=False)
-        else:
-            await ctx.reply(embed=embed, files=files, mention_author=False)
+        view = ProfilePaginationView(member, 0, len(images))
+        await ctx.reply(embed=embed, files=files, view=view, mention_author=False)
 
     # ── mau command ──────────────────────────────────────────────────────────
     @commands.command(name="mau", aliases=["profilemau"])
@@ -363,37 +385,52 @@ class ProfileCard(commands.Cog, name="ProfileCard"):
 
         # ── sub: img / image / pic ──
         if sub in ["img", "image", "images", "pic", "pics", "photo"]:
-            attachment = ctx.message.attachments[0] if ctx.message.attachments else None
-            url = attachment.url if attachment else (cmd_args[1] if len(cmd_args) > 1 else None)
+            urls = [att.url for att in ctx.message.attachments] if ctx.message.attachments else []
+            if not urls and len(cmd_args) > 1:
+                urls = [arg for arg in cmd_args[1:] if arg.startswith("http://") or arg.startswith("https://")]
 
-            if not url:
+            if not urls:
                 return await ctx.reply(
-                    f"❌ Đính kèm ảnh hoặc cung cấp URL! VD: `{p}set img https://...`",
+                    f"❌ Đính kèm ảnh/GIF hoặc cung cấp URL! VD: `{p}set img https://...`",
                     mention_author=False,
                 )
 
-            card = get_card(target.id, ctx.guild.id)
-            if card and len(card.get("images") or []) >= 10:
-                return await ctx.reply("❌ Tối đa 10 ảnh!", mention_author=False)
+            card = get_card(target.id, ctx.guild.id) or {}
+            curr_images = card.get("images") or []
+            if len(curr_images) >= 10:
+                return await ctx.reply("❌ Profile đã có tối đa 10 ảnh/GIF!", mention_author=False)
 
-            # Determine extension
-            ext = ".png"
-            clean_url = url.split("?")[0].lower()
-            for possible_ext in [".gif", ".webp", ".jpg", ".jpeg", ".png"]:
-                if clean_url.endswith(possible_ext):
-                    ext = possible_ext
+            added_count = 0
+            for idx, url in enumerate(urls):
+                if len(curr_images) + added_count >= 10:
                     break
 
-            filename = f"{target.id}_{int(time.time() * 1000)}{ext}"
-            dest = PICS_DIR / filename
+                ext = ".png"
+                clean_url = url.split("?")[0].lower()
+                for possible_ext in [".gif", ".webp", ".jpg", ".jpeg", ".png"]:
+                    if clean_url.endswith(possible_ext):
+                        ext = possible_ext
+                        break
 
-            try:
-                await self._download_file(url, dest)
-            except Exception as e:
-                return await ctx.reply(f"❌ Không tải được ảnh: {e}", mention_author=False)
+                filename = f"{target.id}_{int(time.time() * 1000)}_{idx}{ext}"
+                dest = PICS_DIR / filename
 
-            total = add_image(target.id, ctx.guild.id, filename)
-            return await ctx.reply(f"✅ Đã thêm ảnh{for_str} ({total} ảnh)!", mention_author=False)
+                try:
+                    await self._download_file(url, dest)
+                    add_image(target.id, ctx.guild.id, filename)
+                    added_count += 1
+                except Exception as e:
+                    logger.warning("Failed to download image %s: %s", url, e)
+
+            if added_count == 0:
+                return await ctx.reply("❌ Không tải được ảnh/GIF nào!", mention_author=False)
+
+            updated_card = get_card(target.id, ctx.guild.id) or {}
+            total = len(updated_card.get("images") or [])
+            return await ctx.reply(
+                f"✅ Đã thêm {added_count} ảnh/GIF{for_str} (Tổng album: {total}/10)!",
+                mention_author=False,
+            )
 
         # ── sub: theme / color ──
         if sub in ["theme", "color"]:
@@ -672,21 +709,12 @@ class ProfileCard(commands.Cog, name="ProfileCard"):
 
         images = card.get("images") or []
         embed, files = build_profile_embed(card, target_member, 0)
-        view = (
-            ProfilePaginationView(target_member, 0, len(images))
-            if len(images) > 1
-            else None
-        )
+        view = ProfilePaginationView(target_member, 0, len(images))
 
         try:
-            if view:
-                await message.reply(
-                    embed=embed, files=files, view=view, mention_author=False
-                )
-            else:
-                await message.reply(
-                    embed=embed, files=files, mention_author=False
-                )
+            await message.reply(
+                embed=embed, files=files, view=view, mention_author=False
+            )
         except Exception as e:
             logger.error("Error replying with shortcut profile card: %s", e)
 

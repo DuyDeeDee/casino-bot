@@ -67,6 +67,17 @@ def init_db() -> None:
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_profile_cards_guild ON profile_cards(guild_id)"
             )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS profile_card_hearts (
+                    profile_user_id TEXT NOT NULL,
+                    guild_id TEXT NOT NULL,
+                    giver_user_id TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (profile_user_id, guild_id, giver_user_id)
+                )
+                """
+            )
             conn.commit()
 
             # Migrate any existing records from economy.db if present
@@ -272,6 +283,66 @@ def remove_image(user_id: str | int, guild_id: str | int, index: int) -> Optiona
     removed = images.pop(index - 1)
     upsert_card(user_id, guild_id, images=images)
     return removed
+
+
+def get_profile_heart_count(user_id: str | int, guild_id: str | int) -> int:
+    """Return the number of unique hearts given to a profile in a guild."""
+    init_db()
+    with _db_lock, _get_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT COUNT(*) AS heart_count FROM profile_card_hearts
+            WHERE profile_user_id = ? AND guild_id = ?
+            """,
+            (str(user_id), str(guild_id)),
+        ).fetchone()
+        return int(row["heart_count"])
+
+
+def toggle_profile_heart(
+    user_id: str | int, guild_id: str | int, giver_user_id: str | int
+) -> tuple[int, bool]:
+    """Toggle one member's heart on a profile and return (count, is_now_liked)."""
+    init_db()
+    profile_uid, gid, giver_uid = str(user_id), str(guild_id), str(giver_user_id)
+    with _db_lock, _get_connection() as conn:
+        existing = conn.execute(
+            """
+            SELECT 1 FROM profile_card_hearts
+            WHERE profile_user_id = ? AND guild_id = ? AND giver_user_id = ?
+            """,
+            (profile_uid, gid, giver_uid),
+        ).fetchone()
+
+        if existing:
+            conn.execute(
+                """
+                DELETE FROM profile_card_hearts
+                WHERE profile_user_id = ? AND guild_id = ? AND giver_user_id = ?
+                """,
+                (profile_uid, gid, giver_uid),
+            )
+            is_liked = False
+        else:
+            conn.execute(
+                """
+                INSERT INTO profile_card_hearts (profile_user_id, guild_id, giver_user_id)
+                VALUES (?, ?, ?)
+                """,
+                (profile_uid, gid, giver_uid),
+            )
+            is_liked = True
+
+        count = conn.execute(
+            """
+            SELECT COUNT(*) AS heart_count FROM profile_card_hearts
+            WHERE profile_user_id = ? AND guild_id = ?
+            """,
+            (profile_uid, gid),
+        ).fetchone()["heart_count"]
+        conn.commit()
+
+    return int(count), is_liked
 
 
 def add_shortcut(user_id: str | int, guild_id: str | int, keyword: str) -> None:
