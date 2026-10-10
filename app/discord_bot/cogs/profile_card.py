@@ -152,6 +152,39 @@ class ProfilePaginationView(discord.ui.View):
         await interaction.response.edit_message(embed=embed, attachments=files, view=self)
 
 
+class FontListPaginationView(discord.ui.View):
+    """View with Prev / Next buttons to browse font list pages."""
+
+    def __init__(self, author_id: int, embeds: list[discord.Embed]):
+        super().__init__(timeout=180.0)
+        self.author_id = author_id
+        self.embeds = embeds
+        self.current_page = 0
+        self._update_buttons()
+
+    def _update_buttons(self):
+        self.prev_button.disabled = self.current_page == 0
+        self.next_button.disabled = self.current_page == len(self.embeds) - 1
+
+    @discord.ui.button(emoji="<:zh_trai:1558495370588327976>", style=discord.ButtonStyle.secondary)
+    async def prev_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.author_id:
+            return await interaction.response.send_message("❌ Bạn không phải người dùng lệnh này!", ephemeral=True)
+        if self.current_page > 0:
+            self.current_page -= 1
+            self._update_buttons()
+            await interaction.response.edit_message(embed=self.embeds[self.current_page], view=self)
+
+    @discord.ui.button(emoji="<:zh_phai:1558495389487861860>", style=discord.ButtonStyle.secondary)
+    async def next_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.author_id:
+            return await interaction.response.send_message("❌ Bạn không phải người dùng lệnh này!", ephemeral=True)
+        if self.current_page < len(self.embeds) - 1:
+            self.current_page += 1
+            self._update_buttons()
+            await interaction.response.edit_message(embed=self.embeds[self.current_page], view=self)
+
+
 class ProfileCard(commands.Cog, name="ProfileCard"):
     """Cog managing personal customizable profile cards."""
 
@@ -387,11 +420,34 @@ class ProfileCard(commands.Cog, name="ProfileCard"):
         # ── sub: font / fonttitle / fontcontent / fontfooter ──
         if sub in ["font", "fonttitle", "fontcontent", "fontfooter"]:
             if len(cmd_args) > 1 and cmd_args[1].lower() == "list":
-                lines = ["**Danh sách font nghệ thuật có sẵn:**"]
-                for k, v in FONTS.items():
-                    sample = apply_font("Hello World 123", k)
-                    lines.append(f"• `{k}` ({v['label']}): {sample}")
-                return await ctx.reply("\n".join(lines), mention_author=False)
+                items = list(FONTS.items())
+                page_size = 8
+                total_pages = (len(items) + page_size - 1) // page_size
+                embeds = []
+
+                for page_idx in range(total_pages):
+                    chunk = items[page_idx * page_size : (page_idx + 1) * page_size]
+                    embed = discord.Embed(
+                        title=f"🎨 Danh Sách Font Chữ Nghệ Thuật ({page_idx + 1}/{total_pages})",
+                        color=discord.Color.from_rgb(253, 215, 223),
+                    )
+                    lines = []
+                    for k, v in chunk:
+                        sample = apply_font("Hello 123", k)
+                        lines.append(f"• **`{k}`** ({v['label']}):\n  ↳ {sample}")
+
+                    lines.append("\n─────────────────────────────")
+                    lines.append(f"**Cú pháp:** `{p}set font all <tên font>` hoặc `{p}set font content <tên font>`")
+                    lines.append(f"**Đặt lại:** `{p}set font all none` (hoặc `normal`)")
+
+                    embed.description = "\n".join(lines)
+                    embed.set_footer(
+                        text=f"Trang {page_idx + 1}/{total_pages} (Tổng {len(items)} fonts)  ·  Bấm nút bên dưới để chuyển trang"
+                    )
+                    embeds.append(embed)
+
+                view = FontListPaginationView(ctx.author.id, embeds)
+                return await ctx.reply(embed=embeds[0], view=view, mention_author=False)
 
             target_field = "all"
             font_key = ""
