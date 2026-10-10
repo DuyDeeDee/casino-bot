@@ -129,12 +129,12 @@ class ProfilePaginationView(discord.ui.View):
         self.current_index = current_index
         self.total_images = total_images
 
-    @discord.ui.button(emoji="◀", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(emoji="<:zh_trai:1558495370588327976>", style=discord.ButtonStyle.secondary)
     async def prev_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.current_index = (self.current_index - 1 + self.total_images) % self.total_images
         await self._update(interaction)
 
-    @discord.ui.button(emoji="▶", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(emoji="<:zh_phai:1558495389487861860>", style=discord.ButtonStyle.secondary)
     async def next_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.current_index = (self.current_index + 1) % self.total_images
         await self._update(interaction)
@@ -421,6 +421,23 @@ class ProfileCard(commands.Cog, name="ProfileCard"):
                     f"❌ Thiếu tên font! Dùng `{p}set font list` để xem danh sách.",
                     mention_author=False,
                 )
+
+            if font_key in ["none", "normal", "off", "macdinh", "reset"]:
+                if target_field == "all":
+                    upsert_card(target.id, ctx.guild.id, font_title="", font_content="", font_footer="")
+                    field_label = "tất cả"
+                elif target_field == "title":
+                    upsert_card(target.id, ctx.guild.id, font_title="")
+                    field_label = "tiêu đề"
+                elif target_field == "content":
+                    upsert_card(target.id, ctx.guild.id, font_content="")
+                    field_label = "nội dung"
+                elif target_field == "footer":
+                    upsert_card(target.id, ctx.guild.id, font_footer="")
+                    field_label = "footer"
+                else:
+                    return await ctx.reply("❌ Trường không hợp lệ! Dùng: `title`, `content`, `footer`, hoặc `all`.", mention_author=False)
+                return await ctx.reply(f"✅ Đã đặt lại font về mặc định cho {field_label}{for_str}!", mention_author=False)
 
             if font_key not in FONTS:
                 return await ctx.reply(

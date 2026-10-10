@@ -82,20 +82,37 @@ FONTS = {
 
 # Fix sans_bold U if any character mapping differs
 FONTS["sans_bold"]["U"] = _arr("𝗔𝗕𝗖𝗗𝗘𝗙𝗚𝗛𝗜𝗝𝗞𝗟𝗠𝗡𝗢𝗣𝗤𝗥𝗦𝗧𝗨𝗩𝗪𝗫𝗬𝗭")
+FONTS["sans"]["D"] = _arr("𝟢𝟣𝟤𝟥𝟦𝟧𝟨𝟩𝟪𝟫")
+FONTS["italic"]["D"] = _arr("𝟢𝟣𝟤𝟥𝟦𝟧𝟨𝟩𝟪𝟫")
+FONTS["script"]["D"] = _arr("𝟢𝟣𝟤𝟥𝟦𝟧𝟨𝟩𝟪𝟫")
+FONTS["bold_italic"]["D"] = _arr("𝟬𝟭𝟮𝟯𝟰𝟱𝟲𝟳𝟴𝟵")
+FONTS["bold_script"]["D"] = _arr("𝟬𝟭𝟮𝟯𝟰𝟱𝟲𝟳𝟴𝟵")
+FONTS["gothic"]["D"] = _arr("𝟶𝟷𝟸𝟹𝟺𝟻𝟼𝟽𝟾𝟿")
 
 
 def _convert_chars(text: str, U: list[str], L: list[str], D: Optional[list[str]]) -> str:
+    import unicodedata
     res = []
     for ch in text:
-        cp = ord(ch)
-        if 65 <= cp <= 90:
-            res.append(U[cp - 65] if cp - 65 < len(U) else ch)
-        elif 97 <= cp <= 122:
-            res.append(L[cp - 97] if cp - 97 < len(L) else ch)
-        elif D and 48 <= cp <= 57:
-            res.append(D[cp - 48] if cp - 48 < len(D) else ch)
+        if ch in ('đ', 'Đ'):
+            base = 'd' if ch == 'đ' else 'D'
+            combining = '\u0335'
         else:
-            res.append(ch)
+            decomposed = unicodedata.normalize('NFD', ch)
+            base = decomposed[0]
+            combining = decomposed[1:]
+
+        cp = ord(base)
+        if 65 <= cp <= 90:
+            styled_base = U[cp - 65] if cp - 65 < len(U) else base
+        elif 97 <= cp <= 122:
+            styled_base = L[cp - 97] if cp - 97 < len(L) else base
+        elif D and 48 <= cp <= 57:
+            styled_base = D[cp - 48] if cp - 48 < len(D) else base
+        else:
+            styled_base = base
+
+        res.append(styled_base + combining)
     return "".join(res)
 
 
@@ -103,7 +120,10 @@ def apply_font(text: str, font_key: Optional[str]) -> str:
     """Apply a stylized Unicode font, preserving custom Discord emojis."""
     if not text or not font_key:
         return text
-    font = FONTS.get(font_key.lower())
+    k = font_key.lower().strip()
+    if k in ["none", "normal", "off", "macdinh", "reset"]:
+        return text
+    font = FONTS.get(k)
     if not font:
         return text
 
