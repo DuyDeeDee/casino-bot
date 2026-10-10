@@ -84,7 +84,6 @@ def build_profile_embed(
         color = discord.Color(color_val)
 
     embed = discord.Embed(color=color)
-    embed.set_author(name=member.display_name, icon_url=avatar_url)
     embed.set_thumbnail(url=avatar_url)
 
     desc_parts = []
@@ -242,7 +241,6 @@ class ProfileCard(commands.Cog, name="ProfileCard"):
         p = config.bot.prefix or "i?"
 
         embed = discord.Embed(color=discord.Color.from_rgb(253, 215, 223))
-        embed.set_author(name="✦ Tên trong server", icon_url=avatar_url)
         embed.set_thumbnail(url=avatar_url)
         embed.description = "\n".join(
             [
