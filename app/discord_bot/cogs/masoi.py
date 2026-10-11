@@ -215,7 +215,6 @@ class SettingsView(discord.ui.View):
         self.lobby_message = lobby_message
         self.update_button_labels()
         if len(game.players) == MASOI_PLAYER_COUNT:
-            self.remove_item(self.btn_tanner)
             self.remove_item(self.btn_custom_roles)
 
     async def interaction_check(self, interaction: discord.Interaction):
@@ -227,7 +226,6 @@ class SettingsView(discord.ui.View):
     def update_button_labels(self):
         s = self.game.settings
         self.btn_reveal.label = f"Hiện vai trò: {'Hiện ngay ✅' if s.reveal_roles_on_death else 'Ẩn tới cuối'}"
-        self.btn_tanner.label = f"Kẻ Ngốc: {'Bật ✅' if s.tanner_enabled else 'Tắt'}"
         self.btn_vote.label = f"Hiện phiếu: {'Real-time ✅' if s.vote_display == 'REALTIME' else 'Ẩn tới hết giờ'}"
         self.btn_chat.label = f"Người chết chat: {'Được' if s.dead_can_chat else 'Bị cấm ✅'}"
         self.btn_disc_time.label = f"Thời gian thảo luận: {s.discussion_time // 60} phút"
@@ -255,16 +253,6 @@ class SettingsView(discord.ui.View):
         if not await self.check_vip_host(interaction, "Hiện vai trò người chết"):
             return
         self.game.settings.cycle_reveal_roles()
-        self.cog.save_game_settings(self.game)
-        self.update_button_labels()
-        await interaction.response.edit_message(embed=self.cog.build_settings_embed(self.game), view=self)
-
-    @discord.ui.button(style=discord.ButtonStyle.secondary, row=0)
-    async def btn_tanner(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not await self.interaction_check(interaction):
-            return
-        self.game.settings.cycle_tanner()
-        await self.cog.update_lobby_embed(self.game, self.lobby_message)
         self.cog.save_game_settings(self.game)
         self.update_button_labels()
         await interaction.response.edit_message(embed=self.cog.build_settings_embed(self.game), view=self)

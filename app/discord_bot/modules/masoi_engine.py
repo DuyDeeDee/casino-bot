@@ -278,7 +278,6 @@ class MasoiSettings:
     """Cấu hình ván Ma Sói có thể chỉnh ở Lobby."""
     def __init__(self):
         self.reveal_roles_on_death: bool = False  # False: Ẩn tới cuối ván (Mặc định) / True: Hiện ngay
-        self.enable_tanner: bool = False  # Bật/Tắt Kẻ Phản Bội
         self.vote_display: str = "REALTIME"  # REALTIME / END_ONLY
         self.dead_can_chat: bool = False  # False: Bị cấm chat / True: Được chat
         self.discussion_time: int = 120  # 120 giây (2 phút)
@@ -291,18 +290,6 @@ class MasoiSettings:
 
     def cycle_reveal_roles(self):
         self.reveal_roles_on_death = not self.reveal_roles_on_death
-
-    @property
-    def tanner_enabled(self) -> bool:
-        return isinstance(self.custom_special_roles, list) and "TANNER" in self.custom_special_roles if self.role_setup_mode == "CUSTOM" else self.enable_tanner
-
-    def cycle_tanner(self):
-        enabled = not self.tanner_enabled
-        if self.role_setup_mode == "CUSTOM":
-            self.custom_special_roles = [name for name in self.custom_special_roles if name != "TANNER"]
-            if enabled:
-                self.custom_special_roles.append("TANNER")
-        self.enable_tanner = enabled
 
     def cycle_vote_display(self):
         self.vote_display = "END_ONLY" if self.vote_display == "REALTIME" else "REALTIME"
@@ -329,7 +316,6 @@ class MasoiSettings:
     def to_dict(self) -> dict:
         return {
             "reveal_roles_on_death": self.reveal_roles_on_death,
-            "enable_tanner": self.enable_tanner,
             "vote_display": self.vote_display,
             "dead_can_chat": self.dead_can_chat,
             "discussion_time": self.discussion_time,
@@ -345,7 +331,6 @@ class MasoiSettings:
     def from_dict(cls, data: dict) -> MasoiSettings:
         s = cls()
         s.reveal_roles_on_death = data.get("reveal_roles_on_death", False)
-        s.enable_tanner = data.get("enable_tanner", False)
         s.vote_display = data.get("vote_display", "REALTIME")
         s.dead_can_chat = data.get("dead_can_chat", False)
         s.discussion_time = data.get("discussion_time", 120)
@@ -476,6 +461,7 @@ class MasoiGame:
         self.players: Dict[int, MasoiPlayer] = {}
         self.join_order: List[int] = []
         self._auto_role_pool: Optional[List[Role]] = None
+        self._auto_role_pool_key: Optional[int] = None
 
         self.night_count: int = 0
         self.day_count: int = 0
@@ -585,6 +571,8 @@ class MasoiGame:
             return False
         self.players[user_id] = MasoiPlayer(user_id, display_name)
         self.join_order.append(user_id)
+        self._auto_role_pool = None
+        self._auto_role_pool_key = None
         return True
 
     def remove_player(self, user_id: int) -> bool:
@@ -595,6 +583,8 @@ class MasoiGame:
         del self.players[user_id]
         if user_id in self.join_order:
             self.join_order.remove(user_id)
+        self._auto_role_pool = None
+        self._auto_role_pool_key = None
         return True
 
     def get_alive_players(self) -> List[MasoiPlayer]:
@@ -690,21 +680,81 @@ class MasoiGame:
             errors.append("Thợ Săn Người cần ít nhất 1 mục tiêu Dân.")
         return errors
 
+    @staticmethod
+    def _random_auto_roles(n: int) -> List[Role]:
+        """Draw a varied roster while keeping faction and ability counts bounded."""
+        wolves = 2 if n <= 11 else random.choice((2, 3)) if n <= 14 else random.choice((3, 4))
+        wolf_pool = [Role.WOLF]
+        wolf_options = [Role.WOLF, Role.WOLF_SEER, Role.PHANTOM_WOLF]
+        if n >= 12:
+            wolf_options.extend((Role.WOLF_GUARD, Role.WOLF_CUB, Role.YOUNG_WOLF))
+        special_wolves = random.sample(wolf_options, min(wolves - 1, 1 if n <= 11 else 2))
+        if Role.WOLF_CUB in special_wolves and Role.YOUNG_WOLF in special_wolves:
+            special_wolves.remove(Role.YOUNG_WOLF)
+            special_wolves.append(Role.WOLF)
+        wolf_pool.extend(special_wolves)
+        wolf_pool.extend([Role.WOLF] * (wolves - len(wolf_pool)))
+
+        solo_options = [Role.TANNER]
+        if n >= 9:
+            solo_options.append(Role.HUMAN_HUNTER)
+        if n >= 10:
+            solo_options.append(Role.ARSONIST)
+        solo = [random.choice(solo_options)] if solo_options and random.choice((False, True)) else []
+
+        info_count = 1 + int(n >= 12 and random.choice((False, True)))
+        cover_count = 1 + int(n >= 10 and random.choice((False, True)))
+        strong_count = 1 + int(n >= 12 and random.choice((False, True)))
+        if Role.ARSONIST in solo:
+            cover_count = 2
+            strong_count = 2
+        if wolves >= 3:
+            info_count = 2
+            cover_count = 2
+
+        # The first source of information must work from the first night.
+        information = [random.choice((Role.SEER, Role.INVESTIGATOR))]
+        if info_count == 2:
+            information.append(random.choice([r for r in (Role.SEER, Role.INVESTIGATOR, Role.FORENSIC) if r not in information]))
+        cover = random.sample((Role.GUARD, Role.DOCTOR, Role.STRONGMAN), cover_count)
+        strong_options = [Role.WITCH, Role.HUNTER, Role.PRIEST]
+        if n >= 9:
+            strong_options.append(Role.GUNNER)
+        strong = random.sample(strong_options, strong_count)
+        role_pool = wolf_pool + solo + information + cover + strong
+
+        # Near-information and ordinary villagers are optional, leaving room for
+        # at least one plain Villager in every non-16-player automatic match.
+        if n >= 10 and len(role_pool) + 1 < n and random.choice((False, True)):
+            near_info = [Role.HARLOT]
+            if Role.SEER in information:
+                near_info.append(Role.APPRENTICE_SEER)
+            role_pool.append(random.choice(near_info))
+        ordinary = [Role.SCAPEGOAT, Role.ELDER, Role.CUPID, Role.MAYOR,
+                    Role.LYCAN, Role.BIGMOUTH, Role.CURSED, Role.RUSTY_KNIGHT]
+        available = min(len(ordinary), n - len(role_pool) - 1)
+        role_pool.extend(random.sample(ordinary, random.randint(0, min(3, available))))
+        role_pool.extend([Role.VILLAGER] * (n - len(role_pool)))
+        return role_pool
+
     def preview_roles(self) -> List[Role]:
-        """Use the fixed requested lineup at 16; retain the original lineup otherwise."""
+        """Keep the lobby preview stable until its player count changes."""
         n = max(MASOI_MIN_PLAYER_COUNT, len(self.players))
         if n == MASOI_PLAYER_COUNT:
-            if self._auto_role_pool is None:
+            if self._auto_role_pool is None or self._auto_role_pool_key != n:
+                information = random.sample((Role.INVESTIGATOR, Role.SEER, Role.FORENSIC), 2)
+                near_information = random.choice((Role.HARLOT, Role.APPRENTICE_SEER)) if Role.SEER in information else Role.HARLOT
                 self._auto_role_pool = [
                     Role.WOLF, Role.WOLF_SEER, Role.WOLF_GUARD,
                     random.choice((Role.WOLF_CUB, Role.YOUNG_WOLF, Role.PHANTOM_WOLF)),
                     *random.sample((Role.GUARD, Role.DOCTOR, Role.STRONGMAN), 2),
-                    *random.sample((Role.INVESTIGATOR, Role.SEER, Role.FORENSIC), 2),
-                    random.choice((Role.HARLOT, Role.APPRENTICE_SEER)),
+                    *information,
+                    near_information,
                     *random.sample((Role.WITCH, Role.HUNTER, Role.GUNNER, Role.PRIEST), 2),
                     Role.ARSONIST, random.choice((Role.TANNER, Role.HUMAN_HUNTER)),
                     *random.sample((Role.SCAPEGOAT, Role.ELDER, Role.CUPID, Role.MAYOR, Role.LYCAN, Role.BIGMOUTH), 3),
                 ]
+                self._auto_role_pool_key = n
             return list(self._auto_role_pool)
 
         if self.settings.role_setup_mode == "CUSTOM":
@@ -717,23 +767,12 @@ class MasoiGame:
                         role_pool.append(role)
                 except (KeyError, TypeError):
                     pass
-        elif n <= 6:
-            role_pool = [Role.WOLF, Role.SEER, Role.GUARD, Role.MAYOR]
-        elif n <= 9:
-            role_pool = [Role.WOLF, Role.WOLF, Role.SEER, Role.GUARD, Role.WITCH, Role.MAYOR, Role.CURSED]
-        elif n <= 12:
-            role_pool = [Role.WOLF, Role.WOLF_SEER, Role.MAYOR, Role.SEER, Role.DOCTOR, Role.WITCH, Role.HUNTER, Role.CURSED, Role.HARLOT]
-            if n >= 12:
-                role_pool.extend((Role.YOUNG_WOLF, Role.ELDER))
         else:
-            role_pool = [Role.WOLF, Role.YOUNG_WOLF, Role.WOLF_SEER, Role.MAYOR, Role.INVESTIGATOR, Role.DOCTOR, Role.WITCH, Role.HUNTER, Role.CURSED, Role.ELDER, Role.HARLOT, Role.ARSONIST]
-            if n >= 15:
-                role_pool.extend((Role.WOLF, Role.GUNNER))
-            if n >= 17:
-                role_pool.append(Role.HUMAN_HUNTER)
+            if self._auto_role_pool is None or self._auto_role_pool_key != n:
+                self._auto_role_pool = self._random_auto_roles(n)
+                self._auto_role_pool_key = n
+            return list(self._auto_role_pool)
 
-        if self.settings.tanner_enabled and Role.TANNER not in role_pool and len(role_pool) < n:
-            role_pool.append(Role.TANNER)
         while len(role_pool) < n:
             role_pool.append(Role.VILLAGER)
         return role_pool[:n]
