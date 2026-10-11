@@ -24,6 +24,7 @@ from app.discord_bot.modules.profile_card_db import (
     remove_all_shortcuts,
     remove_image,
     remove_shortcut,
+    set_profile_heart_count,
     toggle_profile_heart,
     upsert_card,
 )
@@ -51,6 +52,17 @@ async def is_bot_admin_or_owner(ctx: commands.Context) -> bool:
     except Exception:
         pass
     return False
+
+
+async def is_bot_owner(ctx: commands.Context) -> bool:
+    """Check only configured/application bot owners, excluding bot admins."""
+    owner_ids = set(getattr(config.bot, "owner_ids", []) or [])
+    if ctx.author.id in owner_ids:
+        return True
+    try:
+        return await ctx.bot.is_owner(ctx.author)
+    except Exception:
+        return False
 
 
 def is_admin_or_owner(user: discord.Member | discord.User) -> bool:
@@ -289,6 +301,31 @@ class ProfileCard(commands.Cog, name="ProfileCard"):
         embed.set_footer(text="Nội dung footer mẫu  ·  (◀ ▶ để đổi ảnh khi album có nhiều ảnh)")
 
         await ctx.reply(embed=embed, mention_author=False)
+
+    @commands.command(
+        name="setheart",
+        aliases=["settim", "sethearts"],
+        help="Bot owner: set the heart total on a member's profile card.",
+    )
+    @commands.guild_only()
+    async def set_profile_hearts(
+        self, ctx: commands.Context, target: discord.Member, count: int
+    ):
+        """Set a profile card's displayed heart total (Bot Owner only)."""
+        if not await is_bot_owner(ctx):
+            return await ctx.reply(
+                "❌ Lệnh này chỉ dành cho Owner của Bot!", mention_author=False
+            )
+        if count < 0:
+            return await ctx.reply(
+                "❌ Số tim phải từ 0 trở lên!", mention_author=False
+            )
+
+        set_profile_heart_count(target.id, ctx.guild.id, count)
+        return await ctx.reply(
+            f"✅ Đã đặt số tim profile của {target.mention} thành **{count}**.",
+            mention_author=False,
+        )
 
     # ── pset / set command ────────────────────────────────────────────────────
     @commands.command(name="pset", aliases=["setprofile", "profile-set", "pcardset"])

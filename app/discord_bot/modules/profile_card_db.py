@@ -78,6 +78,16 @@ def init_db() -> None:
                 )
                 """
             )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS profile_card_heart_totals (
+                    profile_user_id TEXT NOT NULL,
+                    guild_id TEXT NOT NULL,
+                    heart_count INTEGER NOT NULL DEFAULT 0 CHECK (heart_count >= 0),
+                    PRIMARY KEY (profile_user_id, guild_id)
+                )
+                """
+            )
             conn.commit()
 
             # Migrate any existing records from economy.db if present
@@ -291,12 +301,40 @@ def get_profile_heart_count(user_id: str | int, guild_id: str | int) -> int:
     with _db_lock, _get_connection() as conn:
         row = conn.execute(
             """
+            SELECT heart_count FROM profile_card_heart_totals
+            WHERE profile_user_id = ? AND guild_id = ?
+            """,
+            (str(user_id), str(guild_id)),
+        ).fetchone()
+        if row:
+            return int(row["heart_count"])
+        row = conn.execute(
+            """
             SELECT COUNT(*) AS heart_count FROM profile_card_hearts
             WHERE profile_user_id = ? AND guild_id = ?
             """,
             (str(user_id), str(guild_id)),
         ).fetchone()
         return int(row["heart_count"])
+
+
+def set_profile_heart_count(user_id: str | int, guild_id: str | int, count: int) -> None:
+    """Set the displayed heart total for a profile."""
+    if count < 0:
+        raise ValueError("Heart count cannot be negative")
+
+    init_db()
+    with _db_lock, _get_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO profile_card_heart_totals (profile_user_id, guild_id, heart_count)
+            VALUES (?, ?, ?)
+            ON CONFLICT(profile_user_id, guild_id)
+            DO UPDATE SET heart_count = excluded.heart_count
+            """,
+            (str(user_id), str(guild_id), count),
+        )
+        conn.commit()
 
 
 def toggle_profile_heart(
@@ -313,6 +351,26 @@ def toggle_profile_heart(
             """,
             (profile_uid, gid, giver_uid),
         ).fetchone()
+
+        total_row = conn.execute(
+            """
+            SELECT heart_count FROM profile_card_heart_totals
+            WHERE profile_user_id = ? AND guild_id = ?
+            """,
+            (profile_uid, gid),
+        ).fetchone()
+        if total_row:
+            count = int(total_row["heart_count"])
+        else:
+            count = int(
+                conn.execute(
+                    """
+                    SELECT COUNT(*) AS heart_count FROM profile_card_hearts
+                    WHERE profile_user_id = ? AND guild_id = ?
+                    """,
+                    (profile_uid, gid),
+                ).fetchone()["heart_count"]
+            )
 
         if existing:
             conn.execute(
@@ -333,13 +391,20 @@ def toggle_profile_heart(
             )
             is_liked = True
 
-        count = conn.execute(
+        if is_liked:
+            count += 1
+        else:
+            count = max(0, count - 1)
+
+        conn.execute(
             """
-            SELECT COUNT(*) AS heart_count FROM profile_card_hearts
-            WHERE profile_user_id = ? AND guild_id = ?
+            INSERT INTO profile_card_heart_totals (profile_user_id, guild_id, heart_count)
+            VALUES (?, ?, ?)
+            ON CONFLICT(profile_user_id, guild_id)
+            DO UPDATE SET heart_count = excluded.heart_count
             """,
-            (profile_uid, gid),
-        ).fetchone()["heart_count"]
+            (profile_uid, gid, count),
+        )
         conn.commit()
 
     return int(count), is_liked
