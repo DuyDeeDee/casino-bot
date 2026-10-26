@@ -12,7 +12,7 @@ from tests.test_masoi_engine import make_game
 
 class RolePreferenceIsolationTests(unittest.TestCase):
     def test_shared_save_keeps_general_settings_but_never_custom_roles(self):
-        game = make_game(*([Role.VILLAGER] * 5))
+        game = make_game(*([Role.VILLAGER] * 8))
         game.settings.role_setup_mode = "CUSTOM"
         game.settings.custom_wolf_count = 2
         game.settings.custom_special_roles = ["SEER", "GUARD"]
@@ -41,7 +41,9 @@ class RolePreferenceIsolationTests(unittest.TestCase):
             self.assertEqual(next_room.role_setup_mode, "AUTO")
             self.assertEqual(next_room.custom_special_roles, [])
             self.assertFalse(next_room.enable_events)
-            self.assertEqual(Counter(make_preview(next_room)), Counter([Role.WOLF, Role.SEER, Role.GUARD, Role.MAYOR, Role.VILLAGER]))
+            preview = make_preview(next_room)
+            self.assertEqual(len(preview), 8)
+            self.assertEqual(sum(role.faction.name == "WEREWOLF" for role in preview), 2)
 
     def test_legacy_shared_custom_data_is_sanitized_on_read(self):
         game = make_game(*([Role.VILLAGER] * 5))
@@ -61,14 +63,14 @@ class RolePreferenceIsolationTests(unittest.TestCase):
 
 
 def make_preview(settings):
-    game = make_game(*([Role.VILLAGER] * 5))
+    game = make_game(*([Role.VILLAGER] * 8))
     game.settings = settings
     return game.preview_roles()
 
 
 class RoleGateTests(unittest.IsolatedAsyncioTestCase):
     def lobby(self):
-        game = make_game(*([Role.VILLAGER] * 5))
+        game = make_game(*([Role.VILLAGER] * 8))
         game.phase = GamePhase.LOBBY
         game.settings.role_setup_mode = "CUSTOM"
         game.settings.custom_wolf_count = 2
@@ -98,7 +100,9 @@ class RoleGateTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(created.host_id, 99)
         self.assertEqual(created.settings.role_setup_mode, "AUTO")
         self.assertEqual(created.settings.custom_special_roles, [])
-        self.assertEqual(Counter(created.preview_roles()), Counter([Role.WOLF, Role.SEER, Role.GUARD, Role.MAYOR, Role.VILLAGER]))
+        preview = created.preview_roles()
+        self.assertEqual(len(preview), 8)
+        self.assertEqual(sum(role.faction.name == "WEREWOLF" for role in preview), 2)
         eco.add_money.assert_called_once_with(99, -masoi.MASOI_CREATE_FEE)
         ctx.send.call_args.kwargs["view"].stop()
 
@@ -170,7 +174,8 @@ class RoleGateTests(unittest.IsolatedAsyncioTestCase):
         await cog.start_game(game, message)
         game.assign_roles.assert_called_once()
         eco.is_masoi_vip.assert_called_with(game.host_id)
-        self.assertEqual(Counter(p.role for p in game.players.values()), Counter([Role.WOLF, Role.SEER, Role.VILLAGER, Role.VILLAGER, Role.VILLAGER]))
+        self.assertEqual(Counter(p.role for p in game.players.values()),
+                         Counter([Role.WOLF, Role.SEER] + [Role.VILLAGER] * 6))
         cog.game_loop.assert_awaited_once()
 
     async def test_vip_expiring_during_dm_preflight_prevents_role_assignment(self):

@@ -51,6 +51,7 @@ from app.discord_bot.cogs import (
     SportsBet,
     ChatLevels,
     ProfileCard,
+    VoiceAfk,
 )
 
 from app.discord_bot.modules.economy import Economy
@@ -94,6 +95,7 @@ COGS = (
     SportsBet,
     ChatLevels,
     ProfileCard,
+    VoiceAfk,
 )
 
 
@@ -105,6 +107,7 @@ def build_intents() -> discord.Intents:
     intents.messages = True
     intents.message_content = True
     intents.members = True
+    intents.voice_states = True
     return intents
 
 

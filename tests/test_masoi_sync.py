@@ -81,18 +81,15 @@ class ObjectiveSyncTests(unittest.TestCase):
         self.assertTrue(game.did_player_win(1))
         self.assertFalse(game.did_player_win(2))
 
-    def test_custom_tanner_switch_matches_preview_and_assignment(self):
-        game = make_game(*([Role.VILLAGER] * 5))
+    def test_custom_tanner_selection_matches_preview_and_assignment(self):
+        game = make_game(*([Role.VILLAGER] * 8))
         game.settings.role_setup_mode = "CUSTOM"
         game.settings.custom_wolf_count = 1
         game.settings.custom_special_roles = ["TANNER", "SEER"]
-        game.settings.enable_tanner = False
-        self.assertTrue(game.settings.tanner_enabled)
         self.assertIn(Role.TANNER, game.preview_roles())
-        game.settings.cycle_tanner()
-        self.assertFalse(game.settings.tanner_enabled)
+        game.settings.custom_special_roles = ["SEER"]
         self.assertNotIn(Role.TANNER, game.preview_roles())
-        game.settings.cycle_tanner()
+        game.settings.custom_special_roles = ["TANNER", "SEER"]
         preview = Counter(game.preview_roles())
         game.assign_roles()
         self.assertEqual(Counter(p.role for p in game.players.values()), preview)
@@ -245,7 +242,7 @@ class LiveUISyncTests(unittest.IsolatedAsyncioTestCase):
         view.stop()
 
     async def test_full_lobby_badges_fit_field_limits(self):
-        game = make_game(*([Role.VILLAGER] * 20))
+        game = make_game(*([Role.VILLAGER] * 16))
         cog, badges, _ = self.badge_cog(game)
         for p in game.players.values():
             p.display_name = f"Player{p.user_id}-" + "x" * 24
@@ -256,31 +253,35 @@ class LiveUISyncTests(unittest.IsolatedAsyncioTestCase):
         text = "\n".join(f.value for f in embed.fields)
         self.assertTrue(all(p.display_name in text for p in game.players.values()))
 
-    async def test_settings_show_effective_custom_tanner_and_actual_channel(self):
-        game = make_game(*([Role.VILLAGER] * 5))
+    async def test_custom_tanner_uses_role_picker_without_a_toggle(self):
+        game = make_game(*([Role.VILLAGER] * 8))
         game.settings.role_setup_mode = "CUSTOM"
         game.settings.custom_special_roles = ["TANNER"]
         cog = make_cog(game)
         embed = cog.build_settings_embed(game)
-        self.assertIn("Kẻ Ngốc (Tanner):** `Bật`", embed.description)
-        self.assertIn("kênh chơi", embed.description)
-        self.assertNotIn("thread", embed.description)
+        self.assertIn("Tùy chỉnh", embed.description)
         view = masoi.SettingsView(game, cog, None)
-        self.assertIn("Bật", view.btn_tanner.label)
-        view.stop()
+        picker = masoi.CustomRolesConfigView(game, cog, view, None)
+        try:
+            self.assertFalse(hasattr(view, "btn_tanner"))
+            self.assertIn("TANNER", {option.value for option in picker.select_roles.options})
+            self.assertIn(Role.TANNER, game.preview_roles())
+        finally:
+            picker.stop()
+            view.stop()
 
-    async def test_tanner_toggle_also_refreshes_lobby_preview(self):
-        game = make_game(*([Role.VILLAGER] * 5))
+    async def test_auto_tanner_needs_no_toggle(self):
+        game = make_game(*([Role.VILLAGER] * 8))
+        game.settings = MasoiSettings.from_dict({"enable_tanner": False})
         game.phase = GamePhase.LOBBY
         cog = make_cog(game)
-        cog.save_game_settings = Mock()
-        message = SimpleNamespace(edit=AsyncMock())
-        view = masoi.SettingsView(game, cog, message)
-        await view.btn_tanner.callback(interaction(game.host_id))
-        self.assertTrue(game.settings.tanner_enabled)
-        fields = message.edit.call_args.kwargs["embed"].fields
-        self.assertTrue(any(Role.TANNER.value in field.value for field in fields))
-        view.stop()
+        view = masoi.SettingsView(game, cog, None)
+        try:
+            self.assertFalse(hasattr(view, "btn_tanner"))
+            self.assertEqual(game.preview_roles(), game.preview_roles())
+            self.assertEqual(game._auto_role_pool_key, 8)
+        finally:
+            view.stop()
 
     async def test_target_count_dm_and_controls_match_with_one_or_two_targets(self):
         for role, kind, cls in ((Role.INVESTIGATOR, ActionKind.INVESTIGATE, masoi.NightInvestigatorView),):

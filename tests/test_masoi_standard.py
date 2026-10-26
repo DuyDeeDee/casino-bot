@@ -28,7 +28,7 @@ class StandardRulesTests(unittest.TestCase):
         self.assertEqual(settings.custom_special_roles, ["SEER", "GUARD"])
 
     def test_boss_flag_cannot_create_boss_when_events_are_off(self):
-        for count in (5, 8, 12, 16, 20):
+        for count in (8, 12, 16):
             game = make_game(*([Role.VILLAGER] * count))
             # Even obsolete in-memory attributes must have no effect.
             game.settings.enable_events = False
@@ -43,13 +43,14 @@ class StandardRulesTests(unittest.TestCase):
             self.assertFalse(any(log.event_type == "NIGHT_EVENT" for log in game.replay_logs))
 
     def test_custom_setup_cannot_assign_retired_boss(self):
-        game = make_game(*([Role.VILLAGER] * 5))
+        game = make_game(*([Role.VILLAGER] * 8))
         game.settings.role_setup_mode = "CUSTOM"
         game.settings.custom_wolf_count = 1
         game.settings.custom_special_roles = ["ALPHA_WOLF", "SEER"]
         self.assertTrue(game.validate_role_setup())
         self.assertNotIn(Role.ALPHA_WOLF, game.preview_roles())
-        game.assign_roles()
+        with self.assertRaises(ValueError):
+            game.assign_roles()
         self.assertFalse(any(p.role == Role.ALPHA_WOLF for p in game.players.values()))
 
     def test_legacy_event_metadata_cannot_affect_night_actions(self):

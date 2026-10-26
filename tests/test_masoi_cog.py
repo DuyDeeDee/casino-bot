@@ -156,7 +156,7 @@ class NightViewTests(unittest.IsolatedAsyncioTestCase):
 
 class PreflightAndPermissionsTests(unittest.IsolatedAsyncioTestCase):
     def lobby(self):
-        game = make_game(*([Role.VILLAGER] * 5))
+        game = make_game(*([Role.VILLAGER] * 8))
         game.phase = GamePhase.LOBBY
         game.assign_roles = Mock(wraps=game.assign_roles)
         cog = make_cog(game)

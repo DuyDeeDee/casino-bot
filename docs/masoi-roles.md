@@ -2,7 +2,18 @@
 
 ## Danh sách và đội hình
 
-Phòng chờ nhận từ **8 đến 16 người**, dùng phân vai AUTO hoặc CUSTOM theo cài đặt. Riêng khi có **đúng 16 người**, ván dùng đội hình bên dưới thay cho thiết lập phân vai thường; đội hình được chọn một lần cho phòng rồi chia ngẫu nhiên:
+Phòng chờ nhận từ **8 đến 16 người**, dùng phân vai AUTO hoặc CUSTOM theo cài đặt. Ở chế độ AUTO, đội hình được bốc một lần cho số người hiện tại và được giữ nguyên khi xem lại hoặc bắt đầu ván. Người chơi vào/rời phòng sẽ tạo lại đội hình dự kiến.
+
+| Số người | Sói | Solo |
+| --- | ---: | ---: |
+| 8–11 | 2 | 0 hoặc 1 |
+| 12–14 | 2 hoặc 3 | 0 hoặc 1 |
+| 15 | 3 hoặc 4 | 0 hoặc 1 |
+| 16 | 4 | 2 |
+
+Ở bàn 8–15 người, mỗi đội hình có ít nhất một vai soi từ đêm đầu, một vai bảo vệ, một Dân mạnh và một Dân thường. Bàn nhiều Sói hoặc có Kẻ Phóng Hỏa nhận thêm vai Dân có khả năng đối phó. Vai Solo có thể xuất hiện từ 8 người: ở 8 người chỉ có Kẻ Ngốc; Thợ Săn Người mở từ 9 người, Kẻ Phóng Hỏa mở từ 10 người. Kẻ Ngốc luôn nằm trong pool Solo ngẫu nhiên của AUTO, không cần bật/tắt. Tiên Tri Tập Sự chỉ được bốc khi có Tiên Tri.
+
+Khi có **đúng 16 người**, ván dùng đội hình bên dưới thay cho thiết lập phân vai thường; các vai trong từng nhóm được chọn ngẫu nhiên:
 
 | Nhóm | Số lượng | Vai trò |
 | --- | ---: | --- |
@@ -20,7 +31,7 @@ Pháp Y chọn một người bị giết đêm trước bởi Sói hoặc Solo 
 
 Ván mới không còn Sói Trắng, Người Thổi Sáo, Cô Bé, Sát Thủ, Sói Câm. ID cũ vẫn tồn tại để đọc snapshot và replay lịch sử. Quyền VIP, phí và các tính năng VIP khác không thay đổi.
 
-Ở bàn đúng 16 người, thiết lập số Sói, phân vai CUSTOM và nút bật Kẻ Ngốc không áp dụng. Các số người khác vẫn dùng thiết lập cũ. Kẻ Ngốc và Thợ Săn Người loại trừ nhau trong đội hình 16 người.
+Ở bàn đúng 16 người, thiết lập số Sói và phân vai CUSTOM không áp dụng. Kẻ Ngốc và Thợ Săn Người loại trừ nhau trong đội hình 16 người.
 
 ## Luật kỹ năng
 

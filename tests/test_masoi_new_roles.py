@@ -29,7 +29,7 @@ def submit(game, uid, kind, *targets):
 
 class NewRoleRulesTests(unittest.TestCase):
     def test_retired_roles_never_enter_new_roster(self):
-        for count in range(5, 21):
+        for count in range(8, 17):
             game = MasoiGame(1, 2, 1, "Host")
             for uid in range(1, count + 1):
                 game.add_player(uid, str(uid))
@@ -58,17 +58,20 @@ class NewRoleRulesTests(unittest.TestCase):
         self.assertTrue(game.validate_role_setup())
 
     def test_auto_roster_progressively_uses_new_roles(self):
-        for count, expected in ((10, Role.DOCTOR), (12, Role.YOUNG_WOLF),
-                                (13, Role.ARSONIST), (15, Role.GUNNER),
-                                (17, Role.HUMAN_HUNTER)):
-            game = MasoiGame(1, 2, 1, "Host")
-            for uid in range(1, count + 1):
-                game.add_player(uid, str(uid))
-            self.assertIn(expected, game.preview_roles())
+        for count, expected in ((8, Role.TANNER), (9, Role.HUMAN_HUNTER),
+                                (10, Role.ARSONIST), (12, Role.YOUNG_WOLF),
+                                (15, Role.GUNNER)):
+            seen = set()
+            for _ in range(120):
+                game = MasoiGame(1, 2, 1, "Host")
+                for uid in range(1, count + 1):
+                    game.add_player(uid, str(uid))
+                seen.update(game.preview_roles())
+            self.assertIn(expected, seen)
 
     def test_human_hunter_gets_village_target_and_personal_win(self):
         game = MasoiGame(1, 2, 1, "Host")
-        for uid in range(1, 17):
+        for uid in range(1, 16):
             game.add_player(uid, str(uid))
         game.settings.role_setup_mode = "CUSTOM"
         game.settings.custom_wolf_count = 2

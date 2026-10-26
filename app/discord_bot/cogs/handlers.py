@@ -45,7 +45,7 @@ class Handlers(commands.Cog, name="handlers"):
         # Kiểm tra giới hạn kênh sử dụng bot cho từng Server (Database) và Global config
         if ctx.guild:
             # Các cog thuộc nhóm "Function" và lệnh help được phép dùng ở mọi kênh
-            exempt_cogs = {"Afk", "afk", "Giveaway", "Jail", "ChannelControl", "TuTien", "tutien", "TuTienCog", "ProfileCard", "profile_card"}
+            exempt_cogs = {"Afk", "afk", "Giveaway", "Jail", "ChannelControl", "TuTien", "tutien", "TuTienCog", "ProfileCard", "profile_card", "VoiceAfk", "voice_afk"}
             is_exempt = False
             if ctx.command:
                 if ctx.command.name == "help" or (ctx.command.cog and ctx.command.cog.qualified_name in exempt_cogs):

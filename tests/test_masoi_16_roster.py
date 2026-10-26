@@ -3,7 +3,7 @@ import unittest
 from collections import Counter
 
 from app.discord_bot.modules.masoi_engine import (
-    ActionIntent, ActionKind, GamePhase, MasoiGame, Role,
+    ActionIntent, ActionKind, GamePhase, MasoiGame, MasoiSettings, Role,
 )
 
 
@@ -28,17 +28,75 @@ class FixedRosterTests(unittest.TestCase):
         self.assertFalse(game.add_player(17, "17"))
         self.assertEqual(game.validate_role_setup(), [])
 
-    def test_non_sixteen_auto_roster_keeps_original_small_game_roles(self):
+    def test_non_sixteen_auto_roster_is_valid_and_stable(self):
         game = game_with(*([Role.VILLAGER] * 8))
         roster = game.preview_roles()
         self.assertEqual(len(roster), 8)
-        self.assertEqual(roster.count(Role.WOLF), 2)
-        self.assertIn(Role.SEER, roster)
-        self.assertIn(Role.GUARD, roster)
-        self.assertNotIn(Role.STRONGMAN, roster)
-        self.assertNotIn(Role.FORENSIC, roster)
-        self.assertNotIn(Role.PRIEST, roster)
-        self.assertNotIn(Role.BIGMOUTH, roster)
+        self.assertEqual(roster, game.preview_roles())
+        self.assertEqual(sum(role.faction.name == "WEREWOLF" for role in roster), 2)
+        self.assertLessEqual(sum(role.faction.name == "INDEPENDENT" for role in roster), 1)
+        self.assertTrue(set(roster) & {Role.SEER, Role.INVESTIGATOR})
+        self.assertTrue(set(roster) & {Role.GUARD, Role.DOCTOR, Role.STRONGMAN})
+        self.assertIn(Role.VILLAGER, roster)
+
+    def test_random_rosters_cover_all_sizes_and_eligible_solos(self):
+        for count in range(8, 16):
+            seen = set()
+            solo_counts = set()
+            for _ in range(120):
+                game = game_with(*([Role.VILLAGER] * count))
+                roster = game.preview_roles()
+                seen.add(tuple(sorted(role.name for role in roster)))
+                solos = set(roster) & {Role.TANNER, Role.HUMAN_HUNTER, Role.ARSONIST}
+                solo_counts.add(len(solos))
+                self.assertEqual(len(roster), count)
+                self.assertEqual(len(roster), len(game.players))
+                self.assertLessEqual(len(solos), 1)
+                self.assertIn(Role.WOLF, roster)
+                self.assertIn(Role.VILLAGER, roster)
+                self.assertTrue(set(roster) & {Role.SEER, Role.INVESTIGATOR})
+                self.assertTrue(set(roster) & {Role.GUARD, Role.DOCTOR, Role.STRONGMAN})
+                self.assertFalse(Role.APPRENTICE_SEER in roster and Role.SEER not in roster)
+                self.assertFalse(Role.WOLF_CUB in roster and Role.YOUNG_WOLF in roster)
+                self.assertEqual(len([role for role in roster if role not in (Role.WOLF, Role.VILLAGER)]),
+                                 len(set(roster) - {Role.WOLF, Role.VILLAGER}))
+                if count <= 11:
+                    self.assertEqual(sum(role.faction.name == "WEREWOLF" for role in roster), 2)
+                elif count <= 14:
+                    self.assertIn(sum(role.faction.name == "WEREWOLF" for role in roster), (2, 3))
+                else:
+                    self.assertIn(sum(role.faction.name == "WEREWOLF" for role in roster), (3, 4))
+                if count == 8:
+                    self.assertFalse(solos - {Role.TANNER})
+                if count == 9:
+                    self.assertFalse(solos - {Role.TANNER, Role.HUMAN_HUNTER})
+                if Role.ARSONIST in solos:
+                    self.assertEqual(len(set(roster) & {Role.GUARD, Role.DOCTOR, Role.STRONGMAN}), 2)
+                    self.assertEqual(len(set(roster) & {Role.WITCH, Role.HUNTER, Role.GUNNER, Role.PRIEST}), 2)
+                game.assign_roles()
+                self.assertEqual(Counter(p.role for p in game.players.values()), Counter(roster))
+            self.assertGreater(len(seen), 5)
+            self.assertEqual(solo_counts, {0, 1})
+
+    def test_auto_roster_redraws_for_player_count_and_ignores_legacy_tanner_setting(self):
+        game = game_with(*([Role.VILLAGER] * 8))
+        before = game.preview_roles()
+        self.assertEqual(before, game.preview_roles())
+        # Old persisted toggle values no longer affect AUTO.
+        game.settings = MasoiSettings.from_dict({"enable_tanner": False})
+        self.assertNotIn("enable_tanner", game.settings.to_dict())
+        self.assertEqual(before, game.preview_roles())
+        self.assertEqual(game._auto_role_pool_key, 8)
+        game.add_player(9, "9")
+        self.assertEqual(len(game.preview_roles()), 9)
+        self.assertEqual(game._auto_role_pool_key, 9)
+
+        seen = set()
+        for _ in range(80):
+            other = game_with(*([Role.VILLAGER] * 8))
+            other.settings = MasoiSettings.from_dict({"enable_tanner": False})
+            seen.update(other.preview_roles())
+        self.assertIn(Role.TANNER, seen)
 
     def test_custom_roles_still_work_below_sixteen_and_sixteen_uses_fixed_roster(self):
         small = game_with(*([Role.VILLAGER] * 8))
@@ -70,6 +128,7 @@ class FixedRosterTests(unittest.TestCase):
             self.assertEqual(len(set(roster) & {Role.GUARD, Role.DOCTOR, Role.STRONGMAN}), 2)
             self.assertEqual(len(set(roster) & {Role.INVESTIGATOR, Role.SEER, Role.FORENSIC}), 2)
             self.assertEqual(len(set(roster) & {Role.HARLOT, Role.APPRENTICE_SEER}), 1)
+            self.assertFalse(Role.APPRENTICE_SEER in roster and Role.SEER not in roster)
             self.assertEqual(len(set(roster) & {Role.WITCH, Role.HUNTER, Role.GUNNER, Role.PRIEST}), 2)
             self.assertEqual(len(set(roster) & {Role.TANNER, Role.HUMAN_HUNTER}), 1)
             self.assertEqual(len(set(roster) & {Role.SCAPEGOAT, Role.ELDER, Role.CUPID, Role.MAYOR, Role.LYCAN, Role.BIGMOUTH}), 3)
