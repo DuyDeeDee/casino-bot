@@ -12,8 +12,10 @@ import json
 import logging
 import random
 import time
+import unicodedata
+from collections import Counter
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 import discord
 from discord.ext import commands
@@ -88,6 +90,47 @@ async def _safe_edit(message, *args, **kwargs):
         except Exception:
             raise
     return None
+
+
+def _normalize_text(text: str) -> str:
+    nfkd = unicodedata.normalize("NFKD", text.lower())
+    return "".join(c for c in nfkd if not unicodedata.combining(c)).replace("đ", "d").strip()
+
+
+def _add_chunked_embed_field(embed: discord.Embed, name: str, lines: list[str]) -> None:
+    chunk = ""
+    first = True
+    for line in lines:
+        if len(chunk) + len(line) + 1 > 1000:
+            embed.add_field(name=name if first else f"{name} (tiếp)", value=chunk, inline=False)
+            chunk = ""
+            first = False
+        chunk += ("\n" if chunk else "") + line
+    if chunk:
+        embed.add_field(name=name if first else f"{name} (tiếp)", value=chunk, inline=False)
+
+
+def _add_roster_fields(embed: discord.Embed, role_counts: Counter[Role]) -> None:
+    wolf_roles = {r: cnt for r, cnt in role_counts.items() if r.faction == Faction.WEREWOLF}
+    villager_roles = {r: cnt for r, cnt in role_counts.items() if r.faction == Faction.VILLAGER}
+    solo_roles = {r: cnt for r, cnt in role_counts.items() if r.faction not in (Faction.WEREWOLF, Faction.VILLAGER)}
+
+    groups = [
+        ("🐺 Phe Sói", wolf_roles),
+        ("👥 Phe Dân Làng", villager_roles),
+        ("🃏 Phe Solo / Thứ Ba", solo_roles),
+    ]
+
+    for title, grp in groups:
+        if not grp:
+            continue
+        total_in_group = sum(grp.values())
+        group_title = f"{title} ({total_in_group} vai trò)"
+        lines = []
+        for r, cnt in sorted(grp.items(), key=lambda x: (-x[1], x[0].value)):
+            cnt_str = f" **(x{cnt})**" if cnt > 1 else ""
+            lines.append(f"• {r.emoji} **{r.value}**{cnt_str} — *{r.description}*")
+        _add_chunked_embed_field(embed, group_title, lines)
 
 
 class LobbyView(discord.ui.View):
@@ -1247,6 +1290,145 @@ class Masoi(MasoiFlowMixin, MasoiRecoveryMixin, commands.Cog):
             color=discord.Color.red()
         )
         await channel.send(embed=embed)
+
+    @commands.command(
+        name="roles",
+        aliases=["vaitro", "masoivaitro", "masoi-roles", "masoi_roles", "doihinh", "game_roles"],
+        brief="Xem danh sách các vai trò (roles) trong ván đấu Ma Sói hiện tại.",
+        usage="roles [tên_vai_trò|all]",
+    )
+    async def roles_cmd(self, ctx: commands.Context, *, query: Optional[str] = None):
+        # 1. Tra cứu từ điển vai trò nếu có query
+        if query:
+            clean_q = query.strip().lower()
+            if clean_q in ("all", "tatca", "tất cả", "list", "danhsach", "danh sách", "guide"):
+                available = set(Role) - RETIRED_ROLES
+                groups = [
+                    ("🐺 Bầy Sói", [r for r in Role if r in available and r.faction == Faction.WEREWOLF]),
+                    ("👥 Dân Làng", [r for r in Role if r in available and r.faction == Faction.VILLAGER]),
+                    ("🃏 Solo / Thứ Ba", [r for r in Role if r in available and r.faction in (Faction.INDEPENDENT, Faction.SERIAL_KILLER, Faction.PIPER)]),
+                ]
+                embed = make_embed(
+                    title="🎭 TỪ ĐIỂN VAI TRÒ MA SÓI",
+                    description="Danh sách toàn bộ các vai trò trong hệ thống Ma Sói:",
+                    color=discord.Color.purple(),
+                )
+                for title, roles in groups:
+                    lines = [f"• {r.emoji} **{r.value}**: {r.description}" for r in roles]
+                    _add_chunked_embed_field(embed, title, lines)
+                embed.set_footer(text=f"Dùng {ctx.prefix}roles để xem đội hình ván đang chơi.")
+                await ctx.send(embed=embed)
+                return
+
+            q_norm = _normalize_text(clean_q)
+            available = [r for r in Role if r not in RETIRED_ROLES]
+            matched = None
+            for r in available:
+                if q_norm == _normalize_text(r.value) or q_norm == _normalize_text(r.name):
+                    matched = r
+                    break
+            if not matched:
+                for r in available:
+                    if q_norm in _normalize_text(r.value) or q_norm in _normalize_text(r.name):
+                        matched = r
+                        break
+
+            if matched:
+                embed = make_embed(
+                    title=f"🎭 Vai Trò: {matched.emoji} {matched.value}",
+                    description=(
+                        f"• **Phe:** {matched.faction.value}\n\n"
+                        f"• **Kỹ năng & Năng lực:**\n> {matched.description}"
+                    ),
+                    color=discord.Color.purple(),
+                )
+                embed.set_footer(text=f"Dùng {ctx.prefix}roles để xem đội hình ván Ma Sói hiện tại.")
+                await ctx.send(embed=embed)
+                return
+
+        # 2. Tìm ván đấu Ma Sói đang hoạt động
+        key = f"{ctx.guild.id}-{ctx.channel.id}" if ctx.guild else None
+        game = self.active_games.get(key) if key else None
+        if not game and ctx.guild and hasattr(ctx.channel, "parent_id") and ctx.channel.parent_id:
+            game = self.active_games.get(f"{ctx.guild.id}-{ctx.channel.parent_id}")
+        if not game and ctx.guild:
+            guild_games = [g for g in self.active_games.values() if g.guild_id == ctx.guild.id]
+            if len(guild_games) == 1:
+                game = guild_games[0]
+
+        if not game:
+            embed_none = make_embed(
+                title="🎭 VAI TRÒ MA SÓI",
+                description=(
+                    "❌ **Không tìm thấy ván Ma Sói nào đang diễn ra hoặc trong phòng chờ tại kênh này!**\n\n"
+                    f"• Dùng `{ctx.prefix}masoi` để tạo phòng chơi mới.\n"
+                    f"• Dùng `{ctx.prefix}roles all` để xem toàn bộ danh sách vai trò có trong bot.\n"
+                    f"• Dùng `{ctx.prefix}roles <tên_vai_trò>` để tra cứu nhanh thông tin 1 vai trò (Ví dụ: `{ctx.prefix}roles tiên tri`)."
+                ),
+                color=discord.Color.orange(),
+            )
+            await ctx.send(embed=embed_none)
+            return
+
+        # 3. Ván đang trong phòng chờ (LOBBY)
+        if game.phase == GamePhase.LOBBY:
+            roles_preview = game.preview_roles()
+            role_counts = Counter(roles_preview)
+            player_count = len(game.players)
+            total_roles = len(roles_preview)
+
+            mode_str = (
+                "Đội hình 16 người cố định" if player_count == MASOI_PLAYER_COUNT
+                else ("Tự động (AUTO)" if game.settings.role_setup_mode == "AUTO" else "Tùy chỉnh (CUSTOM)")
+            )
+
+            desc = (
+                f"👑 **Chủ phòng:** **{game.host_name}**\n"
+                f"👥 **Số người hiện tại:** **{player_count}/{MASOI_MAX_PLAYER_COUNT}** người\n"
+                f"⚙️ **Chế độ phân vai:** `{mode_str}`\n\n"
+                f"📌 *Đội hình dự kiến chia ngẫu nhiên cho **{total_roles}** người chơi:*"
+            )
+
+            embed = make_embed(
+                title="🎭 ĐỘI HÌNH VAI TRÒ DỰ KIẾN (PHÒNG CHỜ)",
+                description=desc,
+                color=discord.Color.blue(),
+            )
+            _add_roster_fields(embed, role_counts)
+            embed.set_footer(text=f"💡 Khi có thêm người tham gia ({player_count}/{MASOI_MAX_PLAYER_COUNT}), đội hình sẽ tự động cập nhật.")
+            await ctx.send(embed=embed)
+            return
+
+        # 4. Ván đã kết thúc
+        if game.phase == GamePhase.GAME_END:
+            await ctx.send(f"📋 Ván Ma Sói ở kênh này đã kết thúc. Bạn có thể dùng `{ctx.prefix}masoi` để tạo ván mới!")
+            return
+
+        # 5. Ván đang diễn ra (Active Match)
+        roles_list = [p.role for p in game.players.values()]
+        role_counts = Counter(roles_list)
+        total_players = len(game.players)
+        alive_players = len(game.get_alive_players())
+        dead_players = total_players - alive_players
+
+        reveal_txt = "Hiện ngay khi chết ✅" if game.settings.reveal_roles_on_death else "Ẩn tới cuối ván 🔒"
+
+        desc = (
+            f"📊 **Tiến trình:** `{game.phase.value}` (Đêm {game.night_count} / Ngày {game.day_count})\n"
+            f"👥 **Tình trạng:** **{alive_players}/{total_players}** người còn sống ({dead_players} đã tử nạn)\n"
+            f"🎭 **Quy mô ván đấu:** **{total_players}** vai trò\n"
+            f"👁️ **Hiện vai trò người chết:** `{reveal_txt}`\n\n"
+            f"📌 *Danh sách tất cả các vai trò có mặt trong ván đấu này:*"
+        )
+
+        embed = make_embed(
+            title="⚔️ ĐỘI HÌNH VAI TRÒ TRONG VÁN MA SÓI",
+            description=desc,
+            color=discord.Color(0xE0A638),
+        )
+        _add_roster_fields(embed, role_counts)
+        embed.set_footer(text="⚠️ Danh tính người giữ vai trò được bảo mật ẩn danh cho tới cuối ván.")
+        await ctx.send(embed=embed)
 
 
     # ──────────────────────────────────────────────

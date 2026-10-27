@@ -292,3 +292,51 @@ class PreflightAndPermissionsTests(unittest.IsolatedAsyncioTestCase):
         cog.end_game.assert_awaited_once()
         self.assertEqual(game._night_result.night, 2)
         self.assertEqual(game._night_result.deaths, (2,))
+
+    async def test_roles_command_no_game(self):
+        cog = make_cog(make_game(Role.WOLF))
+        cog.active_games.clear()
+        ctx = SimpleNamespace(guild=SimpleNamespace(id=1), channel=SimpleNamespace(id=2), send=AsyncMock(), prefix="i?")
+        await masoi.Masoi.roles_cmd.callback(cog, ctx)
+        ctx.send.assert_awaited_once()
+        embed = ctx.send.call_args.kwargs["embed"]
+        self.assertIn("Không tìm thấy ván Ma Sói nào", embed.description)
+
+    async def test_roles_command_in_lobby(self):
+        game = make_game(Role.WOLF, Role.VILLAGER, Role.SEER)
+        game.phase = GamePhase.LOBBY
+        cog = make_cog(game)
+        ctx = SimpleNamespace(guild=SimpleNamespace(id=game.guild_id), channel=SimpleNamespace(id=game.channel_id), send=AsyncMock(), prefix="i?")
+        await masoi.Masoi.roles_cmd.callback(cog, ctx)
+        ctx.send.assert_awaited_once()
+        embed = ctx.send.call_args.kwargs["embed"]
+        self.assertIn("PHÒNG CHỜ", embed.title)
+        field_names = [f.name for f in embed.fields]
+        self.assertTrue(any("Phe Sói" in name for name in field_names))
+        self.assertTrue(any("Phe Dân Làng" in name for name in field_names))
+
+    async def test_roles_command_active_game(self):
+        game = make_game(Role.WOLF, Role.GUARD, Role.VILLAGER)
+        game.phase = GamePhase.NIGHT_WOLF
+        cog = make_cog(game)
+        ctx = SimpleNamespace(guild=SimpleNamespace(id=game.guild_id), channel=SimpleNamespace(id=game.channel_id), send=AsyncMock(), prefix="i?")
+        await masoi.Masoi.roles_cmd.callback(cog, ctx)
+        ctx.send.assert_awaited_once()
+        embed = ctx.send.call_args.kwargs["embed"]
+        self.assertIn("TRONG VÁN MA SÓI", embed.title)
+        self.assertIn("Phe Sói", [f.name for f in embed.fields][0])
+
+    async def test_roles_command_lookup_all_and_single_role(self):
+        cog = make_cog(make_game(Role.WOLF))
+        ctx = SimpleNamespace(guild=SimpleNamespace(id=1), channel=SimpleNamespace(id=2), send=AsyncMock(), prefix="i?")
+
+        # Test roles all
+        await masoi.Masoi.roles_cmd.callback(cog, ctx, query="all")
+        embed_all = ctx.send.call_args.kwargs["embed"]
+        self.assertIn("TỪ ĐIỂN VAI TRÒ", embed_all.title)
+
+        # Test single role lookup
+        ctx.send.reset_mock()
+        await masoi.Masoi.roles_cmd.callback(cog, ctx, query="tiên tri")
+        embed_single = ctx.send.call_args.kwargs["embed"]
+        self.assertIn("Tiên Tri", embed_single.title)

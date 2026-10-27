@@ -716,6 +716,13 @@ SERVER_ADMIN_SECTIONS = {
                 "example": "stopmasoi",
             },
             {
+                "name": "roles [vai_trò|all]",
+                "aliases": ["vaitro", "masoivaitro", "doihinh"],
+                "perm": "Mọi người",
+                "desc": "Xem danh sách các vai trò (roles) trong ván Ma Sói hiện tại hoặc tra cứu kỹ năng vai trò.",
+                "example": "roles",
+            },
+            {
                 "name": "uno stop",
                 "aliases": ["cancel", "forceclose"],
                 "perm": "Host / Quản trị viên",
