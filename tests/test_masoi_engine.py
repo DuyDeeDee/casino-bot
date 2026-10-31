@@ -436,3 +436,14 @@ class NightPipelineTests(unittest.TestCase):
         game.settings.custom_wolf_count = 3
         self.assertTrue(game.validate_role_setup())
 
+    def test_cycle_night_time_includes_up_to_120s(self):
+        game = make_game(Role.VILLAGER)
+        s = game.settings
+        s.night_time = 60
+        s.cycle_night_time()
+        self.assertEqual(s.night_time, 90)
+        s.cycle_night_time()
+        self.assertEqual(s.night_time, 120)
+        s.cycle_night_time()
+        self.assertEqual(s.night_time, 30)
+

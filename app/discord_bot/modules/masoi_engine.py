@@ -303,7 +303,7 @@ class MasoiSettings:
         self.discussion_time = times[(idx + 1) % len(times)]
 
     def cycle_night_time(self):
-        times = [30, 45, 60]
+        times = [30, 45, 60, 90, 120]
         idx = times.index(self.night_time) if self.night_time in times else 2
         self.night_time = times[(idx + 1) % len(times)]
 
