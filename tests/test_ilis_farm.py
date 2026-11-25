@@ -1,7 +1,7 @@
 import tempfile
 import unittest
 from concurrent.futures import ThreadPoolExecutor
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from threading import Barrier
 from unittest.mock import patch
@@ -20,8 +20,12 @@ class FarmEconomyTests(unittest.TestCase):
         root = Path(self.directory.name)
         database = root / "economy.db"
         self.database_path = database
-        self.enterContext(patch.object(economy_module, "DATABASE_PATH", database))
-        self.enterContext(patch.object(economy_module, "LEGACY_DATABASE_PATH", root / "missing.db"))
+        database_path = patch.object(economy_module, "DATABASE_PATH", database)
+        legacy_path = patch.object(economy_module, "LEGACY_DATABASE_PATH", root / "missing.db")
+        database_path.start()
+        self.addCleanup(database_path.stop)
+        legacy_path.start()
+        self.addCleanup(legacy_path.stop)
         self.economy = Economy()
         self.addCleanup(self.economy.close)
         self.store = FarmStore(self.economy)
@@ -59,7 +63,7 @@ class FarmEconomyTests(unittest.TestCase):
         self.assertEqual(audits, [(1_000_000,), (-16_000_000,)])
 
     def test_harvest_and_sell_credit_spendable_casino_money(self):
-        now = datetime(2026, 11, 26, tzinfo=UTC).timestamp()
+        now = datetime(2026, 11, 26, tzinfo=timezone.utc).timestamp()
         self.store.start(self.user_id)
         with self.store.action(self.user_id, "plant", now=now) as farm:
             farm.plant("1", 1)
@@ -84,7 +88,7 @@ class FarmEconomyTests(unittest.TestCase):
 
     def test_daily_claim_does_not_pay_twice(self):
         self.store.start(self.user_id)
-        now = datetime(2026, 11, 26, 12, tzinfo=UTC).timestamp()
+        now = datetime(2026, 11, 26, 12, tzinfo=timezone.utc).timestamp()
         with patch("app.discord_bot.modules.farm.service.random.randint", return_value=300):
             with self.store.action(self.user_id, "daily", now=now) as farm:
                 self.assertEqual(farm.daily(), (300, 1))

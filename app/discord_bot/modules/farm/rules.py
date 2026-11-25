@@ -1,7 +1,7 @@
 """Ilis Farm rules. Catalog prices and rewards use the original Farm unit."""
 
 import json
-from datetime import UTC, date, datetime
+from datetime import date, datetime, timezone
 from math import floor
 from pathlib import Path
 from random import Random
@@ -51,7 +51,7 @@ def item_id(value: str) -> str:
 
 
 def day_at(now: float) -> date:
-    return datetime.fromtimestamp(now, UTC).date()
+    return datetime.fromtimestamp(now, timezone.utc).date()
 
 
 def season_at(day: date) -> tuple[dict, int]:

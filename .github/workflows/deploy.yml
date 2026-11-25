@@ -18,6 +18,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.VM_PORT || 22 }}
           script: |
+            set -e
             cd ${{ secrets.VM_TARGET_DIR || '/root/bot_dis' }}
             git pull origin main
             if [ -d "venv" ]; then
@@ -27,6 +28,19 @@ jobs:
               pip install -r requirements.txt
             fi
             npm install
+            restart_time=$(date '+%Y-%m-%d %H:%M:%S')
             pm2 restart bot_dis || pm2 start "./venv/bin/python main.py" --name "bot_dis"
-            pm2 save
+            for attempt in $(seq 1 15); do
+              if pm2 logs bot_dis --err --lines 200 --nostream --raw | awk -v since="$restart_time" '
+                substr($0, 1, 19) >= since && /app\.discord_bot\.cogs\.handlers - INFO - .* is ready$/ { ready = 1 }
+                END { exit !ready }
+              '; then
+                echo "Casino Bot connected to Discord."
+                pm2 save
+                exit 0
+              fi
+              sleep 3
+            done
+            echo "Casino Bot did not report Discord readiness after restart." >&2
+            exit 1
 
