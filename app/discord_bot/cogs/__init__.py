@@ -36,3 +36,4 @@ from .sportsbet import SportsBet
 from .chat_levels import ChatLevels
 from .profile_card import ProfileCard
 from .voice_afk import VoiceAfk
+from .ilis_farm import IlisFarm

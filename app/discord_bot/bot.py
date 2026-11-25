@@ -52,6 +52,7 @@ from app.discord_bot.cogs import (
     ChatLevels,
     ProfileCard,
     VoiceAfk,
+    IlisFarm,
 )
 
 from app.discord_bot.modules.economy import Economy
@@ -96,6 +97,7 @@ COGS = (
     ChatLevels,
     ProfileCard,
     VoiceAfk,
+    IlisFarm,
 )
 
 

@@ -12,6 +12,21 @@ from app.config import config
 DATABASE_PATH = Path(config.storage.database_path)
 
 
+def ensure_wallet_transaction_table(cur: sqlite3.Cursor) -> None:
+    cur.execute(
+        """CREATE TABLE IF NOT EXISTS wallet_transactions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            event TEXT NOT NULL,
+            money_delta INTEGER NOT NULL DEFAULT 0,
+            credits_delta INTEGER NOT NULL DEFAULT 0,
+            command TEXT,
+            details TEXT,
+            created_at INTEGER NOT NULL
+        )"""
+    )
+
+
 def log_wallet_change(
     logger: logging.Logger,
     *,
@@ -37,18 +52,7 @@ def log_wallet_change(
     try:
         conn = sqlite3.connect(str(DATABASE_PATH), timeout=10)
         cur = conn.cursor()
-        cur.execute(
-            """CREATE TABLE IF NOT EXISTS wallet_transactions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                event TEXT NOT NULL,
-                money_delta INTEGER NOT NULL DEFAULT 0,
-                credits_delta INTEGER NOT NULL DEFAULT 0,
-                command TEXT,
-                details TEXT,
-                created_at INTEGER NOT NULL
-            )"""
-        )
+        ensure_wallet_transaction_table(cur)
         cur.execute(
             """INSERT INTO wallet_transactions(user_id, event, money_delta, credits_delta, command, details, created_at)
             VALUES (?, ?, ?, ?, ?, ?, ?)""",

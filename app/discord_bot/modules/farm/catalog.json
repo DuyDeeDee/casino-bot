@@ -1,0 +1,2091 @@
+{
+  "CROPS": {
+    "rau_muong": {
+      "name": "Rau Muống",
+      "emoji": "🥬",
+      "growTime": 900,
+      "seedCost": 8,
+      "sellValue": 16,
+      "xp": 2
+    },
+    "ca_chua": {
+      "name": "Cà Chua",
+      "emoji": "🍅",
+      "growTime": 1200,
+      "seedCost": 12,
+      "sellValue": 24,
+      "xp": 3
+    },
+    "lua": {
+      "name": "Lúa",
+      "emoji": "🌾",
+      "growTime": 1800,
+      "seedCost": 20,
+      "sellValue": 40,
+      "xp": 5
+    },
+    "khoai_lang": {
+      "name": "Khoai Lang",
+      "emoji": "🍠",
+      "growTime": 2400,
+      "seedCost": 30,
+      "sellValue": 60,
+      "xp": 7
+    },
+    "carrot": {
+      "name": "Cà Rốt",
+      "emoji": "🥕",
+      "growTime": 3600,
+      "seedCost": 50,
+      "sellValue": 100,
+      "xp": 10
+    },
+    "corn": {
+      "name": "Bắp",
+      "emoji": "🌽",
+      "growTime": 7200,
+      "seedCost": 100,
+      "sellValue": 200,
+      "xp": 20
+    },
+    "pumpkin": {
+      "name": "Bí Ngô",
+      "emoji": "🎃",
+      "growTime": 14400,
+      "seedCost": 220,
+      "sellValue": 450,
+      "xp": 40
+    },
+    "strawberry": {
+      "name": "Dâu Tây",
+      "emoji": "🍓",
+      "growTime": 28800,
+      "seedCost": 450,
+      "sellValue": 900,
+      "xp": 80
+    },
+    "watermelon": {
+      "name": "Dưa Hấu",
+      "emoji": "🍉",
+      "growTime": 43200,
+      "seedCost": 1000,
+      "sellValue": 2000,
+      "xp": 150
+    },
+    "dragonfruit": {
+      "name": "Thanh Long",
+      "emoji": "🐉",
+      "growTime": 86400,
+      "seedCost": 2500,
+      "sellValue": 5000,
+      "xp": 300
+    },
+    "nhan_sam": {
+      "name": "Nhân Sâm",
+      "emoji": "🌱",
+      "growTime": 172800,
+      "seedCost": 5000,
+      "sellValue": 10000,
+      "xp": 600
+    }
+  },
+  "QUALITY_RATES": {
+    "common": {
+      "rate": 0.7,
+      "multiplier": 0.75
+    },
+    "uncommon": {
+      "rate": 0.2,
+      "multiplier": 0.9
+    },
+    "rare": {
+      "rate": 0.08,
+      "multiplier": 1.05
+    },
+    "epic": {
+      "rate": 0.018,
+      "multiplier": 1.2
+    },
+    "legendary": {
+      "rate": 0.002,
+      "multiplier": 1.4
+    }
+  },
+  "FARM_EXPANSION": {
+    "1": {
+      "rows": 2,
+      "cols": 2,
+      "maxPlots": 4
+    },
+    "10": {
+      "rows": 3,
+      "cols": 3,
+      "maxPlots": 9
+    },
+    "25": {
+      "rows": 4,
+      "cols": 4,
+      "maxPlots": 16
+    },
+    "50": {
+      "rows": 5,
+      "cols": 5,
+      "maxPlots": 25
+    }
+  },
+  "FERTILIZER_TIME_REDUCTION": {
+    "normal": 0.1,
+    "premium": 0.2,
+    "superior": 0.3
+  },
+  "SHOP_ITEMS": {
+    "rau_muong": {
+      "category": "seeds",
+      "name": "Hạt giống Rau Muống",
+      "coin": 8,
+      "gem": 0
+    },
+    "ca_chua": {
+      "category": "seeds",
+      "name": "Hạt giống Cà Chua",
+      "coin": 12,
+      "gem": 0
+    },
+    "lua": {
+      "category": "seeds",
+      "name": "Hạt giống Lúa",
+      "coin": 20,
+      "gem": 0
+    },
+    "khoai_lang": {
+      "category": "seeds",
+      "name": "Hạt giống Khoai Lang",
+      "coin": 30,
+      "gem": 0
+    },
+    "carrot": {
+      "category": "seeds",
+      "name": "Hạt giống Cà Rốt",
+      "coin": 50,
+      "gem": 0
+    },
+    "corn": {
+      "category": "seeds",
+      "name": "Hạt giống Bắp",
+      "coin": 100,
+      "gem": 0
+    },
+    "pumpkin": {
+      "category": "seeds",
+      "name": "Hạt giống Bí Ngô",
+      "coin": 220,
+      "gem": 0
+    },
+    "strawberry": {
+      "category": "seeds",
+      "name": "Hạt giống Dâu Tây",
+      "coin": 450,
+      "gem": 0
+    },
+    "watermelon": {
+      "category": "seeds",
+      "name": "Hạt giống Dưa Hấu",
+      "coin": 1000,
+      "gem": 0
+    },
+    "dragonfruit": {
+      "category": "seeds",
+      "name": "Hạt giống Thanh Long",
+      "coin": 2500,
+      "gem": 0
+    },
+    "nhan_sam": {
+      "category": "seeds",
+      "name": "Hạt giống Nhân Sâm",
+      "coin": 5000,
+      "gem": 0
+    },
+    "thuc_an_thuong": {
+      "category": "food",
+      "name": "Thức ăn thường",
+      "coin": 30,
+      "gem": 0
+    },
+    "thuc_an_ngon": {
+      "category": "food",
+      "name": "Thức ăn ngon",
+      "coin": 100,
+      "gem": 0
+    },
+    "thuc_an_cao_cap": {
+      "category": "food",
+      "name": "Thức ăn cao cấp",
+      "coin": 300,
+      "gem": 0
+    },
+    "keo_ngot": {
+      "category": "food",
+      "name": "Kẹo ngọt",
+      "coin": 200,
+      "gem": 0
+    },
+    "htng": {
+      "category": "food",
+      "name": "Hồng trà Ngô Gia",
+      "coin": 500,
+      "gem": 0
+    },
+    "normal_fertilizer": {
+      "category": "fertilizer",
+      "name": "Phân bón thường",
+      "coin": 100,
+      "gem": 0
+    },
+    "premium_fertilizer": {
+      "category": "fertilizer",
+      "name": "Phân bón cao cấp",
+      "coin": 300,
+      "gem": 0
+    },
+    "superior_fertilizer": {
+      "category": "fertilizer",
+      "name": "Phân bón đặc biệt",
+      "coin": 800,
+      "gem": 0
+    },
+    "rod_common": {
+      "category": "fishing",
+      "name": "Cần câu bình dân",
+      "coin": 500,
+      "gem": 0
+    },
+    "rod_uncommon": {
+      "category": "fishing",
+      "name": "Cần câu trung bình",
+      "coin": 5000,
+      "gem": 0
+    },
+    "rod_rare": {
+      "category": "fishing",
+      "name": "Cần câu cao cấp",
+      "coin": 15000,
+      "gem": 0
+    },
+    "chick_pet": {
+      "category": "pets",
+      "name": "Gà Con",
+      "coin": 300,
+      "gem": 0,
+      "petId": "chick"
+    },
+    "worm_pet": {
+      "category": "pets",
+      "name": "Sâu",
+      "coin": 300,
+      "gem": 0,
+      "petId": "worm"
+    },
+    "turtle_pet": {
+      "category": "pets",
+      "name": "Rùa",
+      "coin": 500,
+      "gem": 0,
+      "petId": "turtle"
+    },
+    "butterfly_pet": {
+      "category": "pets",
+      "name": "Bướm",
+      "coin": 1000,
+      "gem": 0,
+      "petId": "butterfly"
+    },
+    "rabbit_pet": {
+      "category": "pets",
+      "name": "Thỏ",
+      "coin": 5000,
+      "gem": 0,
+      "petId": "rabbit"
+    },
+    "dog_pet": {
+      "category": "pets",
+      "name": "Chó",
+      "coin": 5000,
+      "gem": 0,
+      "petId": "dog"
+    },
+    "cat_pet": {
+      "category": "pets",
+      "name": "Mèo",
+      "coin": 5000,
+      "gem": 0,
+      "petId": "cat"
+    },
+    "fox_pet": {
+      "category": "pets",
+      "name": "Cáo",
+      "coin": 15000,
+      "gem": 0,
+      "petId": "fox"
+    }
+  },
+  "SHOP_ID_MAP": {
+    "1": "rau_muong",
+    "2": "ca_chua",
+    "3": "lua",
+    "4": "khoai_lang",
+    "5": "carrot",
+    "6": "corn",
+    "7": "pumpkin",
+    "8": "strawberry",
+    "9": "watermelon",
+    "10": "dragonfruit",
+    "11": "nhan_sam",
+    "100": "chick_pet",
+    "101": "worm_pet",
+    "102": "turtle_pet",
+    "103": "butterfly_pet",
+    "104": "rabbit_pet",
+    "105": "dog_pet",
+    "106": "cat_pet",
+    "107": "fox_pet",
+    "200": "thuc_an_thuong",
+    "201": "thuc_an_ngon",
+    "202": "thuc_an_cao_cap",
+    "203": "keo_ngot",
+    "204": "htng",
+    "250": "normal_fertilizer",
+    "251": "premium_fertilizer",
+    "252": "superior_fertilizer",
+    "260": "rod_common",
+    "261": "rod_uncommon",
+    "262": "rod_rare"
+  },
+  "FISH_TYPES": {
+    "common": {
+      "rate": 0.5,
+      "emoji": "🐟",
+      "name": "Cá thường",
+      "basePrice": 100,
+      "xp": 15,
+      "rarity": "common",
+      "rareChanceBonus": 0
+    },
+    "uncommon": {
+      "rate": 0.28,
+      "emoji": "🐠",
+      "name": "Cá lạ",
+      "basePrice": 250,
+      "xp": 30,
+      "rarity": "uncommon",
+      "rareChanceBonus": 0.02
+    },
+    "rare": {
+      "rate": 0.14,
+      "emoji": "🐡",
+      "name": "Cá hiếm",
+      "basePrice": 600,
+      "xp": 60,
+      "rarity": "rare",
+      "rareChanceBonus": 0.05
+    },
+    "epic": {
+      "rate": 0.06,
+      "emoji": "🦈",
+      "name": "Cá sứ thi",
+      "basePrice": 1500,
+      "xp": 120,
+      "rarity": "epic",
+      "rareChanceBonus": 0.1
+    },
+    "mythic": {
+      "rate": 0.02,
+      "emoji": "🐙",
+      "name": "Cá huyền thoại",
+      "basePrice": 5000,
+      "xp": 250,
+      "rarity": "mythic",
+      "rareChanceBonus": 0.15
+    }
+  },
+  "JUNK_ITEMS": {
+    "old_shoe": {
+      "rate": 0.15,
+      "emoji": "👢",
+      "name": "Giày cũ rách",
+      "type": "junk"
+    },
+    "fish_bone": {
+      "rate": 0.1,
+      "emoji": "🦴",
+      "name": "Xương cá",
+      "type": "junk"
+    },
+    "seaweed": {
+      "rate": 0.08,
+      "emoji": "🌿",
+      "name": "Rong biển",
+      "type": "junk"
+    },
+    "bottle": {
+      "rate": 0.05,
+      "emoji": "🍾",
+      "name": "Chai rỗng",
+      "type": "junk"
+    }
+  },
+  "BONUS_ITEMS": {
+    "lua": {
+      "rate": 0.08,
+      "emoji": "🌾",
+      "name": "Hạt giống Lúa",
+      "quantity": 2,
+      "type": "seed"
+    },
+    "carrot": {
+      "rate": 0.05,
+      "emoji": "🥕",
+      "name": "Hạt giống Cà Rốt",
+      "quantity": 2,
+      "type": "seed"
+    },
+    "normal_fertilizer": {
+      "rate": 0.1,
+      "emoji": "🥄",
+      "name": "Phân bón thường",
+      "quantity": 1,
+      "type": "fertilizer"
+    },
+    "premium_fertilizer": {
+      "rate": 0.02,
+      "emoji": "✨🥄",
+      "name": "Phân bón cao cấp",
+      "quantity": 1,
+      "type": "fertilizer"
+    }
+  },
+  "ROD_INFO": {
+    "rod_common": {
+      "name": "Cần câu bình dân",
+      "emoji": "🎣",
+      "rareChanceBonus": 0,
+      "weightBonus": 0,
+      "coinCost": 500
+    },
+    "rod_uncommon": {
+      "name": "Cần câu trung bình",
+      "emoji": "🎣✨",
+      "rareChanceBonus": 0.1,
+      "weightBonus": 5,
+      "coinCost": 2000
+    },
+    "rod_rare": {
+      "name": "Cần câu cao cấp",
+      "emoji": "🎣💎",
+      "rareChanceBonus": 0.25,
+      "weightBonus": 15,
+      "coinCost": 8000
+    }
+  },
+  "GACHA_POOL": [
+    {
+      "id": "chick",
+      "type": "pet",
+      "rate": 0.08,
+      "name": "Gà Con",
+      "rarity": "common",
+      "description": "+5% XP nhận được"
+    },
+    {
+      "id": "worm",
+      "type": "pet",
+      "rate": 0.07,
+      "name": "Sâu",
+      "rarity": "common",
+      "description": "+5% sản lượng cây trồng"
+    },
+    {
+      "id": "turtle",
+      "type": "pet",
+      "rate": 0.06,
+      "name": "Rùa",
+      "rarity": "common",
+      "description": "+5% xu kiếm được"
+    },
+    {
+      "id": "butterfly",
+      "type": "pet",
+      "rate": 0.04,
+      "name": "Bướm",
+      "rarity": "uncommon",
+      "description": "+3% cơ hội nông sản hiếm"
+    },
+    {
+      "id": "rabbit",
+      "type": "pet",
+      "rate": 0.05,
+      "name": "Thỏ",
+      "rarity": "common",
+      "description": "+10% sản lượng cây trồng"
+    },
+    {
+      "id": "dog",
+      "type": "pet",
+      "rate": 0.04,
+      "name": "Chó",
+      "rarity": "common",
+      "description": "+10% xu kiếm được"
+    },
+    {
+      "id": "cat",
+      "type": "pet",
+      "rate": 0.035,
+      "name": "Mèo",
+      "rarity": "common",
+      "description": "+10% XP nhận được"
+    },
+    {
+      "id": "fox",
+      "type": "pet",
+      "rate": 0.025,
+      "name": "Cáo",
+      "rarity": "uncommon",
+      "description": "+5% cơ hội nông sản hiếm"
+    },
+    {
+      "id": "phoenix",
+      "type": "pet",
+      "rate": 0.01,
+      "name": "Phượng Hoàng",
+      "rarity": "rare",
+      "description": "+15% XP, +15% xu, 5% thu hoạch gấp đôi"
+    },
+    {
+      "id": "dragon",
+      "type": "pet",
+      "rate": 0.008,
+      "name": "Rồng",
+      "rarity": "rare",
+      "description": "+20% sản lượng, +10% xu"
+    },
+    {
+      "id": "unicorn",
+      "type": "pet",
+      "rate": 0.007,
+      "name": "Kỳ Lân",
+      "rarity": "rare",
+      "description": "+18% XP, +12% cơ hội hiếm"
+    },
+    {
+      "id": "sphinx",
+      "type": "pet",
+      "rate": 0.005,
+      "name": "Sphinx",
+      "rarity": "epic",
+      "description": "+25% XP, +25% xu, +10% sản lượng"
+    },
+    {
+      "id": "kraken",
+      "type": "pet",
+      "rate": 0.003,
+      "name": "Kraken",
+      "rarity": "epic",
+      "description": "+28% sản lượng, +15% cơ hội hiếm, 3% gấp đôi"
+    },
+    {
+      "id": "shadowCat",
+      "type": "pet",
+      "rate": 0,
+      "name": "Mèo Bóng Tối",
+      "rarity": "mythic",
+      "description": "Không còn trong gacha — vật phẩm mùa 1 cũ",
+      "isHidden": true
+    },
+    {
+      "id": "hr",
+      "type": "pet",
+      "rate": 0,
+      "name": "Huyn",
+      "rarity": "mythic",
+      "description": "Buff độc quyền — mở khoá qua cơ chế ẩn",
+      "isMythic": true,
+      "isLimited": true,
+      "isHidden": true
+    },
+    {
+      "id": "kuromi",
+      "type": "pet",
+      "rate": 0.003,
+      "name": "Kuromi",
+      "rarity": "mythic",
+      "description": "+32% XP, +25% xu, +18% cơ hội hiếm",
+      "isMythic": true,
+      "isLimited": false,
+      "season": 2
+    },
+    {
+      "id": "melody",
+      "type": "pet",
+      "rate": 0.003,
+      "name": "Melody",
+      "rarity": "mythic",
+      "description": "+32% sản lượng, +28% XP, +8% thu hoạch gấp đôi",
+      "isMythic": true,
+      "isLimited": false,
+      "season": 2
+    },
+    {
+      "id": "satou",
+      "type": "pet",
+      "rate": 0.002,
+      "name": "Satou Matsuzaka",
+      "rarity": "mythic",
+      "description": "+28% sản lượng, +22% xu · C6: Cộng hưởng +30% buff Shio",
+      "isMythic": true,
+      "isLimited": true,
+      "season": 2
+    },
+    {
+      "id": "shio",
+      "type": "pet",
+      "rate": 0.002,
+      "name": "Shio Kōbe",
+      "rarity": "mythic",
+      "description": "+28% XP, +15% cơ hội hiếm · C6: Cộng hưởng +30% buff Satou",
+      "isMythic": true,
+      "isLimited": true,
+      "season": 2
+    },
+    {
+      "id": "tuat",
+      "type": "pet",
+      "rate": 0.008,
+      "name": "Tuất",
+      "rarity": "legendary",
+      "description": "+22% XP, +18% sản lượng, +10% thu hoạch gấp đôi"
+    },
+    {
+      "id": "thaoThiet",
+      "type": "pet",
+      "rate": 0.006,
+      "name": "Thao Thiết",
+      "rarity": "legendary",
+      "description": "+28% XP, +22% sản lượng · Đói nhanh hơn 20%"
+    },
+    {
+      "id": "rau_muong",
+      "type": "seed",
+      "rate": 0.05,
+      "name": "Hạt giống Rau Muống",
+      "quantity": 5
+    },
+    {
+      "id": "ca_chua",
+      "type": "seed",
+      "rate": 0.05,
+      "name": "Hạt giống Cà Chua",
+      "quantity": 4
+    },
+    {
+      "id": "lua",
+      "type": "seed",
+      "rate": 0.06,
+      "name": "Hạt giống Lúa",
+      "quantity": 3
+    },
+    {
+      "id": "khoai_lang",
+      "type": "seed",
+      "rate": 0.045,
+      "name": "Hạt giống Khoai Lang",
+      "quantity": 3
+    },
+    {
+      "id": "carrot",
+      "type": "seed",
+      "rate": 0.05,
+      "name": "Hạt giống Cà Rốt",
+      "quantity": 2
+    },
+    {
+      "id": "corn",
+      "type": "seed",
+      "rate": 0.04,
+      "name": "Hạt giống Bắp",
+      "quantity": 2
+    },
+    {
+      "id": "pumpkin",
+      "type": "seed",
+      "rate": 0.03,
+      "name": "Hạt giống Bí Ngô",
+      "quantity": 2
+    },
+    {
+      "id": "strawberry",
+      "type": "seed",
+      "rate": 0.02,
+      "name": "Hạt giống Dâu Tây",
+      "quantity": 1
+    },
+    {
+      "id": "watermelon",
+      "type": "seed",
+      "rate": 0.01,
+      "name": "Hạt giống Dưa Hấu",
+      "quantity": 1
+    },
+    {
+      "id": "dragonfruit",
+      "type": "seed",
+      "rate": 0.008,
+      "name": "Hạt giống Thanh Long",
+      "quantity": 1
+    },
+    {
+      "id": "nhan_sam",
+      "type": "seed",
+      "rate": 0.008,
+      "name": "Hạt giống Nhân Sâm",
+      "quantity": 1
+    },
+    {
+      "id": "normal_fertilizer",
+      "type": "fertilizer",
+      "rate": 0.05,
+      "name": "Phân bón thường",
+      "quantity": 1
+    },
+    {
+      "id": "thuc_an_thuong",
+      "type": "food",
+      "rate": 0.05,
+      "name": "Thức ăn thường",
+      "quantity": 2
+    },
+    {
+      "id": "thuc_an_ngon",
+      "type": "food",
+      "rate": 0.02,
+      "name": "Thức ăn ngon",
+      "quantity": 1
+    },
+    {
+      "id": "coin_small",
+      "type": "coin",
+      "rate": 0.05,
+      "name": "Túi xu nhỏ",
+      "emoji": "💰",
+      "min": 100,
+      "max": 300
+    },
+    {
+      "id": "coin_medium",
+      "type": "coin",
+      "rate": 0.02,
+      "name": "Túi xu vừa",
+      "emoji": "💰",
+      "min": 300,
+      "max": 600
+    },
+    {
+      "id": "coin_large",
+      "type": "coin",
+      "rate": 0.005,
+      "name": "Túi xu lớn",
+      "emoji": "💎",
+      "min": 600,
+      "max": 1000
+    }
+  ],
+  "DUPLICATE_COIN_BY_RARITY": {
+    "common": 100,
+    "uncommon": 300,
+    "rare": 800,
+    "epic": 1500,
+    "legendary": 2500,
+    "mythic": 4000
+  },
+  "PET_FOODS": {
+    "thuc_an_thuong": {
+      "name": "Thức ăn thường",
+      "hunger": 25,
+      "happiness": 2
+    },
+    "thuc_an_ngon": {
+      "name": "Thức ăn ngon",
+      "hunger": 50,
+      "happiness": 5
+    },
+    "thuc_an_cao_cap": {
+      "name": "Thức ăn cao cấp",
+      "hunger": 70,
+      "happiness": 10
+    },
+    "keo_ngot": {
+      "name": "Kẹo ngọt",
+      "hunger": 10,
+      "happiness": 40
+    },
+    "htng": {
+      "name": "Hồng trà Ngô Gia",
+      "hunger": 80,
+      "happiness": 20
+    }
+  },
+  "ACTIVITIES": [
+    {
+      "name": "Chạy bộ",
+      "emoji": "🏃",
+      "hungerLoss": 8,
+      "happyLoss": 5,
+      "hpLoss": 5,
+      "xpGain": 35
+    },
+    {
+      "name": "Nhảy dây",
+      "emoji": "🪢",
+      "hungerLoss": 10,
+      "happyLoss": 8,
+      "hpLoss": 8,
+      "xpGain": 40
+    },
+    {
+      "name": "Bơi lội",
+      "emoji": "🏊",
+      "hungerLoss": 12,
+      "happyLoss": 5,
+      "hpLoss": 10,
+      "xpGain": 45
+    },
+    {
+      "name": "Leo núi",
+      "emoji": "🧗",
+      "hungerLoss": 15,
+      "happyLoss": 10,
+      "hpLoss": 12,
+      "xpGain": 50
+    },
+    {
+      "name": "Chạy đua",
+      "emoji": "🏅",
+      "hungerLoss": 13,
+      "happyLoss": 12,
+      "hpLoss": 10,
+      "xpGain": 55
+    }
+  ],
+  "PET_LEVEL_XP": [
+    0,
+    100,
+    200,
+    350,
+    550,
+    800,
+    1100,
+    1500,
+    2000,
+    2700
+  ],
+  "PET_BASE_BONUSES": {
+    "chick": {
+      "xpBonus": 1.1,
+      "fishingXpBonus": 1.05
+    },
+    "worm": {
+      "yieldBonus": 1.08,
+      "fishingWeightBonus": 3
+    },
+    "turtle": {
+      "fishingCoinBonus": 1.1,
+      "fishingXpBonus": 1.05,
+      "hungerDecayReduction": 0.1
+    },
+    "butterfly": {
+      "rareChanceBonus": 0.04,
+      "fishingRareBonus": 0.05,
+      "happinessDecayReduction": 0.1
+    },
+    "rabbit": {
+      "yieldBonus": 1.12,
+      "fishingWeightBonus": 5,
+      "exerciseHpReduction": 0.12
+    },
+    "dog": {
+      "fishingCoinBonus": 1.15,
+      "fishingXpBonus": 1.08,
+      "hungerDecayReduction": 0.15
+    },
+    "cat": {
+      "xpBonus": 1.12,
+      "fishingXpBonus": 1.1,
+      "happinessDecayReduction": 0.12
+    },
+    "fox": {
+      "rareChanceBonus": 0.06,
+      "fishingRareBonus": 0.08,
+      "exerciseHpReduction": 0.12
+    },
+    "phoenix": {
+      "xpBonus": 1.18,
+      "doubleHarvestChance": 0.05,
+      "fishingXpBonus": 1.15,
+      "exerciseHpReduction": 0.18
+    },
+    "dragon": {
+      "yieldBonus": 1.22,
+      "fishingWeightBonus": 8,
+      "doubleHarvestChance": 0.04,
+      "fishingCoinBonus": 1.1
+    },
+    "unicorn": {
+      "xpBonus": 1.2,
+      "rareChanceBonus": 0.12,
+      "fishingRareBonus": 0.15,
+      "hungerDecayReduction": 0.18,
+      "happinessDecayReduction": 0.15
+    },
+    "sphinx": {
+      "xpBonus": 1.28,
+      "yieldBonus": 1.12,
+      "fishingXpBonus": 1.25,
+      "fishingWeightBonus": 10,
+      "hungerDecayReduction": 0.15,
+      "exerciseHpReduction": 0.2
+    },
+    "kraken": {
+      "yieldBonus": 1.3,
+      "rareChanceBonus": 0.15,
+      "doubleHarvestChance": 0.05,
+      "fishingRareBonus": 0.22,
+      "fishingWeightBonus": 12,
+      "exerciseHpReduction": 0.22
+    },
+    "shadowCat": {
+      "xpBonus": 1.35,
+      "rareChanceBonus": 0.18,
+      "fishingXpBonus": 1.3,
+      "fishingRareBonus": 0.22,
+      "exerciseHpReduction": 0.2,
+      "happinessDecayReduction": 0.18
+    },
+    "hr": {
+      "yieldBonus": 1.35,
+      "xpBonus": 1.3,
+      "doubleHarvestChance": 0.05,
+      "fishingXpBonus": 1.25,
+      "fishingWeightBonus": 15,
+      "hungerDecayReduction": 0.25,
+      "happinessDecayReduction": 0.2
+    },
+    "tuat": {
+      "xpBonus": 1.22,
+      "yieldBonus": 1.18,
+      "doubleHarvestChance": 0.1,
+      "fishingXpBonus": 1.15,
+      "fishingCoinBonus": 1.12,
+      "hungerDecayReduction": 0.15
+    },
+    "thaoThiet": {
+      "xpBonus": 1.28,
+      "yieldBonus": 1.22,
+      "doubleHarvestChance": 0.12,
+      "fishingXpBonus": 1.18,
+      "fishingCoinBonus": 1.15,
+      "hungerDecayBoost": 1.2
+    },
+    "kuromi": {
+      "xpBonus": 1.32,
+      "coinBonus": 1.25,
+      "rareChanceBonus": 0.18,
+      "fishingCoinBonus": 1.28,
+      "fishingRareBonus": 0.2,
+      "happinessDecayReduction": 0.18
+    },
+    "melody": {
+      "yieldBonus": 1.32,
+      "xpBonus": 1.28,
+      "doubleHarvestChance": 0.08,
+      "fishingXpBonus": 1.25,
+      "fishingWeightBonus": 12,
+      "happinessDecayReduction": 0.18
+    },
+    "satou": {
+      "yieldBonus": 1.28,
+      "coinBonus": 1.22,
+      "doubleHarvestChance": 0.06,
+      "xpBonus": 1.2,
+      "fishingCoinBonus": 1.22,
+      "rareChanceBonus": 0.15
+    },
+    "shio": {
+      "xpBonus": 1.28,
+      "rareChanceBonus": 0.15,
+      "fishingXpBonus": 1.22,
+      "fishingRareBonus": 0.12,
+      "yieldBonus": 1.22,
+      "doubleHarvestChance": 0.06
+    }
+  },
+  "CONSTELLATION_BONUSES": {
+    "chick": [
+      {
+        "label": "+8% XP nhận được",
+        "key": "xpBonus",
+        "delta": 0.08
+      },
+      {
+        "label": "+8% XP câu cá",
+        "key": "fishingXpBonus",
+        "delta": 0.08
+      },
+      {
+        "label": "🍖 Đói chậm hơn 8%",
+        "key": "hungerDecayReduction",
+        "delta": 0.08
+      },
+      {
+        "label": "+10% XP nhận được",
+        "key": "xpBonus",
+        "delta": 0.1
+      },
+      {
+        "label": "😊 Vui vẻ giảm chậm hơn 8%",
+        "key": "happinessDecayReduction",
+        "delta": 0.08
+      },
+      {
+        "label": "+12% XP nhận được",
+        "key": "xpBonus",
+        "delta": 0.12
+      }
+    ],
+    "worm": [
+      {
+        "label": "+8% sản lượng cây trồng",
+        "key": "yieldBonus",
+        "delta": 0.08
+      },
+      {
+        "label": "😊 Vui vẻ giảm chậm hơn 8%",
+        "key": "happinessDecayReduction",
+        "delta": 0.08
+      },
+      {
+        "label": "+5 kg cân cá",
+        "key": "fishingWeightBonus",
+        "delta": 5
+      },
+      {
+        "label": "+8% sản lượng cây trồng",
+        "key": "yieldBonus",
+        "delta": 0.08
+      },
+      {
+        "label": "🍖 Đói chậm hơn 8%",
+        "key": "hungerDecayReduction",
+        "delta": 0.08
+      },
+      {
+        "label": "+3% cơ hội thu hoạch gấp đôi",
+        "key": "doubleHarvestChance",
+        "delta": 0.03
+      }
+    ],
+    "turtle": [
+      {
+        "label": "+8% xu kiếm được",
+        "key": "coinBonus",
+        "delta": 0.08
+      },
+      {
+        "label": "🍖 Đói chậm hơn 10%",
+        "key": "hungerDecayReduction",
+        "delta": 0.1
+      },
+      {
+        "label": "+8% xu câu cá",
+        "key": "fishingCoinBonus",
+        "delta": 0.08
+      },
+      {
+        "label": "😊 Vui vẻ giảm chậm hơn 8%",
+        "key": "happinessDecayReduction",
+        "delta": 0.08
+      },
+      {
+        "label": "+8% xu kiếm được",
+        "key": "coinBonus",
+        "delta": 0.08
+      },
+      {
+        "label": "+10% xu kiếm được",
+        "key": "coinBonus",
+        "delta": 0.1
+      }
+    ],
+    "butterfly": [
+      {
+        "label": "+3% cơ hội nông sản hiếm",
+        "key": "rareChanceBonus",
+        "delta": 0.03
+      },
+      {
+        "label": "😊 Vui vẻ giảm chậm hơn 10%",
+        "key": "happinessDecayReduction",
+        "delta": 0.1
+      },
+      {
+        "label": "+5% cá hiếm",
+        "key": "fishingRareBonus",
+        "delta": 0.05
+      },
+      {
+        "label": "🍖 Đói chậm hơn 8%",
+        "key": "hungerDecayReduction",
+        "delta": 0.08
+      },
+      {
+        "label": "+5% cơ hội nông sản hiếm",
+        "key": "rareChanceBonus",
+        "delta": 0.05
+      },
+      {
+        "label": "+8% cơ hội nông sản hiếm",
+        "key": "rareChanceBonus",
+        "delta": 0.08
+      }
+    ],
+    "rabbit": [
+      {
+        "label": "+10% sản lượng cây trồng",
+        "key": "yieldBonus",
+        "delta": 0.1
+      },
+      {
+        "label": "😊 Vui vẻ giảm chậm hơn 10%",
+        "key": "happinessDecayReduction",
+        "delta": 0.1
+      },
+      {
+        "label": "+7 kg cân cá",
+        "key": "fishingWeightBonus",
+        "delta": 7
+      },
+      {
+        "label": "💪 Giảm 12% HP mất khi tập",
+        "key": "exerciseHpReduction",
+        "delta": 0.12
+      },
+      {
+        "label": "+10% sản lượng cây trồng",
+        "key": "yieldBonus",
+        "delta": 0.1
+      },
+      {
+        "label": "+5% thu hoạch gấp đôi",
+        "key": "doubleHarvestChance",
+        "delta": 0.05
+      }
+    ],
+    "dog": [
+      {
+        "label": "+10% xu kiếm được",
+        "key": "coinBonus",
+        "delta": 0.1
+      },
+      {
+        "label": "😊 Vui vẻ giảm chậm hơn 15%",
+        "key": "happinessDecayReduction",
+        "delta": 0.15
+      },
+      {
+        "label": "+8% xu câu cá",
+        "key": "fishingCoinBonus",
+        "delta": 0.08
+      },
+      {
+        "label": "🍖 Đói chậm hơn 10%",
+        "key": "hungerDecayReduction",
+        "delta": 0.1
+      },
+      {
+        "label": "+8% xu kiếm được",
+        "key": "coinBonus",
+        "delta": 0.08
+      },
+      {
+        "label": "+10% xu kiếm được",
+        "key": "coinBonus",
+        "delta": 0.1
+      }
+    ],
+    "cat": [
+      {
+        "label": "+10% XP nhận được",
+        "key": "xpBonus",
+        "delta": 0.1
+      },
+      {
+        "label": "😊 Vui vẻ giảm chậm hơn 12%",
+        "key": "happinessDecayReduction",
+        "delta": 0.12
+      },
+      {
+        "label": "+10% XP câu cá",
+        "key": "fishingXpBonus",
+        "delta": 0.1
+      },
+      {
+        "label": "💪 Giảm 10% HP mất khi tập",
+        "key": "exerciseHpReduction",
+        "delta": 0.1
+      },
+      {
+        "label": "+8% XP nhận được",
+        "key": "xpBonus",
+        "delta": 0.08
+      },
+      {
+        "label": "+12% XP nhận được",
+        "key": "xpBonus",
+        "delta": 0.12
+      }
+    ],
+    "fox": [
+      {
+        "label": "+5% cơ hội nông sản hiếm",
+        "key": "rareChanceBonus",
+        "delta": 0.05
+      },
+      {
+        "label": "+8% cá hiếm",
+        "key": "fishingRareBonus",
+        "delta": 0.08
+      },
+      {
+        "label": "🍖 Đói chậm hơn 10%",
+        "key": "hungerDecayReduction",
+        "delta": 0.1
+      },
+      {
+        "label": "💪 Giảm 12% HP mất khi tập",
+        "key": "exerciseHpReduction",
+        "delta": 0.12
+      },
+      {
+        "label": "+8% cơ hội nông sản hiếm",
+        "key": "rareChanceBonus",
+        "delta": 0.08
+      },
+      {
+        "label": "+10% cơ hội nông sản hiếm",
+        "key": "rareChanceBonus",
+        "delta": 0.1
+      }
+    ],
+    "phoenix": [
+      {
+        "label": "+15% XP nhận được",
+        "key": "xpBonus",
+        "delta": 0.15
+      },
+      {
+        "label": "+15% xu kiếm được",
+        "key": "coinBonus",
+        "delta": 0.15
+      },
+      {
+        "label": "😊 Vui vẻ giảm chậm hơn 12%",
+        "key": "happinessDecayReduction",
+        "delta": 0.12
+      },
+      {
+        "label": "💪 Giảm 18% HP mất khi tập",
+        "key": "exerciseHpReduction",
+        "delta": 0.18
+      },
+      {
+        "label": "+5% thu hoạch gấp đôi",
+        "key": "doubleHarvestChance",
+        "delta": 0.05
+      },
+      {
+        "label": "+20% XP nhận được",
+        "key": "xpBonus",
+        "delta": 0.2
+      }
+    ],
+    "dragon": [
+      {
+        "label": "+20% sản lượng cây trồng",
+        "key": "yieldBonus",
+        "delta": 0.2
+      },
+      {
+        "label": "💪 Giảm 15% HP mất khi tập",
+        "key": "exerciseHpReduction",
+        "delta": 0.15
+      },
+      {
+        "label": "+10% xu kiếm được",
+        "key": "coinBonus",
+        "delta": 0.1
+      },
+      {
+        "label": "🍖 Đói chậm hơn 10%",
+        "key": "hungerDecayReduction",
+        "delta": 0.1
+      },
+      {
+        "label": "+15 kg cân cá",
+        "key": "fishingWeightBonus",
+        "delta": 15
+      },
+      {
+        "label": "+3% thu hoạch gấp đôi",
+        "key": "doubleHarvestChance",
+        "delta": 0.03
+      }
+    ],
+    "unicorn": [
+      {
+        "label": "+18% XP nhận được",
+        "key": "xpBonus",
+        "delta": 0.18
+      },
+      {
+        "label": "😊 Vui vẻ giảm chậm hơn 15%",
+        "key": "happinessDecayReduction",
+        "delta": 0.15
+      },
+      {
+        "label": "+12% cơ hội nông sản hiếm",
+        "key": "rareChanceBonus",
+        "delta": 0.12
+      },
+      {
+        "label": "🍖 Đói chậm hơn 18%",
+        "key": "hungerDecayReduction",
+        "delta": 0.18
+      },
+      {
+        "label": "+15% cá hiếm",
+        "key": "fishingRareBonus",
+        "delta": 0.15
+      },
+      {
+        "label": "+20% XP nhận được",
+        "key": "xpBonus",
+        "delta": 0.2
+      }
+    ],
+    "sphinx": [
+      {
+        "label": "+25% XP nhận được",
+        "key": "xpBonus",
+        "delta": 0.25
+      },
+      {
+        "label": "😊 Vui vẻ giảm chậm hơn 12%",
+        "key": "happinessDecayReduction",
+        "delta": 0.12
+      },
+      {
+        "label": "+25% xu kiếm được",
+        "key": "coinBonus",
+        "delta": 0.25
+      },
+      {
+        "label": "🍖 Đói chậm hơn 15%",
+        "key": "hungerDecayReduction",
+        "delta": 0.15
+      },
+      {
+        "label": "💪 Giảm 20% HP mất khi tập",
+        "key": "exerciseHpReduction",
+        "delta": 0.2
+      },
+      {
+        "label": "+15% sản lượng cây trồng",
+        "key": "yieldBonus",
+        "delta": 0.15
+      }
+    ],
+    "kraken": [
+      {
+        "label": "+28% sản lượng cây trồng",
+        "key": "yieldBonus",
+        "delta": 0.28
+      },
+      {
+        "label": "💪 Giảm 22% HP mất khi tập",
+        "key": "exerciseHpReduction",
+        "delta": 0.22
+      },
+      {
+        "label": "🍖 Đói chậm hơn 12%",
+        "key": "hungerDecayReduction",
+        "delta": 0.12
+      },
+      {
+        "label": "+20% cá hiếm",
+        "key": "fishingRareBonus",
+        "delta": 0.2
+      },
+      {
+        "label": "😊 Vui vẻ giảm chậm hơn 10%",
+        "key": "happinessDecayReduction",
+        "delta": 0.1
+      },
+      {
+        "label": "+5% thu hoạch gấp đôi",
+        "key": "doubleHarvestChance",
+        "delta": 0.05
+      }
+    ],
+    "shadowCat": [
+      {
+        "label": "+30% XP nhận được",
+        "key": "xpBonus",
+        "delta": 0.3
+      },
+      {
+        "label": "😊 Vui vẻ giảm chậm hơn 18%",
+        "key": "happinessDecayReduction",
+        "delta": 0.18
+      },
+      {
+        "label": "+15% cơ hội nông sản hiếm",
+        "key": "rareChanceBonus",
+        "delta": 0.15
+      },
+      {
+        "label": "✨ +10% xu bán *(đặc biệt)*",
+        "key": "_sc4",
+        "delta": 0.1
+      },
+      {
+        "label": "💪 Giảm 20% HP mất khi tập",
+        "key": "exerciseHpReduction",
+        "delta": 0.2
+      },
+      {
+        "label": "🌟 +10% thu hoạch gấp đôi *(đặc biệt)*",
+        "key": "_sc6",
+        "delta": 0.1
+      }
+    ],
+    "hr": [
+      {
+        "label": "+30% sản lượng cây trồng",
+        "key": "yieldBonus",
+        "delta": 0.3
+      },
+      {
+        "label": "😊 Vui vẻ giảm chậm hơn 20%",
+        "key": "happinessDecayReduction",
+        "delta": 0.2
+      },
+      {
+        "label": "🍖 Đói chậm hơn 25%",
+        "key": "hungerDecayReduction",
+        "delta": 0.25
+      },
+      {
+        "label": "✨ +10 XP mỗi lần thu hoạch *(đặc biệt)*",
+        "key": "_hr4",
+        "delta": 10
+      },
+      {
+        "label": "💪 Giảm 25% HP mất khi tập",
+        "key": "exerciseHpReduction",
+        "delta": 0.25
+      },
+      {
+        "label": "🌟 +1 nông sản thêm mỗi thu hoạch *(đặc biệt)*",
+        "key": "_hr6",
+        "delta": 1
+      }
+    ],
+    "tuat": [
+      {
+        "label": "+10% XP nhận được",
+        "key": "xpBonus",
+        "delta": 0.1
+      },
+      {
+        "label": "+10% sản lượng cây trồng",
+        "key": "yieldBonus",
+        "delta": 0.1
+      },
+      {
+        "label": "🍖 Đói chậm hơn 12%",
+        "key": "hungerDecayReduction",
+        "delta": 0.12
+      },
+      {
+        "label": "+8% thu hoạch gấp đôi",
+        "key": "doubleHarvestChance",
+        "delta": 0.08
+      },
+      {
+        "label": "💪 Giảm 15% HP mất khi tập",
+        "key": "exerciseHpReduction",
+        "delta": 0.15
+      },
+      {
+        "label": "+12% XP câu cá",
+        "key": "fishingXpBonus",
+        "delta": 0.12
+      }
+    ],
+    "thaoThiet": [
+      {
+        "label": "+12% XP nhận được",
+        "key": "xpBonus",
+        "delta": 0.12
+      },
+      {
+        "label": "+12% sản lượng cây trồng",
+        "key": "yieldBonus",
+        "delta": 0.12
+      },
+      {
+        "label": "⚡ Buff tổng +5%",
+        "key": "_tt3",
+        "delta": 0.05
+      },
+      {
+        "label": "+10% thu hoạch gấp đôi",
+        "key": "doubleHarvestChance",
+        "delta": 0.1
+      },
+      {
+        "label": "+15% xu câu cá",
+        "key": "fishingCoinBonus",
+        "delta": 0.15
+      },
+      {
+        "label": "+15% XP nhận được",
+        "key": "xpBonus",
+        "delta": 0.15
+      }
+    ],
+    "kuromi": [
+      {
+        "label": "+15% XP nhận được",
+        "key": "xpBonus",
+        "delta": 0.15
+      },
+      {
+        "label": "😊 Vui vẻ giảm chậm hơn 15%",
+        "key": "happinessDecayReduction",
+        "delta": 0.15
+      },
+      {
+        "label": "+15% xu kiếm được",
+        "key": "coinBonus",
+        "delta": 0.15
+      },
+      {
+        "label": "+12% cơ hội nông sản hiếm",
+        "key": "rareChanceBonus",
+        "delta": 0.12
+      },
+      {
+        "label": "💪 Giảm 20% HP mất khi tập",
+        "key": "exerciseHpReduction",
+        "delta": 0.2
+      },
+      {
+        "label": "🖤 +15% xu câu cá",
+        "key": "fishingCoinBonus",
+        "delta": 0.15
+      }
+    ],
+    "melody": [
+      {
+        "label": "+15% sản lượng cây trồng",
+        "key": "yieldBonus",
+        "delta": 0.15
+      },
+      {
+        "label": "😊 Vui vẻ giảm chậm hơn 18%",
+        "key": "happinessDecayReduction",
+        "delta": 0.18
+      },
+      {
+        "label": "+12% XP nhận được",
+        "key": "xpBonus",
+        "delta": 0.12
+      },
+      {
+        "label": "+8% thu hoạch gấp đôi",
+        "key": "doubleHarvestChance",
+        "delta": 0.08
+      },
+      {
+        "label": "+15% XP câu cá",
+        "key": "fishingXpBonus",
+        "delta": 0.15
+      },
+      {
+        "label": "🎵 +20 kg cân cá *(đặc biệt)*",
+        "key": "fishingWeightBonus",
+        "delta": 20
+      }
+    ],
+    "satou": [
+      {
+        "label": "+15% sản lượng cây trồng",
+        "key": "yieldBonus",
+        "delta": 0.15
+      },
+      {
+        "label": "+12% xu kiếm được",
+        "key": "coinBonus",
+        "delta": 0.12
+      },
+      {
+        "label": "+10% cơ hội nông sản hiếm",
+        "key": "rareChanceBonus",
+        "delta": 0.1
+      },
+      {
+        "label": "+10% thu hoạch gấp đôi",
+        "key": "doubleHarvestChance",
+        "delta": 0.1
+      },
+      {
+        "label": "😊 Vui vẻ giảm chậm hơn 15%",
+        "key": "happinessDecayReduction",
+        "delta": 0.15
+      },
+      {
+        "label": "🌹 Cộng hưởng Shio: +30% buff Shio hiện tại *(đặc biệt)*",
+        "key": "_satou6",
+        "delta": 0
+      }
+    ],
+    "shio": [
+      {
+        "label": "+15% XP nhận được",
+        "key": "xpBonus",
+        "delta": 0.15
+      },
+      {
+        "label": "😊 Vui vẻ giảm chậm hơn 15%",
+        "key": "happinessDecayReduction",
+        "delta": 0.15
+      },
+      {
+        "label": "+12% cơ hội nông sản hiếm",
+        "key": "rareChanceBonus",
+        "delta": 0.12
+      },
+      {
+        "label": "+10% XP câu cá",
+        "key": "fishingXpBonus",
+        "delta": 0.1
+      },
+      {
+        "label": "🍖 Đói chậm hơn 15%",
+        "key": "hungerDecayReduction",
+        "delta": 0.15
+      },
+      {
+        "label": "🌸 Cộng hưởng Satou: +30% buff Satou hiện tại *(đặc biệt)*",
+        "key": "_shio6",
+        "delta": 0
+      }
+    ]
+  },
+  "QUESTS": {
+    "plant_3": {
+      "key": "plant_3",
+      "name": "Nông dân mới",
+      "desc": "Trồng 2 cây",
+      "type": "plant",
+      "target": 2,
+      "coin": 50,
+      "xp": 20,
+      "diff": "easy"
+    },
+    "harvest_3": {
+      "key": "harvest_3",
+      "name": "Thu hoạch đầu tiên",
+      "desc": "Thu hoạch 2 cây",
+      "type": "harvest",
+      "target": 2,
+      "coin": 50,
+      "xp": 20,
+      "diff": "easy"
+    },
+    "sell_5": {
+      "key": "sell_5",
+      "name": "Thương nhân nhỏ",
+      "desc": "Bán 3 vật phẩm",
+      "type": "sell",
+      "target": 3,
+      "coin": 60,
+      "xp": 25,
+      "diff": "easy"
+    },
+    "feed_2": {
+      "key": "feed_2",
+      "name": "Chăm sóc pet",
+      "desc": "Cho pet ăn 1 lần",
+      "type": "feed_pet",
+      "target": 1,
+      "coin": 40,
+      "xp": 15,
+      "diff": "easy"
+    },
+    "play_2": {
+      "key": "play_2",
+      "name": "Vui chơi cùng pet",
+      "desc": "Chơi với pet 1 lần",
+      "type": "play_pet",
+      "target": 1,
+      "coin": 40,
+      "xp": 15,
+      "diff": "easy"
+    },
+    "plant_8": {
+      "key": "plant_8",
+      "name": "Mở rộng canh tác",
+      "desc": "Trồng 5 cây",
+      "type": "plant",
+      "target": 5,
+      "coin": 120,
+      "xp": 50,
+      "diff": "medium"
+    },
+    "harvest_8": {
+      "key": "harvest_8",
+      "name": "Mùa bội thu",
+      "desc": "Thu hoạch 5 cây",
+      "type": "harvest",
+      "target": 5,
+      "coin": 120,
+      "xp": 50,
+      "diff": "medium"
+    },
+    "sell_15": {
+      "key": "sell_15",
+      "name": "Kinh doanh tốt",
+      "desc": "Bán 10 vật phẩm",
+      "type": "sell",
+      "target": 10,
+      "coin": 180,
+      "xp": 70,
+      "diff": "medium"
+    },
+    "gacha_3": {
+      "key": "gacha_3",
+      "name": "Thử vận may",
+      "desc": "Gacha 2 lần",
+      "type": "gacha",
+      "target": 2,
+      "coin": 100,
+      "xp": 40,
+      "diff": "medium"
+    },
+    "earn_500": {
+      "key": "earn_500",
+      "name": "Làm giàu",
+      "desc": "Kiếm 300 xu từ bán hàng",
+      "type": "earn_coin",
+      "target": 300,
+      "coin": 150,
+      "xp": 60,
+      "diff": "medium"
+    },
+    "plant_20": {
+      "key": "plant_20",
+      "name": "Đại điền chủ",
+      "desc": "Trồng 12 cây",
+      "type": "plant",
+      "target": 12,
+      "coin": 350,
+      "xp": 140,
+      "diff": "hard"
+    },
+    "harvest_15": {
+      "key": "harvest_15",
+      "name": "Vụ mùa lớn",
+      "desc": "Thu hoạch 10 cây",
+      "type": "harvest",
+      "target": 10,
+      "coin": 350,
+      "xp": 140,
+      "diff": "hard"
+    },
+    "sell_30": {
+      "key": "sell_30",
+      "name": "Thương gia tài ba",
+      "desc": "Bán 20 vật phẩm",
+      "type": "sell",
+      "target": 20,
+      "coin": 500,
+      "xp": 180,
+      "diff": "hard"
+    },
+    "gacha_10": {
+      "key": "gacha_10",
+      "name": "Gacha cuồng nhiệt",
+      "desc": "Gacha 5 lần",
+      "type": "gacha",
+      "target": 5,
+      "coin": 300,
+      "xp": 120,
+      "diff": "hard"
+    },
+    "earn_2000": {
+      "key": "earn_2000",
+      "name": "Triệu phú nông trại",
+      "desc": "Kiếm 1000 xu từ bán hàng",
+      "type": "earn_coin",
+      "target": 1000,
+      "coin": 600,
+      "xp": 200,
+      "diff": "hard"
+    }
+  },
+  "ACHIEVEMENTS": {
+    "first_plant": {
+      "name": "🌱 Người Nông Dân",
+      "desc": "Trồng cây lần đầu tiên",
+      "reward": 50
+    },
+    "first_harvest": {
+      "name": "🌾 Thu Hoạch Đầu Tiên",
+      "desc": "Thu hoạch cây lần đầu tiên",
+      "reward": 100
+    },
+    "harvest_100": {
+      "name": "🚜 Nông Dân Chăm Chỉ",
+      "desc": "Thu hoạch 100 cây",
+      "reward": 500
+    },
+    "harvest_1000": {
+      "name": "👑 Vua Nông Trại",
+      "desc": "Thu hoạch 1,000 cây",
+      "reward": 5000
+    },
+    "legendary_crop": {
+      "name": "✨ Nông Sản Huyền Thoại",
+      "desc": "Thu hoạch nông sản chất lượng Legendary",
+      "reward": 2000
+    },
+    "rich_1k": {
+      "name": "💰 Tiểu Thương",
+      "desc": "Tổng xu kiếm được đạt 1,000",
+      "reward": 0
+    },
+    "rich_10k": {
+      "name": "💵 Thương Gia",
+      "desc": "Tổng xu kiếm được đạt 10,000",
+      "reward": 0
+    },
+    "rich_100k": {
+      "name": "💎 Triệu Phú",
+      "desc": "Tổng xu kiếm được đạt 100,000",
+      "reward": 1000
+    },
+    "rich_1m": {
+      "name": "🏆 Tỷ Phú",
+      "desc": "Tổng xu kiếm được đạt 1,000,000",
+      "reward": 10000
+    },
+    "sell_50": {
+      "name": "🏪 Thương Nhân",
+      "desc": "Bán được 50 vật phẩm",
+      "reward": 500
+    },
+    "sell_200": {
+      "name": "🛒 Chợ Phiên",
+      "desc": "Bán được 200 vật phẩm",
+      "reward": 2000
+    },
+    "streak_7": {
+      "name": "📅 Chăm Chỉ",
+      "desc": "Đăng nhập 7 ngày liên tiếp",
+      "reward": 700
+    },
+    "7day_streak": {
+      "name": "📅 Chăm Chỉ",
+      "desc": "Đăng nhập 7 ngày liên tiếp",
+      "reward": 0
+    },
+    "streak_30": {
+      "name": "🔥 Tận Tâm",
+      "desc": "Đăng nhập 30 ngày liên tiếp",
+      "reward": 3000
+    },
+    "30day_streak": {
+      "name": "🔥 Tận Tâm",
+      "desc": "Đăng nhập 30 ngày liên tiếp",
+      "reward": 0
+    },
+    "streak_90": {
+      "name": "⭐ Trung Thành",
+      "desc": "Đăng nhập 90 ngày liên tiếp",
+      "reward": 10000
+    },
+    "first_pet": {
+      "name": "🐾 Chủ Pet",
+      "desc": "Có pet đầu tiên",
+      "reward": 100
+    },
+    "mythic_pet": {
+      "name": "🌟 Siêu May Mắn",
+      "desc": "Nhận pet thần thoại từ gacha",
+      "reward": 5000
+    },
+    "reach_level_10": {
+      "name": "⭐ Có Kinh Nghiệm",
+      "desc": "Đạt cấp độ 10",
+      "reward": 500
+    },
+    "reach_level_25": {
+      "name": "🌟 Chuyên Gia",
+      "desc": "Đạt cấp độ 25",
+      "reward": 2000
+    },
+    "reach_level_50": {
+      "name": "💫 Huyền Thoại",
+      "desc": "Đạt cấp độ 50",
+      "reward": 10000
+    },
+    "first_gacha": {
+      "name": "🎰 Vận May",
+      "desc": "Quay gacha lần đầu tiên",
+      "reward": 100
+    }
+  },
+  "SEASONS": [
+    {
+      "id": "spring",
+      "name": "Mùa Xuân",
+      "emoji": "🌸",
+      "desc": "Cây lương thực nảy mầm mạnh mẽ trong tiết trời ấm áp.",
+      "bonusCrops": [
+        "lua",
+        "carrot"
+      ],
+      "bonusText": "Lúa & Cà Rốt +20% năng suất",
+      "multiplier": 1.2,
+      "color": 3066993
+    },
+    {
+      "id": "summer",
+      "name": "Mùa Hè",
+      "emoji": "☀️",
+      "desc": "Ánh nắng chan hòa giúp cây nhiệt đới phát triển vượt bậc.",
+      "bonusCrops": [
+        "corn",
+        "pumpkin"
+      ],
+      "bonusText": "Bắp & Bí Ngô +20% năng suất",
+      "multiplier": 1.2,
+      "color": 15965202
+    },
+    {
+      "id": "fall",
+      "name": "Mùa Thu",
+      "emoji": "🍂",
+      "desc": "Trái cây chín mọng trong gió mùa thu mát lành.",
+      "bonusCrops": [
+        "strawberry",
+        "watermelon"
+      ],
+      "bonusText": "Dâu Tây & Dưa Hấu +20% năng suất",
+      "multiplier": 1.2,
+      "color": 15105570
+    },
+    {
+      "id": "winter",
+      "name": "Mùa Đông",
+      "emoji": "❄️",
+      "desc": "Mùa đặc biệt — tất cả nông sản bán được giá cao hơn.",
+      "bonusCrops": [
+        "dragonfruit"
+      ],
+      "bonusText": "Thanh Long +30% năng suất • Tất cả cây +5% giá bán",
+      "multiplier": 1.3,
+      "globalSellBonus": 1.05,
+      "color": 3447003
+    }
+  ],
+  "EVENT_POOL": [
+    {
+      "id": "market_surge",
+      "name": "📈 Thị Trường Tăng Giá",
+      "desc": "Thương lái trả giá cao hơn hôm nay.",
+      "effect": "Giá bán nông sản +25%",
+      "sellBonus": 1.25,
+      "color": 3066993
+    },
+    {
+      "id": "rain",
+      "name": "🌧️ Mưa Thuận Gió Hòa",
+      "desc": "Cơn mưa lớn giúp cây trồng lớn nhanh hơn, nhưng hàng nhiều giá giảm nhẹ.",
+      "effect": "Thời gian sinh trưởng −20% · Giá bán −5%",
+      "growBonus": 0.8,
+      "sellBonus": 0.95,
+      "color": 3447003
+    },
+    {
+      "id": "harvest_festival",
+      "name": "🎉 Lễ Hội Thu Hoạch",
+      "desc": "Cả làng cùng ăn mừng mùa vụ bội thu, thương lái bận tiệc bỏ chợ.",
+      "effect": "XP thu hoạch x2 · Giá bán −10%",
+      "xpBonus": 2,
+      "sellBonus": 0.9,
+      "color": 15965202
+    },
+    {
+      "id": "golden_day",
+      "name": "✨ Ngày Vàng",
+      "desc": "Đất đai màu mỡ bất thường trong ngày hôm nay.",
+      "effect": "Xác suất nông sản chất lượng cao +30%",
+      "qualityBonus": 1.3,
+      "color": 15844367
+    },
+    {
+      "id": "traders_visit",
+      "name": "🐪 Thương Đoàn Ghé Thăm",
+      "desc": "Nông dân bận tiếp đón thương nhân, ít chú ý chăm sóc cây trồng.",
+      "effect": "Xu kiếm được +15% · Cây lớn chậm hơn 10%",
+      "coinBonus": 1.15,
+      "growBonus": 1.1,
+      "color": 10181046
+    },
+    {
+      "id": "pet_play_day",
+      "name": "🐾 Ngày Hội Pet",
+      "desc": "Chủ nhân mải chơi với thú cưng, ít chú tâm vào nông trại.",
+      "effect": "Pet nhận gấp đôi hạnh phúc khi nựng · Cây lớn chậm hơn 10%",
+      "petHappyBonus": 2,
+      "growBonus": 1.1,
+      "color": 16738740
+    },
+    {
+      "id": "drought",
+      "name": "☀️ Hạn Hán Nhẹ",
+      "desc": "Nắng gắt khiến đất đai khô cằn, nông dân phải làm việc cực nhọc hơn.",
+      "effect": "Giá bán −10% · XP thu hoạch +50%",
+      "sellBonus": 0.9,
+      "xpBonus": 1.5,
+      "color": 15105570
+    },
+    {
+      "id": "calm_day",
+      "name": "🌤️ Ngày Bình Yên",
+      "desc": "Không có gì đặc biệt xảy ra hôm nay.",
+      "effect": "Không có hiệu ứng",
+      "color": 9807270
+    }
+  ]
+}

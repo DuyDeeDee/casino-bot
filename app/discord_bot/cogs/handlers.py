@@ -98,6 +98,8 @@ class Handlers(commands.Cog, name="handlers"):
         
         # Nếu chưa nhận quà khởi nghiệp và lệnh không phải là khoinghiep hoặc help hoặc exempt
         if not self.economy.has_claimed_start(user_id):
+            if ctx.command and (ctx.command.root_parent or ctx.command).name == "farm":
+                return
             if ctx.command and (ctx.command.name in ["khoinghiep", "help", "redeem"] or (ctx.command.cog and ctx.command.cog.qualified_name in exempt_cogs)):
                 return
                 

@@ -16,6 +16,7 @@ EXTRA_ADMIN_COMMANDS = {"invest max", "set", "mau"}
 # ──────────────────────────────────────────────
 COG_GROUP_MAPPING = {
     "ProfileCard":   ("<:function:1531341821257716025>", "Function"),
+    "IlisFarm":      ("🌾", "Ilis Farm"),
     "Blackjack":     ("<:cobac:1531333888931135518>", "Cờ Bạc"),
     "MultiBlackjack":("<:cobac:1531333888931135518>", "Cờ Bạc"),
     "GamblingGames": ("<:cobac:1531333888931135518>", "Cờ Bạc"),
@@ -57,6 +58,7 @@ COG_GROUP_MAPPING = {
 
 GROUP_ORDER = [
     "<:gen:1531709110376988743> General",
+    "🌾 Ilis Farm",
     "<:tutien:1540738237021298849> Tu Tiên",
     "<:cobac:1531333888931135518> Cờ Bạc",
     "<:trade:1531333907868291132> Giao Dịch",

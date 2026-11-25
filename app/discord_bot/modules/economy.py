@@ -14,11 +14,12 @@ from pathlib import Path
 from typing import Tuple, List, Optional
 
 from app.config import config
+from app.discord_bot.modules.wallet_logging import ensure_wallet_transaction_table
 
 Entry = Tuple[int, int, int]
 DATABASE_PATH = Path(config.storage.database_path)
 LEGACY_DATABASE_PATH = Path(__file__).resolve().parents[3] / "economy.db"
-SCHEMA_VERSION = 55
+SCHEMA_VERSION = 56
 
 
 logger = logging.getLogger(__name__)
@@ -1051,6 +1052,16 @@ def _migration_55_add_masoi_sessions(cur: sqlite3.Cursor) -> None:
     )
 
 
+def _migration_56_add_farm(cur: sqlite3.Cursor) -> None:
+    cur.execute(
+        """CREATE TABLE IF NOT EXISTS farm_players (
+            user_id INTEGER PRIMARY KEY,
+            state TEXT NOT NULL
+        )"""
+    )
+    ensure_wallet_transaction_table(cur)
+
+
 MIGRATIONS: dict[int, Callable[[sqlite3.Cursor], None]] = {
     1: _migration_1_create_economy,
     2: _migration_2_add_indexes,
@@ -1107,6 +1118,7 @@ MIGRATIONS: dict[int, Callable[[sqlite3.Cursor], None]] = {
     53: _migration_53_add_marry_contributions,
     54: _migration_54_add_masoi_faction_ranks,
     55: _migration_55_add_masoi_sessions,
+    56: _migration_56_add_farm,
 }
 
 
@@ -1298,6 +1310,7 @@ class Economy:
             "masoi_sessions",
             "masoi_match_history",
             "wallet_transactions",
+            "farm_players",
         ]
         for tbl in tables_to_clear:
             try:
@@ -1392,6 +1405,30 @@ class Economy:
         )
         self.conn.commit()
         return self._fetch_entry(user_id)
+
+    def adjust_wallet_money(
+        self, user_id: int, delta: int, *, event: str, command: str
+    ) -> int | None:
+        """Apply the full delta and log it atomically, or return None."""
+        if not -(2**63 - 1) <= delta <= 2**63 - 1:
+            return None
+        with self.transaction():
+            self._ensure_entry(user_id)
+            self.cur.execute(
+                """UPDATE economy SET money = money + ?
+                   WHERE user_id = ? AND money BETWEEN ? AND ?""",
+                (delta, user_id, max(0, -delta), 2**63 - 1 - max(0, delta)),
+            )
+            if self.cur.rowcount != 1:
+                return None
+            if delta:
+                self.cur.execute(
+                    """INSERT INTO wallet_transactions
+                       (user_id, event, money_delta, command, created_at)
+                       VALUES (?, ?, ?, ?, ?)""",
+                    (user_id, event, delta, command, int(time.time())),
+                )
+            return self._fetch_entry(user_id)[1]
 
     def _record_gold_flow(self, delta: int) -> None:
         """Tracks weekly gold supply/demand used by the gold price updater."""
