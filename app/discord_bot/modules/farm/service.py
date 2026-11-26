@@ -496,6 +496,12 @@ class FarmSession:
                 if self.state["tea_fed"] == 10 and "hr" not in self.state["pets"]:
                     self.add_pet("hr")
             self.quest_progress("feed_pet", 1)
+        elif activity == "kiss":
+            wait = self.state.get("last_kiss", 0) + 1800 - self.now
+            if wait > 0:
+                raise FarmError(f"Hôn lại sau **{ceil(wait / 60)} phút**.")
+            self.state["last_kiss"] = self.now
+            pet["happiness"] = min(100, pet["happiness"] + 10)
         else:
             cooldown = {"play": 3600, "cuddle": 600, "exercise": 7200}[activity]
             if pet[activity] and self.now - pet[activity] < cooldown:

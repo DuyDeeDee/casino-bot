@@ -12,23 +12,23 @@ from app.discord_bot.modules.farm.rules import (
 from app.discord_bot.modules.farm.service import FarmError, FarmSession, FarmStore, plot_limit
 
 
-def shop_icon(ctx, key: str) -> str:
+def shop_icon(emojis, ctx, key: str) -> str:
     item = SHOP[key]
-    return art.emoji(ctx, f"pet_{item['petId']}" if item["category"] == "pets" else key)
+    return emojis.emoji(ctx, f"pet_{item['petId']}" if item["category"] == "pets" else key)
 
 
-def inventory_name(ctx, entry: str) -> str:
+def inventory_name(emojis, ctx, entry: str) -> str:
     category, key = entry.split(":", 1)
     if category == "crop":
         crop, _, quality = key.rpartition("_")
-        return f"{art.emoji(ctx, crop)} {CROPS[crop]['name']} ({QUALITY_NAMES[quality]})"
+        return f"{emojis.emoji(ctx, crop)} {CROPS[crop]['name']} ({QUALITY_NAMES[quality]})"
     if category == "junk":
         return f"{JUNK[key]['emoji']} {JUNK[key]['name']} (`{key}`)"
-    return f"{shop_icon(ctx, key)} {SHOP[key]['name']}"
+    return f"{shop_icon(emojis, ctx, key)} {SHOP[key]['name']}"
 
 
-def format_pet(ctx, key: str, pet: dict) -> str:
-    icon = art.emoji(ctx, f"pet_{key}")
+def format_pet(emojis, ctx, key: str, pet: dict) -> str:
+    icon = emojis.emoji(ctx, f"pet_{key}")
     return (
         f"{icon} **{PETS[key]['name']}** · Cấp {pet['level']} · C{pet['stars']}\n\n"
         f"🍖 **Độ no** {pet['hunger']:.0f}%\n"
@@ -37,11 +37,66 @@ def format_pet(ctx, key: str, pet: dict) -> str:
     )
 
 
+class PetAlbum(discord.ui.View):
+    def __init__(self, ctx, emojis, state: dict, selected: str):
+        super().__init__(timeout=120)
+        self.ctx = ctx
+        self.emojis = emojis
+        self.state = state
+        self.select = discord.ui.Select(
+            placeholder="Chọn pet để xem ảnh gốc",
+            options=[
+                discord.SelectOption(
+                    label=f"#{number:02} · {pet['name']}", value=key, default=key == selected,
+                )
+                for number, (key, pet) in enumerate(PETS.items(), 1)
+            ],
+        )
+        self.select.callback = self.show_pet
+        self.add_item(self.select)
+
+    def page(self, key: str) -> discord.Embed:
+        pet = PETS[key]
+        rarity, color = art.PET_RARITY[pet["rarity"]]
+        number = tuple(PETS).index(key) + 1
+        owned = self.state["pets"].get(key)
+        lines = [
+            f"**{rarity}** · Đã sưu tầm **{len(self.state['pets'])}/{len(PETS)}** pet",
+            pet["description"],
+            f"Trạng thái · **Cấp {owned['level']} · C{owned['stars']}**" if owned else "🔒 Chưa sưu tầm",
+        ]
+        if key == self.state["active_pet"]:
+            lines.append("🟢 Đang hoạt động")
+        icon = self.emojis.emoji(self.ctx, f"pet_{key}")
+        embed = discord.Embed(
+            title=f"{icon} #{number:02} · {pet['name']}", description="\n".join(lines), color=color,
+        )
+        portrait = art.image(f"pet_{key}")
+        if portrait:
+            embed.set_image(url=portrait)
+        embed.set_footer(text=art.FOOTER)
+        return embed
+
+    async def show_pet(self, interaction: discord.Interaction) -> None:
+        if interaction.user.id != self.ctx.author.id:
+            await interaction.response.send_message("Dùng lệnh Farm pet để mở album của bạn.", ephemeral=True)
+            return
+        selected = self.select.values[0]
+        for option in self.select.options:
+            option.default = option.value == selected
+        await interaction.response.edit_message(embed=self.page(selected), view=self)
+
+
 class IlisFarm(commands.Cog):
     """Nông trại Ilis Farm trong Casino Bot."""
 
     def __init__(self, bot):
         self.store = FarmStore(bot.economy)
+        self.emojis = art.FarmEmojis(bot)
+
+    @commands.Cog.listener()
+    async def on_connect(self) -> None:
+        await self.emojis.sync()
 
     @commands.Cog.listener()
     async def on_command_completion(self, ctx: commands.Context) -> None:
@@ -49,7 +104,7 @@ class IlisFarm(commands.Cog):
             return
         try:
             await ctx.send(
-                f"{art.emoji(ctx, 'ui_farm')} **Nông trại mới!** Gõ `{ctx.clean_prefix}farm` để chơi.",
+                f"{self.emojis.emoji(ctx, 'ui_farm')} **Nông trại mới!** Gõ `{ctx.clean_prefix}farm` để chơi.",
                 delete_after=5,
                 allowed_mentions=discord.AllowedMentions.none(),
             )
@@ -63,7 +118,7 @@ class IlisFarm(commands.Cog):
     ) -> None:
         if not description:
             description = "Chưa có dữ liệu."
-        heading = f"{art.emoji(ctx, badge)} {title}"[:256]
+        heading = f"{self.emojis.emoji(ctx, badge)} {title}"[:256]
         while description:
             split = len(description) if len(description) <= 4000 else description.rfind("\n", 0, 4000)
             if split <= 0:
@@ -102,7 +157,7 @@ class IlisFarm(commands.Cog):
         if session.unlocked:
             description += "\n🏅 " + " · ".join(session.unlocked)
         if session.wallet_delta:
-            description += f"\n{art.emoji(ctx, 'ui_coin')} Ví Casino **{session.wallet_delta:+,} VND**"
+            description += f"\n{self.emojis.emoji(ctx, 'ui_coin')} Ví Casino **{session.wallet_delta:+,} VND**"
         thumbnail, image = media(result) if media else (None, None)
         await self._send(ctx, title, description, badge=badge, thumbnail=thumbnail, image=image)
 
@@ -119,7 +174,7 @@ class IlisFarm(commands.Cog):
                 tiles.append("⬜")
             else:
                 crop = plot["crop"]
-                icon = art.emoji(ctx, crop)
+                icon = self.emojis.emoji(ctx, crop)
                 ready = plot["ready"] <= now
                 tiles.append("🌹" if ready else icon)
                 status = "Sẵn sàng thu hoạch" if ready else f"<t:{int(plot['ready'])}:R>"
@@ -133,11 +188,11 @@ class IlisFarm(commands.Cog):
         ])
         fields = [
             ("🗺️ Ô đất", f"**{len(plots)}/{capacity}** · {width}×{width}", True),
-            (f"{art.emoji(ctx, 'ui_xp')} Cấp độ", f"**{level}** · {state['xp']:,} XP", True),
+            (f"{self.emojis.emoji(ctx, 'ui_xp')} Cấp độ", f"**{level}** · {state['xp']:,} XP", True),
         ]
         if player.id == ctx.author.id:
             wallet = self.store.economy.get_entry(player.id)[1]
-            fields.append((f"{art.emoji(ctx, 'ui_coin')} Ví Casino", f"**{wallet:,} VND**", True))
+            fields.append((f"{self.emojis.emoji(ctx, 'ui_coin')} Ví Casino", f"**{wallet:,} VND**", True))
         await self._send(
             ctx, f"Nông trại · {player.display_name}", description,
             thumbnail=player.display_avatar.url, fields=tuple(fields),
@@ -184,9 +239,9 @@ class IlisFarm(commands.Cog):
             balance = self.store.economy.get_entry(ctx.author.id)[1]
             await self._send(
                 ctx, "Ví và tài sản Farm",
-                f"{art.emoji(ctx, 'ui_coin')} **Ví Casino** · {balance:,} VND\n"
-                f"{art.emoji(ctx, 'ui_gem')} **Đá quý** · {state['gems']}\n"
-                f"{art.emoji(ctx, 'ui_gacha')} **Vé gacha** · {state['tickets']}",
+                f"{self.emojis.emoji(ctx, 'ui_coin')} **Ví Casino** · {balance:,} VND\n"
+                f"{self.emojis.emoji(ctx, 'ui_gem')} **Đá quý** · {state['gems']}\n"
+                f"{self.emojis.emoji(ctx, 'ui_gacha')} **Vé gacha** · {state['tickets']}",
                 thumbnail=ctx.author.display_avatar.url,
             )
 
@@ -211,8 +266,8 @@ class IlisFarm(commands.Cog):
             ctx, FarmSession.daily, title="Quà điểm danh", badge="ui_coin",
             render=lambda r: (
                 f"Chuỗi điểm danh **{r[1]} ngày**\n"
-                f"{art.emoji(ctx, 'ui_coin')} **{vnd(r[0]):,} VND**\n"
-                f"{art.emoji(ctx, 'ui_gacha')} **1 vé gacha**"
+                f"{self.emojis.emoji(ctx, 'ui_coin')} **{vnd(r[0]):,} VND**\n"
+                f"{self.emojis.emoji(ctx, 'ui_gacha')} **1 vé gacha**"
             ),
             media=lambda _: (ctx.author.display_avatar.url, None),
         )
@@ -227,7 +282,7 @@ class IlisFarm(commands.Cog):
         for number, key in SHOP_IDS.items():
             item = SHOP[key]
             sections[item["category"]].append(
-                f"`#{number}` {shop_icon(ctx, key)} {item['name']} · **{vnd(item['coin']):,} VND**"
+                f"`#{number}` {shop_icon(self.emojis, ctx, key)} {item['name']} · **{vnd(item['coin']):,} VND**"
             )
         fields = tuple(
             (categories[category], "\n".join(items), False) for category, items in sections.items()
@@ -278,7 +333,7 @@ class IlisFarm(commands.Cog):
     async def harvest(self, ctx, plot: str = "all"):
         await self._play(
             ctx, FarmSession.harvest, plot.lower().lstrip("#"),
-            render=lambda r: "\n".join(f"{inventory_name(ctx, f'crop:{key}')} **×{qty}**" for key, qty in r[0].items()) + f"\n+{r[1]} XP",
+            render=lambda r: "\n".join(f"{inventory_name(self.emojis, ctx, f'crop:{key}')} **×{qty}**" for key, qty in r[0].items()) + f"\n+{r[1]} XP",
         )
 
     @farm.command(name="sell", brief="Bán nông sản theo mã cây hoặc all")
@@ -295,14 +350,14 @@ class IlisFarm(commands.Cog):
             return
         if category.lower() in {"fish", "f"}:
             lines = [
-                f"`#{key}` {art.emoji(ctx, 'fish_' + fish['type'])} {FISH[fish['type']]['name']} · {fish['weight']} kg · {vnd(fish['price']):,} VND giá gốc"
+                f"`#{key}` {self.emojis.emoji(ctx, 'fish_' + fish['type'])} {FISH[fish['type']]['name']} · {fish['weight']} kg · {vnd(fish['price']):,} VND giá gốc"
                 for key, fish in state["fish"].items()
             ]
             await self._send(ctx, "Kho cá", "\n".join(lines))
             return
         inventory = state["inventory"]
         lines = [f"**{sum(inventory.values())}/{INVENTORY_CAPACITY}** vật phẩm"]
-        lines.extend(f"{inventory_name(ctx, entry)} ×{quantity}" for entry, quantity in sorted(inventory.items()))
+        lines.extend(f"{inventory_name(self.emojis, ctx, entry)} ×{quantity}" for entry, quantity in sorted(inventory.items()))
         await self._send(ctx, "Kho đồ Farm", "\n".join(lines))
 
     @farm.command(name="discard", brief="Bỏ rác câu cá khỏi kho")
@@ -317,7 +372,7 @@ class IlisFarm(commands.Cog):
     async def fish(self, ctx, rod: str | None = None):
         await self._play(
             ctx, FarmSession.fishing, rod, title="Kết quả câu cá", badge="rod_common",
-            render=lambda r: f"{art.emoji(ctx, r[2], '🎣')} {r[0]}\n{art.emoji(ctx, 'ui_xp')} **+{r[1]} XP**",
+            render=lambda r: f"{self.emojis.emoji(ctx, r[2], '🎣')} {r[0]}\n{self.emojis.emoji(ctx, 'ui_xp')} **+{r[1]} XP**",
             media=lambda r: (art.thumbnail(r[2]), None),
         )
 
@@ -328,26 +383,49 @@ class IlisFarm(commands.Cog):
             render=lambda r: f"Đã bán **{r[0]} cá** với giá **{vnd(r[1]):,} VND**.",
         )
 
-    @farm.command(name="pet", aliases=["petlist"], brief="Xem danh sách pet hoặc chi tiết theo mã")
+    @farm.command(name="pet", aliases=["pets"], brief="Mở album pet, chọn theo số hoặc mã pet")
     async def pet(self, ctx, pet_id: str | None = None):
         state = await self._player(ctx)
         if state is None:
             return
-        pets = state["pets"]
+        roster = tuple(PETS)
+        selected = state["active_pet"] or roster[0]
         if pet_id:
-            key = pet_id.lower()
-            if key not in pets:
-                await self._error(ctx, FarmError("Bạn chưa sở hữu pet có mã này."))
+            value = pet_id.lower().lstrip("#")
+            selected = value
+            if value.isascii() and value.isdecimal() and len(value) <= 2:
+                index = int(value) - 1
+                selected = roster[index] if 0 <= index < len(roster) else ""
+            if selected not in PETS:
+                await self._error(ctx, FarmError(f"Chọn số pet từ 1 đến {len(roster)} hoặc nhập mã pet."))
                 return
-            pet = pets[key]
-            update_pet(pet, pet_bonus(key, pet), time.time())
-            await self._send(
-                ctx, "Thông tin pet", format_pet(ctx, key, pet),
-                badge=f"pet_{key}", thumbnail=art.thumbnail(f"pet_{key}"),
-            )
+        album = PetAlbum(ctx, self.emojis, state, selected)
+        await ctx.send(embed=album.page(selected), view=album, allowed_mentions=discord.AllowedMentions.none())
+
+    @farm.command(name="petinfo", brief="Xem độ no, hạnh phúc và sức khỏe pet đã sở hữu")
+    async def petinfo(self, ctx, pet_id: str | None = None):
+        state = await self._player(ctx)
+        if state is None:
             return
+        key = pet_id.lower() if pet_id else state["active_pet"]
+        pet = state["pets"].get(key)
+        if pet is None:
+            await self._error(ctx, FarmError("Hãy chọn pet đang hoạt động hoặc nhập mã pet đã sở hữu."))
+            return
+        update_pet(pet, pet_bonus(key, pet), time.time())
+        await self._send(
+            ctx, "Thông tin pet", format_pet(self.emojis, ctx, key, pet),
+            badge=f"pet_{key}", thumbnail=art.thumbnail(f"pet_{key}"),
+        )
+
+    @farm.command(name="petlist", brief="Xem danh sách pet đã sở hữu")
+    async def petlist(self, ctx):
+        state = await self._player(ctx)
+        if state is None:
+            return
+        pets = state["pets"]
         lines = [
-            f"{art.emoji(ctx, f'pet_{key}')} `{key}` **{PETS[key]['name']}** · Cấp {pet['level']} · C{pet['stars']}"
+            f"{self.emojis.emoji(ctx, f'pet_{key}')} `{key}` **{PETS[key]['name']}** · Cấp {pet['level']} · C{pet['stars']}"
             + (" · Đang hoạt động" if key == state["active_pet"] else "")
             for key, pet in pets.items()
         ]
@@ -362,14 +440,14 @@ class IlisFarm(commands.Cog):
         key = f"pet_{pet.lower()}"
         await self._play(
             ctx, FarmSession.select_pet, pet,
-            render=lambda name: f"{art.emoji(ctx, key)} Đã chọn **{name}**.",
+            render=lambda name: f"{self.emojis.emoji(ctx, key)} Đã chọn **{name}**.",
             media=lambda _: (art.thumbnail(key), None),
         )
 
     async def _care(self, ctx, activity: str, title: str, food: str = "") -> None:
         await self._play(
             ctx, FarmSession.care, activity, food, title=title,
-            render=lambda r: format_pet(ctx, *r),
+            render=lambda r: format_pet(self.emojis, ctx, *r),
             media=lambda r: (art.thumbnail(f"pet_{r[0]}"), art.action_image(activity)),
         )
 
@@ -384,6 +462,10 @@ class IlisFarm(commands.Cog):
     @farm.command(name="cuddle", aliases=["nung"], brief="Nựng pet")
     async def cuddle(self, ctx):
         await self._care(ctx, "cuddle", "Nựng pet")
+
+    @farm.command(name="kiss", aliases=["hon"], brief="Hôn pet để tăng hạnh phúc")
+    async def kiss(self, ctx):
+        await self._care(ctx, "kiss", "Hôn pet")
 
     @farm.command(name="exercise", brief="Cho pet tập luyện")
     async def exercise(self, ctx):
@@ -400,6 +482,7 @@ class IlisFarm(commands.Cog):
                     f"Dùng `{ctx.clean_prefix}farm gacha 1` hoặc `{ctx.clean_prefix}farm gacha 10`. "
                     f"Mỗi lượt dùng **1 vé** hoặc **{vnd(10_000):,} VND**.",
                     badge="ui_gacha", thumbnail=art.thumbnail("ui_gacha"),
+                    image=art.image("gacha_gif_normal"),
                 )
             return
 
@@ -413,7 +496,7 @@ class IlisFarm(commands.Cog):
             ctx, FarmSession.gacha, count, title="Kết quả gacha", badge="ui_gacha",
             render=lambda r: (
                 ("Đã dùng vé gacha.\n" if r[1] else f"Chi phí **{vnd(10_000 * count):,} VND**.\n")
-                + "\n".join(f"{art.emoji(ctx, key)} **{label}**" for key, label in r[0])
+                + "\n".join(f"{self.emojis.emoji(ctx, key)} **{label}**" for key, label in r[0])
             ),
             media=gacha_media,
         )
@@ -448,7 +531,7 @@ class IlisFarm(commands.Cog):
         ]
         for entry in NORMAL_GACHA:
             key = entry["id"]
-            icon = art.emoji(ctx, f"pet_{key}" if entry["type"] == "pet" else key, entry.get("emoji", ""))
+            icon = self.emojis.emoji(ctx, f"pet_{key}" if entry["type"] == "pet" else key, entry.get("emoji", ""))
             lines.append(f"{icon} {entry['name']} · {entry['rate'] / total:.2%}")
         await self._send(ctx, "Tỷ lệ gacha Farm", "\n".join(lines), badge="ui_gacha")
 
