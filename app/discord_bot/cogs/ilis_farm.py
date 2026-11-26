@@ -9,7 +9,7 @@ from discord.ext import commands
 from app.discord_bot.modules.farm import art
 from app.discord_bot.modules.farm.rules import (
     ACHIEVEMENTS, ALL_WORDS, CATALOG, CROPS, FISH, INVENTORY_CAPACITY, JUNK, NORMAL_GACHA, PETS, QUALITY_NAMES,
-    QUESTS, SHOP, SHOP_IDS, START_COINS, daily_quests, day_at, event_at, pet_bonus, pet_key, season_at,
+    QUESTS, SHOP, SHOP_IDS, START_COINS, daily_quests, day_at, event_at, inventory_size, pet_bonus, pet_key, season_at,
     vnd, xp_required,
 )
 from app.discord_bot.modules.farm.service import FarmError, FarmSession, FarmStore, plot_limit
@@ -133,7 +133,6 @@ class IlisFarm(commands.Cog):
     def __init__(self, bot):
         self.store = FarmStore(bot.economy)
         self.emojis = art.FarmEmojis(bot)
-        self.proposals = set()
         self.last_huyn_line = {}
 
     @commands.Cog.listener()
@@ -208,21 +207,6 @@ class IlisFarm(commands.Cog):
         embed = discord.Embed(title=title, description=text, color=art.COLOR)
         embed.set_footer(text=art.FOOTER)
         await interaction.edit_original_response(content=None, embed=embed, view=None)
-
-    async def _reaction_choice(self, ctx, message, user_id: int, timeout: int) -> bool | None:
-        def check(payload):
-            return payload.message_id == message.id and payload.user_id == user_id and payload.emoji.name in {"✅", "❌"}
-
-        pending = asyncio.create_task(ctx.bot.wait_for("raw_reaction_add", check=check, timeout=timeout))
-        try:
-            await message.add_reaction("✅")
-            await message.add_reaction("❌")
-            return (await pending).emoji.name == "✅"
-        except asyncio.TimeoutError:
-            return None
-        finally:
-            if not pending.done():
-                pending.cancel()
 
     async def _error(self, ctx, error: FarmError) -> None:
         message = str(error).replace("`farm ", f"`{ctx.clean_prefix}farm ")
@@ -322,7 +306,7 @@ class IlisFarm(commands.Cog):
     async def guide(self, ctx):
         prefix = f"{ctx.clean_prefix}farm"
         await self._send(ctx, "Hướng dẫn Ilis Farm", "\n".join((
-            f"1. `{prefix} start` · Đọc điều khoản, mở nông trại và nhận vốn.",
+            f"1. `{prefix} start` · Mở nông trại và nhận vốn.",
             f"2. `{prefix} shop farm` · Xem hạt giống, phân bón và cần câu.",
             f"3. `{prefix} plant 1 all` · Trồng rau muống vào các ô còn đủ hạt hoặc tiền.",
             f"4. `{prefix} water` · Tưới cây. `{prefix} harvest` · Thu hoạch cây chín.",
@@ -343,49 +327,21 @@ class IlisFarm(commands.Cog):
                  for title, description in descriptions]
         await self._pages(ctx, pages)
 
-    @farm.command(name="start", aliases=["dangky", "register", "taotaikhoan", "batdau", "bat_dau"], brief="Đồng ý điều khoản, tạo nông trại và nhận vốn một lần")
+    @farm.command(
+        name="start", aliases=["dangky", "register", "taotaikhoan", "batdau", "bat_dau"],
+        brief="Tạo nông trại và nhận vốn một lần",
+    )
     async def start(self, ctx):
         try:
-            self.store.get(ctx.author.id)
-        except FarmError:
-            pass
-        else:
-            await self._error(ctx, FarmError("Bạn đã có nông trại. Dùng `farm help` để xem lệnh."))
+            balance = self.store.start(ctx.author.id)
+        except FarmError as error:
+            await self._error(ctx, error)
             return
-
-        async def choose(interaction, selection):
-            if selection == "decline":
-                await self._choice_message(interaction, "Đã hủy đăng ký.")
-                return
-            if self.store.economy.is_banned(ctx.author.id):
-                await self._choice_message(interaction, "❌ Tài khoản Casino đang bị khóa.")
-                return
-            try:
-                balance = self.store.start(ctx.author.id)
-            except FarmError as error:
-                await self._choice_message(interaction, f"❌ {error}")
-                return
-            await self._choice_message(
-                interaction,
-                f"Đã cộng **{vnd(START_COINS):,} VND** vào ví Casino. Số dư **{balance:,} VND**.\n"
-                f"Dùng `{ctx.clean_prefix}farm plant 1` để trồng rau muống.",
-                "🌱 Nông trại mới",
-            )
-
-        choices = FarmChoices(ctx.author.id, (
-            ("accept", "✅ Đồng ý & Tạo tài khoản", discord.ButtonStyle.success, False),
-            ("decline", "❌ Từ chối", discord.ButtonStyle.danger, False),
-        ), choose, timeout=60)
         await self._send(
-            ctx, "Điều khoản sử dụng · Ilis Farm",
-            "Vui lòng đọc và đồng ý điều khoản trước khi tạo tài khoản. Lựa chọn hết hạn sau 60 giây.",
-            fields=(
-                ("📌 Phạm vi", "Farm hoạt động trong các máy chủ được Casino Bot cho phép.", False),
-                ("💰 Tiền tệ ảo", "VND trong game, vật phẩm và điểm số là dữ liệu ảo. Cấm mua bán hoặc quy đổi ra tiền thật.", False),
-                ("🔐 Dữ liệu", "Bot lưu Discord User ID, Server ID, dữ liệu kinh tế, vật phẩm và tiến trình.", False),
-                ("⚙️ Quản trị", "Ban quản trị có thể cân bằng dữ liệu và khóa tài khoản vi phạm quy định.", False),
-                ("⚠️ Tình trạng dịch vụ", "Bot được cung cấp theo hiện trạng. Lỗi kỹ thuật hoặc bảo trì có thể làm gián đoạn trò chơi.", False),
-            ), view=choices,
+            ctx, "Nông trại mới",
+            f"Đã cộng **{vnd(START_COINS):,} VND** vào ví Casino. Số dư **{balance:,} VND**.\n"
+            f"Dùng `{ctx.clean_prefix}farm plant 1` để trồng rau muống.",
+            thumbnail=ctx.author.display_avatar.url,
         )
 
     @farm.command(name="balance", aliases=["bal", "bl", "cash", "cs"], brief="Xem ví Casino, đá quý và vé Farm")
@@ -447,93 +403,15 @@ class IlisFarm(commands.Cog):
             level = state["level"]
             cap = 70 if state["evolutions"] else 50
             xp = f"{state['xp']:,}/{xp_required(level, state['evolutions']):,} XP" if level < cap else "Cấp tối đa"
-            wedding = state.get("marriage")
             pet = state["active_pet"]
-            partner = f"<@{wedding['partner']}> · {SHOP[wedding['ring']]['name']} · {int((time.time() - wedding['at']) // 86400)} ngày" if wedding else "Chưa kết hôn"
             await self._send(
                 ctx, "Tiến trình Farm",
                 f"**Cấp {level}** · {xp} · Tiến hóa {state['evolutions']}\n"
                 f"Đã trồng {state['planted']:,} · Đã thu hoạch {state['harvested']:,} · Đã bán {state['sold']:,}\n"
                 f"Tổng thu nhập ghi nhận **{vnd(state['earned']):,} VND** · Chuỗi điểm danh {state['streak']} ngày",
                 badge="ui_xp", thumbnail=ctx.author.display_avatar.url,
-                fields=(
-                    ("🐾 Pet", PETS[pet]["name"] if pet else "Chưa có pet đang hoạt động", True),
-                    ("💔 Hôn nhân", partner, True),
-                ),
+                fields=(("🐾 Pet", PETS[pet]["name"] if pet else "Chưa có pet đang hoạt động", True),),
             )
-
-    @farm.command(name="marry", aliases=["cuoi", "cưới", "propose"], brief="Cầu hôn bằng nhẫn đã mua trong Farm")
-    @commands.guild_only()
-    async def marry(self, ctx, member: discord.Member):
-        couple = {ctx.author.id, member.id}
-        try:
-            if member.bot or len(couple) != 2:
-                raise FarmError("Chọn một người chơi khác để cầu hôn.")
-            if couple & self.proposals:
-                raise FarmError("Một trong hai người đã có lời cầu hôn đang chờ.")
-            ring = self.store.proposal_ring(ctx.author.id, member.id)
-        except FarmError as error:
-            await self._error(ctx, error)
-            return
-        item = SHOP[ring]
-        embed = discord.Embed(
-            title="💍 Lời cầu hôn", color=art.COLOR,
-            description=f"<@{ctx.author.id}> cầu hôn <@{member.id}> bằng {item['emoji']} **{item['name']}**.\n"
-                        "✅ Đồng ý · ❌ Từ chối\nHết hạn sau 60 giây.",
-        )
-        self.proposals.update(couple)
-        try:
-            message = await ctx.send(
-                member.mention, embed=embed,
-                allowed_mentions=discord.AllowedMentions(users=[member], roles=False, everyone=False),
-            )
-            try:
-                accepted = await self._reaction_choice(ctx, message, member.id, 60)
-                if accepted:
-                    if any(self.store.economy.is_banned(user_id) for user_id in couple):
-                        raise FarmError("Một trong hai tài khoản Casino đang bị khóa.")
-                    self.store.marry(ctx.author.id, member.id, ctx.guild.id, ring)
-                    result = f"💒 <@{ctx.author.id}> và <@{member.id}> đã kết hôn trong Farm."
-                else:
-                    result = "Lời cầu hôn đã hết hạn." if accepted is None else "Lời cầu hôn đã bị từ chối."
-            except discord.Forbidden:
-                result = "Bot cần quyền thêm reaction trong kênh này."
-            except FarmError as error:
-                result = str(error)
-            await message.edit(content=None, embed=discord.Embed(description=result, color=art.COLOR),
-                               allowed_mentions=discord.AllowedMentions.none())
-        finally:
-            self.proposals.difference_update(couple)
-
-    @farm.command(name="divorce", aliases=["lidj", "lidị", "chia_tay"], brief="Xác nhận ly dị trong Farm")
-    async def divorce(self, ctx):
-        state = await self._player(ctx)
-        if state is None:
-            return
-        wedding = state.get("marriage")
-        if not wedding:
-            await self._error(ctx, FarmError("Bạn chưa kết hôn trong Farm."))
-            return
-        embed = discord.Embed(
-            title="💔 Xác nhận ly dị", color=art.COLOR,
-            description=f"Bạn muốn ly dị <@{wedding['partner']}>? Nhẫn sẽ không được hoàn trả.\n"
-                        "✅ Xác nhận · ❌ Hủy\nHết hạn sau 30 giây.",
-        )
-        message = await ctx.send(embed=embed, allowed_mentions=discord.AllowedMentions.none())
-        try:
-            accepted = await self._reaction_choice(ctx, message, ctx.author.id, 30)
-            if accepted:
-                if self.store.economy.is_banned(ctx.author.id):
-                    raise FarmError("Tài khoản Casino đang bị khóa.")
-                self.store.divorce(ctx.author.id, wedding["id"])
-                result = "💔 Đã ly dị trong Farm."
-            else:
-                result = "Đã hủy xác nhận ly dị."
-        except discord.Forbidden:
-            result = "Bot cần quyền thêm reaction trong kênh này."
-        except FarmError as error:
-            result = str(error)
-        await message.edit(embed=discord.Embed(description=result, color=art.COLOR))
 
     @farm.command(name="daily", aliases=["dl", "d", "nhận", "nhan"], brief="Điểm danh nhận VND và vé gacha")
     async def daily(self, ctx):
@@ -554,11 +432,10 @@ class IlisFarm(commands.Cog):
             return
         categories = {
             "seeds": "🌱 Hạt giống", "pets": "🐾 Pet", "food": "🍖 Thức ăn",
-            "fertilizer": "🧺 Phân bón", "fishing": "🎣 Cần câu", "ring": "💍 Nhẫn cưới", "weapon": "🔪 Vũ khí",
+            "fertilizer": "🧺 Phân bón", "fishing": "🎣 Cần câu", "weapon": "🔪 Vũ khí",
         }
         filters = {"farm": ("seeds", "fertilizer", "fishing"), "pet": ("pets", "food")}
-        key = {"rings": "ring", "nhan": "ring", "nhẫn": "ring", "nhan_cuoi": "ring", "dao": "weapon",
-               "vukhi": "weapon", "nôngtrại": "farm", "food": "pet"}.get(category.lower(), category.lower())
+        key = {"dao": "weapon", "vukhi": "weapon", "nôngtrại": "farm", "food": "pet"}.get(category.lower(), category.lower())
         selected = filters.get(key, (key,) if key in categories else ())
         prefix = f"{ctx.clean_prefix}farm"
         balance = self.store.economy.get_entry(ctx.author.id)[1]
@@ -568,8 +445,7 @@ class IlisFarm(commands.Cog):
                 ctx, "Cửa hàng Ilis Farm", header, badge="ui_coin",
                 fields=tuple(
                     (label, f"`{prefix} shop {name}`", True)
-                    for name, label in (("farm", "🌱 Nông trại"), ("pet", "🐾 Pet và thức ăn"),
-                                        ("ring", "💍 Nhẫn cưới"), ("weapon", "🔪 Vũ khí"))
+                    for name, label in (("farm", "🌱 Nông trại"), ("pet", "🐾 Pet và thức ăn"), ("weapon", "🔪 Vũ khí"))
                 ),
             )
             return
@@ -703,10 +579,10 @@ class IlisFarm(commands.Cog):
         else:
             title = "📦 Kho đồ Farm"
             inventory = state["inventory"]
-            total = f"**{sum(inventory.values())}/{INVENTORY_CAPACITY}** vật phẩm"
+            total = f"**{inventory_size(inventory)}/{INVENTORY_CAPACITY}** vật phẩm"
             lines = []
             for kind, name in (("crop", "🌾 Nông sản"), ("seed", "🌱 Hạt giống"), ("food", "🍖 Thức ăn"),
-                               ("fertilizer", "🥄 Phân bón"), ("fishing", "🎣 Cần câu"), ("ring", "💍 Nhẫn"),
+                               ("fertilizer", "🥄 Phân bón"), ("fishing", "🎣 Cần câu"),
                                ("weapon", "🔪 Vũ khí"), ("junk", "📦 Đồ vớt được")):
                 items = [(key, qty) for key, qty in inventory.items() if key.startswith(f"{kind}:")]
                 if items:
@@ -1100,7 +976,7 @@ class IlisFarm(commands.Cog):
             pages.append(embed)
         await self._pages(ctx, pages)
 
-    @farm.command(name="leaderboard", aliases=["top", "lb"], brief="Bảng xếp hạng ví, cấp, thu nhập Farm, điểm danh và cặp đôi")
+    @farm.command(name="leaderboard", aliases=["top", "lb"], brief="Bảng xếp hạng ví, cấp, thu nhập Farm và thu hoạch")
     async def leaderboard(self, ctx, metric: str = "coin"):
         metric = metric.lower()
         try:
@@ -1109,23 +985,21 @@ class IlisFarm(commands.Cog):
             await self._error(ctx, error)
             return
         titles = {"coin": "Top ví Casino", "level": "Top cấp độ", "farm": "Top nông dân",
-                  "earned": "Top nông dân", "streak": "Top chuỗi điểm danh", "harvested": "Top thu hoạch"}
+                  "earned": "Top nông dân", "harvested": "Top thu hoạch"}
         lines = []
         for index, (user_id, score, extra, _) in enumerate(scores, 1):
             medal = ["🥇", "🥈", "🥉"][index - 1] if index <= 3 else f"**#{index}**"
-            if metric in {"couple", "couples", "capdoi"}:
-                summary = f"💔 <@{score}> · {int((time.time() - extra) // 86400)} ngày"
-            elif metric == "coin":
+            if metric == "coin":
                 summary = f"{score:,} VND"
             elif metric in {"earned", "farm"}:
                 summary = f"{vnd(score):,} VND"
             elif metric == "level":
                 summary = f"Cấp {score}" + (f" v{extra + 1}" if extra else "")
             else:
-                summary = f"{score:,}" + (" ngày" if metric == "streak" else "")
+                summary = f"{score:,}"
             lines.append(f"{medal} <@{user_id}> · {summary}")
         await self._send(
-            ctx, titles.get(metric, "Top cặp đôi"), "\n".join(lines),
+            ctx, titles[metric], "\n".join(lines),
             fields=(("Xếp hạng của bạn", f"**#{rank}**" if rank else "Chưa có hạng", False),),
         )
 

@@ -149,25 +149,28 @@ class FarmEconomyTests(unittest.TestCase):
             self.assertEqual(cost, 8)
         self.assertEqual(self.store.get(self.user_id)["planted"], 3)
 
-    def test_marriage_consumes_ring_and_records_both_players_atomically(self):
-        partner = self.user_id + 1
+    def test_removed_rings_do_not_block_existing_inventories(self):
         self.store.start(self.user_id)
-        self.store.start(partner)
-        with self.store.action(self.user_id, "test setup") as farm:
-            farm.change_item("ring", "nhan_bac", 1)
-            farm.change_item("ring", "nhan_vang", 1)
-        ring = self.store.proposal_ring(self.user_id, partner)
-        self.assertEqual(ring, "nhan_vang")
-        self.store.marry(self.user_id, partner, 123, ring)
-        wedding = self.store.get(self.user_id)["marriage"]
-        self.assertEqual(wedding["id"], self.store.get(partner)["marriage"]["id"])
-        self.assertEqual(self.store.get(self.user_id)["inventory"], {"ring:nhan_bac": 1})
-        with self.assertRaises(FarmError):
-            self.store.marry(self.user_id, partner, 123, "nhan_bac")
-        self.assertEqual(self.store.leaderboard("couple", partner)[1], 1)
-        self.store.divorce(partner, wedding["id"])
-        self.assertNotIn("marriage", self.store.get(self.user_id))
-        self.assertNotIn("marriage", self.store.get(partner))
+        self.economy.set_money(self.user_id, 20_000_000)
+        with self.store.action(self.user_id, "legacy fixture") as farm:
+            farm.state["inventory"]["ring:nhan_bac"] = 200
+        for item in ("300", "#301", "nhan_kim_cuong"):
+            with self.subTest(item=item), self.assertRaises(FarmError):
+                with self.store.action(self.user_id, "buy") as farm:
+                    farm.buy(item, 1)
+        self.assertEqual(self.balance(), 20_000_000)
+        with self.store.action(self.user_id, "buy") as farm:
+            farm.buy("1", 200)
+        self.assertEqual(self.store.get(self.user_id)["inventory"]["seed:rau_muong"], 200)
+
+    def test_only_active_rankings_are_available(self):
+        self.store.start(self.user_id)
+        for metric in ("couple", "couples", "capdoi", "streak"):
+            with self.subTest(metric=metric), self.assertRaises(FarmError):
+                self.store.leaderboard(metric, self.user_id)
+        for metric in ("coin", "level", "farm", "earned", "harvested"):
+            with self.subTest(metric=metric):
+                self.assertEqual(self.store.leaderboard(metric, self.user_id)[1], 1)
 
     def test_original_leaderboard_prioritizes_evolution_then_level_then_xp(self):
         first, second, third = self.user_id, self.user_id + 1, self.user_id + 2

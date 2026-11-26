@@ -357,30 +357,6 @@
       "description": "+5% cơ hội nông sản hiếm",
       "petId": "fox"
     },
-    "nhan_bac": {
-      "category": "ring",
-      "name": "Nhẫn Bạc",
-      "emoji": "💍",
-      "coin": 100000,
-      "gem": 0,
-      "description": "Cầu hôn người ấy~ · Tier cơ bản"
-    },
-    "nhan_vang": {
-      "category": "ring",
-      "name": "Nhẫn Vàng",
-      "emoji": "💛",
-      "coin": 500000,
-      "gem": 0,
-      "description": "Cầu hôn người ấy~ · Buff: +5% xu thu hoạch _(sắp ra)_"
-    },
-    "nhan_kim_cuong": {
-      "category": "ring",
-      "name": "Nhẫn Kim Cương",
-      "emoji": "💎",
-      "coin": 2000000,
-      "gem": 0,
-      "description": "Cầu hôn người ấy~ · Buff: +10% xu + giảm 10% thời gian trồng _(sắp ra)_"
-    },
     "dao": {
       "category": "weapon",
       "name": "Dao",
@@ -421,9 +397,6 @@
     "260": "rod_common",
     "261": "rod_uncommon",
     "262": "rod_rare",
-    "300": "nhan_bac",
-    "301": "nhan_vang",
-    "302": "nhan_kim_cuong",
     "400": "dao"
   },
   "FISH_TYPES": {

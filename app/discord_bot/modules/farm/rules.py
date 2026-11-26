@@ -23,7 +23,6 @@ NORMAL_GACHA = tuple(
 FISH = CATALOG["FISH_TYPES"]
 JUNK = CATALOG["JUNK_ITEMS"]
 RODS = CATALOG["ROD_INFO"]
-RINGS = ("nhan_kim_cuong", "nhan_vang", "nhan_bac")
 PET_ORDER = tuple(PETS)
 ALL_WORDS = {"all", "hết", "het", "tất", "tat"}
 QUESTS = CATALOG["QUESTS"]
@@ -41,6 +40,11 @@ QUALITY_NAMES = dict(zip(QUALITIES, ("Thường", "Khá", "Hiếm", "Sử thi", 
 
 def vnd(coins: int) -> int:
     return coins * VND_PER_COIN
+
+
+def inventory_size(inventory: dict[str, int]) -> int:
+    # Rings from earlier Farm saves no longer occupy space in the active inventory.
+    return sum(quantity for key, quantity in inventory.items() if not key.startswith("ring:"))
 
 
 def round_reward(value: float) -> int:

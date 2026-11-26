@@ -2,7 +2,7 @@
 
 ## Ilis Farm
 
-- `i?farm start` mở điều khoản. Bấm **Đồng ý & Tạo tài khoản** để tạo nông trại mới và nhận 1.000.000 VND một lần vào ví Casino.
+- `i?farm start` tạo ngay nông trại và cộng 1.000.000 VND một lần vào ví Casino.
 - `i?farm help` liệt kê các lệnh, gồm trồng và bán nông sản, câu cá, nuôi pet, gacha và nhiệm vụ.
 - `i?farm balance` hiển thị ví VND dùng chung cùng đá quý và vé gacha riêng của Farm.
 - `i?farm plant all` trồng hạt có sẵn trong kho. `i?farm plant 1 all` trồng rau muống vào các ô còn đủ hạt hoặc tiền.

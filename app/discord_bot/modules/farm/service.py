@@ -6,12 +6,11 @@ import time
 from contextlib import contextmanager
 from datetime import date, timedelta
 from math import ceil
-from uuid import uuid4
 
 from .rules import (
     ACHIEVEMENTS, ALL_WORDS, CATALOG, CROPS, FISH, INVENTORY_CAPACITY, JUNK, NORMAL_GACHA,
-    PETS, QUALITIES, QUESTS, RINGS, RODS, SHOP, START_COINS, VND_PER_COIN, active_pet_bonus, daily_quests,
-    day_at, event_at, item_id, pet_bonus, pet_key, round_reward, season_at, update_pet, vnd,
+    PETS, QUALITIES, QUESTS, RODS, SHOP, START_COINS, VND_PER_COIN, active_pet_bonus, daily_quests,
+    day_at, event_at, inventory_size, item_id, pet_bonus, pet_key, round_reward, season_at, update_pet, vnd,
     xp_required,
 )
 
@@ -93,27 +92,15 @@ class FarmStore:
             self._save(user_id, state)
 
     def leaderboard(self, metric: str, user_id: int) -> tuple[list[tuple], int | None]:
-        metric = {"farm": "earned", "couples": "couple", "capdoi": "couple"}.get(metric, metric)
-        if metric == "couple":
-            rows = self.economy.conn.execute(
-                """SELECT user_id,
-                          json_extract(state, '$.marriage.partner') AS partner,
-                          json_extract(state, '$.marriage.at') AS married_at,
-                          RANK() OVER (ORDER BY json_extract(state, '$.marriage.at')) AS rank
-                   FROM farm_players WHERE user_id = json_extract(state, '$.marriage.proposer')
-                   ORDER BY married_at, user_id"""
-            ).fetchall()
-            rank = next((row[3] for row in rows if user_id in row[:2]), None)
-            return rows[:10], rank
+        metric = "earned" if metric == "farm" else metric
         ordering = {
             "level": "evolutions DESC, score DESC, xp DESC",
             "coin": "score DESC",
             "earned": "score DESC",
-            "streak": "score DESC",
             "harvested": "score DESC",
         }.get(metric)
         if not ordering:
-            raise FarmError("Chọn bảng `coin`, `level`, `farm`, `streak` hoặc `couple`.")
+            raise FarmError("Chọn bảng `coin`, `level`, `farm` hoặc `harvested`.")
         score = "COALESCE(e.money, 0)" if metric == "coin" else "json_extract(p.state, ?)"
         params = (user_id,) if metric == "coin" else (f"$.{metric}", user_id)
         rows = self.economy.conn.execute(
@@ -131,42 +118,6 @@ class FarmStore:
             params,
         ).fetchall()
         return rows[:10], next((row[3] for row in rows if row[0] == user_id), None)
-
-    def proposal_ring(self, proposer: int, target: int) -> str:
-        if proposer == target:
-            raise FarmError("Bạn không thể tự cầu hôn mình.")
-        sender = self.get(proposer)
-        receiver = self.get(target)
-        if sender.get("marriage") or receiver.get("marriage"):
-            raise FarmError("Một trong hai người đã kết hôn trong Farm.")
-        ring = next((ring for ring in RINGS if sender["inventory"].get(f"ring:{ring}")), None)
-        if not ring:
-            raise FarmError("Bạn cần có nhẫn trong kho. Xem `farm shop ring`.")
-        return ring
-
-    def marry(self, proposer: int, target: int, guild_id: int, ring: str) -> None:
-        with self.action(proposer, "marry") as session:
-            receiver = self.get(target, now=session.now)
-            if proposer == target or session.state.get("marriage") or receiver.get("marriage"):
-                raise FarmError("Lời cầu hôn không còn hợp lệ.")
-            if ring not in RINGS:
-                raise FarmError("Nhẫn cưới không hợp lệ.")
-            session.change_item("ring", ring, -1)
-            wedding = {"id": uuid4().hex, "proposer": proposer, "guild": guild_id, "ring": ring, "at": session.now}
-            session.state["marriage"] = dict(wedding, partner=target)
-            receiver["marriage"] = dict(wedding, partner=proposer)
-            self._save(target, receiver)
-
-    def divorce(self, user_id: int, marriage_id: str) -> None:
-        with self.action(user_id, "divorce") as session:
-            wedding = session.state.get("marriage")
-            if not wedding or wedding["id"] != marriage_id:
-                raise FarmError("Hôn nhân này đã thay đổi.")
-            partner = self.get(wedding["partner"], now=session.now)
-            if partner.get("marriage", {}).get("id") == marriage_id:
-                partner.pop("marriage")
-                self._save(wedding["partner"], partner)
-            session.state.pop("marriage")
 
     def visit(self, user_id: int, target_id: int, activity: str) -> str:
         if user_id == target_id or activity not in {"water", "rob"}:
@@ -257,7 +208,7 @@ class FarmSession:
         quantity = inventory.get(entry, 0) + delta
         if quantity < 0:
             raise FarmError("Bạn không có đủ vật phẩm trong kho.")
-        if delta > 0 and sum(inventory.values()) + delta > INVENTORY_CAPACITY:
+        if delta > 0 and inventory_size(inventory) + delta > INVENTORY_CAPACITY:
             raise FarmError(f"Kho đồ đã đầy ({INVENTORY_CAPACITY} vật phẩm).")
         if quantity:
             inventory[entry] = quantity
