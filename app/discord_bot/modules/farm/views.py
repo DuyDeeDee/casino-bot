@@ -40,13 +40,26 @@ class FarmChoices(discord.ui.View):
 
 
 class FarmPages(discord.ui.View):
-    def __init__(self, user_id, pages):
-        super().__init__(timeout=120)
+    def __init__(self, user_id, pages, *, start=0, rate_pages=False):
+        super().__init__(timeout=60 if rate_pages else 300)
         self.user_id = user_id
         self.pages = pages
-        self.index = 0
-        self.previous.disabled = True
+        self.index = max(0, min(start, len(pages) - 1))
+        self.rate_pages = rate_pages
+        if rate_pages:
+            self.previous.emoji = self.next.emoji = None
+            self.previous.label = "◀ Trước"
+            self.next.label = "Sau ▶"
+        self._update_buttons()
         self.message = None
+
+    @property
+    def current(self):
+        return self.pages[self.index]
+
+    def _update_buttons(self):
+        self.previous.disabled = self.index == 0
+        self.next.disabled = self.index == len(self.pages) - 1
 
     async def interaction_check(self, interaction):
         if interaction.user.id == self.user_id:
@@ -57,20 +70,23 @@ class FarmPages(discord.ui.View):
     async def on_timeout(self):
         if self.message:
             try:
-                await self.message.edit(view=None)
+                if self.rate_pages:
+                    self.previous.disabled = self.next.disabled = True
+                    await self.message.edit(view=self)
+                else:
+                    await self.message.edit(view=None)
             except discord.HTTPException:
                 pass
 
     async def turn(self, interaction, offset):
         self.index = max(0, min(self.index + offset, len(self.pages) - 1))
-        self.previous.disabled = self.index == 0
-        self.next.disabled = self.index == len(self.pages) - 1
-        await interaction.response.edit_message(embed=self.pages[self.index], view=self)
+        self._update_buttons()
+        await interaction.response.edit_message(embed=self.current, view=self)
 
-    @discord.ui.button(label="◀", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(emoji="◀️", style=discord.ButtonStyle.secondary)
     async def previous(self, interaction, button):
         await self.turn(interaction, -1)
 
-    @discord.ui.button(label="▶", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(emoji="▶️", style=discord.ButtonStyle.secondary)
     async def next(self, interaction, button):
         await self.turn(interaction, 1)

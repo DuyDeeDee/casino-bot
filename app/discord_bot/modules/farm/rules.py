@@ -10,6 +10,7 @@ with Path(__file__).with_name("catalog.json").open(encoding="utf-8") as source:
 
 VND_PER_COIN = 10_000
 START_COINS = 100
+DAILY_STREAK_BONUSES = {7: 1000, 14: 2000, 30: 5000, 60: 10_000, 90: 20_000}
 INVENTORY_CAPACITY = 200
 CROPS = CATALOG["CROPS"]
 SHOP = CATALOG["SHOP_ITEMS"]

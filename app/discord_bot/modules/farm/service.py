@@ -8,7 +8,7 @@ from datetime import date, timedelta
 from math import ceil
 
 from .rules import (
-    ACHIEVEMENTS, ALL_WORDS, CATALOG, CROPS, FISH, INVENTORY_CAPACITY, JUNK, NORMAL_GACHA,
+    ACHIEVEMENTS, ALL_WORDS, CATALOG, CROPS, DAILY_STREAK_BONUSES, FISH, INVENTORY_CAPACITY, JUNK, NORMAL_GACHA,
     PETS, QUALITIES, QUESTS, RODS, SHOP, START_COINS, VND_PER_COIN, active_pet_bonus, daily_quests,
     day_at, event_at, inventory_size, item_id, pet_bonus, pet_key, round_reward, season_at, update_pet, vnd,
     xp_required,
@@ -262,7 +262,7 @@ class FarmSession:
             raise FarmError("Bạn đã điểm danh. Quà mới mở lúc 07:00 giờ Việt Nam.")
         yesterday = (self.day - timedelta(days=1)).isoformat()
         streak = self.state["streak"] + 1 if self.state["daily"] == yesterday else 1
-        reward = random.randint(200, 500) + {7: 1000, 14: 2000, 30: 5000, 60: 10_000, 90: 20_000}.get(streak, 0)
+        reward = random.randint(200, 500) + DAILY_STREAK_BONUSES.get(streak, 0)
         self.state.update(daily=today, streak=streak, tickets=self.state["tickets"] + 1)
         self.earn(reward)
         return reward, streak

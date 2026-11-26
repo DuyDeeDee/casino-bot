@@ -8,7 +8,7 @@ from discord.ext import commands
 
 from app.discord_bot.modules.farm import art
 from app.discord_bot.modules.farm.rules import (
-    ACHIEVEMENTS, ALL_WORDS, CATALOG, CROPS, FISH, INVENTORY_CAPACITY, JUNK, NORMAL_GACHA, PETS, QUALITY_NAMES,
+    ACHIEVEMENTS, ALL_WORDS, CATALOG, CROPS, DAILY_STREAK_BONUSES, FISH, INVENTORY_CAPACITY, JUNK, NORMAL_GACHA, PETS, QUALITY_NAMES,
     QUESTS, SHOP, SHOP_IDS, START_COINS, daily_quests, day_at, event_at, inventory_size, pet_bonus, pet_key, season_at,
     vnd, xp_required,
 )
@@ -39,11 +39,15 @@ def inventory_name(emojis, ctx, entry: str) -> str:
     return f"{shop_icon(emojis, ctx, key)} {SHOP[key]['name']}"
 
 
+def progress_bar(value, total: int, width: int = 10) -> str:
+    count = min(width, max(0, int(value * width / total + 0.5)))
+    return f"`{'█' * count}{'░' * (width - count)}`"
+
+
 def format_pet(emojis, ctx, key: str, pet: dict) -> str:
     icon = emojis.emoji(ctx, f"pet_{key}")
     def bar(value):
-        filled = min(10, max(0, int(value / 10 + 0.5)))
-        return f"`{'█' * filled}{'░' * (10 - filled)}` {value:.0f}/100"
+        return f"{progress_bar(value, 100)} {value:.0f}/100"
 
     return (
         f"{icon} **{PETS[key]['name']}** · Cấp {pet['level']} · C{pet['stars']}\n\n"
@@ -53,78 +57,60 @@ def format_pet(emojis, ctx, key: str, pet: dict) -> str:
     )
 
 
-class PetAlbum(discord.ui.View):
-    def __init__(self, ctx, emojis, state: dict, selected: str):
-        super().__init__(timeout=120)
-        self.ctx = ctx
-        self.emojis = emojis
-        self.state = state
-        self.select = discord.ui.Select(
-            placeholder="Chọn pet để xem ảnh gốc",
-            options=[
-                discord.SelectOption(
-                    label=f"#{number:02} · {pet['name']}", value=key, default=key == selected,
-                )
-                for number, (key, pet) in enumerate(PETS.items(), 1)
-            ],
+def pet_album_page(ctx, emojis, state: dict, key: str) -> discord.Embed:
+    pet = PETS[key]
+    rarity, color = art.PET_RARITY[pet["rarity"]]
+    number = tuple(PETS).index(key) + 1
+    owned = state["pets"].get(key)
+    collected = len(state["pets"])
+    filled = int(collected * 12 / len(PETS) + 0.5)
+    season = "🌹 Mùa 2" if key in {"tuat", "thaothiet", "kuromi", "melody", "satou", "shio"} else "📖 Mùa 1"
+    lines = [
+        f"**{rarity}** · {season}",
+        f"{'🌸' * filled}{'🤍' * (12 - filled)} **{collected}/{len(PETS)}** pet đã sưu tầm",
+    ]
+    icon = emojis.emoji(ctx, f"pet_{key}")
+    embed = discord.Embed(
+        title=f"{emojis.emoji(ctx, 'ui_muong')} {icon} #{number:02} · {pet['name']}", description="\n".join(lines), color=color,
+    )
+    max_level = 10
+    bonuses = pet_bonus(key, {"level": max_level, "stars": 0})
+    bonus_lines = [
+        f"**+{(bonuses[stat] - 1):.1%}** {label}"
+        for stat, label in (
+            ("xpBonus", "XP"), ("yieldBonus", "sản lượng"), ("coinBonus", "VND"),
+            ("fishingXpBonus", "XP câu cá"), ("fishingCoinBonus", "VND câu cá"),
         )
-        self.select.callback = self.show_pet
-        self.add_item(self.select)
-
-    def page(self, key: str) -> discord.Embed:
-        pet = PETS[key]
-        rarity, color = art.PET_RARITY[pet["rarity"]]
-        number = tuple(PETS).index(key) + 1
-        owned = self.state["pets"].get(key)
-        lines = [
-            f"**{rarity}** · Đã sưu tầm **{len(self.state['pets'])}/{len(PETS)}** pet",
-            pet["description"],
-            f"Trạng thái · **Cấp {owned['level']} · C{owned['stars']}**" if owned else "🔒 Chưa sưu tầm",
-        ]
-        if key == self.state["active_pet"]:
-            lines.append("🟢 Đang hoạt động")
-        icon = self.emojis.emoji(self.ctx, f"pet_{key}")
-        embed = discord.Embed(
-            title=f"{icon} #{number:02} · {pet['name']}", description="\n".join(lines), color=color,
+        if bonuses.get(stat, 1) > 1
+    ]
+    bonus_lines.extend(
+        f"**+{bonuses[stat]:.1%}** {label}"
+        for stat, label in (("rareChanceBonus", "cơ hội nông sản hiếm"), ("doubleHarvestChance", "cơ hội thu hoạch gấp đôi"))
+        if bonuses.get(stat, 0) > 0
+    )
+    if bonuses.get("fishingWeightBonus"):
+        bonus_lines.append(f"**+{bonuses['fishingWeightBonus']:g} kg** khi câu cá")
+    if bonus_lines:
+        embed.add_field(name="✨ Hiệu ứng cấp 10", value="\n".join(bonus_lines), inline=False)
+    constellations = CATALOG["CONSTELLATION_BONUSES"].get(pet["id"], [])
+    if constellations:
+        embed.add_field(name="🌟 Tiềm năng cung mệnh", value="\n".join(
+            f"**C{index}** · {shop_description(entry['label'])}" for index, entry in enumerate(constellations, 1)
+        ), inline=False)
+    portrait = art.image(f"pet_{key}")
+    if portrait:
+        embed.set_thumbnail(url=portrait)
+    prefix = f"{ctx.clean_prefix}farm"
+    if owned:
+        active = " · 🟢 Đang hoạt động" if key == state["active_pet"] else ""
+        embed.add_field(
+            name="📊 Pet của bạn", value=f"{progress_bar(owned['level'], 10)} **{owned['level']}/10**{active}\n"
+            f"⭐ Cung mệnh **C{owned['stars']}/C6**", inline=False,
         )
-        max_level = 10
-        bonuses = pet_bonus(key, {"level": max_level, "stars": 0})
-        bonus_lines = [
-            f"**+{(bonuses[stat] - 1):.1%}** {label}"
-            for stat, label in (
-                ("xpBonus", "XP"), ("yieldBonus", "sản lượng"), ("coinBonus", "VND"),
-                ("fishingXpBonus", "XP câu cá"), ("fishingCoinBonus", "VND câu cá"),
-            )
-            if bonuses.get(stat, 1) > 1
-        ]
-        bonus_lines.extend(
-            f"**+{bonuses[stat]:.1%}** {label}"
-            for stat, label in (("rareChanceBonus", "cơ hội nông sản hiếm"), ("doubleHarvestChance", "cơ hội thu hoạch gấp đôi"))
-            if bonuses.get(stat, 0) > 0
-        )
-        if bonuses.get("fishingWeightBonus"):
-            bonus_lines.append(f"**+{bonuses['fishingWeightBonus']:g} kg** khi câu cá")
-        if bonus_lines:
-            embed.add_field(name="✨ Hiệu ứng cấp 10", value="\n".join(bonus_lines), inline=False)
-        constellations = CATALOG["CONSTELLATION_BONUSES"].get(pet["id"], [])
-        if constellations:
-            embed.add_field(name="🌟 Cung mệnh", value="\n".join(
-                f"**C{index}** · {shop_description(entry['label'])}" for index, entry in enumerate(constellations, 1)
-            ), inline=False)
-        portrait = art.image(f"pet_{key}")
-        if portrait:
-            embed.set_image(url=portrait)
-        embed.set_footer(text=art.FOOTER)
-        return embed
-
-    async def show_pet(self, interaction: discord.Interaction) -> None:
-        if interaction.user.id != self.ctx.author.id:
-            await interaction.response.send_message("Dùng lệnh Farm pet để mở album của bạn.", ephemeral=True)
-            return
-        selected = self.select.values[0]
-        for option in self.select.options:
-            option.default = option.value == selected
-        await interaction.response.edit_message(embed=self.page(selected), view=self)
+    else:
+        embed.add_field(name="🔒 Trạng thái", value=f"**Chưa sưu tầm**\nDùng `{prefix} gacha` để nhận pet.", inline=False)
+    embed.set_footer(text=f"🥀 {prefix} pet <id> · {prefix} gacha · {prefix} selectpet · {prefix} petinfo")
+    return embed
 
 
 class IlisFarm(commands.Cog):
@@ -171,7 +157,8 @@ class IlisFarm(commands.Cog):
     async def _send(
         self, ctx, title: str, description: str, *,
         badge: str = "ui_muong", thumbnail: str | None = None, image: str | None = None,
-        color: int = art.COLOR, fields: tuple = (), view=None,
+        color: int = art.COLOR, fields: tuple = (), view=None, footer: str = art.FOOTER,
+        timestamp=None,
     ) -> None:
         if not description:
             description = "Chưa có dữ liệu."
@@ -180,8 +167,8 @@ class IlisFarm(commands.Cog):
             split = len(description) if len(description) <= 4000 else description.rfind("\n", 0, 4000)
             if split <= 0:
                 split = 4000
-            embed = discord.Embed(title=heading, description=description[:split], color=color)
-            embed.set_footer(text=art.FOOTER)
+            embed = discord.Embed(title=heading, description=description[:split], color=color, timestamp=timestamp)
+            embed.set_footer(text=footer)
             if thumbnail:
                 embed.set_thumbnail(url=thumbnail)
             if image:
@@ -189,19 +176,24 @@ class IlisFarm(commands.Cog):
             for name, value, inline in fields:
                 embed.add_field(name=name, value=value, inline=inline)
             if view:
-                view.message = await ctx.send(embed=embed, view=view, allowed_mentions=discord.AllowedMentions.none())
+                view.message = await ctx.reply(embed=embed, view=view, allowed_mentions=discord.AllowedMentions.none())
             else:
-                await ctx.send(embed=embed, allowed_mentions=discord.AllowedMentions.none())
+                await ctx.reply(embed=embed, allowed_mentions=discord.AllowedMentions.none())
             fields, image = (), None
             view = None
             description = description[split:].lstrip("\n")
 
-    async def _pages(self, ctx, pages) -> None:
+    async def _pages(self, ctx, pages, *, start=0, rate_pages=False) -> None:
+        if not rate_pages:
+            for index, page in enumerate(pages, 1):
+                footer = page.footer.text
+                stamp = f"Trang {index} / {len(pages)}"
+                page.set_footer(text=f"{footer} · {stamp}" if footer else stamp)
         if len(pages) == 1:
-            await ctx.send(embed=pages[0], allowed_mentions=discord.AllowedMentions.none())
+            await ctx.reply(embed=pages[0], allowed_mentions=discord.AllowedMentions.none())
             return
-        view = FarmPages(ctx.author.id, pages)
-        view.message = await ctx.send(embed=pages[0], view=view, allowed_mentions=discord.AllowedMentions.none())
+        view = FarmPages(ctx.author.id, pages, start=start, rate_pages=rate_pages)
+        view.message = await ctx.reply(embed=view.current, view=view, allowed_mentions=discord.AllowedMentions.none())
 
     async def _choice_message(self, interaction, text: str, title: str = "Ilis Farm") -> None:
         embed = discord.Embed(title=title, description=text, color=art.COLOR)
@@ -219,7 +211,7 @@ class IlisFarm(commands.Cog):
             await self._error(ctx, error)
             return None
 
-    async def _play(self, ctx, action, *args, render, title="Ilis Farm", badge="ui_muong", media=None) -> None:
+    async def _play(self, ctx, action, *args, render, title="Ilis Farm", badge="ui_muong", media=None, fields=None) -> None:
         try:
             with self.store.action(ctx.author.id, ctx.command.name) as session:
                 result = action(session, *args)
@@ -232,7 +224,10 @@ class IlisFarm(commands.Cog):
         if session.wallet_delta:
             description += f"\n{self.emojis.emoji(ctx, 'ui_coin')} Ví Casino **{session.wallet_delta:+,} VND**"
         thumbnail, image = media(result) if media else (None, None)
-        await self._send(ctx, title, description, badge=badge, thumbnail=thumbnail, image=image)
+        await self._send(
+            ctx, title, description, badge=badge, thumbnail=thumbnail, image=image,
+            fields=fields(result) if fields else (),
+        )
 
     async def _show_plots(self, ctx, player, state: dict, *, view=None) -> None:
         level = state["level"]
@@ -255,24 +250,29 @@ class IlisFarm(commands.Cog):
         grid = ["　".join(tiles[i:i + width]) for i in range(0, capacity, width)]
         prefix = f"{ctx.clean_prefix}farm"
         progress = growing or [f"Trồng luống đầu tiên với `{prefix} plant 1`."]
-        description = "\n".join([
-            "╭───────────────╮", *grid, "╰───────────────╯",
-            "⬜ Ô trống　🌱 Đang lớn　🌹 Sẵn sàng", "", *progress,
-        ])
+        description = "\n".join(["╭──────────────────────────╮", *grid, "╰──────────────────────────╯"])
         fields = [
-            ("🗺️ Ô đất", f"**{len(plots)}/{capacity}** · {width}×{width}", True),
-            (f"{self.emojis.emoji(ctx, 'ui_xp')} Cấp độ", f"**{level}** · {state['xp']:,} XP", True),
+            ("🌸 Chú thích", "⬜ Trống　🌱 Đang lớn　🌹 Sẵn sàng", False),
+            *(("⏳ Tiến độ cây trồng", "\n".join(progress[index:index + 12]), False)
+              for index in range(0, len(progress), 12)),
+            ("🗺️ Kích thước", f"`{width}×{width}`", True),
+            ("🌱 Ô đã dùng", f"`{len(plots)}/{capacity}`", True),
+            ("🏡 Trạng thái", "🌹 Đầy rồi" if len(plots) == capacity else "🌱 Còn trống", True),
+            (f"{self.emojis.emoji(ctx, 'ui_xp')} Cấp độ", f"🌹 Lv.**{level}**", True),
+            ("✨ Kinh nghiệm", f"`{state['xp']:,} XP`", True),
         ]
+        if player.id == ctx.author.id:
+            wallet = self.store.economy.get_entry(player.id)[1]
+            fields.append((f"{self.emojis.emoji(ctx, 'ui_coin')} Ví Casino", f"`{wallet:,} VND`", True))
         next_level = next((int(level_key) for level_key in CATALOG["FARM_EXPANSION"] if int(level_key) > level), None)
         if next_level is not None:
             size = CATALOG["FARM_EXPANSION"][str(next_level)]
             fields.append(("🎀 Mở rộng tiếp theo", f"Cấp {next_level} · {size['rows']}×{size['cols']}", False))
-        if player.id == ctx.author.id:
-            wallet = self.store.economy.get_entry(player.id)[1]
-            fields.append((f"{self.emojis.emoji(ctx, 'ui_coin')} Ví Casino", f"**{wallet:,} VND**", True))
         await self._send(
-            ctx, f"Nông trại · {player.display_name}", description,
+            ctx, f"₊˚🌸 NÔNG TRẠI — {player.display_name} 🌸˚₊", description,
             thumbnail=player.display_avatar.url, fields=tuple(fields), view=view,
+            footer=f"🥀 {prefix} plant · {prefix} water · {prefix} harvest · {prefix} fer",
+            timestamp=discord.utils.utcnow(),
         )
 
     @commands.group(name="farm", case_insensitive=True, invoke_without_command=True, brief="Xem nông trại Ilis Farm")
@@ -281,18 +281,46 @@ class IlisFarm(commands.Cog):
         if state is not None:
             await self._show_plots(ctx, ctx.author, state)
 
-    @farm.command(name="help", brief="Xem danh sách lệnh Farm")
+    @farm.command(name="help", aliases=["hp"], brief="Xem danh sách lệnh Farm")
     async def farm_help(self, ctx):
         prefix = f"{ctx.clean_prefix}farm"
-        lines = [f"**`{prefix}`** xem nông trại"]
-        for cmd in sorted(self.farm.commands, key=lambda item: item.name):
-            if cmd.name == "help" or cmd.hidden:
-                continue
-            signature = cmd.signature
-            syntax = f"{prefix} {cmd.name} {signature}".strip()
-            lines.append(f"`{syntax}` · {cmd.brief}")
-        lines.append(f"`{ctx.clean_prefix}give` · Chuyển VND qua lệnh ví Casino.")
-        await self._send(ctx, "Lệnh Ilis Farm", "\n".join(lines), badge="ui_farm")
+        sections = (
+            (
+                ("📅 Hằng ngày", ("daily", "quest", "update")),
+                (f"{self.emojis.emoji(ctx, 'ui_gacha')} Gacha", ("gacha", "gacharates")),
+                ("🌾 Nông trại", ("start", "plant", "harvest", "water", "fertilize", "friend")),
+                ("🎣 Câu cá", ("fish", "equip", "sellfish")),
+                ("📦 Kho và giao dịch", ("inventory", "sell", "shop", "buy", "balance", "give", "discard")),
+            ),
+            (
+                ("🐾 Pet", ("pet", "petlist", "petinfo", "selectpet", "feed", "play", "cuddle", "kiss", "exercise", "killpet")),
+                ("👤 Hồ sơ và thành tích", ("profile", "leaderboard", "achievements")),
+                ("🌍 Thế giới", ("season", "events")),
+                ("❓ Trợ giúp", ("help", "coche", "vt", "hdsd", "ping")),
+                (f"{self.emojis.emoji(ctx, 'ui_xp')} Cấp độ và mở rộng đất", ("levelreward", "evolve")),
+            ),
+        )
+        pages = []
+        for index, page_sections in enumerate(sections, 1):
+            page = discord.Embed(
+                title=f"{self.emojis.emoji(ctx, 'ui_muong')} 🌸 ILYS FARM — Lệnh ({index}/2)",
+                description=f"Tiền tố **`{prefix}`** · Dùng `{prefix} vt` để xem tên viết tắt.",
+                color=art.COLOR if index == 1 else 0xA50018,
+            )
+            for name, names in page_sections:
+                commands_in_section = [self.farm.get_command(command_name) for command_name in names]
+                lines = [f"꒰ ✦ ꒱ `{command.name}` — {command.brief}" for command in commands_in_section]
+                if names[0] == "start":
+                    lines.insert(0, f"꒰ 🏡 ꒱ `{prefix}` — Xem nông trại.")
+                if names[0] == "levelreward":
+                    lines.extend(
+                        f"꒰ 🌸 ꒱ Cấp {level}+ · {size['rows']}×{size['cols']} = **{size['maxPlots']} ô**"
+                        for level, size in CATALOG["FARM_EXPANSION"].items()
+                    )
+                page.add_field(name=name, value="\n".join(lines), inline=False)
+            page.set_footer(text=art.FOOTER)
+            pages.append(page)
+        await self._pages(ctx, pages)
 
     @farm.command(name="vt", aliases=["viettăt", "vittat", "shortcuts", "alias"], brief="Xem tên viết tắt của lệnh Farm")
     async def shortcuts(self, ctx):
@@ -305,23 +333,28 @@ class IlisFarm(commands.Cog):
     @farm.command(name="hdsd", aliases=["guide", "tutorial", "huongdan"], brief="Hướng dẫn chơi Farm theo từng bước")
     async def guide(self, ctx):
         prefix = f"{ctx.clean_prefix}farm"
-        await self._send(ctx, "Hướng dẫn Ilis Farm", "\n".join((
-            f"1. `{prefix} start` · Mở nông trại và nhận vốn.",
-            f"2. `{prefix} shop farm` · Xem hạt giống, phân bón và cần câu.",
-            f"3. `{prefix} plant 1 all` · Trồng rau muống vào các ô còn đủ hạt hoặc tiền.",
-            f"4. `{prefix} water` · Tưới cây. `{prefix} harvest` · Thu hoạch cây chín.",
-            f"5. `{prefix} sell all` · Bán nông sản vào ví Casino.",
-            f"6. `{prefix} daily`, `{prefix} quest`, `{prefix} gacha` · Nhận thưởng và sưu tầm pet.",
-        )))
+        chapters = (
+            ("🌸 ₊˚⊹ KHỞI ĐẦU HÀNH TRÌNH ⊹˚₊ 🌸", f"`{prefix} start` · Mở nông trại và nhận {vnd(START_COINS):,} VND.\n`{prefix}` · Xem đất và thời gian thu hoạch."),
+            ("🎀 ₊˚⊹ DAILY & GACHA ⊹˚₊ 🎀", f"`{prefix} daily` và `{prefix} quest` · Nhận thưởng.\n`{prefix} gacha` · Quay 1 hoặc 10 lượt."),
+            ("🌹 ₊˚⊹ NÔNG TRẠI ⊹˚₊ 🌹", f"`{prefix} plant 1 all` · Trồng rau muống.\n`{prefix} plant all` · Trồng hạt từ kho.\n`{prefix} water`, `{prefix} fer` và `{prefix} harvest` · Chăm sóc và thu hoạch."),
+            ("📦 ₊˚ KHO & GIAO DỊCH ˚₊", f"`{prefix} shop farm` · Xem hạt giống và cần câu.\n`{prefix} inv` · Xem kho.\n`{prefix} sell all` · Bán nông sản."),
+            ("₊˚🐾 PET 🐾˚₊", f"`{prefix} pet` · Mở sách sưu tầm.\n`{prefix} selectpet` · Chọn pet.\n`{prefix} feed`, `{prefix} play`, `{prefix} nung` · Chăm sóc pet."),
+            ("₊˚🌍 THẾ GIỚI & MẸO 🌍˚₊", f"`{prefix} season` và `{prefix} events` · Xem hiệu ứng hôm nay.\n`{prefix} friend @người` · Ghé thăm nông trại bạn bè."),
+        )
+        await self._pages(ctx, [
+            discord.Embed(title=f"{title} ({index}/6)", description=description, color=art.COLOR if index % 2 else 0xA50018).set_footer(text=art.FOOTER)
+            for index, (title, description) in enumerate(chapters, 1)
+        ])
 
     @farm.command(name="coche", aliases=["co_che", "mechanism", "mecanic", "rules"], brief="Xem cơ chế gacha, pet, câu cá, mùa và sự kiện")
     async def mechanics(self, ctx):
         prefix = f"{ctx.clean_prefix}farm"
         descriptions = (
-            ("Gacha", f"Vé từ điểm danh, nhiệm vụ, thưởng cấp và cập nhật Mùa 2. Ưu tiên dùng đủ vé, hoặc trừ {vnd(10_000):,} VND mỗi lượt. Tỷ lệ thần thoại tăng từ lượt 80, bảo đảm ở lượt 100. Dùng `{prefix} gachrates` để xem bảng tỷ lệ."),
-            ("Pet", f"Cho pet ăn để tăng độ no, chơi hoặc nựng để tăng hạnh phúc. Sức khỏe thấp làm giảm hiệu ứng. Dùng `{prefix} pet` để xem ảnh, độ hiếm và cung mệnh."),
-            ("Câu cá", f"Trang bị cần câu đã mua. Mỗi lượt tốn {vnd(100):,} VND và chờ 6 giây. Xem cá với `{prefix} inv f`, bán bằng `{prefix} selff <số|all>`."),
-            ("Mùa và sự kiện", f"Mỗi mùa kéo dài 14 ngày. Sự kiện thay theo ngày. Kiểm tra hiệu ứng hiện tại qua `{prefix} season` và `{prefix} events`."),
+            ("🎀 ୨୧ GACHA BAKERY ୨୧ 🎀", f"Vé từ điểm danh, nhiệm vụ, thưởng cấp và cập nhật Mùa 2. Ưu tiên dùng đủ vé, hoặc trừ {vnd(10_000):,} VND mỗi lượt. Tỷ lệ thần thoại tăng từ lượt 80, bảo đảm ở lượt 100. Dùng `{prefix} gachrates` để xem bảng tỷ lệ."),
+            ("🐟 ୨୧ GÓC CÂU CÁ ୨୧ 🐟", f"Trang bị cần câu đã mua. Mỗi lượt tốn {vnd(100):,} VND và chờ 6 giây. Xem cá với `{prefix} inv f`, bán bằng `{prefix} selff <số|all>`."),
+            ("🐰 ୨୧ PET & BẠN ĐỒNG HÀNH ୨୧ 🐰", f"Cho pet ăn để tăng độ no, chơi hoặc nựng để tăng hạnh phúc. Sức khỏe thấp làm giảm hiệu ứng. Dùng `{prefix} pet` để xem ảnh, độ hiếm và cung mệnh."),
+            ("🍃 ୨୧ MÙA VỤ ILYS ୨୧ 🍃", f"Mỗi mùa kéo dài 14 ngày. Dùng `{prefix} season` để xem cây trồng được hưởng hiệu ứng."),
+            ("✨ ୨୧ SỰ KIỆN HÔM NAY ୨୧ ✨", f"Sự kiện đổi mỗi ngày. Dùng `{prefix} events` để xem hiệu ứng hiện tại."),
         )
         pages = [discord.Embed(title=title, description=description, color=art.COLOR).set_footer(text=art.FOOTER)
                  for title, description in descriptions]
@@ -350,11 +383,17 @@ class IlisFarm(commands.Cog):
         if state is not None:
             balance = self.store.economy.get_entry(ctx.author.id)[1]
             await self._send(
-                ctx, "Ví và tài sản Farm",
-                f"{self.emojis.emoji(ctx, 'ui_coin')} **Ví Casino** · {balance:,} VND\n"
-                f"{self.emojis.emoji(ctx, 'ui_gem')} **Đá quý** · {state['gems']}\n"
-                f"{self.emojis.emoji(ctx, 'ui_gacha')} **Vé gacha** · {state['tickets']}",
+                ctx, f"🌸 VÍ TIỀN — {ctx.author.display_name}",
+                "╭─────────────────────────╮\n꒰ ✦ ꒱ Đây là ví tiền của bạn~\n╰─────────────────────────╯",
                 thumbnail=ctx.author.display_avatar.url,
+                fields=(
+                    (f"{self.emojis.emoji(ctx, 'ui_coin')} Ví Casino", f"`{balance:,} VND`", True),
+                    (f"{self.emojis.emoji(ctx, 'ui_gem')} Đá quý", f"`{state['gems']}`", True),
+                    (f"{self.emojis.emoji(ctx, 'ui_gacha')} Vé gacha", f"`{state['tickets']} vé`", True),
+                    (f"{self.emojis.emoji(ctx, 'ui_xp')} Cấp độ", f"`Lv.{state['level']}`", True),
+                    ("✨ Kinh nghiệm", f"`{state['xp']:,} XP`", True),
+                ),
+                timestamp=discord.utils.utcnow(),
             )
 
     @farm.command(name="give", aliases=["transfer", "send"], brief="Xác nhận chuyển VND bằng ví Casino")
@@ -402,27 +441,50 @@ class IlisFarm(commands.Cog):
         if state is not None:
             level = state["level"]
             cap = 70 if state["evolutions"] else 50
-            xp = f"{state['xp']:,}/{xp_required(level, state['evolutions']):,} XP" if level < cap else "Cấp tối đa"
+            required = xp_required(level, state["evolutions"])
+            xp = f"`{state['xp']:,}/{required:,} XP`" if level < cap else "✨ MAX"
+            bar = progress_bar(state["xp"] if level < cap else required, required, 15)
             pet = state["active_pet"]
+            wallet = self.store.economy.get_entry(ctx.author.id)[1]
+            level_label = f"Lv.{level}" + (f" v{state['evolutions'] + 1}" if state["evolutions"] else "")
             await self._send(
-                ctx, "Tiến trình Farm",
-                f"**Cấp {level}** · {xp} · Tiến hóa {state['evolutions']}\n"
-                f"Đã trồng {state['planted']:,} · Đã thu hoạch {state['harvested']:,} · Đã bán {state['sold']:,}\n"
-                f"Tổng thu nhập ghi nhận **{vnd(state['earned']):,} VND** · Chuỗi điểm danh {state['streak']} ngày",
-                badge="ui_xp", thumbnail=ctx.author.display_avatar.url,
-                fields=(("🐾 Pet", PETS[pet]["name"] if pet else "Chưa có pet đang hoạt động", True),),
+                ctx, f"🌸 HỒ SƠ — {ctx.author.display_name}",
+                f"╭─────────────────────────╮\n꒰ ✦ ꒱ Nông dân **{level_label}** đây~\n╰─────────────────────────╯",
+                thumbnail=ctx.author.display_avatar.url, timestamp=discord.utils.utcnow(),
+                fields=(
+                    (f"{self.emojis.emoji(ctx, 'ui_xp')} Cấp độ và kinh nghiệm", f"**{level_label}** · {bar}\n{xp}", False),
+                    (f"{self.emojis.emoji(ctx, 'ui_coin')} Ví Casino", f"`{wallet:,} VND`", True),
+                    (f"{self.emojis.emoji(ctx, 'ui_gem')} Đá quý", f"`{state['gems']}`", True),
+                    ("🐾 Pet", f"{self.emojis.emoji(ctx, 'pet_' + pet)} {PETS[pet]['name']}" if pet else "Chưa có pet", True),
+                    ("📈 Thống kê nông trại", f"🌱 Đã trồng · `{state['planted']:,}`\n🌹 Đã thu hoạch · `{state['harvested']:,}`\n"
+                     f"🛒 Đã bán · `{state['sold']:,}`\n💰 Tổng thu nhập · `{vnd(state['earned']):,} VND`", False),
+                    ("📅 Chuỗi đăng nhập", f"🔥 `{state['streak']} ngày`", True),
+                ),
             )
 
     @farm.command(name="daily", aliases=["dl", "d", "nhận", "nhan"], brief="Điểm danh nhận VND và vé gacha")
     async def daily(self, ctx):
+        def fields(result):
+            reward, streak = result
+            bonus = DAILY_STREAK_BONUSES.get(streak, 0)
+            coin = self.emojis.emoji(ctx, "ui_coin")
+            result_fields = [
+                (f"{coin} Thưởng cơ bản", f"`+{vnd(reward - bonus):,} VND`", True),
+                (f"{coin} Tổng thưởng", f"`+{vnd(reward):,} VND`", True),
+                ("📅 Chuỗi đăng nhập", f"`{streak} ngày liên tiếp`", True),
+                (f"{self.emojis.emoji(ctx, 'ui_gacha')} Vé gacha", "**+1 vé gacha**", False),
+            ]
+            if bonus:
+                result_fields.append(("🎉 Thưởng mốc hôm nay", f"**+{vnd(bonus):,} VND**", False))
+            result_fields.append(("🎯 Các mốc thưởng", "\n".join(
+                f"Ngày {day} · **+{vnd(amount):,} VND**" for day, amount in DAILY_STREAK_BONUSES.items()
+            ), False))
+            return tuple(result_fields)
+
         await self._play(
-            ctx, FarmSession.daily, title="Quà điểm danh", badge="ui_coin",
-            render=lambda r: (
-                f"Chuỗi điểm danh **{r[1]} ngày**\n"
-                f"{self.emojis.emoji(ctx, 'ui_coin')} **{vnd(r[0]):,} VND**\n"
-                f"{self.emojis.emoji(ctx, 'ui_gacha')} **1 vé gacha**"
-            ),
-            media=lambda _: (ctx.author.display_avatar.url, None),
+            ctx, FarmSession.daily, title="🎁 NHẬN THƯỞNG HẰNG NGÀY",
+            render=lambda r: f"꒰ ✦ ꒱ **{ctx.author.display_name}** đã điểm danh ngày thứ **{r[1]}**!",
+            media=lambda _: (ctx.author.display_avatar.url, None), fields=fields,
         )
 
     @farm.command(name="shop", aliases=["sh", "hang", "hàng", "cửahàng"], brief="Xem cửa hàng Farm theo danh mục")
@@ -439,7 +501,7 @@ class IlisFarm(commands.Cog):
         selected = filters.get(key, (key,) if key in categories else ())
         prefix = f"{ctx.clean_prefix}farm"
         balance = self.store.economy.get_entry(ctx.author.id)[1]
-        header = f"**{balance:,} VND** · Cấp **{state['level']}**"
+        header = f"{self.emojis.emoji(ctx, 'ui_coin')} **{balance:,} VND**　{self.emojis.emoji(ctx, 'ui_xp')} **Lv.{state['level']}**"
         if not selected:
             await self._send(
                 ctx, "Cửa hàng Ilis Farm", header, badge="ui_coin",
@@ -456,13 +518,18 @@ class IlisFarm(commands.Cog):
                 items.append((number, key, item))
         pages = []
         for first in range(0, len(items), 6):
-            embed = discord.Embed(title="🛒 Cửa hàng Farm", description=f"{header}\n`{prefix} buy <mã> [số lượng]`", color=art.COLOR)
+            title = f"{self.emojis.emoji(ctx, 'ui_muong')} 🛒 CỬA HÀNG ILIS FARM"
+            color = art.COLOR if (first // 6) % 2 == 0 else 0xA50018
+            embed = discord.Embed(title=title, description=f"{header}\n꒰ 🛒 ꒱ Mua với `{prefix} buy <#số> [số lượng]`", color=color)
+            grouped = {}
             for number, key, item in items[first:first + 6]:
-                embed.add_field(
-                    name=f"#{number} {shop_icon(self.emojis, ctx, key)} {item['name']} · {vnd(item['coin']):,} VND",
-                    value=shop_description(item["description"]), inline=False,
+                detail = shop_description(item["description"]).replace("`il kill pet`", f"`{prefix} kill pet`")
+                grouped.setdefault(item["category"], []).append(
+                    f"`#{number}` {shop_icon(self.emojis, ctx, key)} **{item['name']}** · **{vnd(item['coin']):,} VND**\n꒰ ✦ ꒱ _{detail}_"
                 )
-            embed.set_footer(text=f"{art.FOOTER} · {first // 6 + 1}/{(len(items) + 5) // 6}")
+            for section, lines in grouped.items():
+                embed.add_field(name=categories[section], value="\n".join(lines), inline=False)
+            embed.set_footer(text=f"🥀 {prefix} buy <#số> [số lượng]")
             pages.append(embed)
         await self._pages(ctx, pages)
 
@@ -577,7 +644,7 @@ class IlisFarm(commands.Cog):
             title = "🎣 Kho thủy sản"
             total = f"**{len(lines)} cá**"
         else:
-            title = "📦 Kho đồ Farm"
+            title = f"📦 KHO ĐỒ — {ctx.author.display_name}"
             inventory = state["inventory"]
             total = f"**{inventory_size(inventory)}/{INVENTORY_CAPACITY}** vật phẩm"
             lines = []
@@ -592,6 +659,11 @@ class IlisFarm(commands.Cog):
             lines = ["Kho trống."]
         pages = [discord.Embed(title=title, description=f"{total}\n\n" + "\n".join(lines[index:index + 12]), color=art.COLOR)
                  for index in range(0, len(lines), 12)]
+        prefix = f"{ctx.clean_prefix}farm"
+        for page in pages:
+            if category.lower() not in {"fish", "f"}:
+                page.add_field(name="🌸 Chất lượng", value="⚪ Thường　🟢 Hiếm nhẹ　🔵 Hiếm　🟣 Sử thi　🟡 Huyền thoại", inline=False)
+            page.set_footer(text=f"🥀 {prefix} sell <cây> · {prefix} inv f · {prefix} selff <id>")
         await self._pages(ctx, pages)
 
     @farm.command(name="discard", brief="Bỏ rác câu cá khỏi kho")
@@ -633,8 +705,8 @@ class IlisFarm(commands.Cog):
             if selected not in PETS:
                 await self._error(ctx, FarmError(f"Chọn số pet từ 1 đến {len(roster)} hoặc nhập mã pet."))
                 return
-        album = PetAlbum(ctx, self.emojis, state, selected)
-        await ctx.send(embed=album.page(selected), view=album, allowed_mentions=discord.AllowedMentions.none())
+        pages = [pet_album_page(ctx, self.emojis, state, key) for key in roster]
+        await self._pages(ctx, pages, start=roster.index(selected))
 
     @farm.command(name="petinfo", aliases=["pi"], brief="Xem độ no, hạnh phúc và sức khỏe pet đã sở hữu")
     async def petinfo(self, ctx, pet_id: str | None = None):
@@ -856,18 +928,11 @@ class IlisFarm(commands.Cog):
                     except FarmError as error:
                         await self._choice_message(interaction, f"❌ {error}", "Gacha Farm")
                         return
-                    thumbnail, gif = self._gacha_media(result)
+                    _, gif = self._gacha_media(result)
                     animation = discord.Embed(color=art.COLOR).set_image(url=gif)
                     await interaction.edit_original_response(embed=animation, view=None)
                     await asyncio.sleep(4.8 if gif == art.image("gacha_gif_mythic") else 3.8)
-                    text = self._gacha_result(ctx, count, result)
-                    if session.unlocked:
-                        text += "\n🏅 " + " · ".join(session.unlocked)
-                    embed = discord.Embed(title="Kết quả gacha", description=text, color=art.COLOR)
-                    embed.set_footer(text=art.FOOTER)
-                    if thumbnail:
-                        embed.set_thumbnail(url=thumbnail)
-                    await interaction.edit_original_response(embed=embed, view=None)
+                    await interaction.edit_original_response(embed=self._gacha_card(ctx, count, result, session), view=None)
 
                 view = FarmChoices(ctx.author.id, (
                     ("1", "Roll 1", discord.ButtonStyle.primary, False),
@@ -877,26 +942,56 @@ class IlisFarm(commands.Cog):
                 tickets = state["tickets"]
                 cost = lambda n: f"{n} vé" if tickets >= n else f"{vnd(10_000 * n):,} VND"
                 await self._send(
-                    ctx, "Gacha Farm",
-                    f"**{tickets} vé** · Pity **{state['pity']}/100**\nChọn trong 30 giây.",
-                    badge="ui_gacha", thumbnail=art.thumbnail("ui_gacha"),
-                    image=art.image("gacha_gif_normal"), view=view,
+                    ctx, f"{self.emojis.emoji(ctx, 'ui_gacha')} GACHA", "꒰ ✦ ꒱ Thử vận may nào~!",
+                    view=view, footer=f"🥀 Chọn trong 30 giây · {ctx.clean_prefix}farm gachrates",
                     fields=(
                         ("🎫 Roll 1", cost(1), True),
                         ("✨ Roll 10", cost(10), True),
+                        ("⏳ Pity hiện tại", f"{progress_bar(state['pity'], 100)} **{state['pity']}/100**", False),
                         ("🎯 Bảo hiểm", "Lần thần thoại tới chắc chắn giới hạn." if state["limited"] else "Lần thần thoại tới có 40% cơ hội pet giới hạn.", False),
                     ),
                 )
             return
 
-        await self._play(
-            ctx, FarmSession.gacha, count, title="Kết quả gacha", badge="ui_gacha",
-            render=lambda result: self._gacha_result(ctx, count, result), media=self._gacha_media,
-        )
+        try:
+            with self.store.action(ctx.author.id, "gacha") as session:
+                result = session.gacha(count)
+        except FarmError as error:
+            await self._error(ctx, error)
+            return
+        card = self._gacha_card(ctx, count, result, session)
+        card.set_image(url=self._gacha_media(result)[1])
+        await ctx.reply(embed=card, allowed_mentions=discord.AllowedMentions.none())
 
-    def _gacha_result(self, ctx, count, result):
+    def _gacha_card(self, ctx, count, result, session):
         charge = "Đã dùng vé gacha." if result[1] else f"Chi phí **{vnd(10_000 * count):,} VND**."
-        return "\n".join([charge, *(f"{self.emojis.emoji(ctx, key)} **{label}**" for key, label in result[0])])
+        key = result[0][0][0]
+        if count == 10:
+            title = "KẾT QUẢ ROLL 10"
+        elif key.startswith("pet_"):
+            title = "QUAY GACHA~!"
+        elif key == "ui_coin":
+            title = "Nhận được VND~!"
+        elif key in CROPS:
+            title = "Nhận được hạt giống~!"
+        else:
+            title = "Nhận được vật phẩm~!"
+        thumbnail, gif = self._gacha_media(result)
+        embed = discord.Embed(
+            title=f"{self.emojis.emoji(ctx, 'ui_muong')} {self.emojis.emoji(ctx, 'ui_gacha')} {title}",
+            description="\n".join(f"{self.emojis.emoji(ctx, item)} **{label}**" for item, label in result[0]),
+            color=0xC2185B if gif == art.image("gacha_gif_mythic") else art.COLOR,
+        ).set_footer(text=f"🥀 {ctx.clean_prefix}farm gacha · {ctx.clean_prefix}farm gachrates")
+        if thumbnail:
+            embed.set_thumbnail(url=thumbnail)
+        embed.add_field(name="🎫 Lượt quay", value=charge)
+        embed.add_field(name="⏳ Pity", value=f"`{session.state['pity']}/100`")
+        embed.add_field(name="🎟️ Vé còn lại", value=f"`{session.state['tickets']}`")
+        if session.wallet_delta:
+            embed.add_field(name="💰 Thay đổi ví", value=f"`{session.wallet_delta:+,} VND`")
+        if session.unlocked:
+            embed.add_field(name="🏅 Thành tích mới", value=" · ".join(session.unlocked), inline=False)
+        return embed
 
     @staticmethod
     def _gacha_media(result):
@@ -913,31 +1008,65 @@ class IlisFarm(commands.Cog):
         today = day_at(time.time())
         quests = state["quests"] if state["quest_day"] == today.isoformat() else daily_quests(ctx.author.id, today)
         lines = []
+        total_coins, total_xp, completed = 0, 0, 0
+        difficulty = {"easy": "🟢 Dễ", "medium": "🟡 Vừa", "hard": "🔴 Khó"}
         for key, progress in quests.items():
             quest = QUESTS[key]
             target = quest["target"]
             tally = f"{vnd(progress):,}/{vnd(target):,} VND" if quest["type"] == "earn_coin" else f"{progress}/{target}"
-            detail = "Kiếm VND từ bán hàng" if quest["type"] == "earn_coin" else quest["desc"]
+            done = progress >= target
+            completed += done
+            total_coins += quest["coin"]
+            total_xp += quest["xp"]
             lines.append(
-                f"{'✅' if progress >= target else '▫️'} **{quest['name']}** · {detail} ({tally})"
-                f" · {vnd(quest['coin']):,} VND + {quest['xp']} XP"
+                f"{'🌸' if done else '🤍'} **{quest['name']}** · {difficulty[quest['diff']]}\n"
+                f"{progress_bar(progress, target)} `[{tally}]`\n"
+                f"{self.emojis.emoji(ctx, 'ui_coin')} `+{vnd(quest['coin']):,} VND`"
+                f"  {self.emojis.emoji(ctx, 'ui_xp')} `+{quest['xp']} XP`"
             )
-        await self._send(ctx, "Nhiệm vụ Farm · Đổi lúc 07:00 giờ Việt Nam", "\n".join(lines), badge="ui_quest")
+        await self._send(
+            ctx, "🌸 NHIỆM VỤ HẰNG NGÀY", "\n\n".join(lines),
+            thumbnail=ctx.author.display_avatar.url, timestamp=discord.utils.utcnow(),
+            fields=(
+                ("🌹 Tiến trình", f"Hoàn thành `{completed}/{len(quests)}`", True),
+                ("🎁 Tổng phần thưởng", f"`{vnd(total_coins):,} VND`\n`{total_xp} XP`", True),
+            ), footer="🥀 Đổi lúc 07:00 giờ Việt Nam · Tự nhận thưởng khi hoàn thành",
+        )
 
     @farm.command(name="gacharates", aliases=["gachrates", "gr"], brief="Xem tỷ lệ gacha và mốc bảo hiểm")
     async def gacharates(self, ctx):
+        player = await self._player(ctx)
+        if player is None:
+            return
         total = sum(entry["rate"] for entry in NORMAL_GACHA)
-        lines = [
-            "Pet thần thoại có tỷ lệ cơ bản **0,3%**, tăng từ lượt 80 và chắc chắn ở lượt 100.",
-            "Sau một pet thần thoại thường, pet thần thoại tiếp theo sẽ là loại giới hạn.",
-            "",
-            "**Tỷ lệ phần thưởng nếu lượt quay thuộc nhóm thường**",
-        ]
+        groups = {}
         for entry in NORMAL_GACHA:
-            key = entry["id"]
-            icon = self.emojis.emoji(ctx, f"pet_{key}" if entry["type"] == "pet" else key, entry.get("emoji", ""))
-            lines.append(f"{icon} {entry['name']} · {entry['rate'] / total:.2%}")
-        await self._send(ctx, "Tỷ lệ gacha Farm", "\n".join(lines), badge="ui_gacha")
+            kind = entry["type"]
+            key = f"pet_{entry['id']}" if kind == "pet" else entry["id"]
+            icon = self.emojis.emoji(ctx, key, entry.get("emoji", ""))
+            rate = entry["rate"] / total * 0.997
+            groups.setdefault(entry.get("rarity", kind), []).append(f"{icon} {entry['name']} · **{rate:.2%}**")
+        groups["mythic"] = [
+            f"{self.emojis.emoji(ctx, 'pet_' + key)} {PETS[key]['name']} · **{rate:.3%}**"
+            for key, rate in (("kuromi", .0009), ("melody", .0009), ("satou", .0006), ("shio", .0006))
+        ]
+        prefix = f"{ctx.clean_prefix}farm"
+        title = f"{self.emojis.emoji(ctx, 'ui_gacha')} TỈ LỆ GACHA — Mùa 2"
+        pets = discord.Embed(title=f"{title} · Trang 1/2", color=art.COLOR)
+        for label, rarities in (("🐾 Pet thường", ("common", "uncommon", "rare", "epic")),
+                                ("✨ Season 2", ("legendary", "mythic"))):
+            lines = []
+            for rarity in rarities:
+                lines.extend([f"**{art.PET_RARITY[rarity][0]}**", *groups.get(rarity, [])])
+            pets.add_field(name=label, value="\n".join(lines), inline=False)
+        pets.set_footer(text="🥀 Pity tăng từ lượt 80 · bảo đảm ở lượt 100")
+        items = discord.Embed(title=f"{title} · Trang 2/2", color=art.COLOR)
+        for kind, name in (("seed", "🌱 Hạt giống"), ("fertilizer", "🥄 Phân bón"), ("food", "🍖 Thức ăn"), ("coin", "💰 VND")):
+            items.add_field(name=name, value="\n".join(groups[kind]), inline=False)
+        items.add_field(name="Quay bằng vé", value=f"`{prefix} gacha` · {player['tickets']} vé đang có", inline=True)
+        items.add_field(name="Quay có phí", value=f"`{vnd(10_000):,} VND` mỗi lượt", inline=True)
+        items.set_footer(text=f"🥀 Ví Casino · {self.store.economy.get_entry(ctx.author.id)[1]:,} VND")
+        await self._pages(ctx, [pets, items], rate_pages=True)
 
     @farm.command(name="levelreward", aliases=["lr", "level_reward", "lvreward"], brief="Nhận vé gacha theo các cấp đã đạt")
     async def levelreward(self, ctx):
