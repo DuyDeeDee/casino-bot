@@ -402,7 +402,7 @@ class FarmSession:
         self.state["rod"] = key
         return RODS[key]["name"]
 
-    def fishing(self, key: str | None) -> tuple[str, int]:
+    def fishing(self, key: str | None) -> tuple[str, int, str]:
         remaining = self.state["last_fish"] + 6 - self.now
         if remaining > 0:
             raise FarmError(f"Chờ **{ceil(remaining)} giây** để câu tiếp.")
@@ -435,9 +435,11 @@ class FarmSession:
             self.state["fish"][fish_id] = {"type": fish_key, "weight": weight, "price": price}
             result = f"{fish['name']} **#{fish_id}**, {weight} kg • giá gốc {vnd(price):,} VND"
             xp = fish["xp"]
+            icon = f"fish_{fish_key}"
         else:
             reward_key = random.choices(tuple(pool), [item["rate"] for item in pool.values()])[0]
             reward = pool[reward_key]
+            icon = reward_key
             if pool is JUNK:
                 self.change_item("junk", reward_key, 1)
                 result, xp = reward["name"], 5
@@ -447,7 +449,7 @@ class FarmSession:
         earned_xp = round_reward(xp * pet.get("fishingXpBonus", 1))
         self.xp(earned_xp)
         self.state["last_fish"] = self.now
-        return result, earned_xp
+        return result, earned_xp, icon
 
     def sell_fish(self, selection: str) -> tuple[int, int]:
         owned = self.state["fish"]
@@ -518,7 +520,7 @@ class FarmSession:
         if pet["level"] < 10 and pet["xp"] >= CATALOG["PET_LEVEL_XP"][pet["level"]]:
             pet["level"] += 1
             pet["xp"] = 0
-        return PETS[key]["name"], pet
+        return key, pet
 
     def draw(self) -> dict:
         self.state["pity"] += 1
@@ -531,7 +533,7 @@ class FarmSession:
             return PETS[random.choice(("satou", "shio") if limited else ("kuromi", "melody"))]
         return random.choices(NORMAL_GACHA, [entry["rate"] for entry in NORMAL_GACHA])[0]
 
-    def gacha(self, count: int) -> tuple[list[str], bool]:
+    def gacha(self, count: int) -> tuple[list[tuple[str, str]], bool]:
         if count not in {1, 10}:
             raise FarmError("Chọn gacha 1 hoặc 10 lượt.")
         use_tickets = self.state["tickets"] >= count
@@ -545,7 +547,9 @@ class FarmSession:
             key = reward["id"].lower()
             kind = reward["type"]
             label = reward["name"]
+            icon = key
             if kind == "pet":
+                icon = f"pet_{key}"
                 owned = self.state["pets"].get(key)
                 if owned:
                     owned["stars"] = min(6, owned["stars"] + 1)
@@ -557,13 +561,14 @@ class FarmSession:
                 if reward.get("isMythic"):
                     self.award("mythic_pet")
             elif kind == "coin":
+                icon = "ui_coin"
                 coins = random.randint(reward["min"], reward["max"])
                 self.earn(coins)
                 label = f"+{vnd(coins):,} VND"
             else:
                 self.change_item(kind, key, reward["quantity"])
                 label += f" ×{reward['quantity']}"
-            results.append(label)
+            results.append((icon, label))
         self.state["pulls"] += count
         self.quest_progress("gacha", count)
         return results, use_tickets
