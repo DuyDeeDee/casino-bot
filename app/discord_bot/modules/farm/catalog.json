@@ -143,139 +143,162 @@
       "category": "seeds",
       "name": "Hạt giống Rau Muống",
       "coin": 8,
-      "gem": 0
+      "gem": 0,
+      "description": "Thời gian lớn: 15 phút · Bán: 12–22 xu"
     },
     "ca_chua": {
       "category": "seeds",
       "name": "Hạt giống Cà Chua",
       "coin": 12,
-      "gem": 0
+      "gem": 0,
+      "description": "Thời gian lớn: 20 phút · Bán: 18–34 xu"
     },
     "lua": {
       "category": "seeds",
       "name": "Hạt giống Lúa",
       "coin": 20,
-      "gem": 0
+      "gem": 0,
+      "description": "Thời gian lớn: 30 phút · Bán: 30–56 xu"
     },
     "khoai_lang": {
       "category": "seeds",
       "name": "Hạt giống Khoai Lang",
       "coin": 30,
-      "gem": 0
+      "gem": 0,
+      "description": "Thời gian lớn: 40 phút · Bán: 45–84 xu"
     },
     "carrot": {
       "category": "seeds",
       "name": "Hạt giống Cà Rốt",
       "coin": 50,
-      "gem": 0
+      "gem": 0,
+      "description": "Thời gian lớn: 1 giờ · Bán: 75–140 xu"
     },
     "corn": {
       "category": "seeds",
       "name": "Hạt giống Bắp",
       "coin": 100,
-      "gem": 0
+      "gem": 0,
+      "description": "Thời gian lớn: 2 giờ · Bán: 150–280 xu"
     },
     "pumpkin": {
       "category": "seeds",
       "name": "Hạt giống Bí Ngô",
       "coin": 220,
-      "gem": 0
+      "gem": 0,
+      "description": "Thời gian lớn: 4 giờ · Bán: 338–630 xu"
     },
     "strawberry": {
       "category": "seeds",
       "name": "Hạt giống Dâu Tây",
       "coin": 450,
-      "gem": 0
+      "gem": 0,
+      "description": "Thời gian lớn: 8 giờ · Bán: 675–1.260 xu"
     },
     "watermelon": {
       "category": "seeds",
       "name": "Hạt giống Dưa Hấu",
       "coin": 1000,
-      "gem": 0
+      "gem": 0,
+      "description": "Thời gian lớn: 12 giờ · Bán: 1.500–2.800 xu"
     },
     "dragonfruit": {
       "category": "seeds",
       "name": "Hạt giống Thanh Long",
       "coin": 2500,
-      "gem": 0
+      "gem": 0,
+      "description": "Thời gian lớn: 24 giờ · Bán: 3.750–7.000 xu"
     },
     "nhan_sam": {
       "category": "seeds",
       "name": "Hạt giống Nhân Sâm",
       "coin": 5000,
-      "gem": 0
+      "gem": 0,
+      "description": "Thời gian lớn: 48 giờ · Bán: 7.500–14.000 xu"
     },
     "thuc_an_thuong": {
       "category": "food",
       "name": "Thức ăn thường",
       "coin": 30,
-      "gem": 0
+      "gem": 0,
+      "description": "No +25, Vui +2"
     },
     "thuc_an_ngon": {
       "category": "food",
       "name": "Thức ăn ngon",
       "coin": 100,
-      "gem": 0
+      "gem": 0,
+      "description": "No +50, Vui +5"
     },
     "thuc_an_cao_cap": {
       "category": "food",
       "name": "Thức ăn cao cấp",
       "coin": 300,
-      "gem": 0
+      "gem": 0,
+      "description": "No +70, Vui +10"
     },
     "keo_ngot": {
       "category": "food",
       "name": "Kẹo ngọt",
       "coin": 200,
-      "gem": 0
+      "gem": 0,
+      "description": "No +10, Vui +40 — Tăng nhiều hạnh phúc!"
     },
     "htng": {
       "category": "food",
       "name": "Hồng trà Ngô Gia",
       "coin": 500,
-      "gem": 0
+      "gem": 0,
+      "description": "No +80, Vui +20 ✨ Đặc biệt!"
     },
     "normal_fertilizer": {
       "category": "fertilizer",
       "name": "Phân bón thường",
       "coin": 100,
-      "gem": 0
+      "gem": 0,
+      "description": "Giảm 10% thời gian lớn"
     },
     "premium_fertilizer": {
       "category": "fertilizer",
       "name": "Phân bón cao cấp",
       "coin": 300,
-      "gem": 0
+      "gem": 0,
+      "description": "Giảm 20% thời gian lớn"
     },
     "superior_fertilizer": {
       "category": "fertilizer",
       "name": "Phân bón đặc biệt",
       "coin": 800,
-      "gem": 0
+      "gem": 0,
+      "description": "Giảm 30% thời gian lớn"
     },
     "rod_common": {
       "category": "fishing",
       "name": "Cần câu bình dân",
       "coin": 500,
-      "gem": 0
+      "gem": 0,
+      "description": "×1.0 coin, cooldown 3s"
     },
     "rod_uncommon": {
       "category": "fishing",
       "name": "Cần câu trung bình",
       "coin": 5000,
-      "gem": 0
+      "gem": 0,
+      "description": "×1.15 coin & XP"
     },
     "rod_rare": {
       "category": "fishing",
       "name": "Cần câu cao cấp",
       "coin": 15000,
-      "gem": 0
+      "gem": 0,
+      "description": "×1.30 coin & XP"
     },
     "chick_pet": {
       "category": "pets",
       "name": "Gà Con",
       "coin": 300,
       "gem": 0,
+      "description": "+5% XP nhận được",
       "petId": "chick"
     },
     "worm_pet": {
@@ -283,6 +306,7 @@
       "name": "Sâu",
       "coin": 300,
       "gem": 0,
+      "description": "+5% sản lượng cây trồng",
       "petId": "worm"
     },
     "turtle_pet": {
@@ -290,6 +314,7 @@
       "name": "Rùa",
       "coin": 500,
       "gem": 0,
+      "description": "+5% xu kiếm được",
       "petId": "turtle"
     },
     "butterfly_pet": {
@@ -297,6 +322,7 @@
       "name": "Bướm",
       "coin": 1000,
       "gem": 0,
+      "description": "+3% cơ hội nông sản hiếm",
       "petId": "butterfly"
     },
     "rabbit_pet": {
@@ -304,6 +330,7 @@
       "name": "Thỏ",
       "coin": 5000,
       "gem": 0,
+      "description": "+10% sản lượng cây trồng",
       "petId": "rabbit"
     },
     "dog_pet": {
@@ -311,6 +338,7 @@
       "name": "Chó",
       "coin": 5000,
       "gem": 0,
+      "description": "+10% xu kiếm được",
       "petId": "dog"
     },
     "cat_pet": {
@@ -318,6 +346,7 @@
       "name": "Mèo",
       "coin": 5000,
       "gem": 0,
+      "description": "+10% XP nhận được",
       "petId": "cat"
     },
     "fox_pet": {
@@ -325,7 +354,40 @@
       "name": "Cáo",
       "coin": 15000,
       "gem": 0,
+      "description": "+5% cơ hội nông sản hiếm",
       "petId": "fox"
+    },
+    "nhan_bac": {
+      "category": "ring",
+      "name": "Nhẫn Bạc",
+      "emoji": "💍",
+      "coin": 100000,
+      "gem": 0,
+      "description": "Cầu hôn người ấy~ · Tier cơ bản"
+    },
+    "nhan_vang": {
+      "category": "ring",
+      "name": "Nhẫn Vàng",
+      "emoji": "💛",
+      "coin": 500000,
+      "gem": 0,
+      "description": "Cầu hôn người ấy~ · Buff: +5% xu thu hoạch _(sắp ra)_"
+    },
+    "nhan_kim_cuong": {
+      "category": "ring",
+      "name": "Nhẫn Kim Cương",
+      "emoji": "💎",
+      "coin": 2000000,
+      "gem": 0,
+      "description": "Cầu hôn người ấy~ · Buff: +10% xu + giảm 10% thời gian trồng _(sắp ra)_"
+    },
+    "dao": {
+      "category": "weapon",
+      "name": "Dao",
+      "emoji": "🔪",
+      "coin": 3000,
+      "gem": 0,
+      "description": "Dùng với `il kill pet` · _(Vật phẩm đặc biệt)_"
     }
   },
   "SHOP_ID_MAP": {
@@ -358,7 +420,11 @@
     "252": "superior_fertilizer",
     "260": "rod_common",
     "261": "rod_uncommon",
-    "262": "rod_rare"
+    "262": "rod_rare",
+    "300": "nhan_bac",
+    "301": "nhan_vang",
+    "302": "nhan_kim_cuong",
+    "400": "dao"
   },
   "FISH_TYPES": {
     "common": {

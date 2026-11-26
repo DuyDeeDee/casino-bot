@@ -6,11 +6,12 @@ import time
 from contextlib import contextmanager
 from datetime import date, timedelta
 from math import ceil
+from uuid import uuid4
 
 from .rules import (
-    ACHIEVEMENTS, CATALOG, CROPS, FISH, INVENTORY_CAPACITY, JUNK, NORMAL_GACHA,
-    PETS, QUALITIES, QUESTS, RODS, SHOP, START_COINS, active_pet_bonus, daily_quests,
-    day_at, event_at, item_id, pet_bonus, round_reward, season_at, update_pet, vnd,
+    ACHIEVEMENTS, ALL_WORDS, CATALOG, CROPS, FISH, INVENTORY_CAPACITY, JUNK, NORMAL_GACHA,
+    PETS, QUALITIES, QUESTS, RINGS, RODS, SHOP, START_COINS, VND_PER_COIN, active_pet_bonus, daily_quests,
+    day_at, event_at, item_id, pet_bonus, pet_key, round_reward, season_at, update_pet, vnd,
     xp_required,
 )
 
@@ -91,14 +92,81 @@ class FarmStore:
             session.check_achievements()
             self._save(user_id, state)
 
-    def leaderboard(self, metric: str) -> list[tuple[int, int]]:
-        if metric not in {"level", "harvested", "earned"}:
-            raise FarmError("Chọn bảng `level`, `harvested` hoặc `earned`.")
-        return self.economy.conn.execute(
-            """SELECT user_id, json_extract(state, ?) AS score
-               FROM farm_players ORDER BY score DESC, user_id LIMIT 10""",
-            (f"$.{metric}",),
+    def leaderboard(self, metric: str, user_id: int) -> tuple[list[tuple], int | None]:
+        metric = {"farm": "earned", "couples": "couple", "capdoi": "couple"}.get(metric, metric)
+        if metric == "couple":
+            rows = self.economy.conn.execute(
+                """SELECT user_id,
+                          json_extract(state, '$.marriage.partner') AS partner,
+                          json_extract(state, '$.marriage.at') AS married_at,
+                          RANK() OVER (ORDER BY json_extract(state, '$.marriage.at')) AS rank
+                   FROM farm_players WHERE user_id = json_extract(state, '$.marriage.proposer')
+                   ORDER BY married_at, user_id"""
+            ).fetchall()
+            rank = next((row[3] for row in rows if user_id in row[:2]), None)
+            return rows[:10], rank
+        ordering = {
+            "level": "evolutions DESC, score DESC, xp DESC",
+            "coin": "score DESC",
+            "earned": "score DESC",
+            "streak": "score DESC",
+            "harvested": "score DESC",
+        }.get(metric)
+        if not ordering:
+            raise FarmError("Chọn bảng `coin`, `level`, `farm`, `streak` hoặc `couple`.")
+        score = "COALESCE(e.money, 0)" if metric == "coin" else "json_extract(p.state, ?)"
+        params = (user_id,) if metric == "coin" else (f"$.{metric}", user_id)
+        rows = self.economy.conn.execute(
+            f"""WITH scores AS (
+                    SELECT p.user_id, {score} AS score,
+                           json_extract(p.state, '$.evolutions') AS evolutions,
+                           json_extract(p.state, '$.xp') AS xp
+                    FROM farm_players p LEFT JOIN economy e ON e.user_id = p.user_id
+                ), ranks AS (
+                    SELECT user_id, score, evolutions, RANK() OVER (ORDER BY {ordering}) AS rank,
+                           ROW_NUMBER() OVER (ORDER BY {ordering}, user_id) AS position FROM scores
+                )
+                SELECT user_id, score, evolutions, rank FROM ranks
+                WHERE position <= 10 OR user_id = ? ORDER BY position""",
+            params,
         ).fetchall()
+        return rows[:10], next((row[3] for row in rows if row[0] == user_id), None)
+
+    def proposal_ring(self, proposer: int, target: int) -> str:
+        if proposer == target:
+            raise FarmError("Bạn không thể tự cầu hôn mình.")
+        sender = self.get(proposer)
+        receiver = self.get(target)
+        if sender.get("marriage") or receiver.get("marriage"):
+            raise FarmError("Một trong hai người đã kết hôn trong Farm.")
+        ring = next((ring for ring in RINGS if sender["inventory"].get(f"ring:{ring}")), None)
+        if not ring:
+            raise FarmError("Bạn cần có nhẫn trong kho. Xem `farm shop ring`.")
+        return ring
+
+    def marry(self, proposer: int, target: int, guild_id: int, ring: str) -> None:
+        with self.action(proposer, "marry") as session:
+            receiver = self.get(target, now=session.now)
+            if proposer == target or session.state.get("marriage") or receiver.get("marriage"):
+                raise FarmError("Lời cầu hôn không còn hợp lệ.")
+            if ring not in RINGS:
+                raise FarmError("Nhẫn cưới không hợp lệ.")
+            session.change_item("ring", ring, -1)
+            wedding = {"id": uuid4().hex, "proposer": proposer, "guild": guild_id, "ring": ring, "at": session.now}
+            session.state["marriage"] = dict(wedding, partner=target)
+            receiver["marriage"] = dict(wedding, partner=proposer)
+            self._save(target, receiver)
+
+    def divorce(self, user_id: int, marriage_id: str) -> None:
+        with self.action(user_id, "divorce") as session:
+            wedding = session.state.get("marriage")
+            if not wedding or wedding["id"] != marriage_id:
+                raise FarmError("Hôn nhân này đã thay đổi.")
+            partner = self.get(wedding["partner"], now=session.now)
+            if partner.get("marriage", {}).get("id") == marriage_id:
+                partner.pop("marriage")
+                self._save(wedding["partner"], partner)
+            session.state.pop("marriage")
 
     def visit(self, user_id: int, target_id: int, activity: str) -> str:
         if user_id == target_id or activity not in {"water", "rob"}:
@@ -150,6 +218,10 @@ class FarmSession:
         self.season = season_at(self.day)[0]
         self.wallet_delta = 0
         self.unlocked = []
+
+    def balance(self) -> int:
+        row = self.economy.conn.execute("SELECT money FROM economy WHERE user_id = ?", (self.user_id,)).fetchone()
+        return row[0] if row else 0
 
     def wallet(self, coins: int) -> int:
         delta = vnd(coins)
@@ -261,28 +333,52 @@ class FarmSession:
             self.change_item(category, key, quantity)
         return item["name"], cost
 
-    def plant(self, key: str, quantity: int) -> tuple[str, float, int]:
+    def plant(self, key: str, quantity: int | str) -> tuple[list[tuple[str, int, float]], int]:
         key = item_id(key)
-        crop = CROPS.get(key)
-        if crop is None or quantity < 1:
-            raise FarmError("Chọn mã cây hợp lệ và số lượng lớn hơn 0.")
         plots = self.state["plots"]
         free = [str(index) for index in range(1, plot_limit(self.state["level"]) + 1) if str(index) not in plots]
-        if quantity > len(free):
-            raise FarmError(f"Nông trại còn **{len(free)} ô trống**.")
-        seeds = min(quantity, self.state["inventory"].get(f"seed:{key}", 0))
-        cost = (quantity - seeds) * crop["seedCost"]
-        if seeds:
-            self.change_item("seed", key, -seeds)
-        self.wallet(-cost)
+        if not free:
+            raise FarmError("Không còn ô đất trống.")
+        inventory = self.state["inventory"]
+        if key in ALL_WORDS:
+            orders = [
+                (entry[5:], stock) for entry, stock in inventory.items()
+                if entry.startswith("seed:") and entry[5:] in CROPS and stock > 0
+            ]
+            if not orders:
+                raise FarmError("Không có hạt giống trong kho. Xem `farm shop seeds`.")
+            seed_only = True
+        else:
+            if key not in CROPS or quantity != "all" and (not isinstance(quantity, int) or quantity < 1):
+                raise FarmError("Chọn mã cây và số lượng lớn hơn 0, hoặc dùng `all`.")
+            orders = [(key, len(free) if quantity == "all" else quantity)]
+            seed_only = False
+        batch, cost, used = [], 0, 0
+        available = self.balance() // VND_PER_COIN
         grow_factor = max(0.1, 1 - 0.1 * self.state["evolutions"])
-        ready = self.now + crop["growTime"] * self.event.get("growBonus", 1) * grow_factor
-        for index in free[:quantity]:
-            plots[index] = {"crop": key, "ready": ready, "watered": None, "fertilized": ""}
-        self.state["planted"] += quantity
-        self.xp(2 * quantity)
-        self.quest_progress("plant", quantity)
-        return crop["name"], ready, cost
+        for crop_id, requested in orders:
+            if used == len(free):
+                break
+            crop = CROPS[crop_id]
+            count = min(requested, len(free) - used)
+            seeds = min(count, inventory.get(f"seed:{crop_id}", 0))
+            bought = 0 if seed_only else min(count - seeds, available // crop["seedCost"])
+            planted = seeds + bought
+            if not planted:
+                raise FarmError(f"Cần hạt giống hoặc **{vnd(crop['seedCost']):,} VND** để trồng.")
+            if seeds:
+                self.change_item("seed", crop_id, -seeds)
+            cost += bought * crop["seedCost"]
+            ready = self.now + crop["growTime"] * self.event.get("growBonus", 1) * grow_factor
+            for index in free[used:used + planted]:
+                plots[index] = {"crop": crop_id, "ready": ready, "watered": None, "fertilized": ""}
+            used += planted
+            batch.append((crop_id, planted, ready))
+        self.wallet(-cost)
+        self.state["planted"] += used
+        self.xp(2 * used)
+        self.quest_progress("plant", used)
+        return batch, cost
 
     def tend(self, fertilizer: str | None = None) -> tuple[int, int]:
         today = self.day.isoformat()
@@ -321,7 +417,7 @@ class FarmSession:
         ]
         if not ready:
             raise FarmError("Ô đã chọn chưa có cây nào sẵn sàng thu hoạch.")
-        pet = active_pet_bonus(self.state["pets"], self.state["active_pet"], self.now)
+        pet = active_pet_bonus(self.state["pets"], self.state["active_pet"])
         quality_bonus = self.event.get("qualityBonus", 1) * (1 + pet.get("rareChanceBonus", 0))
         tiers = tuple(QUALITIES)
         rates = [rule["rate"] for rule in QUALITIES.values()]
@@ -347,7 +443,7 @@ class FarmSession:
         count = sum(harvested.values())
         self.state["harvested"] += count
         self.xp(xp)
-        self.quest_progress("harvest", count)
+        self.quest_progress("harvest", len(ready))
         return harvested, xp
 
     def sale(self, coins: int, quantity: int) -> None:
@@ -404,7 +500,7 @@ class FarmSession:
 
     def fishing(self, key: str | None) -> tuple[str, int, str]:
         remaining = self.state["last_fish"] + 6 - self.now
-        if remaining > 0:
+        if not self.state.get("fishing_bypass") and remaining > 0:
             raise FarmError(f"Chờ **{ceil(remaining)} giây** để câu tiếp.")
         inventory = self.state["inventory"]
         key = item_id(key) if key else self.state["rod"]
@@ -414,14 +510,11 @@ class FarmSession:
             raise FarmError("Bạn cần mua cần câu #260, #261 hoặc #262 từ shop Farm.")
         self.wallet(-100)
         rod = RODS[key]
-        pet = active_pet_bonus(self.state["pets"], self.state["active_pet"], self.now)
+        pet = active_pet_bonus(self.state["pets"], self.state["active_pet"])
         pools = (FISH, JUNK, CATALOG["BONUS_ITEMS"])
         pool = random.choices(pools, [sum(item["rate"] for item in pool.values()) for pool in pools])[0]
         if pool is FISH:
-            rarity_bonus = rod["rareChanceBonus"] + pet.get("fishingRareBonus", 0)
-            fish_key = random.choices(
-                tuple(FISH), [fish["rate"] + rarity_bonus * fish["rareChanceBonus"] for fish in FISH.values()]
-            )[0]
+            fish_key = random.choices(tuple(FISH), [fish["rate"] for fish in FISH.values()])[0]
             fish = FISH[fish_key]
             base_weight = max(1, min(100, round_reward(random.gauss(40, 15))))
             weight = max(1, min(100, round_reward(base_weight + rod["weightBonus"] + pet.get("fishingWeightBonus", 0))))
@@ -458,7 +551,9 @@ class FarmSession:
             raise FarmError("Không tìm thấy cá trong kho.")
         multiplier = self.event.get("sellBonus", 1) * self.event.get("coinBonus", 1)
         coins = sum(round_reward(owned.pop(key)["price"] * multiplier) for key in keys)
-        self.sale(coins, len(keys))
+        self.earn(coins)
+        self.quest_progress("sell", len(keys))
+        self.quest_progress("earn_coin", coins)
         return len(keys), coins
 
     def add_pet(self, key: str) -> None:
@@ -467,20 +562,53 @@ class FarmSession:
             "updated": self.now, "play": 0, "cuddle": 0, "exercise": 0,
         }
 
+    def pet_status(self, value: str | None) -> tuple[str, dict]:
+        key = pet_key(value) if value else self.state["active_pet"]
+        pet = self.state["pets"].get(key)
+        if pet is None:
+            raise FarmError("Hãy chọn pet đang hoạt động hoặc nhập mã pet đã sở hữu.")
+        update_pet(pet, pet_bonus(key, pet), self.now)
+        return key, pet
+
     def select_pet(self, key: str) -> str:
-        key = key.lower()
+        key = pet_key(key)
+        remaining = self.state.get("satou_locked_until", 0) - self.now
+        if remaining > 0:
+            raise FarmError(f"Satou đang khóa pet. Còn **{ceil(remaining / 3600)} giờ**.")
         if key not in self.state["pets"]:
             raise FarmError("Bạn chưa sở hữu pet có mã này.")
         self.state["active_pet"] = key
+        if key == "satou" and self.state.get("satou_kills", 0) >= 5:
+            self.state["satou_locked_until"] = self.now + 86400
         return PETS[key]["name"]
 
-    def care(self, activity: str, food_id: str = "") -> tuple[str, dict]:
+    def kill_pet(self, key: str) -> tuple[str, int, int]:
+        if self.state["active_pet"] != "satou":
+            raise FarmError("Hãy chọn Satou Matsuzaka làm pet đang hoạt động.")
+        key = pet_key(key)
+        target = self.state["pets"].get(key)
+        if not target or target["stars"] < 1:
+            raise FarmError("Pet của bạn phải ở C1 trở lên.")
+        self.change_item("weapon", "dao", -1)
+        target["stars"] -= 1
+        self.state["satou_kills"] = self.state.get("satou_kills", 0) + 1
+        return PETS[key]["name"], target["stars"], self.state["satou_kills"]
+
+    def update_reward(self) -> int:
+        if self.state.get("last_update_claim") == "S2_2025":
+            raise FarmError("Bạn đã nhận phần thưởng cập nhật Mùa 2.")
+        self.state["last_update_claim"] = "S2_2025"
+        self.state["tickets"] += 10
+        return self.state["tickets"]
+
+    def care(self, activity: str, food_id: str = "") -> tuple[str, dict, bool]:
         key = self.state["active_pet"]
         if not key:
             raise FarmError("Hãy chọn pet đang hoạt động bằng lệnh `farm selectpet`.")
         pet = self.state["pets"][key]
         bonus = pet_bonus(key, pet)
         update_pet(pet, bonus, self.now)
+        unlocked_huyn = False
         if activity == "feed":
             food_id = item_id(food_id)
             food = CATALOG["PET_FOODS"].get(food_id)
@@ -491,10 +619,10 @@ class FarmSession:
             pet["happiness"] = min(100, pet["happiness"] + food["happiness"])
             if pet["hunger"] > 70:
                 pet["health"] = min(100, pet["health"] + 5)
-            if food_id == "htng":
+            if food_id == "htng" and "hr" in self.state["pets"] and not self.state.get("huyn_active"):
                 self.state["tea_fed"] += 1
-                if self.state["tea_fed"] == 10 and "hr" not in self.state["pets"]:
-                    self.add_pet("hr")
+                if self.state["tea_fed"] >= 10:
+                    self.state["huyn_active"] = unlocked_huyn = True
             self.quest_progress("feed_pet", 1)
         elif activity == "kiss":
             wait = self.state.get("last_kiss", 0) + 1800 - self.now
@@ -526,7 +654,7 @@ class FarmSession:
         if pet["level"] < 10 and pet["xp"] >= CATALOG["PET_LEVEL_XP"][pet["level"]]:
             pet["level"] += 1
             pet["xp"] = 0
-        return key, pet
+        return key, pet, unlocked_huyn
 
     def draw(self) -> dict:
         self.state["pity"] += 1
@@ -547,9 +675,24 @@ class FarmSession:
             self.state["tickets"] -= count
         else:
             self.wallet(-10_000 * count)
+        slots = list(range(count))
+        if count > 1:
+            random.shuffle(slots)
+        guarantees = self.state.get("gacha_guarantees", [])
+        guaranteed = {}
+        for entry in guarantees:
+            for _ in range(min(len(slots), entry["remaining"])):
+                guaranteed[slots.pop()] = entry["pet"]
+                entry["remaining"] -= 1
+        if guaranteed:
+            self.state["gacha_guarantees"] = [entry for entry in guarantees if entry["remaining"] > 0]
         results = []
-        for _ in range(count):
-            reward = self.draw()
+        for slot in range(count):
+            if slot in guaranteed:
+                reward = PETS[guaranteed[slot]]
+                self.state["pity"] = 0 if reward.get("isMythic") else self.state["pity"] + 1
+            else:
+                reward = self.draw()
             key = reward["id"].lower()
             kind = reward["type"]
             label = reward["name"]
@@ -578,6 +721,167 @@ class FarmSession:
         self.state["pulls"] += count
         self.quest_progress("gacha", count)
         return results, use_tickets
+
+    def arrange_gacha(self, value: str, count: int) -> tuple[str, int]:
+        key = pet_key(value)
+        if key not in PETS or not 1 <= count <= 10_000:
+            raise FarmError("Chọn pet và số lượt hợp lệ.")
+        guarantees = self.state.setdefault("gacha_guarantees", [])
+        entry = next((entry for entry in guarantees if entry["pet"] == key), None)
+        if entry is None:
+            entry = {"pet": key, "remaining": 0}
+            guarantees.append(entry)
+        entry["remaining"] += count
+        return PETS[key]["name"], entry["remaining"]
+
+    def grant_pet(self, value: str) -> tuple[str, int]:
+        key = pet_key(value)
+        if key not in PETS:
+            raise FarmError("Mã pet không hợp lệ.")
+        pet = self.state["pets"].get(key)
+        if pet is None:
+            self.add_pet(key)
+            return PETS[key]["name"], 0
+        if pet["stars"] >= 6:
+            raise FarmError("Pet đã đạt C6.")
+        pet["stars"] += 1
+        return PETS[key]["name"], pet["stars"]
+
+    def admin_plant(self, value: str) -> str:
+        key = item_id(value)
+        crop = CROPS.get(key)
+        if not crop:
+            raise FarmError("Mã cây không hợp lệ.")
+        plots = self.state["plots"]
+        free = [str(n) for n in range(1, plot_limit(self.state["level"]) + 1) if str(n) not in plots]
+        cost = len(free) * crop["seedCost"]
+        self.wallet(-cost)
+        for position in free:
+            plots[position] = {"crop": key, "ready": self.now + crop["growTime"], "watered": None, "fertilized": ""}
+        self.state["planted"] += len(free)
+        self.xp(2 * len(free))
+        return f"Đã trồng **{len(free)} {crop['name']}** · Chi phí **{vnd(cost):,} VND**."
+
+    def admin_harvest(self) -> str:
+        plots = self.state["plots"]
+        weights = [quality["rate"] for quality in QUALITIES.values()]
+        coins, xp = 0, 0
+        for plot in plots.values():
+            crop = CROPS[plot["crop"]]
+            quality = random.choices(tuple(QUALITIES), weights)[0]
+            coins += int(crop["sellValue"] * QUALITIES[quality]["multiplier"])
+            xp += crop["xp"]
+        count = len(plots)
+        plots.clear()
+        self.state["harvested"] += count
+        self.earn(coins)
+        self.xp(xp)
+        return f"Đã thu hoạch **{count} ô** · **+{vnd(coins):,} VND** · **+{xp} XP**."
+
+    def admin_skip(self, kind: str) -> str:
+        if kind not in {"daily", "nung", "td", "farm", "all"}:
+            raise FarmError("Chọn `daily`, `nung`, `td`, `farm` hoặc `all`.")
+        if kind in {"daily", "all"}:
+            self.state["daily"] = ""
+        if kind in {"nung", "td", "all"}:
+            pet = self.state["pets"].get(self.state["active_pet"])
+            if pet is None and kind != "all":
+                raise FarmError("Người chơi chưa có pet đang hoạt động.")
+            if pet is not None:
+                if kind in {"nung", "all"}:
+                    pet["cuddle"] = 0
+                if kind in {"td", "all"}:
+                    pet["exercise"] = 0
+        if kind in {"farm", "all"}:
+            self.farm_admin("ready", ())
+        return f"Đã bỏ qua thời gian chờ **{kind}**."
+
+    def farm_admin(self, action: str, args: tuple[str, ...]) -> str:
+        value = args[0] if args else ""
+        if action == "info":
+            return (
+                f"Cấp **{self.state['level']}**, {self.state['xp']} XP\n"
+                f"**{len(self.state['plots'])}/{plot_limit(self.state['level'])}** ô · **{len(self.state['pets'])}** pet\n"
+                f"**{self.state['tickets']}** vé · Pity **{self.state['pity']}/100**"
+            )
+        if action == "gachapet":
+            name, count = self.arrange_gacha(value, int(args[1]))
+            return f"Đã đặt **{count}** lượt bảo đảm ra **{name}**."
+        if action in {"pet", "takepet"}:
+            key = pet_key(value)
+            exists = key in self.state["pets"]
+            if action == "pet" and key in PETS and not exists:
+                self.add_pet(key)
+                return f"Đã cấp **{PETS[key]['name']}**."
+            if action == "takepet" and exists:
+                del self.state["pets"][key]
+                if self.state["active_pet"] == key:
+                    self.state["active_pet"] = None
+                return f"Đã thu hồi **{PETS[key]['name']}**."
+            raise FarmError("Kiểm tra mã và quyền sở hữu pet.")
+        if action in {"coin", "setcoin", "xp", "setlevel", "pull"}:
+            amount = int(value or ("1" if action == "pull" else ""))
+            if action in {"coin", "setcoin"}:
+                change = amount if action == "coin" else amount - self.balance()
+                if self.economy.adjust_wallet_money(self.user_id, change, event="farm", command=f"farm cheat {action}") is None:
+                    raise FarmError("Điều chỉnh này vượt số dư hoặc giới hạn SQLite.")
+                return f"Đã điều chỉnh ví **{change:+,} VND**."
+            if action == "xp":
+                self.xp(max(-self.state["xp"], amount))
+            elif action == "setlevel":
+                if not 1 <= amount <= (70 if self.state["evolutions"] else 50):
+                    raise FarmError("Cấp đó nằm ngoài giới hạn.")
+                self.state.update(level=amount, xp=0)
+            elif self.state["tickets"] + amount >= 0:
+                self.state["tickets"] += amount
+            else:
+                raise FarmError("Số vé không thể âm.")
+            return f"Cấp **{self.state['level']}**, {self.state['xp']} XP, **{self.state['tickets']}** vé."
+        if action in {"seed", "food", "rod", "item"}:
+            key = item_id(value)
+            if action == "rod" and key not in RODS:
+                key = f"rod_{key}"
+            item = SHOP.get(key)
+            if item is None or item["category"] == "pets":
+                raise FarmError("Mã vật phẩm không hợp lệ.")
+            category = "seed" if item["category"] == "seeds" else item["category"]
+            wanted = {"seed": "seed", "food": "food", "rod": "fishing"}.get(action, category)
+            count = int(args[1]) if len(args) > 1 else 1
+            if category != wanted or count < 1:
+                raise FarmError("Danh mục hoặc số lượng không hợp lệ.")
+            self.change_item(category, key, count)
+            return f"Đã cấp **{item['name']} ×{count}**."
+        if action == "unlockpet":
+            self.state["satou_locked_until"] = 0
+            return "Đã mở khóa đổi pet."
+        if action == "fishcd":
+            bypass = not self.state.get("fishing_bypass")
+            self.state["fishing_bypass"] = bypass
+            return "Đã tắt chờ câu cá." if bypass else "Đã bật lại thời gian chờ câu cá."
+        if action in {"ready", "reset", "resync"}:
+            plots = self.state["plots"]
+            if action == "reset":
+                plots.clear()
+                return "Đã dọn trống các ô đất."
+            if action == "resync":
+                return f"Nông trại có {len(plots)}/{plot_limit(self.state['level'])} ô đang dùng."
+            growing = [plot for plot in plots.values() if plot["ready"] > self.now]
+            for plot in growing:
+                plot["ready"] = self.now
+            return f"Đã làm chín {len(growing)} ô đất."
+        if action in {"clear", "clearall", "cleanup"}:
+            inventory = self.state["inventory"]
+            if action == "clear" and (not value or len(args) < 2 or args[1].lower() != "all"):
+                raise FarmError("Dùng `farm cheat @người clear <mã> all`.")
+            targets = [
+                key for key in inventory
+                if action == "clearall" or action == "clear" and key.partition(":")[2] == item_id(value)
+                or action == "cleanup" and (not key.partition(":")[0] or not key.partition(":")[2])
+            ]
+            for key in targets:
+                inventory.pop(key)
+            return f"Đã xóa {len(targets)} loại vật phẩm."
+        raise FarmError("Thao tác quản trị Farm không hợp lệ.")
 
     def level_reward(self) -> int:
         previous = self.state["last_level_reward"]

@@ -4,7 +4,6 @@ import json
 from datetime import date, datetime, timezone
 from math import floor
 from pathlib import Path
-from random import Random
 
 with Path(__file__).with_name("catalog.json").open(encoding="utf-8") as source:
     CATALOG = json.load(source)
@@ -24,6 +23,9 @@ NORMAL_GACHA = tuple(
 FISH = CATALOG["FISH_TYPES"]
 JUNK = CATALOG["JUNK_ITEMS"]
 RODS = CATALOG["ROD_INFO"]
+RINGS = ("nhan_kim_cuong", "nhan_vang", "nhan_bac")
+PET_ORDER = tuple(PETS)
+ALL_WORDS = {"all", "hết", "het", "tất", "tat"}
 QUESTS = CATALOG["QUESTS"]
 ACHIEVEMENTS = CATALOG["ACHIEVEMENTS"]
 PET_MULTIPLIERS = ("xpBonus", "coinBonus", "yieldBonus", "fishingXpBonus", "fishingCoinBonus")
@@ -50,6 +52,14 @@ def item_id(value: str) -> str:
     return SHOP_IDS.get(value, value)
 
 
+def pet_key(value: str) -> str:
+    key = value.lower().lstrip("#")
+    if key.isascii() and key.isdecimal() and len(key) <= 2:
+        index = int(key) - 1
+        return PET_ORDER[index] if 0 <= index < len(PET_ORDER) else ""
+    return key
+
+
 def day_at(now: float) -> date:
     return datetime.fromtimestamp(now, timezone.utc).date()
 
@@ -65,11 +75,19 @@ def event_at(day: date) -> dict:
 
 
 def daily_quests(user_id: int, day: date) -> dict[str, int]:
-    rng = Random(f"{user_id}:{day.isoformat()}")
-    return {
-        rng.choice([key for key, rule in QUESTS.items() if rule["diff"] == difficulty]): 0
-        for difficulty in ("easy", "medium", "hard")
-    }
+    # Keep the legacy seeded draw, using Discord ID as the new stable player key.
+    state = 2166136261
+    for char in f"{user_id}:{day.isoformat()}":
+        state = ((state ^ ord(char)) * 16777619) & 0xFFFFFFFF
+    tasks = {}
+    for difficulty in ("easy", "medium", "hard"):
+        pool = [key for key, rule in QUESTS.items() if rule["diff"] == difficulty]
+        for index in range(len(pool) - 1, 0, -1):
+            state = (1664525 * state + 1013904223) & 0xFFFFFFFF
+            choice = state * (index + 1) // 2**32
+            pool[index], pool[choice] = pool[choice], pool[index]
+        tasks[pool[0]] = 0
+    return tasks
 
 
 def xp_required(level: int, evolutions: int) -> int:
@@ -113,18 +131,18 @@ def update_pet(pet: dict, bonus: dict, now: float) -> None:
     happy_rate = 10.5 * (1 - bonus.get("happinessDecayReduction", 0))
     pet["hunger"] = max(0, hunger - hunger_rate * hours)
     pet["happiness"] = max(0, pet["happiness"] - happy_rate * hours)
-    fed_hours = min(hours, max(0, (hunger - 70) / hunger_rate))
-    hungry_hours = max(0, hours - hunger / hunger_rate)
-    pet["health"] = max(0, min(100, pet["health"] + 5 * fed_hours) - 2 * hungry_hours)
+    if pet["hunger"] <= 0:
+        pet["health"] = max(0, pet["health"] - 2 * hours)
+    elif pet["hunger"] > 70:
+        pet["health"] = min(100, pet["health"] + 5 * hours)
     pet["updated"] = now
 
 
-def active_pet_bonus(pets: dict, active: str | None, now: float) -> dict:
+def active_pet_bonus(pets: dict, active: str | None) -> dict:
     if not active:
         return {}
     pet = pets[active]
     bonus = pet_bonus(active, pet)
-    update_pet(pet, bonus, now)
     partner = {"satou": "shio", "shio": "satou"}.get(active)
     if partner in pets:
         synergy = pet_bonus(partner, pets[partner])
